@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Acquired Leaders Command Portal</title>
+  <meta name="description" content="Dedicated leadership workspace for Acquired HR, managers, and site leaders in the TE Connectivity integration.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <script src="/js/transitions.js?v=1782361361859"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
+          </svg>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title">
+          <span class="portal-badge" style="background: #D4AF37; color: white;">👑 LEADERS PORTAL</span>
+        </div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">PMO Console</a>
+        <a href="/survey.html" class="nav-link">Survey</a>
+        <a href="/playbook.html" class="nav-link">Playbook</a>
+        <a href="/dashboard.html" class="nav-btn-portal-hrbp">Integration Leader Portal</a>
+        <a href="/employee.html?name=Alex&role=R%26D%20Specialist&dept=R%26D" class="nav-btn-portal-emp">Employee Portal</a>
+        <a href="/leaders.html" class="nav-link active">Leaders Portal</a>
+        <a href="/admin.html" class="nav-btn-admin">Admin Settings</a>
+      </nav>
+    </header>
+
+    <main class="main-content" style="max-width: 1200px; margin: 2rem auto; padding: 0 1.5rem;">
+      <!-- Welcome Header -->
+      <div class="card card-glass" style="margin-bottom: 2rem; border-left: 5px solid #D4AF37;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2 data-i18n="leaders.welcome_heading" style="margin: 0; font-family: var(--font-family-display); color: var(--te-dark-teal);">Acquired Leadership Operations</h2>
+            <p data-i18n="leaders.welcome_subtitle" style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.95rem;">
+              Dashboard for site managers, local HR, and plant heads transitioning to TE Connectivity.
+            </p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem; background: rgba(212, 175, 55, 0.1); padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid rgba(212, 175, 55, 0.3);">
+            <span style="font-size: 1.2rem;">👑</span>
+            <span id="leader-identity-tag" style="font-weight: 700; color: #B59410; font-size: 0.85rem;">LOADING PROFILE...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaders Grid -->
+      <div class="landing-grid" style="grid-template-columns: 1.4fr 1fr; gap: 2rem; align-items: start;">
+        
+        <!-- Left Side: Workforce Milestones & Leadership Academy -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+          
+          <!-- Site Team Onboarding Tracker -->
+          <div class="card card-glass">
+            <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+              <h3 data-i18n-html="leaders.progress_heading" style="margin:0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem;">
+                <span>📊</span> Site Team Integration Progress
+              </h3>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+              <!-- Circle Progress Rings -->
+              <div class="card" style="text-align: center; padding: 1.25rem; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white;">
+                <h5 data-i18n="leaders.academy_progress_rate_label" style="margin: 0 0 1rem 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">Academy Progress Rate</h5>
+                <div style="position: relative; width: 100px; height: 100px;">
+                  <svg viewBox="0 0 36 36" style="width: 100%; height: 100%; transform: rotate(-90deg);">
+                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#E2E8F0" stroke-width="3"/>
+                    <path id="progress-circle-fill" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--te-dark-teal)" stroke-dasharray="75, 100" stroke-width="3" stroke-linecap="round"/>
+                  </svg>
+                  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: 800; font-size: 1.2rem; color: var(--te-dark-teal);" id="progress-circle-percent">75%</div>
+                </div>
+                <p data-i18n="leaders.academy_progress_caption" style="font-size: 0.75rem; color: var(--text-dim); margin: 0.75rem 0 0 0;">Average completed onboarding lessons.</p>
+              </div>
+
+              <!-- Merit Accumulator -->
+              <div class="card" style="text-align: center; padding: 1.25rem; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white;">
+                <h5 data-i18n="leaders.team_merit_points_label" style="margin: 0 0 1rem 0; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">Team Merit Points</h5>
+                <div style="font-size: 2.5rem; font-weight: 900; color: var(--te-orange); line-height: 1.2;" id="team-merit-points">310</div>
+                <span data-i18n="leaders.team_merit_badge" style="font-size: 0.75rem; background: var(--te-orange-light); color: var(--te-orange); padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 700; margin-top: 0.5rem;">TOP 10% SITE LEVEL</span>
+                <p data-i18n="leaders.team_merit_caption" style="font-size: 0.75rem; color: var(--text-dim); margin: 0.75rem 0 0 0;">Total XP accumulated by site workforce.</p>
+              </div>
+            </div>
+
+            <!-- Detailed Team roster progress list -->
+            <h4 data-i18n="leaders.direct_reports_heading" style="color: var(--te-dark-teal); font-size: 0.95rem; font-family: var(--font-family-display); margin-bottom: 0.75rem;">Your Acquired Direct Reports</h4>
+            <div id="direct-reports-roster" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <p style="text-align: center; color: var(--text-dim); padding: 1rem;">Loading reports...</p>
+            </div>
+          </div>
+
+          <!-- Leadership Academy Checklist -->
+          <div class="card card-glass">
+            <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+              <h3 data-i18n-html="leaders.checklist_heading" style="margin:0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem;">
+                <span>🎓</span> Leadership Integration Checklist
+              </h3>
+            </div>
+            <p data-i18n="leaders.checklist_intro" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+              As an acquired site leader or HR coordinator, completing these tasks guarantees operational alignment and high employee retention.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;" id="leader-checklist-container">
+              <!-- Item 1 -->
+              <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                <input type="checkbox" id="chk-leader-1" style="width: 18px; height: 18px; cursor: pointer; margin-top: 0.15rem; accent-color: var(--te-orange);">
+                <div style="flex: 1;">
+                  <label for="chk-leader-1" data-i18n="leaders.checklist_1_title" style="font-weight: 700; color: var(--text-primary); cursor: pointer; display: block; font-size: 0.9rem;">Organize Local Alignment Town-Hall (Week 1)</label>
+                  <span data-i18n="leaders.checklist_1_desc" style="font-size: 0.75rem; color: var(--text-secondary);">Bring acquired teams together to discuss benefits alignment, IT SSO structures, and introduce the TE Post-Merger system.</span>
+                </div>
+              </div>
+              <!-- Item 2 -->
+              <div style="display: flex; gap: 0.75rem; align-items: flex-start; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.85rem;">
+                <input type="checkbox" id="chk-leader-2" style="width: 18px; height: 18px; cursor: pointer; margin-top: 0.15rem; accent-color: var(--te-orange);">
+                <div style="flex: 1;">
+                  <label for="chk-leader-2" data-i18n="leaders.checklist_2_title" style="font-weight: 700; color: var(--text-primary); cursor: pointer; display: block; font-size: 0.9rem;">Calibrate Title Bandings &amp; Compensation Unification (Week 4)</label>
+                  <span data-i18n="leaders.checklist_2_desc" style="font-size: 0.75rem; color: var(--text-secondary);">Conduct workforce banding mapping in coordination with the TE Compensation &amp; Benefits Integration Leader lead David Miller.</span>
+                </div>
+              </div>
+              <!-- Item 3 -->
+              <div style="display: flex; gap: 0.75rem; align-items: flex-start; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.85rem;">
+                <input type="checkbox" id="chk-leader-3" style="width: 18px; height: 18px; cursor: pointer; margin-top: 0.15rem; accent-color: var(--te-orange);">
+                <div style="flex: 1;">
+                  <label for="chk-leader-3" data-i18n="leaders.checklist_3_title" style="font-weight: 700; color: var(--text-primary); cursor: pointer; display: block; font-size: 0.9rem;">Coordinate IT Systems and Security Access Audit (Week 2)</label>
+                  <span data-i18n="leaders.checklist_3_desc" style="font-size: 0.75rem; color: var(--text-secondary);">Audit the workforce compliance logs to ensure all critical R&amp;D architects have registered and setup cybersecurity accounts.</span>
+                </div>
+              </div>
+              <!-- Item 4 -->
+              <div style="display: flex; gap: 0.75rem; align-items: flex-start; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.85rem;">
+                <input type="checkbox" id="chk-leader-4" style="width: 18px; height: 18px; cursor: pointer; margin-top: 0.15rem; accent-color: var(--te-orange);">
+                <div style="flex: 1;">
+                  <label for="chk-leader-4" data-i18n="leaders.checklist_4_title" style="font-weight: 700; color: var(--text-primary); cursor: pointer; display: block; font-size: 0.9rem;">Deploy Local Integration Champions (Month 2)</label>
+                  <span data-i18n="leaders.checklist_4_desc" style="font-size: 0.75rem; color: var(--text-secondary);">Select key personnel in R&amp;D and Sales to act as local cultural advocates, resolving team feedback and monitoring organizational alignment.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: Integration Buddy & Chat System -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+          
+          <!-- Assigned Buddy Card -->
+          <div class="card buddy-card" style="padding: 1.5rem;">
+            <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+              <h3 data-i18n-html="leaders.buddy_heading" style="margin:0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem;">
+                <span>🤝</span> Your Assigned Integration Buddy
+              </h3>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 1rem; background: rgba(36,76,90,0.03); padding: 1rem; border-radius: var(--radius-md); border: 1px solid rgba(36,76,90,0.06); margin-bottom: 1.25rem;">
+              <div style="width: 55px; height: 55px; background: var(--te-orange); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 1.4rem; box-shadow: 0 4px 10px rgba(233,131,0,0.25);" id="buddy-avatar">
+                SC
+              </div>
+              <div>
+                <h4 style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display);" id="buddy-name">Sarah Connor</h4>
+                <p data-i18n="leaders.buddy_role" style="margin: 0.15rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);" id="buddy-role">Senior Integration Specialist</p>
+                <a style="font-size: 0.75rem; color: var(--te-orange); text-decoration: none; font-weight: 600;" href="#" id="buddy-email">sconnor@te.com</a>
+              </div>
+            </div>
+
+            <!-- Buddy Chat Box -->
+            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; height: 350px;">
+              <!-- Messages -->
+              <div id="buddy-chat-messages" style="flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.85rem;">
+                <!-- Initial Buddy Message -->
+                <div style="display: flex; gap: 0.5rem; max-width: 85%;">
+                  <div style="width: 28px; height: 28px; background: var(--te-orange); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;" class="mini-avatar">SC</div>
+                  <div data-i18n="leaders.buddy_intro_message" style="background: white; border: 1px solid var(--border-color); border-radius: 0 10px 10px 10px; padding: 0.55rem 0.75rem; color: var(--text-primary); line-height: 1.4;">
+                    Hi! I'm your assigned TE Integration Buddy. Feel free to ask me anything about benefits, IT systems setups, or payroll conversions. I'm here to support you!
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Typing Indicator -->
+              <div id="buddy-chat-typing" style="padding: 0.5rem 1rem; font-style: italic; font-size: 0.75rem; color: var(--text-dim); display: none;">
+                Sarah is typing...
+              </div>
+
+              <!-- Input Area -->
+              <form id="buddy-chat-form" style="border-top: 1.5px solid var(--border-color); padding: 0.75rem; display: flex; gap: 0.5rem; background: white; border-radius: 0 0 8px 8px;">
+                <input type="text" id="buddy-chat-input" data-i18n-ph="leaders.buddy_chat_placeholder" placeholder="Type a message to your buddy..." style="flex: 1; border: 1.5px solid var(--border-color); border-radius: var(--radius-full); padding: 0.45rem 1rem; font-size: 0.85rem; outline: none; transition: border 0.2s;" required>
+                <button type="submit" class="btn btn-primary" data-i18n="leaders.buddy_chat_send" style="padding: 0.4rem 1rem; font-size: 0.8rem; border-radius: var(--radius-full);">Send</button>
+              </form>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    </main>
+
+    <footer class="main-footer" style="margin-top: 4rem;">
+      <p>&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Leaders PMI Management Platform.</p>
+    </footer>
+  </div>
+
+  <script src="/js/leaders.js?v=1782361361859"></script>
+</body>
+</html>

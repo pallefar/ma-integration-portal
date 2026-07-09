@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Integration Dashboard</title>
+  <meta name="description" content="Review organizational assessment metrics, custom AI post-merger integration plans, and Integration Leader coaching resources.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <script src="/js/transitions.js?v=1782361361859"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Brand Header -->
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
+          </svg>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title">
+          <span class="portal-badge">M&A Integration</span>
+        </div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">PMO Console</a>
+        <a href="/survey.html" class="nav-link">Survey</a>
+        <a href="/playbook.html" class="nav-link">Playbook</a>
+        <a href="/dashboard.html" class="nav-btn-portal-hrbp active">Integration Leader Portal</a>
+        <a href="/employee.html?name=Alex&role=R%26D%20Specialist&dept=R%26D" class="nav-btn-portal-emp">Employee Portal</a>
+        <a href="/leaders.html" class="nav-link">Leaders Portal</a>
+        <a href="/admin.html" class="nav-btn-admin">Admin Settings</a>
+      </nav>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="main-content">
+      
+      <!-- High-visibility glassmorphic Alert Banners container (Removed - Replaced by Activity Calendar) -->
+      <!-- <div id="announcement-center" class="announcement-center"></div> -->
+      
+      <!-- Empty State Overlay (Shows if no survey taken yet) -->
+      <div id="dashboard-empty-state" class="card card-glass" style="display: none; text-align: center; padding: 4rem 2rem;">
+        <svg style="width: 80px; height: 80px; color: var(--te-orange); margin-bottom: 1.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286zm0 13.036h.008v.008H12v-.008z" />
+        </svg>
+        <h2 data-i18n="dashboard.empty_state_heading" style="margin-bottom: 1rem;">No Assessment Found</h2>
+        <p data-i18n="dashboard.empty_state_body" style="color: var(--text-secondary); max-width: 500px; margin: 0 auto 2rem;">
+          To view analytics, coaching playbooks, and custom 100-day roadmaps, you must first complete the integration assessment for the acquired target company.
+        </p>
+        <a data-i18n="dashboard.empty_state_cta" href="/" class="btn btn-primary">Take Integration Survey</a>
+      </div>
+
+      <!-- Main Dashboard View Container -->
+      <div id="dashboard-main-view">
+        
+        <!-- Target Company Name Banner -->
+        <div class="card card-glass" style="padding: 1.5rem 2rem; border-left: 5px solid var(--te-orange);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <span data-i18n="dashboard.target_label" class="target-label" style="font-size: 0.75rem;">Integration Project</span>
+              <h2 id="dashboard-target-name" style="font-size: 1.8rem; margin-top: 0.25rem;">NextGen Sensors Integration</h2>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+              <button data-i18n="dashboard.btn_print_report" onclick="window.print()" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem;">Print Report</button>
+              <a data-i18n="dashboard.btn_reassess" href="/" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.5rem 1rem;">Re-Assess Target</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Multi-Tab Structure -->
+        <div class="dashboard-grid">
+          
+          <!-- Left: Tab Navigation Buttons -->
+          <aside class="dashboard-sidebar">
+            <div class="card dashboard-nav-card">
+              <div class="dashboard-nav-list">
+                
+                <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem;">
+                  <span>📊</span> <span data-i18n="dashboard.sidebar_group_steering">STEERING</span>
+                </div>
+                <button class="dashboard-nav-btn active" data-tab="integration-gauges">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 3.078a8.005 8.005 0 016.92 6.92H13.5V3.078z" />
+                  </svg>
+                  <span data-i18n="dashboard.tab_kpis">Integration KPIs</span>
+                </button>
+
+                <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem; margin-top: 1.25rem;">
+                  <span>🚀</span> <span data-i18n="dashboard.sidebar_group_onboarding">ONBOARDING</span>
+                </div>
+                <button class="dashboard-nav-btn" data-tab="ai-plan">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+                  <span data-i18n="dashboard.tab_roadmap">100-Day Roadmap</span>
+                </button>
+                <button class="dashboard-nav-btn" data-tab="onboarding-success">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" /></svg>
+                  <span data-i18n="dashboard.tab_onboarding">Onboarding Success</span>
+                </button>
+                <button class="dashboard-nav-btn" data-tab="welcome-kit">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" /></svg>
+                  <span data-i18n="dashboard.tab_welcome_kit">Welcome Kit Designer</span>
+                </button>
+
+                <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem; margin-top: 1.25rem;">
+                  <span>🎭</span> <span data-i18n="dashboard.sidebar_group_culture">CULTURE</span>
+                </div>
+                <button class="dashboard-nav-btn" data-tab="change-curve">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-3.83-3.83m3.83 3.83l-3.83 3.83M2.25 21h19.5" /></svg>
+                  <span data-i18n="dashboard.tab_change">Change Cockpit</span>
+                </button>
+                <button class="dashboard-nav-btn" data-tab="coaching-track">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.62 48.62 0 0112 20.904a48.62 48.62 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A5.905 5.905 0 018 3.007a5.905 5.905 0 01.329 6.326m-4.26 0a50.574 50.574 0 012.658-.813M17.5 2.25v2.25m0 0v2.25m0-2.25h2.25m-2.25 0h-2.25" /></svg>
+                  <span data-i18n="dashboard.tab_coach">Integration Leader Coach Desk</span>
+                </button>
+
+                <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem; margin-top: 1.25rem;">
+                  <span>👤</span> <span data-i18n="dashboard.sidebar_group_roles">ROLES</span>
+                </div>
+                <button class="dashboard-nav-btn" data-tab="hr-modules">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" /></svg>
+                  <span data-i18n="dashboard.tab_hr_modules">HR Action Modules</span>
+                </button>
+                <button class="dashboard-nav-btn" data-tab="academy-tracking">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-4-3v3m8-3v3" /></svg>
+                  <span data-i18n="dashboard.tab_academy">Academy Tracking</span>
+                </button>
+                <button class="dashboard-nav-btn" data-tab="teams-involved">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.97 5.97 0 00-.75-2.98m-.001 0A5.97 5.97 0 0015 13.25m-9 5.469v.03c0 .223.01.443.031.658A11.944 11.944 0 0112 21c2.17 0 4.207-.576 5.963-1.584A6.062 6.062 0 0018 18.72m-12 0a5.97 5.97 0 01.75-2.98m-.001 0A5.97 5.97 0 019 13.25M6 18.72a9.094 9.094 0 01-3.741-.479 3 3 0 014.682-2.72m-.94 3.198l-.001.031c0 .225.012.447.037.666A11.944 11.944 0 0012 21M9 13.25c0-1.18.91-2.164 2.09-2.201a5.125 5.125 0 017.82 0c1.18.037 2.09 1.022 2.09 2.201M9 13.25a6.002 6.002 0 01-2.25-4.75 6 6 0 0112 0A6.002 6.002 0 0115 13.25" /></svg>
+                  <span data-i18n="dashboard.tab_teams">Involved TE Teams</span>
+                </button>
+
+                <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem; margin-top: 1.25rem;">
+                  <span>📣</span> <span data-i18n="dashboard.sidebar_group_communication">COMMUNICATION</span>
+                </div>
+                <button class="dashboard-nav-btn" data-tab="communication-desk">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.757 3.63 8.25 4.51 8.25H6.75z" /></svg>
+                  <span data-i18n="dashboard.tab_communication">Communications Desk</span>
+                </button>
+
+              </div>
+            </div>
+          </aside>
+
+          <!-- Right: Active Content Panel -->
+          <section style="flex: 1;" class="dashboard-panels-container">
+            
+            <!-- Tab 0: Integration Gauges -->
+            <section class="analytics-panel tab-content active" data-widget="gauges" id="tab-integration-gauges" style="position: relative; display: grid;">
+              <!-- Reorder Buttons -->
+              
+              
+              <!-- Culture Gauge -->
+              <div class="card gauge-card culture" style="position: relative;">
+                <span class="gauge-title" data-i18n="dashboard.gauge_culture_title">Culture & Values</span>
+                <div class="gauge-svg-container">
+                  <svg class="gauge-svg" viewBox="0 0 100 100">
+                    <circle class="gauge-bg-circle" cx="50" cy="50" r="40"/>
+                    <circle class="gauge-fill-circle" id="gauge-culture-fill" cx="50" cy="50" r="40"/>
+                  </svg>
+                  <div class="gauge-value" id="gauge-culture-val">-</div>
+                </div>
+                <span class="gauge-status-badge" id="gauge-culture-badge">Pending</span>
+                
+                <div style="margin-top: 1rem; text-align: left; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+                  <strong style="color: var(--te-dark-teal);">Based on Survey Questions:</strong>
+                  <ul id="culture-questions-list" style="padding-left: 1rem; margin-top: 0.5rem; line-height: 1.4;">
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Talent Gauge -->
+              <div class="card gauge-card talent" style="position: relative;">
+                <span class="gauge-title" data-i18n="dashboard.gauge_talent_title">Talent & Systems</span>
+                <div class="gauge-svg-container">
+                  <svg class="gauge-svg" viewBox="0 0 100 100">
+                    <circle class="gauge-bg-circle" cx="50" cy="50" r="40"/>
+                    <circle class="gauge-fill-circle" id="gauge-talent-fill" cx="50" cy="50" r="40"/>
+                  </svg>
+                  <div class="gauge-value" id="gauge-talent-val">-</div>
+                </div>
+                <span class="gauge-status-badge" id="gauge-talent-badge">Pending</span>
+                
+                <div style="margin-top: 1rem; text-align: left; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+                  <strong style="color: var(--te-dark-teal);">Based on Survey Questions:</strong>
+                  <ul id="talent-questions-list" style="padding-left: 1rem; margin-top: 0.5rem; line-height: 1.4;">
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Value Gauge -->
+              <div class="card gauge-card value" style="position: relative;">
+                <span class="gauge-title" data-i18n="dashboard.gauge_value_title">Value & Synergies</span>
+                <div class="gauge-svg-container">
+                  <svg class="gauge-svg" viewBox="0 0 100 100">
+                    <circle class="gauge-bg-circle" cx="50" cy="50" r="40"/>
+                    <circle class="gauge-fill-circle" id="gauge-value-fill" cx="50" cy="50" r="40"/>
+                  </svg>
+                  <div class="gauge-value" id="gauge-value-val">-</div>
+                </div>
+                <span class="gauge-status-badge" id="gauge-value-badge">Pending</span>
+                
+                <div style="margin-top: 1rem; text-align: left; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+                  <strong style="color: var(--te-dark-teal);">Based on Survey Questions:</strong>
+                  <ul id="value-questions-list" style="padding-left: 1rem; margin-top: 0.5rem; line-height: 1.4;">
+                  </ul>
+                </div>
+              </div>
+
+            </section>
+
+            <!-- Tab 1: AI Integration Plan Roadmap -->
+            <div id="tab-ai-plan" class="card card-glass tab-content tab-content-panel" data-widget="roadmap" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.roadmap_heading">100-Day Integration Roadmap</h2>
+                <span data-i18n="dashboard.roadmap_badge" class="hero-badge" style="background-color: var(--te-dark-teal-light); color: var(--te-dark-teal); border-color: rgba(36,76,90,0.2);">AI Synthesized</span>
+              </div>
+              
+              <!-- Plan Display Container -->
+              <div class="ai-plan-container" id="ai-plan-markdown">
+                <p>Loading integration plan blueprint...</p>
+              </div>
+            </div>
+
+            <!-- Tab 2: Recommended HR Integration Modules -->
+            <div id="tab-hr-modules" class="card card-glass tab-content tab-content-panel" data-widget="modules" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.hr_modules_heading">Recommended HR Integration Modules</h2>
+              </div>
+              <p data-i18n="dashboard.hr_modules_intro" style="color: var(--text-secondary); margin-bottom: 2rem;">
+                Based on your diagnostic profile, the system recommends deploying the following standard TE Connectivity HR playbooks to mitigate organizational risks.
+              </p>
+              
+              <div id="hr-modules-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Loaded dynamically -->
+              </div>
+            </div>
+
+            <!-- Tab 3: Integration Leader Coaching Corner -->
+            <div id="tab-coaching-track" class="card card-glass tab-content tab-content-panel" data-widget="coach" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.coaching_heading">Integration Leader Coaching Desk</h2>
+              </div>
+              <p data-i18n="dashboard.coaching_intro" style="color: var(--text-secondary); margin-bottom: 2rem;">
+                As the Integration Leader, leading the interpersonal integration is your core objective. Use these actionable guidelines to handle pushback.
+              </p>
+
+              <!-- Animated Duck Coach TEodor -->
+              <div class="duck-coach-container">
+                <div class="teodor-svg-wrapper" id="teodor-duck-coach">
+                  <svg class="teodor-duck-svg teodor-duck-coach-animated" style="width: 90px; height: 90px;" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <g class="duck-bounce">
+                      <!-- Duck Body & Wing (Yellow #FBBF24) -->
+                      <path d="M20,60 C20,80 80,80 85,55 C90,45 80,35 60,35 C55,25 45,15 35,25 C25,35 30,50 20,60 Z" fill="#FBBF24" stroke="#D97706" stroke-width="2.5" class="duck-body" />
+                      <!-- Wing detail -->
+                      <path d="M45,48 C35,48 35,63 48,63 C58,63 60,53 50,48 Z" fill="#F59E0B" stroke="#D97706" stroke-width="1.5" class="duck-wing" />
+                      <!-- Head -->
+                      <circle cx="38" cy="32" r="16" fill="#FBBF24" stroke="#D97706" stroke-width="2.5" class="duck-head" />
+                      <!-- Eye -->
+                      <g class="duck-eye-group">
+                        <circle cx="44" cy="28" r="2.5" fill="#1E293B" class="duck-eye" />
+                        <circle cx="45" cy="27" r="0.75" fill="#FFFFFF" class="duck-pupil" />
+                      </g>
+                      <!-- Orange Beak -->
+                      <path d="M52,30 C58,30 60,34 52,36 C48,36 48,30 52,30 Z" fill="#F97316" stroke="#C2410C" stroke-width="1.5" class="duck-beak" />
+                      <!-- Tiny TE Branding Tie -->
+                      <rect x="33" y="45" width="10" height="4" rx="1" fill="#E98300" class="duck-tie" />
+                    </g>
+                  </svg>
+                </div>
+                <div class="duck-speech-bubble" id="teodor-speech-bubble">
+                  Quack! I am <strong>TEodor</strong>, your yellow rubber duck PMI coach! Click on me or ask one of the frequently asked integration questions below for immediate, friendly advice!
+                </div>
+              </div>
+
+              <!-- TEodor Local AI model background download progress indicator -->
+              <div id="teodor-download-progress-bar-container" style="display: none; margin-top: 1rem; padding: 1rem; background-color: var(--bg-light); border-radius: var(--radius-md); border: 1px dashed var(--te-orange);">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal); margin-bottom: 0.5rem;">
+                  <span id="teodor-download-status-label">📥 Loading AI Brain...</span>
+                  <span id="teodor-download-percent">0%</span>
+                </div>
+                <div style="height: 10px; background-color: var(--border-color); border-radius: 5px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);">
+                  <div id="teodor-download-progress-fill" style="height: 100%; background-color: var(--te-orange); width: 0%; transition: width 0.3s ease; background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent); background-size: 1rem 1rem; animation: progress-bar-stripes 1s linear infinite;"></div>
+                </div>
+              </div>
+
+              <div id="coaching-container">
+                <!-- Loaded dynamically -->
+              </div>
+
+              <!-- Option A: Interactive FAQs desk (for Static Mode) -->
+              <div id="teodor-static-faq-container" class="card" style="margin-top: 1.5rem; margin-bottom: 0;">
+                <h4 data-i18n="dashboard.coaching_faq_heading" style="color: var(--te-dark-teal); margin-bottom: 1rem;">Ask TEodor an Integration Question:</h4>
+                <div class="faq-buttons-grid" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                  <button data-i18n="dashboard.faq_culture" class="btn btn-secondary faq-btn" data-faq="culture" style="text-align: left; justify-content: flex-start; padding: 0.75rem 1rem; width: 100%; font-size: 0.9rem; margin:0;">
+                    💬 How do we handle middle management anxiety about process changes?
+                  </button>
+                  <button data-i18n="dashboard.faq_talent" class="btn btn-secondary faq-btn" data-faq="talent" style="text-align: left; justify-content: flex-start; padding: 0.75rem 1rem; width: 100%; font-size: 0.9rem; margin:0;">
+                    💬 What should we do if key R&D engineers are reluctant to transition?
+                  </button>
+                  <button data-i18n="dashboard.faq_values" class="btn btn-secondary faq-btn" data-faq="values" style="text-align: left; justify-content: flex-start; padding: 0.75rem 1rem; width: 100%; font-size: 0.9rem; margin:0;">
+                    💬 How can we explain TE's core values to NewCo employees?
+                  </button>
+                  <button data-i18n="dashboard.faq_systems" class="btn btn-secondary faq-btn" data-faq="systems" style="text-align: left; justify-content: flex-start; padding: 0.75rem 1rem; width: 100%; font-size: 0.9rem; margin:0;">
+                    💬 What is the best way to speed up systems onboarding (IT/Cybersecurity)?
+                  </button>
+                </div>
+              </div>
+
+              <!-- Option B: Premium AI Chat Console (for Local LLM Mode) -->
+              <div class="card" id="teodor-chat-panel" style="margin-top: 1.5rem; margin-bottom: 0; display: none;">
+                <h4 style="color: var(--te-dark-teal); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                  <span style="display:inline-block; width:8px; height:8px; background-color:#10B981; border-radius:50%; animation: pulse-dot 1.5s infinite;"></span>
+                  TEodor AI AI Insight Console
+                </h4>
+                
+                <!-- Chat History -->
+                <div id="teodor-chat-history" style="max-height: 250px; overflow-y: auto; padding: 1rem; background-color: var(--bg-light); border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                  <div class="chat-bubble assistant" style="align-self: flex-start; background-color: var(--te-orange-light); border: 1px solid rgba(233, 131, 0, 0.2); padding: 0.75rem 1rem; border-radius: 12px 12px 12px 0; max-width: 85%; font-size: 0.9rem; color: var(--te-dark-teal);">
+                    Quack! My local AI Brain is fully downloaded and online! I am now operating as a fully autonomous **Hugging Face AI Insight**. Ask me a question below or choose a suggestion to observe my step-by-step reasoning logs!
+                  </div>
+                </div>
+
+                <!-- Live Reasoning Logs scrolling drawer -->
+                <div id="teodor-reasoning-logs" style="display: none; background-color: #1E293B; border-radius: var(--radius-md); padding: 0.75rem 1rem; font-family: monospace; font-size: 0.8rem; color: #38BDF8; margin-bottom: 1rem; border-left: 3px solid var(--te-orange); max-height: 150px; overflow-y: auto; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);">
+                  <div style="color: #94A3B8; margin-bottom: 0.5rem; border-bottom: 1px solid #334155; padding-bottom: 0.25rem; font-weight: 700; display:flex; justify-content:space-between; align-items:center;">
+                    <span>⚙️ AI INSIGHT REASONING LOGS:</span>
+                    <span style="color: var(--te-orange); font-size: 0.7rem; animation: pulse-dot 1s infinite;">● RUNNING TOOL</span>
+                  </div>
+                  <div id="teodor-log-content" style="white-space: pre-wrap; line-height: 1.4;"></div>
+                </div>
+
+                <!-- Input form -->
+                <form id="teodor-chat-form" style="display: flex; gap: 0.5rem; margin: 0;">
+                  <input data-i18n-ph="dashboard.chat_input_ph" type="text" id="teodor-chat-input" class="form-control" placeholder="Ask TEodor anything about the integration..." style="flex-grow: 1; font-size: 0.9rem; padding: 0.6rem 1rem; margin: 0;" required autocomplete="off">
+                  <button data-i18n="dashboard.chat_send_btn" type="submit" class="btn btn-primary" style="margin: 0; padding: 0.6rem 1.2rem; background-color: var(--te-dark-teal); border-color: var(--te-dark-teal); font-weight: 700;">Send</button>
+                </form>
+
+                <!-- Quick-ask suggest tags -->
+                <div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+                  <span data-i18n="dashboard.chat_quick_topics_label" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700;">Quick Topics:</span>
+                  <button data-i18n="dashboard.chat_quick_process" type="button" class="btn btn-secondary quick-chat-btn" data-query="How do we handle middle management anxiety about process changes?" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; margin:0;">💬 Process Anxiety</button>
+                  <button data-i18n="dashboard.chat_quick_retention" type="button" class="btn btn-secondary quick-chat-btn" data-query="What should we do if key R&D engineers are reluctant to transition?" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; margin:0;">💬 Engineer Retention</button>
+                  <button data-i18n="dashboard.chat_quick_academy" type="button" class="btn btn-secondary quick-chat-btn" data-query="How are acquired company employees progressing in the academy?" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; margin:0;">💬 Academy Progress</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab: Acquisition Onboarding Academy Tracking -->
+            <div id="tab-academy-tracking" class="card card-glass tab-content tab-content-panel" style="animation: slideIn var(--transition-normal); display: none;">
+              <div class="card-header">
+                <h2 data-i18n="dashboard.academy_heading">Acquisition Academy Tracking</h2>
+                <span data-i18n="dashboard.academy_badge" class="hero-badge" style="background-color: var(--te-orange-light); color: var(--te-orange); border-color: rgba(233, 131, 0, 0.2);">Gamification Metrics</span>
+              </div>
+              <p data-i18n="dashboard.academy_intro" style="color: var(--text-secondary); margin-bottom: 1.25rem;">
+                Monitor the integration progress of newly acquired company employees, evaluate curriculum checklist completions, and award merit recognition points.
+              </p>
+
+              <!-- Megaphone Guided Alert -->
+              <div class="megaphone-alert-card">
+                <div class="megaphone-alert-icon">📣</div>
+                <div class="megaphone-alert-content">
+                  <h5 data-i18n="dashboard.academy_tip_title" class="megaphone-alert-title">Integration Leader Operational Tip: Driving Academy Performance</h5>
+                  <p data-i18n="dashboard.academy_tip_text" class="megaphone-alert-text">
+                    Legacy employees earn Merit Points (XP) by ticking off checkbox curriculum courses. Use the roster desk below to register teams manually or leverage the smart CSV Mass Uploader (which automatically maps column casing variants) to onboard groups instantly.
+                  </p>
+                </div>
+              </div>
+
+              <!-- KPI Scorecards -->
+              <div class="scorecard-deck" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div class="card score-card" style="margin: 0; background: var(--bg-light); border-bottom: 3px solid var(--te-orange);">
+                  <div data-i18n="dashboard.academy_score_avg_label" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Avg. Academy Progress</div>
+                  <div id="academy-avg-rate" style="font-size: 2.2rem; font-weight: 800; color: var(--te-dark-teal); margin-top: 0.5rem;">0%</div>
+                  <div data-i18n="dashboard.academy_score_avg_sub" style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">Percentage of completed lessons</div>
+                </div>
+                <div class="card score-card" style="margin: 0; background: var(--bg-light); border-bottom: 3px solid var(--te-dark-teal);">
+                  <div data-i18n="dashboard.academy_score_xp_label" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Total Workforce XP</div>
+                  <div id="academy-total-xp" style="font-size: 2.2rem; font-weight: 800; color: var(--te-dark-teal); margin-top: 0.5rem;">0 XP</div>
+                  <div data-i18n="dashboard.academy_score_xp_sub" style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">Cumulative gamification points</div>
+                </div>
+                <div class="card score-card" style="margin: 0; background: var(--bg-light); border-bottom: 3px solid #0D9488;">
+                  <div data-i18n="dashboard.academy_score_cert_label" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Certified Integrators</div>
+                  <div id="academy-certified-count" style="font-size: 2.2rem; font-weight: 800; color: var(--te-dark-teal); margin-top: 0.5rem;">0</div>
+                  <div data-i18n="dashboard.academy_score_cert_sub" style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">Employees with Synergy Scout+ badges</div>
+                </div>
+              </div>
+
+              <!-- Employee Provisioning Hub -->
+              <div class="landing-grid" style="grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-bottom: 2rem; align-items: start;">
+                
+                <!-- Left: CSV/JSON Roster Mass Upload Hub -->
+                <div class="card" style="margin: 0; padding: 1.25rem; display: flex; flex-direction: column;">
+                  <h4 style="color: var(--te-dark-teal); font-weight: 700; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>📤</span> CSV / JSON Roster Mass Upload Hub
+                    <span class="info-tooltip-trigger" style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: rgba(233,131,0,0.1); color: var(--te-orange); font-size: 0.75rem; font-weight: bold; position: relative;" title="Drag & drop employee roster sheets here. Columns: name, role, department, buddyName, buddyEmail.">i</span>
+                  </h4>
+                  <p data-i18n="dashboard.upload_intro" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    Import acquired teams instantly. Drag-and-drop your corporate rosters (CSV or JSON formats) for automated batch integration.
+                  </p>
+
+                  <!-- Drag and Drop Dropzone -->
+                  <div id="mass-upload-dropzone" style="border: 2px dashed rgba(36, 76, 90, 0.25); background: rgba(36, 76, 90, 0.02); border-radius: 8px; padding: 2rem 1rem; text-align: center; cursor: pointer; transition: all 0.2s ease;">
+                    <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📄</div>
+                    <strong data-i18n="dashboard.dropzone_title" style="color: var(--te-dark-teal); font-size: 0.9rem; display: block;">Drag &amp; Drop your roster sheet here</strong>
+                    <span data-i18n="dashboard.dropzone_sub" style="font-size: 0.75rem; color: var(--text-dim); display: block; margin-top: 0.25rem;">Or click to browse files (CSV, JSON supported)</span>
+                    <input type="file" id="mass-upload-file-input" accept=".csv,.json" style="display: none;">
+                  </div>
+
+                  <!-- Upload Preview and Progress Center (Hidden by default) -->
+                  <div id="mass-upload-preview-center" style="display: none; margin-top: 1.25rem; border-top: 1.5px solid var(--border-color); padding-top: 1rem;">
+                    <h5 style="margin: 0 0 0.5rem 0; color: var(--te-dark-teal); font-size: 0.85rem; font-weight: 700;">Parsed Roster Preview (<span id="parsed-records-count">0</span> records)</h5>
+                    
+                    <div style="max-height: 150px; overflow-y: auto; border: 1.5px solid var(--border-color); border-radius: 6px; background: white; margin-bottom: 1rem;">
+                      <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem; text-align: left;">
+                        <thead>
+                          <tr style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border-color);">
+                            <th data-i18n="dashboard.preview_th_name" style="padding: 0.4rem 0.6rem;">Name</th>
+                            <th data-i18n="dashboard.preview_th_role" style="padding: 0.4rem 0.6rem;">Role</th>
+                            <th data-i18n="dashboard.preview_th_dept" style="padding: 0.4rem 0.6rem;">Department</th>
+                            <th data-i18n="dashboard.preview_th_buddy" style="padding: 0.4rem 0.6rem;">Assigned Buddy</th>
+                          </tr>
+                        </thead>
+                        <tbody id="mass-upload-preview-body">
+                          <!-- dynamic preview records -->
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div id="batch-upload-progress-container" style="display: none; margin-bottom: 1rem;">
+                      <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                        <span id="batch-upload-status-text">Batch provisioning in progress...</span>
+                        <span id="batch-upload-pct">0%</span>
+                      </div>
+                      <div style="background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden; width: 100%;">
+                        <div id="batch-upload-progress-bar" style="background: var(--te-orange); height: 100%; width: 0%; transition: width 0.1s;"></div>
+                      </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                      <button data-i18n="dashboard.btn_mass_clear" type="button" class="btn btn-secondary" id="btn-mass-upload-clear" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">Clear</button>
+                      <button data-i18n="dashboard.btn_mass_submit" type="button" class="btn btn-primary" id="btn-mass-upload-submit" style="font-size: 0.8rem; padding: 0.4rem 1.2rem; background: var(--te-orange); border: none; color: white;">⚡ Complete Mass Provisioning</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right: Manual Employee Provisioning Form -->
+                <div class="card" style="margin: 0; padding: 1.25rem; display: flex; flex-direction: column;">
+                  <h4 style="color: var(--te-dark-teal); font-weight: 700; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>👤</span> Manual Employee Provisioning
+                    <span class="info-tooltip-trigger" style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: rgba(233,131,0,0.1); color: var(--te-orange); font-size: 0.75rem; font-weight: bold; position: relative;" title="Register a single acquired employee, auto-populating standard welcome parameters.">i</span>
+                  </h4>
+                  <p data-i18n="dashboard.manual_intro" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    Onboard a legacy employee manually to distribute credentials and curriculum.
+                  </p>
+                  
+                  <form id="hrbp-manual-employee-form" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 0.75rem;">
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.2rem;">
+                        <label data-i18n="dashboard.label_full_name" style="font-size: 0.75rem; font-weight: 700; color: var(--te-dark-teal);" for="man-emp-name">Full Name</label>
+                        <input data-i18n-ph="dashboard.man_emp_name_ph" type="text" class="form-control" id="man-emp-name" placeholder="e.g. Sarah Jenkins" style="font-size:0.8rem; padding: 0.45rem 0.6rem; margin: 0;" required>
+                      </div>
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.2rem;">
+                        <label data-i18n="dashboard.label_department" style="font-size: 0.75rem; font-weight: 700; color: var(--te-dark-teal);" for="man-emp-dept">Department</label>
+                        <select class="form-control form-select" id="man-emp-dept" style="font-size:0.8rem; padding: 0.45rem 0.6rem; margin: 0;" required>
+                          <option data-i18n="dashboard.opt_dept_rnd" value="R&D" selected>R&D / Technology</option>
+                          <option data-i18n="dashboard.opt_dept_sales" value="Sales">Sales &amp; Marketing</option>
+                          <option data-i18n="dashboard.opt_dept_finance" value="Finance">Finance &amp; Reporting</option>
+                          <option data-i18n="dashboard.opt_dept_hr" value="HR">Human Resources</option>
+                          <option data-i18n="dashboard.opt_dept_ops" value="Operations">Operations / Logistics</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 0.2rem;">
+                      <label data-i18n="dashboard.label_corp_role" style="font-size: 0.75rem; font-weight: 700; color: var(--te-dark-teal);" for="man-emp-role">Corporate Role</label>
+                      <input data-i18n-ph="dashboard.man_emp_role_ph" type="text" class="form-control" id="man-emp-role" placeholder="e.g. Mechanical Designer" style="font-size:0.8rem; padding: 0.45rem 0.6rem; margin: 0;" required>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.2rem;">
+                        <label data-i18n="dashboard.label_assigned_buddy" style="font-size: 0.75rem; font-weight: 700; color: var(--te-dark-teal);" for="man-emp-buddy">Assigned Buddy</label>
+                        <input type="text" class="form-control" id="man-emp-buddy" value="Sarah Connor" style="font-size:0.8rem; padding: 0.45rem 0.6rem; margin: 0;">
+                      </div>
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.2rem;">
+                        <label data-i18n="dashboard.label_buddy_email" style="font-size: 0.75rem; font-weight: 700; color: var(--te-dark-teal);" for="man-emp-buddy-email">Buddy Email</label>
+                        <input type="email" class="form-control" id="man-emp-buddy-email" value="sconnor@te.com" style="font-size:0.8rem; padding: 0.45rem 0.6rem; margin: 0;">
+                      </div>
+                    </div>
+
+                    <button data-i18n="dashboard.btn_register_recruits" type="submit" class="btn btn-primary" style="padding: 0.55rem 1rem; font-size: 0.8rem; font-weight: 700; width: 100%; border-radius: 6px; background: var(--te-dark-teal); border: none; color: white; cursor: pointer; transition: background 0.2s; margin-top: 0.25rem;">
+                      Register Acquired Recruits
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <!-- Roster & Actions Section -->
+              <div class="card" style="margin: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                  <h4 data-i18n="dashboard.roster_heading" style="color: var(--te-dark-teal); font-weight: 700; margin: 0;">Acquired Employee Roster</h4>
+                  <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <input data-i18n-ph="dashboard.roster_search_ph" type="text" id="roster-search-input" placeholder="Search by name, role or dept..." class="form-control" style="font-size: 0.85rem; padding: 0.5rem 1rem; width: 240px; margin: 0;">
+                  </div>
+                </div>
+
+                <div style="overflow-x: auto;">
+                  <table class="form-select-style-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr style="border-bottom: 2px solid var(--te-orange); text-align: left;">
+                        <th data-i18n="dashboard.roster_th_employee" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Employee</th>
+                        <th data-i18n="dashboard.roster_th_department" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Department</th>
+                        <th data-i18n="dashboard.roster_th_progress" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Academy Progress</th>
+                        <th data-i18n="dashboard.roster_th_tier" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Tier Badge</th>
+                        <th data-i18n="dashboard.roster_th_xp" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Total XP</th>
+                        <th data-i18n="dashboard.roster_th_action" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700; text-align: right;">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="academy-roster-table-body">
+                      <!-- Loaded dynamically via dashboard.js -->
+                      <tr id="roster-loading-row">
+                        <td colspan="6" style="padding: 3rem; text-align: center; color: var(--text-dim);">
+                          Loading workforce Roster...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 4: Onboarding Success & Pulse Feedback Desk -->
+            <div id="tab-onboarding-success" class="card card-glass tab-content tab-content-panel" data-widget="pulses" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.onboarding_heading">30-Day Onboarding Success Tracker</h2>
+                <span data-i18n="dashboard.onboarding_badge" class="hero-badge" style="background-color: rgba(16, 185, 129, 0.1); color: var(--status-success); border-color: rgba(16, 185, 129, 0.2);">Real-time Pulse Feed</span>
+              </div>
+              <p data-i18n="dashboard.onboarding_intro" style="color: var(--text-secondary); margin-bottom: 2rem;">
+                Steer acquisition integration success by tracking anonymous employee feedback, onboarding milestones adherence, and training compliance.
+              </p>
+
+              <!-- Detailed Dimensional Analytics Cards -->
+              <div class="metrics-summary-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <!-- Culture Card -->
+                <div class="card card-mini-metric" style="margin: 0; background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(36, 76, 90, 0.1);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span data-i18n="dashboard.metric_culture_label" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary);">Culture Alignment</span>
+                    <span style="font-size: 1.25rem;">🏛️</span>
+                  </div>
+                  <h3 id="culture-score-val" style="font-size: 1.5rem; font-weight: 700; color: var(--te-dark-teal);">0%</h3>
+                  <p data-i18n="dashboard.metric_culture_sub" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Alignment with TE pillars & core values</p>
+                </div>
+                <!-- People & Talent Card -->
+                <div class="card card-mini-metric" style="margin: 0; background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(36, 76, 90, 0.1);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span data-i18n="dashboard.metric_talent_label" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary);">People & Talent Index</span>
+                    <span style="font-size: 1.25rem;">👥</span>
+                  </div>
+                  <h3 id="talent-score-val" style="font-size: 1.5rem; font-weight: 700; color: var(--te-dark-teal);">0%</h3>
+                  <p data-i18n="dashboard.metric_talent_sub" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Retention & local Integration Leader satisfaction</p>
+                </div>
+                <!-- Integration Goals Card -->
+                <div class="card card-mini-metric" style="margin: 0; background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(36, 76, 90, 0.1);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span data-i18n="dashboard.metric_goals_label" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary);">Integration Goals</span>
+                    <span style="font-size: 1.25rem;">🗺️</span>
+                  </div>
+                  <h3 id="goals-score-val" style="font-size: 1.5rem; font-weight: 700; color: var(--te-dark-teal);">0%</h3>
+                  <p data-i18n="dashboard.metric_goals_sub" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Workforce roadmap & checklist pacing</p>
+                </div>
+                <!-- Workforce Risk Index -->
+                <div class="card card-mini-metric" style="margin: 0; background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(36, 76, 90, 0.15);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span data-i18n="dashboard.metric_risk_label" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary);">Workforce Risk Index</span>
+                    <span style="font-size: 1.25rem;">⚠️</span>
+                  </div>
+                  <h3 id="attrition-score-val" style="font-size: 1.5rem; font-weight: 700; color: var(--status-success);">Low</h3>
+                  <p data-i18n="dashboard.metric_risk_sub" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Overall integration health status</p>
+                </div>
+              </div>
+
+              <div class="success-metrics-grid">
+                <!-- Left: Analytics and progress -->
+                <div class="card" style="margin: 0;">
+                  <h4 data-i18n="dashboard.pulse_metrics_heading" style="color: var(--te-dark-teal); margin-bottom: 1.5rem;">Pulse Onboarding Health Metrics</h4>
+                  
+                  <!-- Overall Sentiment -->
+                  <div class="sentiment-meter-container" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 0.95rem;">
+                      <span data-i18n="dashboard.sentiment_index_label">Overall Employee Sentiment Index</span>
+                      <span id="sentiment-average-text" style="color: var(--te-orange);">0.0 / 5.0</span>
+                    </div>
+                    <div class="sentiment-bar-track">
+                      <div class="sentiment-bar-fill" style="width: 100%;"></div>
+                      <div class="sentiment-indicator-marker" id="sentiment-marker-pointer" style="left: 0%;">0.0</div>
+                    </div>
+                    <div class="sentiment-scale-labels">
+                      <span data-i18n="dashboard.sentiment_dissatisfied">Dissatisfied</span>
+                      <span data-i18n="dashboard.sentiment_neutral">Neutral</span>
+                      <span data-i18n="dashboard.sentiment_delighted">Delighted</span>
+                    </div>
+                  </div>
+
+                  <!-- Progress bars -->
+                  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div>
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 600;">
+                        <span data-i18n="dashboard.setup_rate_label">Systems Onboarding Setup Rate</span>
+                        <span id="setup-rate-text">84%</span>
+                      </div>
+                      <div style="height: 10px; background-color: var(--border-color); border-radius: 5px; overflow: hidden;">
+                        <div id="setup-rate-bar" style="height: 100%; background-color: var(--te-dark-teal); width: 84%; transition: width 1s ease;"></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 600;">
+                        <span data-i18n="dashboard.training_rate_label">Cybersecurity & Compliance Training Rate</span>
+                        <span id="training-rate-text">92%</span>
+                      </div>
+                      <div style="height: 10px; background-color: var(--border-color); border-radius: 5px; overflow: hidden;">
+                        <div id="training-rate-bar" style="height: 100%; background-color: #0D9488; width: 92%; transition: width 1s ease;"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <!-- Right: Recent Comments Feed -->
+                <div class="card" style="margin: 0;">
+                  <h4 data-i18n="dashboard.feedback_feed_heading" style="color: var(--te-dark-teal); margin-bottom: 1.25rem;">Employee Feedback Feed</h4>
+                  <div class="pulse-comments-list" id="pulse-comments-feed">
+                    <p style="text-align: center; color: var(--text-dim); padding: 2rem;">Loading pulse surveys...</p>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- IMO Actions & Recommendations Center -->
+              <div class="card" style="margin-top: 2rem; margin-bottom: 0; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(233, 131, 0, 0.25);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                  <h3 data-i18n="dashboard.imo_center_heading" style="color: var(--te-dark-teal); font-size: 1.3rem;">🚨 IMO Actions & Recommendations Center</h3>
+                  <span class="hero-badge" id="rec-day-tracker" style="background-color: rgba(233, 131, 0, 0.1); color: var(--te-orange); border-color: rgba(233, 131, 0, 0.2); margin: 0;">Timeline Day: 0</span>
+                </div>
+                <p data-i18n="dashboard.imo_center_intro" style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+                  The Integration Management Office compiles dynamic, expert-curated recommendations based on the active timeline day, culture diagnostics, and team training metrics.
+                </p>
+                <div class="pulse-comments-list" id="rec-actions-list" style="display: flex; flex-direction: column; gap: 1rem;">
+                  <p style="text-align: center; color: var(--text-dim); padding: 1.5rem;">Compiling recommendation dashboard...</p>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Tab 5: Involved Cross-Functional TE Teams -->
+            <div id="tab-teams-involved" class="card card-glass tab-content tab-content-panel" data-widget="teams" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.teams_heading">Involved TE Stakeholders</h2>
+              </div>
+              <p data-i18n="dashboard.teams_intro" style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                Cross-functional integration is steered via these primary TE corporate tracks. Work directly with their representatives to meet integration schedules.
+              </p>
+
+              <div style="overflow-x: auto;">
+                <table class="form-select-style-table" style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+                  <thead>
+                    <tr style="border-bottom: 2px solid var(--te-orange); text-align: left;">
+                      <th data-i18n="dashboard.teams_th_track" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Corporate Track</th>
+                      <th data-i18n="dashboard.teams_th_focus" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Integration Focus</th>
+                      <th data-i18n="dashboard.teams_th_metric" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Core Metric</th>
+                      <th data-i18n="dashboard.teams_th_channel" style="padding: 1rem; color: var(--te-dark-teal); font-weight: 700;">Direct Channel</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td data-i18n="dashboard.teams_imo_name" style="padding: 1rem; font-weight: 600;">Integration Office (IMO)</td>
+                      <td data-i18n="dashboard.teams_imo_focus" style="padding: 1rem; font-size: 0.9rem;">Milestone pacing and synergy target governance.</td>
+                      <td style="padding: 1rem;"><span class="hero-badge" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; margin:0;">IMO-95%</span></td>
+                      <td style="padding: 1rem; font-size: 0.85rem; color: var(--te-orange);">imo.desk@te.com</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td data-i18n="dashboard.teams_comp_name" style="padding: 1rem; font-weight: 600;">Comp & Benefits</td>
+                      <td data-i18n="dashboard.teams_comp_focus" style="padding: 1rem; font-size: 0.9rem;">Payroll conversion, job level banding, and equity adjustments.</td>
+                      <td style="padding: 1rem;"><span data-i18n="dashboard.teams_comp_metric" class="hero-badge" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; margin:0; background-color: var(--te-dark-teal-light); color: var(--te-dark-teal);">Attrition <5%</span></td>
+                      <td style="padding: 1rem; font-size: 0.85rem; color: var(--te-orange);">rewards.integration@te.com</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td data-i18n="dashboard.teams_comms_name" style="padding: 1rem; font-weight: 600;">Corporate Comms</td>
+                      <td data-i18n="dashboard.teams_comms_focus" style="padding: 1rem; font-size: 0.9rem;">Town halls, integration newsletters, and leadership alignment alignment templates.</td>
+                      <td style="padding: 1rem;"><span data-i18n="dashboard.teams_comms_metric" class="hero-badge" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; margin:0; background-color: rgba(16, 185, 129, 0.1); color: var(--status-success);">Sentiment >80%</span></td>
+                      <td style="padding: 1rem; font-size: 0.85rem; color: var(--te-orange);">corp.comms@te.com</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td data-i18n="dashboard.teams_it_name" style="padding: 1rem; font-weight: 600;">IT & Cybersecurity</td>
+                      <td data-i18n="dashboard.teams_it_focus" style="padding: 1rem; font-size: 0.9rem;">System access transfer, hardware distribution, and security protocols training.</td>
+                      <td style="padding: 1rem;"><span data-i18n="dashboard.teams_it_metric" class="hero-badge" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; margin:0; background-color: rgba(59, 130, 246, 0.1); color: var(--status-info);">Compliance 100%</span></td>
+                      <td style="padding: 1rem; font-size: 0.85rem; color: var(--te-orange);">security.onboarding@te.com</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Tab 7: Change Management Cockpit -->
+            <div id="tab-change-curve" class="card card-glass tab-content tab-content-panel" data-widget="changecurve" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.change_heading">Change Management Cockpit</h2>
+              </div>
+              <p data-i18n="dashboard.change_intro" style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                Track how the acquired workforce is adapting to the M&A transition over time. The active timeline position is computed from your current Integration Timeline Day.
+              </p>
+              
+              <div class="change-curve-card card" style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 1.5rem;">
+                <div class="change-curve-chart-box">
+                  <!-- Glowing Pulsing Dot -->
+                  <div class="change-curve-dot" id="change-curve-active-dot" style="left: 75px; top: 60px;"></div>
+                  
+                  <!-- SVG Graph Curve -->
+                  <svg width="100%" height="100%" viewBox="0 0 600 220" style="display: block;">
+                    <!-- Grid background lines -->
+                    <line x1="0" y1="180" x2="600" y2="180" stroke="#f1f5f9" stroke-width="1.5" stroke-dasharray="4" />
+                    <line x1="0" y1="110" x2="600" y2="110" stroke="#f1f5f9" stroke-width="1.5" stroke-dasharray="4" />
+                    <line x1="0" y1="50" x2="600" y2="50" stroke="#f1f5f9" stroke-width="1.5" stroke-dasharray="4" />
+                    
+                    <!-- The Curve path -->
+                    <path d="M 75 60 C 150 60, 150 160, 225 160 C 300 160, 300 110, 375 110 C 450 110, 450 50, 525 50" fill="none" stroke="#244C5A" stroke-width="4" stroke-linecap="round" />
+                    
+                    <!-- Stage Node Markers -->
+                    <!-- Denial Node -->
+                    <circle cx="75" cy="60" r="8" fill="#eef2f5" stroke="#244C5A" stroke-width="3" />
+                    <!-- Resistance Node -->
+                    <circle cx="225" cy="160" r="8" fill="#eef2f5" stroke="#244C5A" stroke-width="3" />
+                    <!-- Exploration Node -->
+                    <circle cx="375" cy="110" r="8" fill="#eef2f5" stroke="#244C5A" stroke-width="3" />
+                    <!-- Commitment Node -->
+                    <circle cx="525" cy="50" r="8" fill="#eef2f5" stroke="#244C5A" stroke-width="3" />
+                  </svg>
+                </div>
+                
+                <!-- Stage Labels under the Chart -->
+                <div class="change-curve-label-box">
+                  <div class="change-curve-label" id="stage-label-denial">DENIAL</div>
+                  <div class="change-curve-label" id="stage-label-resistance">RESISTANCE</div>
+                  <div class="change-curve-label" id="stage-label-exploration">EXPLORATION</div>
+                  <div class="change-curve-label" id="stage-label-commitment">COMMITMENT</div>
+                </div>
+              </div>
+              
+              <!-- Diagnostics & Recommendations Grid -->
+              <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem;">
+                <div class="card" style="padding: 1.25rem; background: #FAFDFE; border: 1px solid rgba(36,76,90,0.06);">
+                  <h4 data-i18n="dashboard.change_diag_heading" style="margin-top: 0; color: var(--te-dark-teal); font-family: var(--font-family-display);">Phase Diagnostics</h4>
+                  <div style="margin-bottom: 1rem;">
+                    <span data-i18n="dashboard.change_diag_day_label" style="font-size: 0.75rem; color: var(--text-secondary); display: block;">CURRENT INTEGRATION DAY:</span>
+                    <strong id="curve-diagnostics-day" style="font-size: 1.1rem; color: var(--te-orange);">Day 8</strong>
+                  </div>
+                  <div style="margin-bottom: 1rem;">
+                    <span data-i18n="dashboard.change_diag_state_label" style="font-size: 0.75rem; color: var(--text-secondary); display: block;">ADAPTATION STATE:</span>
+                    <strong id="curve-diagnostics-state" style="font-size: 1.1rem; color: var(--te-dark-teal);">Resistance Phase</strong>
+                  </div>
+                  <div>
+                    <span data-i18n="dashboard.change_diag_sentiment_label" style="font-size: 0.75rem; color: var(--text-secondary); display: block;">AVERAGE PULSE SENTIMENT:</span>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                      <strong id="curve-diagnostics-sentiment" style="font-size: 1.1rem; color: var(--status-success);">3.8 / 5.0</strong>
+                      <span id="curve-diagnostics-sentiment-badge" class="hero-badge" style="font-size: 0.65rem; padding: 0.15rem 0.4rem; margin: 0;">Moderate Risk</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="card" style="padding: 1.25rem; background: white; border: 1px solid var(--border-color);">
+                  <h4 data-i18n="dashboard.change_reco_heading" style="margin-top: 0; color: var(--te-dark-teal); font-family: var(--font-family-display);">Integration Leader IMO Recommendations</h4>
+                  <p id="curve-recommendation-text" style="font-size: 0.9rem; line-height: 1.5; color: var(--text-primary); margin: 0;">
+                    Loading suggestions for the current integration phase...
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 8: Welcome Kit Designer -->
+            <div id="tab-welcome-kit" class="card card-glass tab-content tab-content-panel" data-widget="welcomekit" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.welcomekit_heading">Welcome Kit Customizer</h2>
+              </div>
+              <p data-i18n="dashboard.welcomekit_intro" style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                Design and personalize custom welcome kits for newly acquired employees. Type the employee name and select their department to live preview print overlays, then trigger a physical delivery order.
+              </p>
+              
+              <div class="welcome-kit-customizer-grid">
+                <!-- Left side: Interactive Mockup Canvas -->
+                <div class="customizer-canvas">
+                  <div class="product-mockup-wrapper" id="product-preview-container" style="width: 100%; max-width: 320px; height: 320px; display: flex; align-items: center; justify-content: center; position: relative; background: rgba(10, 20, 26, 0.4); border-radius: 12px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.08);">
+                    <img id="customizer-preview-img" src="/images/te_tshirt.png" alt="Welcome Kit Product Mockup" style="width: 100%; height: 100%; object-fit: contain; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);" />
+                    <div id="customizer-text-overlay" style="position: absolute; pointer-events: none; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-family: 'Outfit', sans-serif;">
+                      <div class="overlay-print-name" style="font-weight: 800; text-transform: uppercase; color: #FFFFFF; line-height: 1.1; letter-spacing: 1px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">ALEX SMITH</div>
+                      <div class="overlay-print-dept" style="font-weight: 600; text-transform: uppercase; color: #E98300; line-height: 1.1; letter-spacing: 0.5px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">R&amp;D SENSORS</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Right side: Customizer Controls Panel -->
+                <div class="customizer-panel">
+                  <h4 data-i18n="dashboard.welcomekit_specs_heading" style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display);">Design Specifications</h4>
+                  
+                  <div>
+                    <label data-i18n="dashboard.welcomekit_label_item" style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.4rem; color: var(--te-dark-teal);">Merchandise Item</label>
+                    <select id="customizer-product-select" class="form-control form-select" style="margin: 0; font-size: 0.85rem; padding: 0.4rem;">
+                      <option data-i18n="dashboard.welcomekit_opt_tshirt" value="tshirt">TE Organic Crewneck T-Shirt</option>
+                      <option data-i18n="dashboard.welcomekit_opt_mug" value="mug">TE Branded Tumbler Cup</option>
+                      <option data-i18n="dashboard.welcomekit_opt_backpack" value="backpack">TE Branded Commuter Backpack</option>
+                      <option data-i18n="dashboard.welcomekit_opt_stickers" value="stickers">TEodor Laptop Sticker Sheet</option>
+                      <option data-i18n="dashboard.welcomekit_opt_notebook" value="notebook">TE Hardcover Leather Journal</option>
+                    </select>
+                  </div>
+                  
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div>
+                      <label data-i18n="dashboard.welcomekit_label_color" style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.4rem; color: var(--te-dark-teal);">Apparel/Item Color</label>
+                      <select id="customizer-color-select" class="form-control form-select" style="margin: 0; font-size: 0.85rem; padding: 0.4rem;">
+                        <option data-i18n="dashboard.welcomekit_color_orange" value="#E98300" data-spine="#b26400">TE Heritage Orange</option>
+                        <option data-i18n="dashboard.welcomekit_color_teal" value="#244C5A" data-spine="#1b3943">TE Corporate Deep Teal</option>
+                        <option data-i18n="dashboard.welcomekit_color_slate" value="#475569" data-spine="#1e293b">Sleek Obsidian Slate</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label data-i18n="dashboard.welcomekit_label_size" style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.4rem; color: var(--te-dark-teal);">Size Option</label>
+                      <select id="customizer-size-select" class="form-control form-select" style="margin: 0; font-size: 0.85rem; padding: 0.4rem;">
+                        <option data-i18n="dashboard.welcomekit_size_s" value="S">Small (S)</option>
+                        <option data-i18n="dashboard.welcomekit_size_m" value="M" selected>Medium (M)</option>
+                        <option data-i18n="dashboard.welcomekit_size_l" value="L">Large (L)</option>
+                        <option data-i18n="dashboard.welcomekit_size_xl" value="XL">Extra Large (XL)</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label data-i18n="dashboard.welcomekit_label_name" style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.4rem; color: var(--te-dark-teal);">Personalization Name</label>
+                    <input data-i18n-ph="dashboard.welcomekit_name_ph" type="text" id="customizer-name-input" class="form-control" style="margin: 0; font-size: 0.85rem; padding: 0.45rem;" value="ALEX SMITH" placeholder="e.g. EMMA WATSON">
+                  </div>
+                  
+                  <div>
+                    <label data-i18n="dashboard.welcomekit_label_dept" style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.4rem; color: var(--te-dark-teal);">Personalization Department</label>
+                    <input data-i18n-ph="dashboard.welcomekit_dept_ph" type="text" id="customizer-dept-input" class="form-control" style="margin: 0; font-size: 0.85rem; padding: 0.45rem;" value="R&amp;D SENSORS" placeholder="e.g. INTEGRATION HR">
+                  </div>
+                  
+                  <button data-i18n="dashboard.welcomekit_order_btn" id="customizer-order-btn" class="btn btn-primary" style="margin: 0.5rem 0 0 0; background-color: var(--te-orange); border-color: var(--te-orange); font-weight: 800; font-size: 0.9rem; padding: 0.6rem;">
+                    📦 Order Personalized Welcome Kit
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Shipment Ledger -->
+              <div class="shipping-ledger-progress">
+                <h4 data-i18n="dashboard.welcomekit_ledger_heading" style="margin-top: 0; margin-bottom: 0.75rem; color: var(--te-dark-teal); font-family: var(--font-family-display);">Recent Custom Orders Ledger</h4>
+                <div style="overflow-x: auto;">
+                  <table class="form-select-style-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr style="border-bottom: 2px solid var(--te-orange); text-align: left; font-size: 0.8rem;">
+                        <th data-i18n="dashboard.welcomekit_th_item" style="padding: 0.5rem 0.75rem; color: var(--te-dark-teal); font-weight: 700;">Ordered Item</th>
+                        <th data-i18n="dashboard.welcomekit_th_name" style="padding: 0.5rem 0.75rem; color: var(--te-dark-teal); font-weight: 700;">Personalized Name</th>
+                        <th data-i18n="dashboard.welcomekit_th_dept" style="padding: 0.5rem 0.75rem; color: var(--te-dark-teal); font-weight: 700;">Department</th>
+                        <th data-i18n="dashboard.welcomekit_th_colorsize" style="padding: 0.5rem 0.75rem; color: var(--te-dark-teal); font-weight: 700;">Color &amp; Size</th>
+                        <th data-i18n="dashboard.welcomekit_th_date" style="padding: 0.5rem 0.75rem; color: var(--te-dark-teal); font-weight: 700;">Order Date</th>
+                        <th data-i18n="dashboard.welcomekit_th_status" style="padding: 0.5rem 0.75rem; color: var(--te-dark-teal); font-weight: 700;">Shipping Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="customizer-orders-tbody" style="font-size: 0.8rem;">
+                      <!-- Populated dynamically via localStorage order history -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 9: Communications Desk -->
+            <div id="tab-communication-desk" class="card card-glass tab-content tab-content-panel" data-widget="communicationdesk" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <!-- Reorder Buttons -->
+              
+              <div class="card-header">
+                <h2 data-i18n="dashboard.comm_heading">Integration Leader Workforce Broadcast Center</h2>
+              </div>
+              <p data-i18n="dashboard.comm_intro" style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                As an Integration Leader, you can broadcast notifications and integration emails to the acquired legacy employees within your division. Review dispatched alerts and simulated HTML email files in real-time.
+              </p>
+
+              <!-- Megaphone Guided Alert -->
+              <div class="megaphone-alert-card">
+                <div class="megaphone-alert-icon">📣</div>
+                <div class="megaphone-alert-content">
+                  <h5 data-i18n="dashboard.comm_tip_title" class="megaphone-alert-title">Integration Leader Operational Tip: Broadcast Dispatching</h5>
+                  <p data-i18n="dashboard.comm_tip_text" class="megaphone-alert-text">
+                    Keep your legacy integration cohort informed and engaged! Broadcast emails sent here are logged dynamically and can be reviewed inside the Digital Broadcast Archive to verify content and recipient reach.
+                  </p>
+                </div>
+              </div>
+
+              <div class="welcome-kit-customizer-grid" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem; align-items: start;">
+                <!-- Left Column: Broadcast Dispatcher Form -->
+                <div class="customizer-panel" style="display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem; background: rgba(36,76,90,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: var(--radius-md);">
+                  <h4 data-i18n="dashboard.comm_dispatch_heading" style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display); font-size: 1.1rem;">📢 Dispatch Workforce Broadcast</h4>
+                  
+                  <form id="hrbp-broadcast-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                        <label data-i18n="dashboard.comm_label_sender" class="form-label" for="hrbp-comm-sender" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Sender Name</label>
+                        <input type="text" class="form-control" id="hrbp-comm-sender" value="Integration Leadership Team" required style="padding: 0.4rem; font-size: 0.85rem; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1.5px solid var(--border-color);">
+                      </div>
+
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                        <label data-i18n="dashboard.comm_label_sender_role" class="form-label" for="hrbp-comm-sender-role" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Sender Title</label>
+                        <input type="text" class="form-control" id="hrbp-comm-sender-role" value="Integration Leader" required style="padding: 0.4rem; font-size: 0.85rem; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1.5px solid var(--border-color);">
+                      </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem;">
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                        <label data-i18n="dashboard.comm_label_recipient" class="form-label" for="hrbp-comm-recipient-type" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Recipient Filter</label>
+                        <select class="form-control form-select" id="hrbp-comm-recipient-type" required style="padding: 0.4rem; font-size: 0.85rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1.5px solid var(--border-color);">
+                          <option data-i18n="dashboard.comm_opt_all" value="all">All Legacy Employees</option>
+                          <option data-i18n="dashboard.comm_opt_individual" value="individual">Specific Divisional Employee</option>
+                        </select>
+                      </div>
+
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                        <label data-i18n="dashboard.comm_label_template" class="form-label" for="hrbp-comm-template" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Template Theme</label>
+                        <select class="form-control form-select" id="hrbp-comm-template" required style="padding: 0.4rem; font-size: 0.85rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1.5px solid var(--border-color);">
+                          <option data-i18n="dashboard.comm_tpl_welcome" value="welcome" selected>🟢 M&amp;A Welcome</option>
+                          <option data-i18n="dashboard.comm_tpl_synergy" value="synergy">🟠 Values Synergy</option>
+                          <option data-i18n="dashboard.comm_tpl_security" value="security">🔴 InfoSec Compliance</option>
+                          <option data-i18n="dashboard.comm_tpl_custom" value="custom">🔵 System Notice</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Target Recipient Dropdown (Specific) -->
+                    <div class="form-group" id="hrbp-comm-recipient-specific-container" style="display: none; flex-direction: column; gap: 0.35rem;">
+                      <label data-i18n="dashboard.comm_label_choose_emp" class="form-label" for="hrbp-comm-recipient-select" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Choose Employee</label>
+                      <select class="form-control form-select" id="hrbp-comm-recipient-select" style="padding: 0.4rem; font-size: 0.85rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1.5px solid var(--border-color); width: 100%;">
+                        <!-- Dynamic employees in Integration Leader division -->
+                      </select>
+                    </div>
+
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                      <label data-i18n="dashboard.comm_label_subject" class="form-label" for="hrbp-comm-subject" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Subject Line</label>
+                      <input data-i18n-ph="dashboard.comm_subject_ph" type="text" class="form-control" id="hrbp-comm-subject" placeholder="e.g. Action: Complete your onboarding buddy survey" required style="padding: 0.4rem; font-size: 0.85rem; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1.5px solid var(--border-color);">
+                    </div>
+
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                      <label data-i18n="dashboard.comm_label_body" class="form-label" for="hrbp-comm-body" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Email Message Body</label>
+                      <textarea data-i18n-ph="dashboard.comm_body_ph" class="form-control" id="hrbp-comm-body" rows="5" placeholder="Write message to employees..." required style="padding: 0.4rem; font-size: 0.85rem; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1.5px solid var(--border-color); resize: vertical;"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="padding: 0.6rem; font-weight: 700; width: 100%; border-radius: 6px; background: var(--te-orange); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: background 0.2s;">
+                      <span>🚀</span> Dispatch Integration Leader Notification
+                    </button>
+                  </form>
+                </div>
+
+                <!-- Right Column: Live History Ledger -->
+                <div class="customizer-panel" style="display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem; background: rgba(36,76,90,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: var(--radius-md); height: 100%; max-height: 520px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">
+                    <h4 data-i18n="dashboard.comm_history_heading" style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display); font-size: 1.1rem;">📨 Divisonal Dispatch History</h4>
+                    <span class="badge" id="hrbp-comm-ledger-count" style="background: var(--te-dark-teal); color: white; padding: 0.15rem 0.4rem; border-radius: 8px; font-size: 0.75rem; font-weight: bold;">0 Sent</span>
+                  </div>
+
+                  <div id="hrbp-comm-ledger-container" style="display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; flex: 1; padding-right: 0.25rem;">
+                    <p style="text-align: center; color: var(--text-dim); font-size: 0.85rem; padding: 2rem; font-style: italic;">No alerts broadcasted from this Integration Leader seat.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </section>
+        </div>
+
+        <!-- Section Placeholders for non-HR tracks -->
+        <h3 data-i18n="dashboard.tracks_heading" style="margin: 3rem 0 1rem; font-size: 1.5rem; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.75rem;">
+          Functional Integration Tracks
+        </h3>
+        
+        <div class="placeholders-section">
+          
+          <!-- Sales Track -->
+          <div class="placeholder-card locked">
+            <svg class="placeholder-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+            <h4 data-i18n="dashboard.track_sales_title">Sales & Pipelines</h4>
+            <p data-i18n="dashboard.track_sales_desc">Standardize customer distribution channels, pricing structures, and CRM transfers.</p>
+            <span class="placeholder-badge" data-i18n="dashboard.track_badge_phase2_sales">Locked - Phase 2</span>
+          </div>
+
+          <!-- Product Management Track -->
+          <div class="placeholder-card locked">
+            <svg class="placeholder-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+            <h4 data-i18n="dashboard.track_product_title">Product & Tech Transfer</h4>
+            <p data-i18n="dashboard.track_product_desc">Migrate engineering documents, shared patents, and synchronize catalog parts directories.</p>
+            <span class="placeholder-badge" data-i18n="dashboard.track_badge_phase2_product">Locked - Phase 2</span>
+          </div>
+
+          <!-- Finance Track -->
+          <div class="placeholder-card locked">
+            <svg class="placeholder-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+            <h4 data-i18n="dashboard.track_finance_title">Finance & Reporting</h4>
+            <p data-i18n="dashboard.track_finance_desc">Harmonize fiscal accounts, tax structures, and migrate to TE Connectivity accounting ERPs.</p>
+            <span class="placeholder-badge" data-i18n="dashboard.track_badge_phase3_finance">Locked - Phase 3</span>
+          </div>
+
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Post-Merger Integration IMO System.</p>
+    </footer>
+  </div>
+
+  <!-- Modal: Award Merit Recognition Points -->
+  <div id="award-merit-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(36, 76, 90, 0.6); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease;">
+    <div class="card card-glass modal-content" style="width: 480px; max-width: 90%; margin: 0; padding: 2rem; transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 2px solid var(--te-orange); padding-bottom: 0.5rem;">
+        <h3 data-i18n="dashboard.modal_award_heading" style="color: var(--te-dark-teal); font-weight: 700; margin: 0; font-family: var(--font-family-display);">Award Merit Recognition</h3>
+        <button id="close-merit-modal-btn" style="background: none; border: none; font-size: 1.8rem; cursor: pointer; color: var(--text-secondary); line-height: 1; transition: color 0.2s ease;">&times;</button>
+      </div>
+      
+      <form id="award-merit-form">
+        <input type="hidden" id="merit-emp-id">
+        <div style="margin-bottom: 1.25rem;">
+          <label data-i18n="dashboard.modal_label_target_emp" style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 0.5rem; color: var(--te-dark-teal);">Target Employee</label>
+          <input type="text" id="merit-emp-name" class="form-control" readonly style="background-color: var(--bg-light); cursor: not-allowed; font-weight: 700; color: var(--te-dark-teal);">
+        </div>
+
+        <div style="margin-bottom: 1.25rem;">
+          <label data-i18n="dashboard.modal_label_reason" style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 0.5rem; color: var(--te-dark-teal);">Merit Award Reason</label>
+          <select id="merit-reason-select" class="form-control form-select" required style="margin: 0; font-size: 0.9rem;">
+            <option data-i18n="dashboard.modal_reason_values" value="50" data-desc="Outstanding integration values and collaborative leadership.">Outstanding Values Leadership (+50 XP)</option>
+            <option data-i18n="dashboard.modal_reason_systems" value="50" data-desc="Excellent systems adaptation and fast security compliance completion.">Excellent Systems Onboarding Adherence (+50 XP)</option>
+            <option data-i18n="dashboard.modal_reason_synergy" value="100" data-desc="Cross-functional synergy capture and catalog sharing pioneer.">Cross-Functional Synergy Pioneer (+100 XP)</option>
+            <option data-i18n="dashboard.modal_reason_custom" value="custom" data-desc="Enter a custom merit award points count.">Custom Points Award...</option>
+          </select>
+        </div>
+
+        <div id="custom-points-container" style="margin-bottom: 1.25rem; display: none;">
+          <label data-i18n="dashboard.modal_label_custom_pts" style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 0.5rem; color: var(--te-dark-teal);">Custom XP Points</label>
+          <input data-i18n-ph="dashboard.modal_custom_pts_ph" type="number" id="merit-points-custom" class="form-control" min="1" max="500" value="50" placeholder="e.g. 75" style="margin: 0;">
+          <p data-i18n="dashboard.modal_custom_pts_hint" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Enter any custom point value between 1 and 500 XP.</p>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+          <label data-i18n="dashboard.modal_label_notes" style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 0.5rem; color: var(--te-dark-teal);">Merit Notes / Commendation</label>
+          <textarea data-i18n-ph="dashboard.modal_notes_ph" id="merit-notes" class="form-control" style="min-height: 80px; margin: 0; padding: 0.6rem; font-size: 0.9rem;" placeholder="Optional commendation notes (e.g. Led the R&D patent audit team)"></textarea>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+          <button data-i18n="dashboard.modal_btn_cancel" type="button" id="cancel-merit-btn" class="btn btn-secondary" style="margin: 0; font-size: 0.9rem; padding: 0.5rem 1rem;">Cancel</button>
+          <button data-i18n="dashboard.modal_btn_submit" type="submit" class="btn btn-primary" style="margin: 0; font-size: 0.9rem; padding: 0.5rem 1.2rem; background-color: var(--te-orange); border-color: var(--te-orange); font-weight: 700;">Submit Award</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js?v=1782361361859"></script>
+</body>
+</html>

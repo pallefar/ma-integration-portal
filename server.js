@@ -1,0 +1,1804 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const aiService = require('./aiService');
+const ragService = require('./ragService');
+
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const DB_FILE = path.join(__dirname, 'db.json');
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Helper functions for database I/O
+function readDb() {
+  try {
+    if (!fs.existsSync(DB_FILE)) {
+      return { settings: { geminiApiKey: "", targetCompany: "NewCo Ltd." }, questions: [], assessments: [], modules: [], employees: [], hrbps: [], alerts: [], pulses: [] };
+    }
+    const data = fs.readFileSync(DB_FILE, 'utf8');
+    const parsed = JSON.parse(data);
+    parsed.settings = parsed.settings || {};
+    parsed.customSettings = parsed.customSettings || {};
+    parsed.questions = parsed.questions || [];
+    parsed.assessments = parsed.assessments || [];
+    parsed.modules = parsed.modules || [];
+    parsed.employees = parsed.employees || [];
+    parsed.hrbps = parsed.hrbps || [];
+    parsed.alerts = parsed.alerts || [];
+    parsed.pulses = parsed.pulses || [];
+    parsed.ragUploads = parsed.ragUploads || [];
+    parsed.courses = parsed.courses || [];
+    parsed.pages = parsed.pages || [];
+    parsed.media = parsed.media || [];
+    parsed.i18n = parsed.i18n || { languages: [{ code: 'en', label: 'English', flag: '🇬🇧', enabled: true }], defaultLang: 'en', strings: { en: {} } };
+    parsed.menus = parsed.menus || { sidebar: [], groups: [], landingCards: [] };
+    return parsed;
+  } catch (error) {
+    console.error('Error reading database file:', error);
+    return { settings: { geminiApiKey: "", targetCompany: "NewCo Ltd." }, questions: [], assessments: [], modules: [], employees: [], hrbps: [], alerts: [], pulses: [] };
+  }
+}
+
+function writeDb(data) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Error writing to database file:', error);
+    return false;
+  }
+}
+
+// REST API Endpoints
+
+// GET Portable Application Package Download (Dynamic ZIP creation)
+app.get('/api/admin/download-zip', (req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    const zipPath = path.join(__dirname, 'public', 'ma-app.zip');
+    
+    // Execute command to zip the workspace dynamically, excluding heavy modules, archives, and local tooling artifacts
+    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store"`, { cwd: __dirname });
+    
+    // Trigger download response
+    res.download(zipPath, 'te-ma-integration-portal.zip', (err) => {
+      if (err) {
+        console.error('Error sending zip file to browser:', err);
+      }
+    });
+  } catch (error) {
+    console.error('Error generating zip archive dynamically:', error);
+    res.status(500).json({ error: 'Failed to compile and zip the application package. Please ensure zip utility is available.' });
+  }
+});
+
+
+// GET RAG Search of Playbook Snippets
+app.get('/api/rag/search', (req, res) => {
+  const query = req.query.q || '';
+  try {
+    const results = ragService.searchPlaybook(query, 3);
+    res.json({ success: true, query, results });
+  } catch (error) {
+    console.error('Error during backend RAG search:', error);
+    res.status(500).json({ success: false, error: 'Failed to search playbook database.' });
+  }
+});
+
+// POST AI Model RAG PDF Training Upload & AI Insight Review
+app.post('/api/rag/upload', async (req, res) => {
+  try {
+    const { fileName, fileData } = req.body;
+    if (!fileName || !fileData) {
+      return res.status(400).json({ success: false, error: 'Missing fileName or fileData' });
+    }
+
+    console.log(`Processing RAG PDF upload request: "${fileName}"...`);
+
+    // Decode Base64 string
+    const base64Data = fileData.replace(/^data:application\/pdf;base64,/, "");
+    const pdfBuffer = Buffer.from(base64Data, 'base64');
+
+    // Parse plain text from PDF (pdf-parse v2 class API)
+    const { PDFParse } = require('pdf-parse');
+    const pdfParser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
+    const parsedPdf = await pdfParser.getText();
+    const pdfText = parsedPdf.text || '';
+
+    if (pdfText.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Could not extract any plain text from the uploaded PDF.' });
+    }
+
+    console.log(`Extracted ${pdfText.length} characters. Invoking AI Insight cognitive review...`);
+
+    // Get current settings to retrieve the active Gemini API Key
+    const db = readDb();
+    const apiKey = db.settings.geminiApiKey || '';
+
+    // Invoke AI Insight cognitive review
+    const review = await aiService.reviewPdfContent({ pdfText, fileName, apiKey });
+
+    console.log(`AI Insight review complete for "${fileName}". Dimension: ${review.dimension}. Chunks count: ${review.suggestedRags ? review.suggestedRags.length : 0}`);
+
+    // Persist finding blocks to db.json
+    db.ragUploads = db.ragUploads || [];
+    const newUpload = {
+      id: `upload_${Date.now()}`,
+      fileName: fileName,
+      summary: review.summary || '',
+      dimension: review.dimension || 'General Compliance',
+      keyFindings: review.keyFindings || [],
+      suggestedRags: review.suggestedRags || [],
+      timestamp: new Date().toISOString()
+    };
+    db.ragUploads.push(newUpload);
+    writeDb(db);
+
+    // Retrain memory RAG model instantly
+    ragService.initializeRAG();
+
+    res.json({
+      success: true,
+      upload: newUpload
+    });
+  } catch (error) {
+    console.error('Error handling RAG PDF upload:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to process and train RAG model.' });
+  }
+});
+
+// Ordered list of real lesson IDs from the course catalog (drives consistent
+// time-travel seeding so scaled progress matches actual lessons).
+function getCatalogLessonIds(db) {
+  const ids = [];
+  (db.courses || []).forEach(c => (c.modules || []).forEach(m => (m.lessons || []).forEach(l => ids.push(l.id))));
+  // Fallback to the legacy 9-lesson set if the catalog is empty
+  return ids.length ? ids : ['l1_1', 'l1_2', 'l1_3', 'l2_1', 'l2_2', 'l2_3', 'l3_1', 'l3_2', 'l3_3'];
+}
+
+// Helper for temporal employee scaling
+function scaleEmployeesForDay(employees, day, lessonIds) {
+  const pool = (lessonIds && lessonIds.length) ? lessonIds : ['l1_1', 'l1_2', 'l1_3', 'l2_1', 'l2_2', 'l2_3', 'l3_1', 'l3_2', 'l3_3'];
+  const total = pool.length;
+  return employees.map(emp => {
+    const cloned = { ...emp };
+    cloned.completedLessons = cloned.completedLessons || [];
+    cloned.bonusPoints = cloned.bonusPoints || 0;
+
+    if (day === 1) {
+      cloned.completedLessons = [];
+      cloned.bonusPoints = 0;
+      cloned.points = 0;
+      cloned.badge = "New Recruit";
+    } else if (day === 30) {
+      const n = Math.min((cloned.name.charCodeAt(0) % 2) + 1, total);
+      cloned.completedLessons = pool.slice(0, n);
+      cloned.points = cloned.completedLessons.length * 20 + Math.min(cloned.bonusPoints, 10);
+      cloned.badge = calculateBadge(cloned.completedLessons.length);
+    } else if (day === 60) {
+      const n = Math.min((cloned.name.charCodeAt(0) % 3) + 3, total);
+      cloned.completedLessons = pool.slice(0, n);
+      cloned.points = cloned.completedLessons.length * 20 + Math.min(cloned.bonusPoints, 20);
+      cloned.badge = calculateBadge(cloned.completedLessons.length);
+    } else if (day === 90) {
+      const n = Math.min((cloned.name.charCodeAt(0) % 3) + 6, total);
+      cloned.completedLessons = pool.slice(0, n);
+      cloned.points = cloned.completedLessons.length * 20 + Math.min(cloned.bonusPoints, 30);
+      cloned.badge = calculateBadge(cloned.completedLessons.length);
+    } else if (day >= 100) {
+      cloned.completedLessons = pool.slice();
+      cloned.points = total * 20 + cloned.bonusPoints;
+      cloned.badge = "Ultimate Integrator";
+    }
+    return cloned;
+  });
+}
+
+// Helper for temporal pulses feedback
+function getPulsesForDay(day) {
+  const pulseLibrary = {
+    1: [
+      { id: "p1", employeeName: "Alex Mercer", rating: 3, comment: "Excited but curious how TE systems will align with ours.", timestamp: "2026-05-21T08:00:00Z" },
+      { id: "p2", employeeName: "Sarah Connor", rating: 2, comment: "Concerned about R&D patent pipeline migrations. Need more clear directives.", timestamp: "2026-05-21T09:15:00Z" },
+      { id: "p3", employeeName: "Michael Scott", rating: 3, comment: "Will we get new email logins on Day 1? Communication could be clearer.", timestamp: "2026-05-21T10:30:00Z" }
+    ],
+    30: [
+      { id: "p4", employeeName: "Alex Mercer", rating: 4, comment: "SSO accounts are synced! Love the personalized portal.", timestamp: "2026-05-21T08:00:00Z" },
+      { id: "p5", employeeName: "Sarah Connor", rating: 3, comment: "HR training was standard, just got my first Culture Champion badge!", timestamp: "2026-05-21T09:15:00Z" },
+      { id: "p6", employeeName: "Michael Scott", rating: 4, comment: "Nice town-hall sync last week. Payroll mapping is feeling steady.", timestamp: "2026-05-21T10:30:00Z" }
+    ],
+    60: [
+      { id: "p7", employeeName: "Alex Mercer", rating: 4, comment: "IT credentials mapping is fully complete. Zero access delays.", timestamp: "2026-05-21T08:00:00Z" },
+      { id: "p8", employeeName: "Sarah Connor", rating: 4, comment: "The peer group alignment has been really transparent. Great teamwork.", timestamp: "2026-05-21T09:15:00Z" },
+      { id: "p9", employeeName: "Michael Scott", rating: 4, comment: "Standard benefits migration went through flawlessly this week.", timestamp: "2026-05-21T10:30:00Z" }
+    ],
+    90: [
+      { id: "p10", employeeName: "Alex Mercer", rating: 5, comment: "Standard playbook links are working beautifully. Outstanding documentation.", timestamp: "2026-05-21T08:00:00Z" },
+      { id: "p11", employeeName: "Sarah Connor", rating: 4, comment: "Retention contract alignment was very reassuring. Happy to stay with TE.", timestamp: "2026-05-21T09:15:00Z" },
+      { id: "p12", employeeName: "Michael Scott", rating: 5, comment: "Fully aligned with our core values of accountability and innovation.", timestamp: "2026-05-21T10:30:00Z" }
+    ],
+    100: [
+      { id: "p13", employeeName: "Alex Mercer", rating: 5, comment: "Outstanding M&A process, 5 stars! The best integration journey I've experienced.", timestamp: "2026-05-21T08:00:00Z" },
+      { id: "p14", employeeName: "Sarah Connor", rating: 5, comment: "Full synergy capture achieved seamlessly! Excited for the future.", timestamp: "2026-05-21T09:15:00Z" },
+      { id: "p15", employeeName: "Michael Scott", rating: 5, comment: "Felt extremely welcomed from Day 1 to Day 100! Complete organizational harmony.", timestamp: "2026-05-21T10:30:00Z" }
+    ]
+  };
+  
+  const targetDay = day >= 100 ? 100 : day >= 90 ? 90 : day >= 60 ? 60 : day >= 30 ? 30 : 1;
+  return pulseLibrary[targetDay];
+}
+
+// Helper for temporal diagnostic scores scaling
+function getScaledScores(latestScores, day) {
+  if (!latestScores) {
+    latestScores = { culture: 3.2, talent: 3.5, value: 3.0 };
+  }
+  if (day === 1) {
+    return { culture: 2.0, talent: 2.2, value: 2.5 };
+  } else if (day === 30) {
+    return {
+      culture: Math.min(Math.max(latestScores.culture, 3.0), 3.8),
+      talent: Math.min(Math.max(latestScores.talent, 3.2), 4.0),
+      value: Math.min(Math.max(latestScores.value, 3.0), 4.0)
+    };
+  } else if (day === 60) {
+    return {
+      culture: parseFloat(Math.min(Math.max(latestScores.culture * 1.15, 3.8), 4.5).toFixed(2)),
+      talent: parseFloat(Math.min(Math.max(latestScores.talent * 1.15, 4.0), 4.5).toFixed(2)),
+      value: parseFloat(Math.min(Math.max(latestScores.value * 1.15, 4.0), 4.6).toFixed(2))
+    };
+  } else if (day === 90) {
+    return {
+      culture: parseFloat(Math.min(Math.max(latestScores.culture * 1.3, 4.3), 4.8).toFixed(2)),
+      talent: parseFloat(Math.min(Math.max(latestScores.talent * 1.3, 4.5), 4.8).toFixed(2)),
+      value: parseFloat(Math.min(Math.max(latestScores.value * 1.3, 4.5), 4.9).toFixed(2))
+    };
+  } else {
+    return { culture: 5.0, talent: 5.0, value: 5.0 };
+  }
+}
+
+// POST Time Travel (Temporal Timeline Switch)
+app.post('/api/settings/time-travel', (req, res) => {
+  const { day } = req.body;
+  if (day === undefined) {
+    return res.status(400).json({ error: 'Timeline day is required.' });
+  }
+  
+  const parsedDay = parseInt(day) || 30;
+  const db = readDb();
+  db.settings = db.settings || {};
+  db.settings.timeTravelDay = parsedDay;
+  if (db.customSettings) {
+    db.customSettings.timeTravelDay = parsedDay;
+  }
+  writeDb(db);
+  
+  res.json({ success: true, timeTravelDay: parsedDay });
+});
+
+// POST Reorder Survey Questions
+app.post('/api/questions/reorder', (req, res) => {
+  const { questionIds } = req.body;
+  if (!Array.isArray(questionIds)) {
+    return res.status(400).json({ error: 'questionIds array is required.' });
+  }
+  
+  const db = readDb();
+  const questionsMap = {};
+  db.questions.forEach(q => {
+    questionsMap[q.id] = q;
+  });
+  
+  const reordered = [];
+  questionIds.forEach(id => {
+    if (questionsMap[id]) {
+      reordered.push(questionsMap[id]);
+    }
+  });
+  
+  db.questions.forEach(q => {
+    if (!questionIds.includes(q.id)) {
+      reordered.push(q);
+    }
+  });
+  
+  db.questions = reordered;
+  writeDb(db);
+  
+  res.json({ success: true, questions: db.questions });
+});
+
+// POST Reorder Dashboard Widgets
+app.post('/api/dashboard/reorder-widgets', (req, res) => {
+  const { layoutOrder } = req.body;
+  if (!Array.isArray(layoutOrder)) {
+    return res.status(400).json({ error: 'layoutOrder array is required.' });
+  }
+  
+  const db = readDb();
+  db.settings = db.settings || {};
+  db.settings.dashboardLayoutOrder = layoutOrder;
+  writeDb(db);
+  
+  res.json({ success: true, dashboardLayoutOrder: layoutOrder });
+});
+
+// GET Settings
+app.get('/api/settings', (req, res) => {
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    // Merge base settings under custom overrides so custom mode still exposes
+    // shared fields (targetCompany, roleVisibility, ...) instead of a sparse object.
+    const custom = { ...(db.settings || {}), ...(db.customSettings || {}), demoMode: false };
+    custom.timeTravelDay = custom.timeTravelDay !== undefined ? custom.timeTravelDay : (db.settings.timeTravelDay || 30);
+    res.json(custom);
+  } else {
+    res.json(db.settings || {});
+  }
+});
+
+// POST Settings
+app.post('/api/settings', (req, res) => {
+  const db = readDb();
+  db.settings = db.settings || {};
+  
+  if (req.body.demoMode !== undefined) {
+    db.settings.demoMode = req.body.demoMode === true || req.body.demoMode === 'true';
+    if (db.settings.demoMode === false && !db.customSettings) {
+      db.customSettings = { demoMode: false };
+    }
+    writeDb(db);
+    return res.json({ success: true, settings: db.settings.demoMode ? db.settings : db.customSettings });
+  }
+
+  if (db.settings.demoMode === false) {
+    db.customSettings = db.customSettings || { demoMode: false };
+    Object.keys(req.body).forEach(key => {
+      db.customSettings[key] = req.body[key];
+    });
+  } else {
+    Object.keys(req.body).forEach(key => {
+      db.settings[key] = req.body[key];
+    });
+  }
+  
+  writeDb(db);
+  res.json({ success: true, settings: (db.settings.demoMode === false ? db.customSettings : db.settings) });
+});
+
+// POST Reset Custom M&A Wizard state
+app.post('/api/settings/new-ma', (req, res) => {
+  const db = readDb();
+  db.customSettings = { demoMode: false };
+  db.customEmployees = [];
+  db.customHrbps = [];
+  db.customAssessments = [];
+  db.customAlerts = [];
+  db.customCommunications = [];
+  
+  // Wipe custom physical emails
+  const emailDir = path.join(__dirname, 'public', 'sent_emails');
+  if (fs.existsSync(emailDir)) {
+    try {
+      const files = fs.readdirSync(emailDir);
+      files.forEach(file => {
+        if (file.startsWith('comm_')) {
+          fs.unlinkSync(path.join(emailDir, file));
+        }
+      });
+    } catch (e) {
+      console.warn("Could not wipe custom physical emails:", e);
+    }
+  }
+
+  writeDb(db);
+  res.json({ success: true, message: 'Custom M&A successfully reset.' });
+});
+
+// =====================================================================
+// CMS API — Courses/Lessons, i18n, Menus, Pages, Media
+// =====================================================================
+
+// ---- Courses & Lessons ----
+app.get('/api/courses', (req, res) => {
+  const db = readDb();
+  res.json(db.courses || []);
+});
+
+// Create or update a whole course (upsert by id)
+app.post('/api/courses', (req, res) => {
+  const db = readDb();
+  db.courses = db.courses || [];
+  const course = req.body || {};
+  let stored;
+  if (course.id) {
+    const idx = db.courses.findIndex(c => c.id === course.id);
+    if (idx >= 0) { db.courses[idx] = { ...db.courses[idx], ...course }; stored = db.courses[idx]; }
+    else {
+      if (!course.title) return res.status(400).json({ error: 'Course title is required.' });
+      db.courses.push(course); stored = course;
+    }
+  } else {
+    if (!course.title) return res.status(400).json({ error: 'Course title is required.' });
+    course.id = 'course_' + Date.now();
+    course.modules = course.modules || [];
+    db.courses.push(course);
+    stored = course;
+  }
+  writeDb(db);
+  res.json({ success: true, course: stored });
+});
+
+app.delete('/api/courses/:id', (req, res) => {
+  const db = readDb();
+  db.courses = (db.courses || []).filter(c => c.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true, message: 'Course deleted.' });
+});
+
+// Upsert a single lesson within a course/module (keeps big payloads small)
+app.post('/api/courses/:courseId/lessons', (req, res) => {
+  const db = readDb();
+  const course = (db.courses || []).find(c => c.id === req.params.courseId);
+  if (!course) return res.status(404).json({ error: 'Course not found.' });
+  const { moduleId, lesson } = req.body || {};
+  const mod = (course.modules || []).find(m => m.id === moduleId);
+  if (!mod) return res.status(404).json({ error: 'Module not found.' });
+  if (!lesson) return res.status(400).json({ error: 'Lesson payload required.' });
+  mod.lessons = mod.lessons || [];
+  let stored;
+  if (lesson.id) {
+    const idx = mod.lessons.findIndex(l => l.id === lesson.id);
+    if (idx >= 0) { mod.lessons[idx] = { ...mod.lessons[idx], ...lesson }; stored = mod.lessons[idx]; }
+    else { mod.lessons.push(lesson); stored = lesson; }
+  } else {
+    lesson.id = 'lesson_' + Date.now();
+    lesson.order = mod.lessons.length + 1;
+    mod.lessons.push(lesson);
+    stored = lesson;
+  }
+  writeDb(db);
+  res.json({ success: true, lesson: stored });
+});
+
+app.delete('/api/courses/:courseId/lessons/:lessonId', (req, res) => {
+  const db = readDb();
+  const course = (db.courses || []).find(c => c.id === req.params.courseId);
+  if (!course) return res.status(404).json({ error: 'Course not found.' });
+  (course.modules || []).forEach(m => { m.lessons = (m.lessons || []).filter(l => l.id !== req.params.lessonId); });
+  writeDb(db);
+  res.json({ success: true, message: 'Lesson deleted.' });
+});
+
+// Flat lesson lookup used by the employee academy + completion validation
+app.get('/api/lessons', (req, res) => {
+  const db = readDb();
+  const flat = [];
+  (db.courses || []).forEach(c => (c.modules || []).forEach(m => (m.lessons || []).forEach(l => {
+    flat.push({ ...l, courseId: c.id, courseTitle: c.title, moduleId: m.id, moduleTitle: m.title, moduleBadge: m.badge });
+  })));
+  res.json(flat);
+});
+
+// ---- i18n (translations) ----
+app.get('/api/i18n', (req, res) => {
+  const db = readDb();
+  res.json(db.i18n || { languages: [], defaultLang: 'en', strings: {} });
+});
+
+// Merge partial strings/languages into the i18n store
+app.post('/api/i18n', (req, res) => {
+  const db = readDb();
+  db.i18n = db.i18n || { languages: [], defaultLang: 'en', strings: {} };
+  const body = req.body || {};
+  if (Array.isArray(body.languages)) db.i18n.languages = body.languages;
+  if (body.defaultLang) db.i18n.defaultLang = body.defaultLang;
+  if (body.strings && typeof body.strings === 'object') {
+    Object.keys(body.strings).forEach(lang => {
+      db.i18n.strings[lang] = { ...(db.i18n.strings[lang] || {}), ...body.strings[lang] };
+    });
+  }
+  // Single-key convenience: { lang, key, value }
+  if (body.lang && body.key !== undefined) {
+    db.i18n.strings[body.lang] = db.i18n.strings[body.lang] || {};
+    db.i18n.strings[body.lang][body.key] = body.value;
+  }
+  writeDb(db);
+  res.json({ success: true, i18n: db.i18n });
+});
+
+// ---- Menus (sidebar / groups / landing cards) ----
+app.get('/api/menus', (req, res) => {
+  const db = readDb();
+  res.json(db.menus || { sidebar: [], groups: [], landingCards: [] });
+});
+
+app.post('/api/menus', (req, res) => {
+  const db = readDb();
+  db.menus = db.menus || { sidebar: [], groups: [], landingCards: [] };
+  const body = req.body || {};
+  if (Array.isArray(body.sidebar)) db.menus.sidebar = body.sidebar;
+  if (Array.isArray(body.groups)) db.menus.groups = body.groups;
+  if (Array.isArray(body.landingCards)) db.menus.landingCards = body.landingCards;
+  writeDb(db);
+  res.json({ success: true, menus: db.menus });
+});
+
+// ---- Pages (CMS-authored page content) ----
+app.get('/api/pages', (req, res) => {
+  const db = readDb();
+  if (req.query.slug) {
+    const page = (db.pages || []).find(p => p.slug === req.query.slug);
+    return res.json(page || null);
+  }
+  res.json(db.pages || []);
+});
+
+app.post('/api/pages', (req, res) => {
+  const db = readDb();
+  db.pages = db.pages || [];
+  const page = req.body || {};
+  if (page.id) {
+    const idx = db.pages.findIndex(p => p.id === page.id);
+    if (idx >= 0) db.pages[idx] = { ...db.pages[idx], ...page };
+    else db.pages.push(page);
+  } else {
+    page.id = 'page_' + Date.now();
+    db.pages.push(page);
+  }
+  writeDb(db);
+  res.json({ success: true, page });
+});
+
+app.delete('/api/pages/:id', (req, res) => {
+  const db = readDb();
+  db.pages = (db.pages || []).filter(p => p.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true, message: 'Page deleted.' });
+});
+
+// ---- Media library (base64 upload to /public/uploads) ----
+app.get('/api/media', (req, res) => {
+  const db = readDb();
+  res.json(db.media || []);
+});
+
+app.post('/api/media', (req, res) => {
+  const db = readDb();
+  db.media = db.media || [];
+  const { fileName, fileData, kind } = req.body || {};
+  if (!fileName || !fileData) return res.status(400).json({ error: 'fileName and fileData are required.' });
+  try {
+    const uploadDir = path.join(__dirname, 'public', 'uploads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const m = /^data:([^;]+);base64,(.*)$/.exec(fileData);
+    const b64 = m ? m[2] : fileData.replace(/^data:[^,]*,/, '');
+    const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const stored = `${Date.now()}_${safeName}`;
+    fs.writeFileSync(path.join(uploadDir, stored), Buffer.from(b64, 'base64'));
+    const item = { id: 'media_' + Date.now(), fileName: safeName, kind: kind || (m ? m[1] : 'application/octet-stream'), url: `/uploads/${stored}`, timestamp: new Date().toISOString() };
+    db.media.push(item);
+    writeDb(db);
+    res.json({ success: true, media: item });
+  } catch (e) {
+    console.error('Media upload failed:', e);
+    res.status(500).json({ error: 'Media upload failed.' });
+  }
+});
+
+app.delete('/api/media/:id', (req, res) => {
+  const db = readDb();
+  const item = (db.media || []).find(m => m.id === req.params.id);
+  if (item && item.url) {
+    const p = path.join(__dirname, 'public', item.url.replace(/^\//, ''));
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) { /* ignore */ }
+  }
+  db.media = (db.media || []).filter(m => m.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true, message: 'Media deleted.' });
+});
+
+// Helper function to generate high-fidelity SQL schemas
+function generateSqlSchema(provider, db) {
+  let ddl = "";
+  let dml = "";
+
+  // Dialect-specific types
+  let jsonType = "JSON";
+  
+  if (provider === 'supabase' || provider === 'postgres') {
+    jsonType = "JSONB";
+  } else if (provider === 'azure') {
+    jsonType = "NVARCHAR(MAX)";
+  } else if (provider === 'aws' || provider === 'mysql') {
+    jsonType = "JSON";
+  }
+
+  // 1. Settings Table DDL
+  ddl += `-- -----------------------------------------------------\n`;
+  ddl += `-- Target Provider Dialect: ${provider.toUpperCase()}\n`;
+  ddl += `-- Table Structure for settings\n`;
+  ddl += `-- -----------------------------------------------------\n`;
+  if (provider === 'azure') {
+    ddl += `CREATE TABLE settings (\n`;
+    ddl += `  id VARCHAR(50) PRIMARY KEY,\n`;
+    ddl += `  targetCompany NVARCHAR(255) NOT NULL,\n`;
+    ddl += `  sector NVARCHAR(255),\n`;
+    ddl += `  size NVARCHAR(100),\n`;
+    ddl += `  hq NVARCHAR(255),\n`;
+    ddl += `  acquisitionDate VARCHAR(50),\n`;
+    ddl += `  synergyObjective NVARCHAR(MAX),\n`;
+    ddl += `  browserModel NVARCHAR(100),\n`;
+    ddl += `  timeTravelDay INT DEFAULT 1,\n`;
+    ddl += `  doomGloballyEnabled BIT DEFAULT 1,\n`;
+    ddl += `  doomUnlockXp INT DEFAULT 220,\n`;
+    ddl += `  demoMode BIT DEFAULT 0\n`;
+    ddl += `);\n\n`;
+  } else {
+    ddl += `CREATE TABLE settings (\n`;
+    ddl += `  id VARCHAR(50) PRIMARY KEY,\n`;
+    ddl += `  targetCompany VARCHAR(255) NOT NULL,\n`;
+    ddl += `  sector VARCHAR(255),\n`;
+    ddl += `  size VARCHAR(100),\n`;
+    ddl += `  hq VARCHAR(255),\n`;
+    ddl += `  acquisitionDate VARCHAR(50),\n`;
+    ddl += `  synergyObjective TEXT,\n`;
+    ddl += `  browserModel VARCHAR(100),\n`;
+    ddl += `  timeTravelDay INT DEFAULT 1,\n`;
+    ddl += `  doomGloballyEnabled BOOLEAN DEFAULT TRUE,\n`;
+    ddl += `  doomUnlockXp INT DEFAULT 220,\n`;
+    ddl += `  demoMode BOOLEAN DEFAULT FALSE\n`;
+    ddl += `);\n\n`;
+  }
+
+  // Settings Active Row
+  const settings = db.settings.demoMode === false ? (db.customSettings || { demoMode: false }) : db.settings;
+  const targetCo = settings.targetCompany || "Apex Robotics Corp.";
+  const sector = settings.sector || "Industrial Automation & AI";
+  const size = settings.size || "120 Employees";
+  const hq = settings.hq || "Zurich, Switzerland";
+  const acqDate = settings.acquisitionDate || "2026-06-01";
+  const objective = settings.synergyObjective || "Standardize systems and operations.";
+  const browserModel = settings.browserModel || "simulated-duck";
+  const timeTravelDay = settings.timeTravelDay || 1;
+  const doomEnabled = settings.doomGloballyEnabled !== false ? 1 : 0;
+  const doomUnlock = settings.doomUnlockXp || 220;
+
+  if (provider === 'azure') {
+    dml += `INSERT INTO settings (id, targetCompany, sector, size, hq, acquisitionDate, synergyObjective, browserModel, timeTravelDay, doomGloballyEnabled, doomUnlockXp, demoMode) VALUES (\n`;
+    dml += `  'settings_active', N'${targetCo.replace(/'/g, "''")}', N'${sector.replace(/'/g, "''")}', N'${size.replace(/'/g, "''")}', N'${hq.replace(/'/g, "''")}', '${acqDate}', N'${objective.replace(/'/g, "''")}', N'${browserModel}', ${timeTravelDay}, ${doomEnabled}, ${doomUnlock}, 0\n`;
+    dml += `);\n\n`;
+  } else {
+    const dBool = (doomEnabled === 1) ? 'TRUE' : 'FALSE';
+    dml += `INSERT INTO settings (id, targetCompany, sector, size, hq, acquisitionDate, synergyObjective, browserModel, timeTravelDay, doomGloballyEnabled, doomUnlockXp, demoMode) VALUES (\n`;
+    dml += `  'settings_active', '${targetCo.replace(/'/g, "''")}', '${sector.replace(/'/g, "''")}', '${size.replace(/'/g, "''")}', '${hq.replace(/'/g, "''")}', '${acqDate}', '${objective.replace(/'/g, "''")}', '${browserModel}', ${timeTravelDay}, ${dBool}, ${doomUnlock}, FALSE\n`;
+    dml += `);\n\n`;
+  }
+
+  // 2. Employees Table DDL
+  ddl += `-- Table Structure for employees\n`;
+  ddl += `-- -----------------------------------------------------\n`;
+  if (provider === 'azure') {
+    ddl += `CREATE TABLE employees (\n`;
+    ddl += `  id VARCHAR(50) PRIMARY KEY,\n`;
+    ddl += `  name NVARCHAR(255) NOT NULL,\n`;
+    ddl += `  role NVARCHAR(255) NOT NULL,\n`;
+    ddl += `  department NVARCHAR(100) NOT NULL,\n`;
+    ddl += `  company NVARCHAR(255),\n`;
+    ddl += `  isLeader BIT DEFAULT 0,\n`;
+    ddl += `  leaderRole NVARCHAR(255),\n`;
+    ddl += `  buddyName NVARCHAR(255),\n`;
+    ddl += `  buddyEmail NVARCHAR(255),\n`;
+    ddl += `  completedLessons ${jsonType},\n`;
+    ddl += `  points INT DEFAULT 0,\n`;
+    ddl += `  badge NVARCHAR(100),\n`;
+    ddl += `  bonusPoints INT DEFAULT 0\n`;
+    ddl += `);\n\n`;
+  } else {
+    ddl += `CREATE TABLE employees (\n`;
+    ddl += `  id VARCHAR(50) PRIMARY KEY,\n`;
+    ddl += `  name VARCHAR(255) NOT NULL,\n`;
+    ddl += `  role VARCHAR(255) NOT NULL,\n`;
+    ddl += `  department VARCHAR(100) NOT NULL,\n`;
+    ddl += `  company VARCHAR(255),\n`;
+    ddl += `  isLeader BOOLEAN DEFAULT FALSE,\n`;
+    ddl += `  leaderRole VARCHAR(255),\n`;
+    ddl += `  buddyName VARCHAR(255),\n`;
+    ddl += `  buddyEmail VARCHAR(255),\n`;
+    ddl += `  completedLessons ${jsonType},\n`;
+    ddl += `  points INT DEFAULT 0,\n`;
+    ddl += `  badge VARCHAR(100),\n`;
+    ddl += `  bonusPoints INT DEFAULT 0\n`;
+    ddl += `);\n\n`;
+  }
+
+  const employees = db.settings.demoMode === false ? (db.customEmployees || []) : (db.employees || []);
+  employees.forEach(emp => {
+    const isLeader = emp.isLeader ? (provider === 'azure' ? 1 : 'TRUE') : (provider === 'azure' ? 0 : 'FALSE');
+    const name = emp.name || '';
+    const role = emp.role || '';
+    const dept = emp.department || '';
+    const comp = emp.company || '';
+    const lRole = emp.leaderRole || 'None';
+    const bName = emp.buddyName || '';
+    const bEmail = emp.buddyEmail || '';
+    const lessons = JSON.stringify(emp.completedLessons || []);
+    const points = emp.points || 0;
+    const badge = emp.badge || 'New Recruit';
+    const bonus = emp.bonusPoints || 0;
+
+    if (provider === 'azure') {
+      dml += `INSERT INTO employees (id, name, role, department, company, isLeader, leaderRole, buddyName, buddyEmail, completedLessons, points, badge, bonusPoints) VALUES (\n`;
+      dml += `  '${emp.id}', N'${name.replace(/'/g, "''")}', N'${role.replace(/'/g, "''")}', N'${dept.replace(/'/g, "''")}', N'${comp.replace(/'/g, "''")}', ${isLeader}, N'${lRole.replace(/'/g, "''")}', N'${bName.replace(/'/g, "''")}', N'${bEmail.replace(/'/g, "''")}', N'${lessons.replace(/'/g, "''")}', ${points}, N'${badge.replace(/'/g, "''")}', ${bonus}\n`;
+      dml += `);\n`;
+    } else {
+      dml += `INSERT INTO employees (id, name, role, department, company, isLeader, leaderRole, buddyName, buddyEmail, completedLessons, points, badge, bonusPoints) VALUES (\n`;
+      dml += `  '${emp.id}', '${name.replace(/'/g, "''")}', '${role.replace(/'/g, "''")}', '${dept.replace(/'/g, "''")}', '${comp.replace(/'/g, "''")}', ${isLeader}, '${lRole.replace(/'/g, "''")}', '${bName.replace(/'/g, "''")}', '${bEmail.replace(/'/g, "''")}', '${lessons.replace(/'/g, "''")}', ${points}, '${badge.replace(/'/g, "''")}', ${bonus}\n`;
+      dml += `);\n`;
+    }
+  });
+
+  // 3. Integration Leaders Table DDL
+  ddl += `\n-- Table Structure for hrbps\n`;
+  ddl += `-- -----------------------------------------------------\n`;
+  if (provider === 'azure') {
+    ddl += `CREATE TABLE hrbps (\n`;
+    ddl += `  id VARCHAR(50) PRIMARY KEY,\n`;
+    ddl += `  name NVARCHAR(255) NOT NULL,\n`;
+    ddl += `  email NVARCHAR(255) NOT NULL,\n`;
+    ddl += `  role NVARCHAR(100),\n`;
+    ddl += `  assignedTracks ${jsonType},\n`;
+    ddl += `  supportingTeams ${jsonType}\n`;
+    ddl += `);\n\n`;
+  } else {
+    ddl += `CREATE TABLE hrbps (\n`;
+    ddl += `  id VARCHAR(50) PRIMARY KEY,\n`;
+    ddl += `  name VARCHAR(255) NOT NULL,\n`;
+    ddl += `  email VARCHAR(255) NOT NULL,\n`;
+    ddl += `  role VARCHAR(100),\n`;
+    ddl += `  assignedTracks ${jsonType},\n`;
+    ddl += `  supportingTeams ${jsonType}\n`;
+    ddl += `);\n\n`;
+  }
+
+  const hrbps = db.settings.demoMode === false ? (db.customHrbps || []) : (db.hrbps || []);
+  hrbps.forEach(h => {
+    const name = h.name || '';
+    const email = h.email || '';
+    const role = h.role || 'hrbp';
+    const tracks = JSON.stringify(h.assignedTracks || []);
+    const teams = JSON.stringify(h.supportingTeams || []);
+
+    if (provider === 'azure') {
+      dml += `INSERT INTO hrbps (id, name, email, role, assignedTracks, supportingTeams) VALUES (\n`;
+      dml += `  '${h.id}', N'${name.replace(/'/g, "''")}', N'${email.replace(/'/g, "''")}', N'${role.replace(/'/g, "''")}', N'${tracks.replace(/'/g, "''")}', N'${teams.replace(/'/g, "''")}'\n`;
+      dml += `);\n`;
+    } else {
+      dml += `INSERT INTO hrbps (id, name, email, role, assignedTracks, supportingTeams) VALUES (\n`;
+      dml += `  '${h.id}', '${name.replace(/'/g, "''")}', '${email.replace(/'/g, "''")}', '${role.replace(/'/g, "''")}', '${tracks.replace(/'/g, "''")}', '${teams.replace(/'/g, "''")}'\n`;
+      dml += `);\n`;
+    }
+  });
+
+  return ddl + dml;
+}
+
+// POST Migrate Database & Compile SQL Relational Schema
+app.post('/api/admin/migrate-db', (req, res) => {
+  const { provider, connectionDetails } = req.body;
+  if (!provider) {
+    return res.status(400).json({ error: 'Database provider is required.' });
+  }
+
+  const db = readDb();
+  
+  // 1. Generate full customized schema script
+  const sqlSchema = generateSqlSchema(provider, db);
+
+  // 2. Save active configuration persistently in setting metadata
+  db.settings = db.settings || {};
+  db.settings.databaseConfig = {
+    enabled: true,
+    provider,
+    status: 'connected',
+    connectionDetails: connectionDetails || {},
+    timestamp: new Date().toISOString()
+  };
+
+  if (db.settings.demoMode === false) {
+    db.customSettings = db.customSettings || { demoMode: false };
+    db.customSettings.databaseConfig = db.settings.databaseConfig;
+  }
+
+  writeDb(db);
+
+  res.json({
+    success: true,
+    message: `Database successfully migrated to ${provider.toUpperCase()} SQL Relational schema!`,
+    schema: sqlSchema
+  });
+});
+
+// GET AI Insight dynamic RAG portal insight
+app.get('/api/ai/insight', async (req, res) => {
+  const { portal } = req.query;
+  if (!portal) {
+    return res.status(400).json({ error: 'Portal parameter is required.' });
+  }
+
+  try {
+    const db = readDb();
+    
+    // Check if we are running in Custom M&A Mode or Demo Mode
+    const isCustom = db.settings && db.settings.demoMode === false;
+    const apiKey = isCustom ? 
+      ((db.customSettings && db.customSettings.geminiApiKey) || db.settings.geminiApiKey || '') : 
+      (db.settings.geminiApiKey || '');
+
+    // Invoke RAG-enabled AI insight service
+    const aiService = require('./aiService');
+    const insight = await aiService.generateSmolInsight({ portal, apiKey });
+
+    res.json({
+      success: true,
+      portal,
+      insight
+    });
+  } catch (error) {
+    console.error('Error generating AI Insight dynamic insight:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate integration insight.' });
+  }
+});
+
+  // GET Questions
+app.get('/api/questions', (req, res) => {
+  const db = readDb();
+  res.json(db.questions || []);
+});
+
+// POST Question (Add New)
+app.post('/api/questions', (req, res) => {
+  const { text, dimension, weight } = req.body;
+  if (!text || !dimension) {
+    return res.status(400).json({ error: 'Text and dimension are required.' });
+  }
+  
+  const db = readDb();
+  const newQuestion = {
+    id: 'q_' + Date.now(),
+    dimension,
+    text,
+    weight: parseFloat(weight) || 1.0
+  };
+  
+  db.questions.push(newQuestion);
+  writeDb(db);
+  res.status(201).json({ success: true, question: newQuestion });
+});
+
+// POST Question Update (Edit Existing)
+app.post('/api/questions/:id', (req, res) => {
+  const { id } = req.params;
+  const { text, dimension, weight } = req.body;
+  
+  const db = readDb();
+  const q = db.questions.find(item => item.id === id);
+  if (!q) {
+    return res.status(404).json({ error: 'Question not found.' });
+  }
+  
+  if (text !== undefined) q.text = text;
+  if (dimension !== undefined) q.dimension = dimension;
+  if (weight !== undefined) q.weight = parseFloat(weight) || 1.0;
+  
+  writeDb(db);
+  res.json({ success: true, question: q });
+});
+
+// DELETE Question
+app.delete('/api/questions/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  const initialLength = db.questions.length;
+  
+  db.questions = db.questions.filter(q => q.id !== id);
+  
+  if (db.questions.length === initialLength) {
+    return res.status(404).json({ error: 'Question not found.' });
+  }
+  
+  writeDb(db);
+  res.json({ success: true, message: 'Question deleted successfully.' });
+});
+
+// POST Assessment (Submit responses and trigger AI Plan generation)
+app.post('/api/assessment', async (req, res) => {
+  const { responses } = req.body; // e.g. { "q1": 4, "q2": 3 }
+  if (!responses || Object.keys(responses).length === 0) {
+    return res.status(400).json({ error: 'No survey responses provided.' });
+  }
+  
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const targetCompany = isCustom ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || "NewCo Ltd.") : (db.settings.targetCompany || "NewCo Ltd.");
+  
+  // Calculate average scores per dimension
+  const sums = { culture: 0, talent: 0, value: 0 };
+  const counts = { culture: 0, talent: 0, value: 0 };
+  
+  db.questions.forEach(q => {
+    const score = parseFloat(responses[q.id]);
+    if (!isNaN(score)) {
+      sums[q.dimension] += score;
+      counts[q.dimension]++;
+    }
+  });
+  
+  const scores = {
+    culture: counts.culture > 0 ? parseFloat((sums.culture / counts.culture).toFixed(2)) : 3.0,
+    talent: counts.talent > 0 ? parseFloat((sums.talent / counts.talent).toFixed(2)) : 3.0,
+    value: counts.value > 0 ? parseFloat((sums.value / counts.value).toFixed(2)) : 3.0
+  };
+  
+  const assessmentId = 'assess_' + Date.now();
+  const timestamp = new Date().toISOString();
+  
+  // Generate the AI 100-Day Integration Plan
+  let aiPlan = "";
+  try {
+    aiPlan = await aiService.generate100DayPlan({
+      targetCompany,
+      scores,
+      responses,
+      questions: db.questions,
+      apiKey: (isCustom ? (db.customSettings.geminiApiKey || db.settings.geminiApiKey) : db.settings.geminiApiKey)
+    });
+  } catch (error) {
+    console.error("AI Plan generation failed, falling back to local engine:", error);
+    aiPlan = aiService.generateLocalFallbackPlan(targetCompany, scores);
+  }
+  
+  const assessmentRecord = {
+    id: assessmentId,
+    timestamp,
+    targetCompany,
+    responses,
+    scores,
+    aiPlan
+  };
+  
+  if (isCustom) {
+    db.customAssessments = db.customAssessments || [];
+    db.customAssessments.push(assessmentRecord);
+  } else {
+    db.assessments = db.assessments || [];
+    db.assessments.push(assessmentRecord);
+  }
+  writeDb(db);
+  
+  res.status(201).json({ success: true, assessment: assessmentRecord });
+});
+
+// GET Latest Assessment
+app.get('/api/assessment/latest', (req, res) => {
+  const db = readDb();
+  const day = db.settings.timeTravelDay || 30;
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const assessments = isCustom && db.customAssessments && db.customAssessments.length > 0 ? db.customAssessments : (db.assessments || []);
+  const targetCompany = isCustom ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || "NewCo Ltd.") : (db.settings.targetCompany || "NewCo Ltd.");
+  
+  if (!assessments || assessments.length === 0) {
+    const mockAssessment = {
+      id: 'mock_assess',
+      timestamp: new Date().toISOString(),
+      targetCompany: targetCompany,
+      responses: {},
+      scores: getScaledScores(null, day),
+      aiPlan: aiService.generateLocalFallbackPlan(targetCompany, getScaledScores(null, day))
+    };
+    return res.json({ success: true, assessment: mockAssessment });
+  }
+  // Get the most recent assessment
+  const latest = { ...assessments[assessments.length - 1] };
+  latest.scores = getScaledScores(latest.scores, day);
+  res.json({ success: true, assessment: latest });
+});
+
+// GET All Assessments (History)
+app.get('/api/assessments', (req, res) => {
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    res.json(db.customAssessments && db.customAssessments.length > 0 ? db.customAssessments : (db.assessments || []));
+  } else {
+    res.json(db.assessments || []);
+  }
+});
+
+// DELETE Assessment
+app.delete('/api/assessments/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    db.customAssessments = (db.customAssessments || []).filter(a => a.id !== id);
+  } else {
+    db.assessments = (db.assessments || []).filter(a => a.id !== id);
+  }
+  writeDb(db);
+  res.json({ success: true, message: 'Assessment deleted.' });
+});
+
+// ==========================================
+// NEW M&A INTEGRATION DECK CRUD ENDPOINTS
+// ==========================================
+
+// GET Modules
+app.get('/api/modules', (req, res) => {
+  const db = readDb();
+  res.json(db.modules || []);
+});
+
+// POST Module (Add/Edit)
+app.post('/api/modules', (req, res) => {
+  const { id, title, dimension, urgency, minScore, maxScore, description, playbookLink, supportingTeams } = req.body;
+  if (!title || !dimension || !urgency || !description) {
+    return res.status(400).json({ error: 'Title, dimension, urgency, and description are required.' });
+  }
+
+  const db = readDb();
+  db.modules = db.modules || [];
+
+  if (id) {
+    // Edit existing
+    const idx = db.modules.findIndex(m => m.id === id);
+    if (idx !== -1) {
+      db.modules[idx] = {
+        id,
+        title,
+        dimension,
+        urgency,
+        minScore: parseFloat(minScore) || 1.0,
+        maxScore: parseFloat(maxScore) || 5.0,
+        description,
+        playbookLink: playbookLink || '',
+        supportingTeams: supportingTeams || ''
+      };
+      writeDb(db);
+      return res.json({ success: true, module: db.modules[idx] });
+    }
+  }
+
+  // Create new
+  const newModule = {
+    id: 'mod_' + Date.now(),
+    title,
+    dimension,
+    urgency,
+    minScore: parseFloat(minScore) || 1.0,
+    maxScore: parseFloat(maxScore) || 5.0,
+    description,
+    playbookLink: playbookLink || '',
+    supportingTeams: supportingTeams || ''
+  };
+
+  db.modules.push(newModule);
+  writeDb(db);
+  res.status(201).json({ success: true, module: newModule });
+});
+
+// DELETE Module
+app.delete('/api/modules/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  db.modules = (db.modules || []).filter(m => m.id !== id);
+  writeDb(db);
+  res.json({ success: true, message: 'Module deleted successfully.' });
+});
+
+// GET Employees
+app.get('/api/employees', (req, res) => {
+  const db = readDb();
+  const day = db.settings.timeTravelDay || 30;
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
+  const scaled = scaleEmployeesForDay(employeesList, day, getCatalogLessonIds(db));
+  res.json(scaled);
+});
+
+// POST Employee
+app.post('/api/employees', (req, res) => {
+  const { id, name, role, department, company, lang, isLeader, leaderRole, buddyName, buddyEmail } = req.body;
+  if (!name || !role || !department) {
+    return res.status(400).json({ error: 'Name, role, and department are required.' });
+  }
+
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const targetCompany = isCustom ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || "NewCo Ltd.") : (db.settings.targetCompany || "NewCo Ltd.");
+
+  let employee;
+  const list = isCustom ? (db.customEmployees || []) : (db.employees || []);
+  if (id) {
+    employee = list.find(e => e.id === id);
+  }
+
+  if (employee) {
+    employee.name = name;
+    employee.role = role;
+    employee.department = department;
+    employee.company = company || targetCompany || 'Acquired Co.';
+    employee.lang = lang || employee.lang || 'en';
+    employee.isLeader = isLeader === true || isLeader === 'true';
+    employee.leaderRole = leaderRole || 'None';
+    employee.buddyName = buddyName || '';
+    employee.buddyEmail = buddyEmail || '';
+  } else {
+    employee = {
+      id: id || 'emp_' + Date.now(),
+      name,
+      role,
+      department,
+      company: company || targetCompany || 'Acquired Co.',
+      lang: lang || 'en',
+      isLeader: isLeader === true || isLeader === 'true',
+      leaderRole: leaderRole || 'None',
+      buddyName: buddyName || '',
+      buddyEmail: buddyEmail || '',
+      completedLessons: [],
+      points: 0,
+      badge: 'New Recruit',
+      bonusPoints: 0
+    };
+    if (isCustom) {
+      db.customEmployees = db.customEmployees || [];
+      db.customEmployees.push(employee);
+    } else {
+      db.employees = db.employees || [];
+      db.employees.push(employee);
+    }
+  }
+
+  writeDb(db);
+  res.status(id ? 200 : 201).json({ success: true, employee });
+});
+
+// DELETE Employee
+app.delete('/api/employees/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    db.customEmployees = (db.customEmployees || []).filter(e => e.id !== id);
+  } else {
+    db.employees = (db.employees || []).filter(e => e.id !== id);
+  }
+  writeDb(db);
+  res.json({ success: true, message: 'Employee deleted successfully.' });
+});
+
+// Helper for Badge tier calculation
+function calculateBadge(completedCount) {
+  if (completedCount >= 9) return "Ultimate Integrator";
+  if (completedCount >= 6) return "Synergy Scout";
+  if (completedCount >= 3) return "Systems Scholar";
+  if (completedCount >= 1) return "Culture Champion";
+  return "New Recruit";
+}
+
+// GET or Create Employee (For tracking welcome page URLs & progress)
+app.get('/api/employees/get-or-create', (req, res) => {
+  const { empId, name, role, department, company, isLeader, leaderRole, buddyName, buddyEmail } = req.query;
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const targetCompany = isCustom ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || "NewCo Ltd.") : (db.settings.targetCompany || "NewCo Ltd.");
+  
+  let employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
+
+  let found = null;
+  if (empId) {
+    found = employeesList.find(e => e.id === empId);
+  }
+  if (!found && name) {
+    found = employeesList.find(e => e.name.toLowerCase() === name.toLowerCase());
+  }
+
+  if (found) {
+    let updated = false;
+    if (!found.completedLessons) { found.completedLessons = []; updated = true; }
+    if (found.points === undefined) { found.points = 0; updated = true; }
+    if (found.badge === undefined) { found.badge = "New Recruit"; updated = true; }
+    if (found.bonusPoints === undefined) { found.bonusPoints = 0; updated = true; }
+    if (found.isLeader === undefined) { found.isLeader = false; updated = true; }
+    if (found.leaderRole === undefined) { found.leaderRole = "None"; updated = true; }
+    if (found.buddyName === undefined) { found.buddyName = ""; updated = true; }
+    if (found.buddyEmail === undefined) { found.buddyEmail = ""; updated = true; }
+    if (updated) {
+      writeDb(db);
+    }
+    return res.json({ success: true, employee: found });
+  }
+
+  // Create new profile dynamically
+  const newEmployee = {
+    id: empId || 'emp_' + Date.now(),
+    name: name || "Valued Team Member",
+    role: role || "Specialist",
+    department: department || "Operations",
+    company: company || targetCompany || 'NextGen Sensors Ltd.',
+    completedLessons: [],
+    points: 0,
+    badge: "New Recruit",
+    bonusPoints: 0,
+    isLeader: isLeader === true || isLeader === 'true' || false,
+    leaderRole: leaderRole || 'None',
+    buddyName: buddyName || '',
+    buddyEmail: buddyEmail || ''
+  };
+
+  if (isCustom) {
+    db.customEmployees = db.customEmployees || [];
+    db.customEmployees.push(newEmployee);
+  } else {
+    db.employees = db.employees || [];
+    db.employees.push(newEmployee);
+  }
+  writeDb(db);
+  res.status(201).json({ success: true, employee: newEmployee });
+});
+
+// POST Complete Lesson
+app.post('/api/employees/complete-lesson', (req, res) => {
+  const { empId, lessonId } = req.body;
+  if (!empId || !lessonId) {
+    return res.status(400).json({ error: 'empId and lessonId are required.' });
+  }
+
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
+  const employee = employeesList.find(e => e.id === empId);
+
+  if (!employee) {
+    return res.status(404).json({ error: 'Employee not found.' });
+  }
+
+  employee.completedLessons = employee.completedLessons || [];
+  if (!employee.completedLessons.includes(lessonId)) {
+    employee.completedLessons.push(lessonId);
+    employee.bonusPoints = employee.bonusPoints || 0;
+    employee.points = (employee.completedLessons.length * 20) + employee.bonusPoints;
+    employee.badge = calculateBadge(employee.completedLessons.length);
+    writeDb(db);
+  }
+
+  res.json({ success: true, employee });
+});
+
+// POST Uncomplete Lesson
+app.post('/api/employees/uncomplete-lesson', (req, res) => {
+  const { empId, lessonId } = req.body;
+  if (!empId || !lessonId) {
+    return res.status(400).json({ error: 'empId and lessonId are required.' });
+  }
+
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
+  const employee = employeesList.find(e => e.id === empId);
+
+  if (!employee) {
+    return res.status(404).json({ error: 'Employee not found.' });
+  }
+
+  employee.completedLessons = employee.completedLessons || [];
+  if (employee.completedLessons.includes(lessonId)) {
+    employee.completedLessons = employee.completedLessons.filter(id => id !== lessonId);
+    employee.bonusPoints = employee.bonusPoints || 0;
+    employee.points = (employee.completedLessons.length * 20) + employee.bonusPoints;
+    employee.badge = calculateBadge(employee.completedLessons.length);
+    writeDb(db);
+  }
+
+  res.json({ success: true, employee });
+});
+
+// POST Award Merit Bonus (For Integration Leaders to award extra +50 XP points)
+app.post('/api/employees/award-merit', (req, res) => {
+  const { empId, points } = req.body;
+  if (!empId) {
+    return res.status(400).json({ error: 'empId is required.' });
+  }
+
+  const meritPoints = parseInt(points) || 50;
+
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
+  const employee = employeesList.find(e => e.id === empId);
+
+  if (!employee) {
+    return res.status(404).json({ error: 'Employee not found.' });
+  }
+
+  employee.completedLessons = employee.completedLessons || [];
+  employee.bonusPoints = (employee.bonusPoints || 0) + meritPoints;
+  employee.points = (employee.completedLessons.length * 20) + employee.bonusPoints;
+  employee.badge = calculateBadge(employee.completedLessons.length);
+  writeDb(db);
+
+  res.json({ success: true, employee });
+});
+
+// GET Integration Leaders
+app.get('/api/hrbps', (req, res) => {
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    res.json(db.customHrbps || []);
+  } else {
+    res.json(db.hrbps || []);
+  }
+});
+
+// POST Integration Leader
+app.post('/api/hrbps', (req, res) => {
+  const { id, name, email, assignedTracks, supportingTeams, role } = req.body;
+  if (!name || !email) {
+    return res.status(400).json({ error: 'Name and email are required.' });
+  }
+
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  
+  let hrbp;
+  const list = isCustom ? (db.customHrbps || []) : (db.hrbps || []);
+  if (id) {
+    hrbp = list.find(h => h.id === id);
+  }
+
+  if (hrbp) {
+    hrbp.name = name;
+    hrbp.email = email;
+    hrbp.assignedTracks = Array.isArray(assignedTracks) ? assignedTracks : [];
+    hrbp.supportingTeams = Array.isArray(supportingTeams) ? supportingTeams : [];
+    hrbp.role = role || 'hrbp';
+  } else {
+    hrbp = {
+      id: id || 'hrbp_' + Date.now(),
+      name,
+      email,
+      assignedTracks: Array.isArray(assignedTracks) ? assignedTracks : [],
+      supportingTeams: Array.isArray(supportingTeams) ? supportingTeams : [],
+      role: role || 'hrbp'
+    };
+    if (isCustom) {
+      db.customHrbps = db.customHrbps || [];
+      db.customHrbps.push(hrbp);
+    } else {
+      db.hrbps = db.hrbps || [];
+      db.hrbps.push(hrbp);
+    }
+  }
+
+  writeDb(db);
+  res.status(id ? 200 : 201).json({ success: true, hrbp });
+});
+
+// DELETE Integration Leader
+app.delete('/api/hrbps/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    db.customHrbps = (db.customHrbps || []).filter(h => h.id !== id);
+  } else {
+    db.hrbps = (db.hrbps || []).filter(h => h.id !== id);
+  }
+  writeDb(db);
+  res.json({ success: true, message: 'Integration Leader deleted successfully.' });
+});
+
+// GET Alerts
+app.get('/api/alerts', (req, res) => {
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    res.json(db.customAlerts || []);
+  } else {
+    res.json(db.alerts || []);
+  }
+});
+
+// POST Alert
+app.post('/api/alerts', (req, res) => {
+  const { id, title, message, type } = req.body;
+  if (!title || !message || !type) {
+    return res.status(400).json({ error: 'Title, message, and type are required.' });
+  }
+
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  
+  let alertObj;
+  const list = isCustom ? (db.customAlerts || []) : (db.alerts || []);
+  if (id) {
+    alertObj = list.find(a => a.id === id);
+  }
+
+  if (alertObj) {
+    alertObj.title = title;
+    alertObj.message = message;
+    alertObj.type = type;
+  } else {
+    alertObj = {
+      id: id || 'alert_' + Date.now(),
+      title,
+      message,
+      type
+    };
+    if (isCustom) {
+      db.customAlerts = db.customAlerts || [];
+      db.customAlerts.push(alertObj);
+    } else {
+      db.alerts = db.alerts || [];
+      db.alerts.push(alertObj);
+    }
+  }
+
+  writeDb(db);
+  res.status(id ? 200 : 201).json({ success: true, alert: alertObj });
+});
+
+// DELETE Alert
+app.delete('/api/alerts/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    db.customAlerts = (db.customAlerts || []).filter(a => a.id !== id);
+  } else {
+    db.alerts = (db.alerts || []).filter(a => a.id !== id);
+  }
+  writeDb(db);
+  res.json({ success: true, message: 'Alert deleted successfully.' });
+});
+
+// GET Pulses
+app.get('/api/pulses', (req, res) => {
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const day = (isCustom ? db.customSettings.timeTravelDay : db.settings.timeTravelDay) || db.settings.timeTravelDay || 30;
+  const scaled = getPulsesForDay(day);
+  // Append stored pulses (seeded + live submissions from the employee portal)
+  // so POSTed feedback actually surfaces on the dashboard change curve.
+  const stored = (db.pulses || []).filter(p => !scaled.some(s => s.id === p.id));
+  res.json([...scaled, ...stored]);
+});
+
+// POST Pulse
+app.post('/api/pulses', (req, res) => {
+  const { employeeName, rating, comment, type } = req.body;
+  if (!employeeName || !rating) {
+    return res.status(400).json({ error: 'Employee name and rating are required.' });
+  }
+
+  const db = readDb();
+  db.pulses = db.pulses || [];
+
+  const newPulse = {
+    id: 'pulse_' + Date.now(),
+    employeeName,
+    rating: parseInt(rating) || 3,
+    comment: comment || '',
+    timestamp: new Date().toISOString(),
+    type: type || '30-day'
+  };
+
+  db.pulses.push(newPulse);
+  writeDb(db);
+  res.status(201).json({ success: true, pulse: newPulse });
+});
+
+// --- Unified Communications Hub Endpoints ---
+
+// GET Communications Ledger
+app.get('/api/communications', (req, res) => {
+  const db = readDb();
+  if (db.settings && db.settings.demoMode === false) {
+    res.json(db.customCommunications || []);
+  } else {
+    res.json(db.communications || []);
+  }
+});
+
+// POST Communication (Dispatches alert & compiles HTML email)
+app.post('/api/communications/send', (req, res) => {
+  const { sender, senderRole, recipientType, recipientId, recipientEmail, recipientName, subject, template, body } = req.body;
+  
+  if (!sender || !recipientEmail || !subject || !body) {
+    return res.status(400).json({ error: 'Sender, recipient email, subject, and body are required.' });
+  }
+
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+
+  const commId = 'comm_' + Date.now();
+  const htmlFileName = `${commId}.html`;
+  
+  // Create dynamic directory if it doesn't exist
+  const emailDir = path.join(__dirname, 'public', 'sent_emails');
+  if (!fs.existsSync(emailDir)) {
+    fs.mkdirSync(emailDir, { recursive: true });
+  }
+
+  // Compile rich HTML email content
+  const htmlContent = compileHtmlEmail({
+    sender,
+    senderRole: senderRole || 'system',
+    recipientName: recipientName || recipientEmail,
+    recipientEmail,
+    subject,
+    template: template || 'custom',
+    body
+  });
+
+  // Write HTML file persistently
+  const htmlFilePath = path.join(emailDir, htmlFileName);
+  fs.writeFileSync(htmlFilePath, htmlContent, 'utf8');
+
+  const newComm = {
+    id: commId,
+    timestamp: new Date().toISOString(),
+    sender,
+    senderRole: senderRole || 'system',
+    recipientType: recipientType || 'all',
+    recipientId: recipientId || 'all',
+    recipientName: recipientName || recipientEmail,
+    recipientEmail,
+    subject,
+    template: template || 'custom',
+    body,
+    htmlEmailPath: `/sent_emails/${htmlFileName}`,
+    status: 'Sent'
+  };
+
+  if (isCustom) {
+    db.customCommunications = db.customCommunications || [];
+    db.customCommunications.push(newComm);
+  } else {
+    db.communications = db.communications || [];
+    db.communications.push(newComm);
+  }
+  writeDb(db);
+
+  res.status(201).json({ success: true, communication: newComm });
+});
+
+// DELETE Communication from history
+app.delete('/api/communications/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const commsList = isCustom ? (db.customCommunications || []) : (db.communications || []);
+  
+  const comm = commsList.find(c => c.id === id);
+  if (comm && comm.htmlEmailPath) {
+    const filePath = path.join(__dirname, 'public', comm.htmlEmailPath);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.warn("Could not delete physical HTML email:", err);
+      }
+    }
+  }
+
+  if (isCustom) {
+    db.customCommunications = (db.customCommunications || []).filter(c => c.id !== id);
+  } else {
+    db.communications = (db.communications || []).filter(c => c.id !== id);
+  }
+  writeDb(db);
+  res.json({ success: true, message: 'Communication record deleted successfully.' });
+});
+
+// HTML Email Compiler Helper Function
+function compileHtmlEmail({ sender, senderRole, recipientName, recipientEmail, subject, template, body }) {
+  let primaryColor = "#244C5A"; // Dark Teal
+  let accentColor = "#E98300"; // TE Orange
+  let typeLabel = "Welcome Announcement";
+  let bannerColor = "rgba(36, 76, 90, 0.05)";
+  
+  if (template === "security") {
+    primaryColor = "#B91C1C"; // Crimson
+    accentColor = "#E98300"; // TE Orange
+    typeLabel = "InfoSec Compliance Warning";
+    bannerColor = "rgba(185, 28, 28, 0.05)";
+  } else if (template === "synergy") {
+    primaryColor = "#E98300"; // TE Orange
+    accentColor = "#244C5A"; // Dark Teal
+    typeLabel = "Values Synergy Workshop";
+    bannerColor = "rgba(233, 131, 0, 0.05)";
+  } else if (template === "custom") {
+    primaryColor = "#374151"; // Charcoal
+    accentColor = "#E98300"; // TE Orange
+    typeLabel = "System Notice";
+    bannerColor = "rgba(55, 65, 81, 0.05)";
+  }
+
+  const currentDate = new Date().toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f1f5f9;
+      color: #334155;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 2rem auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      border: 1px solid #e2e8f0;
+    }
+    .email-header {
+      background: linear-gradient(135deg, ${primaryColor}, #1e293b);
+      padding: 2rem;
+      text-align: center;
+      border-bottom: 4px solid ${accentColor};
+    }
+    .email-body {
+      padding: 2.5rem 2rem;
+    }
+    .badge {
+      display: inline-block;
+      background-color: ${accentColor};
+      color: #ffffff;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1.25rem;
+    }
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: ${primaryColor};
+      margin: 0 0 1.25rem 0;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+    }
+    p {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #475569;
+      margin: 0 0 1.5rem 0;
+    }
+    .salutation {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 0.5rem;
+    }
+    .message-block {
+      background-color: ${bannerColor};
+      border-left: 4px solid ${accentColor};
+      padding: 1.25rem;
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+      font-size: 0.95rem;
+      margin: 1.5rem 0;
+      line-height: 1.6;
+    }
+    .cta-button {
+      display: inline-block;
+      background-color: ${primaryColor};
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 0.75rem 1.75rem;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      margin-top: 1rem;
+    }
+    .email-footer {
+      background-color: #f8fafc;
+      padding: 1.5rem 2rem;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .footer-links {
+      margin-top: 0.75rem;
+      font-weight: 600;
+    }
+    .footer-links a {
+      color: ${primaryColor};
+      text-decoration: none;
+      margin: 0 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="email-header">
+      <svg width="150" height="35" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="40" height="40" rx="4" fill="#FFFFFF" />
+        <text x="20" y="27" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="900" font-size="20" fill="${accentColor}">TE</text>
+        <text x="48" y="26" font-family="-apple-system, sans-serif" font-weight="700" font-size="15" fill="#FFFFFF" letter-spacing="-0.03em">connectivity</text>
+      </svg>
+    </div>
+    <div class="email-body">
+      <span class="badge">${typeLabel}</span>
+      <h1>${subject}</h1>
+      
+      <div class="salutation">Hello ${recipientName},</div>
+      <p>
+        This is an official communication broadcast regarding the ongoing <strong>TE Connectivity post-merger integration process</strong>.
+      </p>
+      
+      <div class="message-block">
+        ${body.replace(/\n/g, '<br>')}
+      </div>
+      
+      <p>
+        Please log into the M&A Integration Portal using your secure system Single Sign-On (SSO) credentials to review related milestones, complete required training modules, and track integration timelines.
+      </p>
+      
+      <div style="text-align: center;">
+        <a href="http://localhost:3000/" class="cta-button">Launch Integration Workspace</a>
+      </div>
+    </div>
+    <div class="email-footer">
+      <p>
+        <strong>Sender:</strong> ${sender} (${senderRole.toUpperCase()}) | <strong>Date:</strong> ${currentDate}
+      </p>
+      <p style="margin-top: 0.5rem;">
+        This email was programmatically compiled and dispatched by the TE Connectivity Integration Management Office (IMO) System.
+      </p>
+      <p>
+        CONFIDENTIALITY NOTICE: This message contains confidential information intended solely for the recipient's internal integration coordination purposes.
+      </p>
+      <div class="footer-links">
+        <a href="http://localhost:3000/">PMO Workspace</a> &bull; 
+        <a href="http://localhost:3000/playbook.html">M&A Playbook</a> &bull; 
+        <a href="http://localhost:3000/dashboard.html">Integration Leader Console</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Fallback for SPA routing/direct URLs
+app.get('*', (req, res, next) => {
+  // Let express static handle real files
+  const fileExt = path.extname(req.path);
+  if (fileExt) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`TE Connectivity M&A Portal server running at http://localhost:${PORT}`);
+});

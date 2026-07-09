@@ -1,0 +1,14 @@
+{
+  "name": "te-ma-integration-portal",
+  "version": "1.0.0",
+  "description": "TE Connectivity Post-Merger Integration Portal - First 100 Days",
+  "main": "server.js",
+  "scripts": {
+    "start": "(sleep 1 && open http://localhost:3000) & node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pdf-parse": "^2.4.5"
+  },
+  "private": true
+}

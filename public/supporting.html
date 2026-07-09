@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Supporting Teams Hub</title>
+  <meta name="description" content="Isolated support integration desks for HR Shared Services (HRSS), Regional HR, Legal, and Total Rewards.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <script src="/js/transitions.js?v=1782361361859"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Brand Header (dynamically updated by transitions.js) -->
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
+          </svg>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title">
+          <span class="portal-badge" style="background: #8B5CF6; color: white;">👥 SUPPORTING TEAMS</span>
+        </div>
+      </div>
+      <nav class="navigation-bar">
+        <!-- Will be overwritten by transitions.js -->
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <!-- Welcome Header -->
+      <div class="card card-glass" style="margin-bottom: 2rem; border-left: 5px solid #8B5CF6;">
+        <h2 data-i18n="supporting.workspace_heading" style="margin: 0; font-family: var(--font-family-display); color: var(--te-dark-teal);">M&amp;A Supporting Teams Workspace</h2>
+        <p data-i18n="supporting.workspace_intro" style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.95rem;">
+          Specialized operational dashboards coordinating technical credentials, regional localizations, intellectual property deeds, and benefits integration.
+        </p>
+      </div>
+
+      <!-- Supporting Team Subtabs -->
+      <div class="supporting-nav-tabs">
+        <button type="button" class="supporting-tab-btn active" data-support-team="hrss" data-i18n="supporting.tab_hrss">🏢 HRSS (Shared Services)</button>
+        <button type="button" class="supporting-tab-btn" data-support-team="regional" data-i18n="supporting.tab_regional">🌍 Regional HR</button>
+        <button type="button" class="supporting-tab-btn" data-support-team="legal" data-i18n="supporting.tab_legal">⚖️ Legal &amp; IP</button>
+        <button type="button" class="supporting-tab-btn" data-support-team="rewards" data-i18n="supporting.tab_rewards">💵 Total Rewards</button>
+      </div>
+
+      <!-- Active Team Heading -->
+      <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+        <span id="active-team-icon" style="font-size: 1.8rem;">🏢</span>
+        <div>
+          <h3 id="active-team-title" style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display); font-size: 1.4rem;">HR Shared Services (HRSS)</h3>
+          <p id="active-team-desc" style="margin: 0; color: var(--text-secondary); font-size: 0.85rem;">Managing IT credentials, badging systems, hardware migrations, and system directory synchronizations.</p>
+        </div>
+      </div>
+
+      <!-- 4-Pillar Grid -->
+      <div class="supporting-grid">
+        
+        <!-- Pillar 1: Communication -->
+        <div class="supporting-section-card">
+          <div class="supporting-card-header">
+            <h3 data-i18n="supporting.comm_heading">📣 Communication &amp; Bulletins</h3>
+          </div>
+          <p data-i18n="supporting.comm_desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Divisional updates and active service-desk announcements targeted for this support group.</p>
+          <div id="support-comm-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 250px; overflow-y: auto;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Pillar 2: Culture -->
+        <div class="supporting-section-card">
+          <div class="supporting-card-header">
+            <h3 data-i18n="supporting.culture_heading">🎭 Culture &amp; Alignment Metrics</h3>
+          </div>
+          <p data-i18n="supporting.culture_intro" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Cultural survey checks, training compliance metrics, and regional alignment diagnostics.</p>
+          
+          <div style="background: rgba(36, 76, 90, 0.03); padding: 1rem; border-radius: 8px; border: 1.5px dashed var(--border-color); text-align: center; margin-bottom: 1rem;">
+            <div style="font-size: 1.8rem; font-weight: bold; color: var(--te-dark-teal);" id="support-culture-score">82%</div>
+            <div data-i18n="supporting.culture_health_label" style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: bold;">Team Integration Health</div>
+          </div>
+          <p style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4;" id="support-culture-desc">
+            Shared Services IT synchronization matches integration metrics, ensuring hardware deployments have minimal disruption on local employee sentiment.
+          </p>
+        </div>
+
+        <!-- Pillar 3: Roles -->
+        <div class="supporting-section-card">
+          <div class="supporting-card-header">
+            <h3 data-i18n="supporting.roles_heading">👤 Active Support Roles</h3>
+          </div>
+          <p data-i18n="supporting.roles_desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Assigned specialists and coordinators managing integration tasks for this track.</p>
+          <div id="support-roles-list" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 180px; overflow-y: auto; margin-bottom: 1rem;">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Add Support Agent Inline Form -->
+          <form id="add-support-role-form" style="border-top: 1px dashed var(--border-color); padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <input type="text" id="new-agent-name" data-i18n-ph="supporting.agent_name_ph" placeholder="Agent Name" style="padding: 0.4rem; font-size: 0.8rem; border: 1px solid var(--border-color); border-radius: 4px;" required>
+            <input type="text" id="new-agent-spec" data-i18n-ph="supporting.agent_spec_ph" placeholder="Specialization (e.g. IT SSO)" style="padding: 0.4rem; font-size: 0.8rem; border: 1px solid var(--border-color); border-radius: 4px;" required>
+            <button type="submit" class="btn btn-dark" data-i18n="supporting.add_specialist_btn" style="padding: 0.4rem; font-size: 0.76rem; font-weight: bold; background: var(--te-dark-teal); color: white; border: none;">Add Team Specialist</button>
+          </form>
+        </div>
+
+        <!-- Pillar 4: Action Plan -->
+        <div class="supporting-section-card" style="grid-column: span 1;">
+          <div class="supporting-card-header">
+            <h3 data-i18n="supporting.actionplan_heading">🗺️ Active Action Plan &amp; Roadmap</h3>
+          </div>
+          <p data-i18n="supporting.actionplan_desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Track specific integration milestones and active workflows assigned to this supporting function.</p>
+          <div id="support-onboarding-progress" style="display: flex; flex-direction: column; gap: 0.8rem; max-height: 250px; overflow-y: auto;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/supporting.js?v=1782361361859"></script>
+</body>
+</html>

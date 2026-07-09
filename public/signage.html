@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Lobby Plant Digital Signage</title>
+  <meta name="description" content="High-visibility lobby TV screen displaying integration day countdown, upcoming events, milestones, and public employee recognition.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <style>
+    /* Premium visual styles overrides dedicated to full-screen Lobby TV screens */
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #020617 100%);
+      color: #f8fafc;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .signage-container {
+      display: grid;
+      grid-template-rows: 90px 1fr 50px;
+      height: 100vh;
+      width: 100vw;
+      box-sizing: border-box;
+      padding: 1.5rem;
+      gap: 1.5rem;
+    }
+
+    .signage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(30, 41, 59, 0.4);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 0 2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .signage-brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .signage-clock-panel {
+      text-align: right;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .signage-time {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--te-orange);
+      font-family: monospace;
+      letter-spacing: 1px;
+      text-shadow: 0 0 10px rgba(233, 131, 0, 0.4);
+    }
+
+    .signage-date {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .signage-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 1.5rem;
+      height: 100%;
+      min-height: 0; /* Important for grid scrolling */
+    }
+
+    .signage-col {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      min-height: 0;
+    }
+
+    .signage-card {
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+      min-height: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .signage-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, var(--te-orange), var(--te-dark-teal));
+    }
+
+    .signage-card-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #38bdf8;
+      margin-top: 0;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 0.5rem;
+    }
+
+    /* Progress bar */
+    .signage-progress-box {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .signage-progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .signage-progress-bar-bg {
+      background: rgba(255,255,255,0.1);
+      height: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .signage-progress-bar-fill {
+      background: linear-gradient(90deg, var(--te-orange), #ff9800);
+      height: 100%;
+      width: 0%;
+      transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px rgba(233,131,0,0.5);
+    }
+
+    /* Event Calendar */
+    .calendar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      flex-grow: 1;
+      min-height: 0;
+    }
+
+    .calendar-grid-signage {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      background: rgba(255,255,255,0.01);
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .calendar-day-header-signage {
+      text-align: center;
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: #64748b;
+      padding: 0.25rem 0;
+      text-transform: uppercase;
+    }
+
+    .calendar-cell-signage {
+      aspect-ratio: 1.2;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255,255,255,0.03);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #94a3b8;
+      padding: 0.25rem;
+      cursor: default;
+      transition: all 0.3s;
+      position: relative;
+    }
+
+    .calendar-cell-signage.has-event {
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(14, 165, 233, 0.4);
+      color: #38bdf8;
+    }
+
+    .calendar-cell-signage.active-day {
+      background: rgba(233, 131, 0, 0.2);
+      border: 1.5px solid var(--te-orange);
+      color: var(--te-orange);
+      box-shadow: 0 0 10px rgba(233,131,0,0.3);
+    }
+
+    .calendar-cell-signage.has-event::after {
+      content: '';
+      width: 5px;
+      height: 5px;
+      background: #0ea5e9;
+      border-radius: 50%;
+      position: absolute;
+      bottom: 4px;
+    }
+
+    .calendar-cell-signage.active-day::after {
+      background: var(--te-orange);
+    }
+
+    /* Scrolling Ticker Footer */
+    .signage-footer {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      padding: 0 1.5rem;
+      box-shadow: 0 -5px 25px rgba(0,0,0,0.3);
+      position: relative;
+    }
+
+    .ticker-label {
+      background: var(--te-orange);
+      color: white;
+      font-weight: 800;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 1.5rem;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(233,131,0,0.3);
+    }
+
+    .ticker-wrap {
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+    }
+
+    .ticker-content {
+      display: inline-block;
+      padding-left: 100%;
+      animation: ticker-animation 25s linear infinite;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .ticker-item {
+      display: inline-block;
+      margin-right: 3rem;
+    }
+
+    .ticker-item::after {
+      content: ' • ';
+      margin-left: 3rem;
+      color: var(--te-orange);
+      font-weight: 900;
+    }
+
+    @keyframes ticker-animation {
+      0% { transform: translate3d(0, 0, 0); }
+      100% { transform: translate3d(-100%, 0, 0); }
+    }
+
+    /* Leaderboard visual lists */
+    .signage-leader-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      transition: all 0.3s;
+    }
+
+    .signage-leader-row:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.08);
+    }
+
+    .signage-badge-circle {
+      width: 28px;
+      height: 28px;
+      background: rgba(233, 131, 0, 0.1);
+      border: 1px solid rgba(233,131,0,0.3);
+      color: var(--te-orange);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.75rem;
+    }
+
+    .signage-badge-circle.gold {
+      background: rgba(250, 204, 21, 0.15);
+      border-color: #facc15;
+      color: #facc15;
+    }
+
+    /* Rolling bulletin rotations */
+    .bulletin-fader {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 1rem;
+      transition: opacity 0.5s ease-in-out;
+    }
+
+    .bulletin-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      animation: pulseSpark 2s infinite alternate;
+    }
+
+    .bulletin-heading {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #ff9800;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .bulletin-body {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      line-height: 1.5;
+      max-width: 90%;
+    }
+
+    @keyframes pulseSpark {
+      0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(233,131,0,0)); }
+      100% { transform: scale(1.08); filter: drop-shadow(0 0 8px rgba(233,131,0,0.5)); }
+    }
+
+    /* Responsive grid columns on smaller resolutions */
+    @media (max-width: 1024px) {
+      .signage-grid {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+      }
+      body {
+        overflow: auto;
+        height: auto;
+      }
+      .signage-container {
+        height: auto;
+        grid-template-rows: auto auto auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="signage-container">
+    
+    <!-- Top Header Clock -->
+    <header class="signage-header">
+      <div class="signage-brand">
+        <svg viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg" style="height: 38px;">
+          <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+          <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+          <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#FFFFFF" letter-spacing="-0.03em">connectivity</text>
+        </svg>
+        <span data-i18n="signage.badge_broadcast_mode" style="font-size: 0.8rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 0.2rem 0.6rem; border-radius: 12px; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.3); text-transform: uppercase;">Lobby Broadcast Mode</span>
+      </div>
+      
+      <div class="signage-clock-panel">
+        <div>
+          <div class="signage-date" id="signage-date">Friday, May 22, 2026</div>
+          <span data-i18n="signage.site_label" style="font-size: 0.75rem; color: #64748b; font-weight: 700;">NEXTGEN SENSORS SITE</span>
+        </div>
+        <div class="signage-time" id="signage-clock">10:27:00 AM</div>
+      </div>
+    </header>
+
+    <!-- Main signage visual grid -->
+    <div class="signage-grid">
+      
+      <!-- Column 1: Onboarding Milestones & Events Calendar -->
+      <div class="signage-col">
+        <div class="signage-card" style="flex: 1.1;">
+          <div class="signage-card-title" data-i18n-html="signage.card_events_hub">
+            <span>📅</span> Integration Events Hub
+          </div>
+          
+          <div class="calendar-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+              <span id="calendar-month-year" data-i18n="signage.calendar_month_year" style="font-size: 0.85rem; font-weight: 800; color: #94a3b8; text-transform: uppercase;">May 2026</span>
+              <span data-i18n="signage.calendar_grid_label" style="font-size: 0.7rem; color: #64748b; font-weight: 700;">INTEGRATION ACTIVE GRID</span>
+            </div>
+            
+            <div class="calendar-grid-signage" id="signage-calendar-grid">
+              <!-- Day Headers -->
+              <div class="calendar-day-header-signage" data-i18n="signage.cal_day_sun">S</div>
+              <div class="calendar-day-header-signage" data-i18n="signage.cal_day_mon">M</div>
+              <div class="calendar-day-header-signage" data-i18n="signage.cal_day_tue">T</div>
+              <div class="calendar-day-header-signage" data-i18n="signage.cal_day_wed">W</div>
+              <div class="calendar-day-header-signage" data-i18n="signage.cal_day_thu">T</div>
+              <div class="calendar-day-header-signage" data-i18n="signage.cal_day_fri">F</div>
+              <div class="calendar-day-header-signage" data-i18n="signage.cal_day_sat">S</div>
+              
+              <!-- Populated dynamically via JS -->
+            </div>
+          </div>
+        </div>
+
+        <div class="signage-card" style="flex: 0.9;">
+          <div class="signage-card-title" data-i18n-html="signage.card_milestones">
+            <span>📊</span> Site Integration Milestones
+          </div>
+          
+          <div class="signage-progress-box">
+            <div class="signage-progress-header">
+              <span data-i18n="signage.progress_global_timeline" style="color: #cbd5e1;">Global Integration Timeline</span>
+              <span id="signage-timeline-day-text" style="color: var(--te-orange);">Day 8 / Day 30</span>
+            </div>
+            <div class="signage-progress-bar-bg">
+              <div class="signage-progress-bar-fill" id="signage-timeline-bar-fill"></div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; flex-grow: 1;">
+            <div class="card" style="margin: 0; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.04); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 1rem;">
+              <span data-i18n="signage.stat_academy_completion" style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700;">Site Academy Completion</span>
+              <strong id="signage-completion-rate" style="font-size: 1.8rem; color: #38bdf8; font-weight: 900; margin-top: 0.25rem;">75%</strong>
+            </div>
+            <div class="card" style="margin: 0; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.04); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 1rem;">
+              <span data-i18n="signage.stat_total_xp" style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700;">Total Site XP Earned</span>
+              <strong id="signage-team-xp" style="font-size: 1.8rem; color: var(--te-orange); font-weight: 900; margin-top: 0.25rem;">890</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Column 2: Today's Featured Events & Upcoming Deck -->
+      <div class="signage-col">
+        <div class="signage-card" style="height: 100%;">
+          <div class="signage-card-title" data-i18n-html="signage.card_today_event">
+            <span>📣</span> Today's Integration Event
+          </div>
+          
+          <div id="signage-today-event-box" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 0.75rem;">📅</div>
+            <h3 id="signage-today-event-title" style="margin: 0 0 0.5rem 0; color: white; font-size: 1.25rem; font-weight: 800;">No Event Today</h3>
+            <p id="signage-today-event-desc" style="margin: 0; color: #94a3b8; font-size: 0.85rem; line-height: 1.4;">Check the upcoming integration schedule on the calendar.</p>
+          </div>
+
+          <div class="signage-card-title" data-i18n-html="signage.card_upcoming_schedule" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
+            <span>⏳</span> Upcoming Schedule
+          </div>
+          
+          <div id="signage-upcoming-list" style="display: flex; flex-direction: column; gap: 0.75rem; flex-grow: 1; overflow-y: auto;">
+            <!-- Populated dynamically via JS (shows next 3 events) -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Column 3: Site Celebrations & XP Leaderboard -->
+      <div class="signage-col">
+        <!-- Site Celebrations Slide loop -->
+        <div class="signage-card" style="flex: 0.9;">
+          <div class="signage-card-title" data-i18n-html="signage.card_announcements">
+            <span>🎉</span> Site Announcements
+          </div>
+          <div id="signage-bulletin-container" style="flex-grow: 1; display: flex; align-items: center; justify-content: center;">
+            <div class="bulletin-fader" id="signage-bulletin-fader">
+              <div class="bulletin-icon">🚀</div>
+              <div class="bulletin-heading">Integration Kickoff!</div>
+              <div class="bulletin-body">Welcome NextGen Sensors team! Complete your onboarding profile and start earning milestone badges today.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Leaderboard -->
+        <div class="signage-card" style="flex: 1.1;">
+          <div class="signage-card-title" data-i18n-html="signage.card_leaderboard">
+            <span>🏆</span> Site XP Leaderboard
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; flex-grow: 1; overflow-y: auto;" id="signage-leaderboard-container">
+            <!-- Populated dynamically via JS -->
+            <p style="text-align: center; color: #64748b; padding: 2rem;">Loading leaderboard roster...</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Ticker Ticker Announcements -->
+    <footer class="signage-footer">
+      <div class="ticker-label" data-i18n="signage.ticker_label">Breaking News</div>
+      <div class="ticker-wrap">
+        <div class="ticker-content" id="signage-news-ticker">
+          <span class="ticker-item" data-i18n="signage.ticker_item_1">TE Connectivity successfully acquires NextGen Sensors Ltd. to expand sensor portfolio!</span>
+          <span class="ticker-item" data-i18n="signage.ticker_item_2">Welcome Emma Watson, Sarah Connor and the entire NextGen Sensors R&amp;D crew!</span>
+          <span class="ticker-item" data-i18n="signage.ticker_item_3">Complete 6 lessons in the Integration Academy to earn your certified Synergy Scout badge!</span>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="/js/signage.js?v=1782361361859"></script>
+  <!-- Minimal i18n bootstrap: this kiosk page does not load transitions.js, so it
+       applies data-i18n itself. Language via ?lang= or the shared employeeLanguage key. -->
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var lang = params.get('lang') || localStorage.getItem('employeeLanguage') || 'en';
+      var dict = null;
+      function pick(key) {
+        if (!dict || !dict.strings) return null;
+        var s = dict.strings;
+        return (s[lang] && s[lang][key] != null ? s[lang][key] : (s.en && s.en[key])) ?? null;
+      }
+      function apply() {
+        if (!dict) return;
+        document.querySelectorAll('[data-i18n]').forEach(function (el) { var v = pick(el.getAttribute('data-i18n')); if (v != null) el.textContent = v; });
+        document.querySelectorAll('[data-i18n-html]').forEach(function (el) { var v = pick(el.getAttribute('data-i18n-html')); if (v != null) el.innerHTML = v; });
+        document.querySelectorAll('[data-i18n-ph]').forEach(function (el) { var v = pick(el.getAttribute('data-i18n-ph')); if (v != null) el.setAttribute('placeholder', v); });
+        document.documentElement.setAttribute('lang', lang);
+      }
+      fetch('/api/i18n').then(function (r) { return r.json(); }).then(function (d) {
+        dict = d;
+        apply();
+        // signage.js rebuilds some regions (calendar headers) on its own timers — re-apply.
+        setTimeout(apply, 1500); setTimeout(apply, 4000);
+        setInterval(apply, 15000);
+      }).catch(function () {});
+    })();
+  </script>
+</body>
+</html>

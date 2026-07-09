@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Large / unrelated artifacts
+ma-portal.zip
+*.zip
+looxmaxing/
+
+# Runtime + OS
+*.log
+npm-debug.log*
+.DS_Store
+
+# Uploaded media (runtime-generated)
+public/uploads/

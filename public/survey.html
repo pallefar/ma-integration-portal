@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - M&A Integration Portal</title>
+  <meta name="description" content="Assess newly acquired teams across Culture, Talent, and Value to generate custom 100-day post-merger integration plans.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <script src="/js/transitions.js?v=1782361361859"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Premium Brand Header -->
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
+          </svg>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title">
+          <span class="portal-badge">M&A Integration</span>
+        </div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">PMO Console</a>
+        <a href="/survey.html" class="nav-link active">Survey</a>
+        <a href="/playbook.html" class="nav-link">Playbook</a>
+        <a href="/dashboard.html" class="nav-btn-portal-hrbp">Integration Leader Portal</a>
+        <a href="/employee.html?name=Alex&role=R%26D%20Specialist&dept=R%26D" class="nav-btn-portal-emp">Employee Portal</a>
+        <a href="/leaders.html" class="nav-link">Leaders Portal</a>
+        <a href="/admin.html" class="nav-btn-admin">Admin Settings</a>
+      </nav>
+    </header>
+
+    <!-- Main Content Frame -->
+    <main class="main-content">
+      <div class="landing-grid">
+        
+        <!-- Left: Actionable Introduction & Survey Card -->
+        <section class="hero-section">
+          <div class="hero-badge" data-i18n="survey.hero_badge">Integration Phase 1</div>
+          <h2 data-i18n="survey.hero_title">Connect & Align Your New Acquisition</h2>
+          <p class="hero-description" data-i18n="survey.hero_description">
+            Evaluate the target organization across key dimensions. Upon survey completion, our built-in **TE Integration Planner** compiles individual scores and synthesizes a tailored, 100-day post-merger action roadmap.
+          </p>
+
+          <!-- Target Company Context Banner (Assessing Target) -->
+          <div class="target-context-banner">
+            <div class="target-banner-main">
+              <span class="target-banner-badge" data-i18n="survey.target_banner_badge">Target Organization Under Assessment</span>
+              <h3 id="survey-target-title">Loading...</h3>
+              <div class="target-banner-meta-inline">
+                <span>🏢 Sector: <strong id="survey-target-sector-inline">...</strong></span>
+                <span>👥 Size: <strong id="survey-target-size-inline">...</strong></span>
+                <span>📍 HQ: <strong id="survey-target-hq-inline">...</strong></span>
+              </div>
+            </div>
+            <div class="target-banner-sidebar">
+              <span class="target-banner-sidebar-label" data-i18n="survey.target_banner_closing_label">Closing Date</span>
+              <span id="survey-target-date-inline" class="target-banner-sidebar-date">...</span>
+              <span class="target-banner-sidebar-status" data-i18n-html="survey.target_banner_status">
+                <span class="pulse-dot-active"></span> Active IMO Audit
+              </span>
+            </div>
+          </div>
+
+          <!-- Dynamic Assessment Card -->
+          <div class="card survey-card card-glass" id="survey-widget">
+            <div class="survey-header">
+              <h3 data-i18n="survey.diagnostic_heading">Acquisition Diagnostic</h3>
+              <span id="step-indicator" style="font-weight: 700; color: var(--te-orange);">Culture (1/3)</span>
+            </div>
+
+            <!-- Progress Tracker -->
+            <div class="survey-progress-bar-container">
+              <div class="survey-progress-fill" id="progress-bar"></div>
+            </div>
+
+            <!-- Dynamic Question Form Container -->
+            <form id="assessment-form">
+              <!-- Steps will be injected dynamically here -->
+              <div id="questions-container">
+                <!-- Fallback Loading text while fetching questions -->
+                <p style="text-align: center; color: var(--text-secondary);">Loading survey blueprint...</p>
+              </div>
+
+              <!-- Navigation Controls -->
+              <div class="survey-navigation">
+                <button type="button" class="btn btn-secondary" id="btn-prev" data-i18n="survey.btn_back" disabled>Back</button>
+                <button type="button" class="btn btn-primary" id="btn-next" data-i18n="survey.btn_next">Next</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- Right: Acquired Target Dashboard Sidebar -->
+        <aside class="dashboard-sidebar">
+          <div class="target-company-lockup">
+            <span class="target-label" data-i18n="survey.sidebar_target_label">Integration Target</span>
+            <div class="target-name" id="target-company-name">Loading target...</div>
+            
+            <div class="target-status-row" style="margin-bottom: 0.75rem;">
+              <div class="status-item">
+                <span class="label" data-i18n="survey.sidebar_status_label">Status</span>
+                <span class="value" style="color: var(--te-orange); font-weight: 700;" data-i18n="survey.sidebar_status_value">Pre-Audit</span>
+              </div>
+              <div class="status-item">
+                <span class="label" data-i18n="survey.sidebar_focus_label">Focus Track</span>
+                <span class="value" data-i18n="survey.sidebar_focus_value">HR & Culture</span>
+              </div>
+            </div>
+
+            <div class="target-metadata-deck" style="display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px dashed rgba(226, 232, 240, 0.3); padding-top: 0.75rem; margin-top: 0.75rem;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span style="color: var(--text-secondary);" data-i18n="survey.sidebar_sector_label">Sector:</span>
+                <span id="target-sector" style="font-weight: 600; color: var(--te-dark-teal);">Loading...</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span style="color: var(--text-secondary);" data-i18n="survey.sidebar_size_label">Size:</span>
+                <span id="target-size" style="font-weight: 600; color: var(--te-dark-teal);">Loading...</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span style="color: var(--text-secondary);" data-i18n="survey.sidebar_hq_label">Headquarters:</span>
+                <span id="target-hq" style="font-weight: 600; color: var(--te-dark-teal);">Loading...</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span style="color: var(--text-secondary);" data-i18n="survey.sidebar_closing_label">Closing Date:</span>
+                <span id="target-closing-date" style="font-weight: 600; color: var(--te-dark-teal);">Loading...</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; margin-top: 0.25rem;">
+                <span style="color: var(--text-secondary);" data-i18n="survey.sidebar_objective_label">Synergy Objective:</span>
+                <span id="target-objective" style="font-style: italic; color: var(--text-primary); font-weight: 500; text-align: left; line-height: 1.4;">Loading...</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; border-top: 1px dashed rgba(226, 232, 240, 0.3); padding-top: 0.75rem; margin-top: 0.75rem; font-size: 0.8rem;">
+                <input type="checkbox" id="chk-local-hr-exists" checked style="width: 16px; height: 16px; cursor: pointer;">
+                <label for="chk-local-hr-exists" style="cursor: pointer; font-weight: 600; color: var(--te-dark-teal);" data-i18n="survey.sidebar_local_hr_label">Local HR Team Moving Over</label>
+              </div>
+            </div>
+            
+            <p style="font-size: 0.85rem; opacity: 0.8; line-height: 1.5; margin-top: 0.5rem;" data-i18n="survey.sidebar_archive_note">
+              Assessments are archived locally and can be managed or re-analyzed within the Admin Control deck.
+            </p>
+          </div>
+
+          <!-- Fast Link to playbook -->
+          <div class="card" style="margin-top: 1rem; border-left: 4px solid var(--te-dark-teal);">
+            <h4 style="margin-bottom: 0.5rem; color: var(--te-dark-teal);" data-i18n="survey.playbook_card_heading">Access M&A Playbook</h4>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;" data-i18n="survey.playbook_card_desc">
+              Review corporate guidelines on organizational design, integration milestones, and compliance.
+            </p>
+            <a href="/playbook.html" class="btn btn-secondary" style="width: 100%; font-size: 0.85rem; padding: 0.5rem 1rem;" data-i18n="survey.playbook_card_link">Open Playbook Reference</a>
+          </div>
+        </aside>
+
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p data-i18n-html="survey.footer_copyright">&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Post-Merger Integration IMO System.</p>
+    </footer>
+  </div>
+
+  <!-- Micro-Interactive Loading Screen Overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="analysis-card">
+      <div class="spinner"></div>
+      <div class="loading-text" id="loading-title">Compiling Survey Analytics</div>
+      <div class="loading-subtext" id="loading-desc">Calculating cultural profiles, key talent maps, and synergies...</div>
+      
+      <!-- Progress Bar Container -->
+      <div class="analysis-progress-container">
+        <div class="analysis-progress-bar" id="analysis-progress-bar"></div>
+        <span class="analysis-progress-percent" id="analysis-progress-percent">0%</span>
+      </div>
+
+      <!-- Real-time analysis checklist -->
+      <div class="analysis-checklist" id="analysis-checklist">
+        <div class="checklist-item pending" id="chk-culture">
+          <span class="chk-status-icon">⏳</span>
+          <span class="chk-text" data-i18n="survey.checklist_culture">Analyzing Culture & Leadership Alignment</span>
+        </div>
+        <div class="checklist-item pending" id="chk-talent">
+          <span class="chk-status-icon">⏳</span>
+          <span class="chk-text" data-i18n="survey.checklist_talent">Evaluating Key Talent Pools & Retention Incentives</span>
+        </div>
+        <div class="checklist-item pending" id="chk-value">
+          <span class="chk-status-icon">⏳</span>
+          <span class="chk-text" data-i18n="survey.checklist_value">Sizing Value Synergies & R&D Workflows</span>
+        </div>
+        <div class="checklist-item pending" id="chk-roadmap">
+          <span class="chk-status-icon">⏳</span>
+          <span class="chk-text" data-i18n="survey.checklist_roadmap">Synthesizing Phased 100-Day Roadmap</span>
+        </div>
+        <div class="checklist-item pending" id="chk-coaching">
+          <span class="chk-status-icon">⏳</span>
+          <span class="chk-text" data-i18n="survey.checklist_coaching">Structuring Integration Leader Playbooks & TEodor Duck Coach Modules</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=1782361361859"></script>
+</body>
+</html>

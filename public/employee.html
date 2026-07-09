@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Employee Welcome Portal</title>
+  <meta name="description" content="Welcome to the TE Connectivity family. Review your personalized onboarding roadmap, systems guidelines, and HR resources.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <script src="/js/transitions.js?v=1782361361859"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Brand Header -->
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
+          </svg>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title">
+          <span class="portal-badge">M&A Integration</span>
+        </div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">PMO Console</a>
+        <a href="/survey.html" class="nav-link">Survey</a>
+        <a href="/playbook.html" class="nav-link">Playbook</a>
+        <a href="/dashboard.html" class="nav-btn-portal-hrbp">Integration Leader Portal</a>
+        <a href="/employee.html?name=Alex&role=R%26D%20Specialist&dept=R%26D" class="nav-btn-portal-emp active">Employee Portal</a>
+        <a href="/leaders.html" class="nav-link">Leaders Portal</a>
+        <a href="/admin.html" class="nav-btn-admin">Admin Settings</a>
+      </nav>
+    </header>
+
+    <!-- Personalized Welcome Banner -->
+    <div class="employee-header-banner">
+      <!-- Premium Language Selector Dropdown Capsule -->
+      <div class="language-selector-capsule">
+        <select id="language-select" class="language-select-dropdown" aria-label="Select Language">
+          <option value="en">🇬🇧 English</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="zh">🇨🇳 中文</option>
+          <option value="cs">🇨🇿 Čeština</option>
+        </select>
+      </div>
+
+      <!-- Left column: Welcome Content -->
+      <div class="hero-welcome-left">
+        <div class="hero-welcome-badge">
+          <span class="pulse-ring"></span>
+          <span data-i18n="hero_badge_label">👋 Personal Onboarding Space</span>
+        </div>
+        <h2 class="employee-welcome-title" id="employee-welcome-name" data-i18n="welcome_title">Welcome to the TE Connectivity Family!</h2>
+        <div class="hero-divider"></div>
+        <p class="employee-subtitle" id="employee-welcome-subtitle">Specialist — NextGen Sensors Integration</p>
+        <p class="hero-description-text" data-i18n="hero_description">
+          Your personalized integration hub for your first 100 days. Complete your training curriculum, view target roadmap milestones, submit pulse checks, and connect directly with local Integration Leader support.
+        </p>
+        <div class="hero-stats-deck">
+          <div class="hero-stat-card">
+            <span class="stat-icon">🎓</span>
+            <div class="stat-info">
+              <span class="stat-label" data-i18n="stat_training_status">Training Status</span>
+              <span class="stat-value" id="hero-stat-training-completed">Active &bull; Module 1</span>
+            </div>
+          </div>
+          <div class="hero-stat-card">
+            <span class="stat-icon">📈</span>
+            <div class="stat-info">
+              <span class="stat-label" data-i18n="stat_onboarding_health">Pulse Health</span>
+              <span class="stat-value" id="hero-stat-pulse-status" style="color: #10B981;">Synced ✅</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: Welcome Video & Dynamic Alerts -->
+      <div class="hero-welcome-right">
+        <!-- Welcome Video Interface Wrapper -->
+        <div class="video-wrapper edit-active-border">
+          <!-- Inline Edit Pen Icon -->
+          <div class="edit-pen-icon" id="edit-welcome-video-pen" title="Edit Welcome Video" style="z-index: 101;">
+            <svg style="width:14px; height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.83 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+            </svg>
+          </div>
+
+          <!-- Dedicated Player Target Container -->
+          <div id="welcome-video-player-container" style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 10;"></div>
+
+          <!-- Premium SVG Onboarding Placeholder Background -->
+          <svg class="video-mockup-bg" id="welcome-video-placeholder-bg" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+            <rect width="800" height="450" fill="#0A141A"/>
+            <!-- Tech abstract circles -->
+            <circle cx="400" cy="225" r="160" fill="none" stroke="#244C5A" stroke-width="2" opacity="0.3"/>
+            <circle cx="400" cy="225" r="220" fill="none" stroke="#E98300" stroke-width="1" stroke-dasharray="5,5" opacity="0.2"/>
+            <!-- Brand Hexagons -->
+            <path d="M 400,105 L 504,165 L 504,285 L 400,345 L 296,285 L 296,165 Z" fill="none" stroke="#244C5A" stroke-width="3" opacity="0.4"/>
+            <path d="M 400,145 L 469,185 L 469,265 L 400,305 L 331,265 L 331,185 Z" fill="none" stroke="#E98300" stroke-width="2" opacity="0.3"/>
+            <!-- Connected grids -->
+            <line x1="0" y1="225" x2="800" y2="225" stroke="#244C5A" stroke-width="1" opacity="0.1"/>
+            <line x1="400" y1="0" x2="400" y2="450" stroke="#244C5A" stroke-width="1" opacity="0.1"/>
+          </svg>
+
+          <!-- Video Player Controls overlay -->
+          <div class="video-overlay" id="welcome-video-overlay-ctrls">
+            <button class="video-play-btn" id="btn-play-video">
+              <svg viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </button>
+            <h3 class="video-title" data-i18n="video_title">Welcome Message from TE Executive IMO Director</h3>
+            <span class="video-duration" data-i18n="video_duration">Play Video &bull; 3:15 min</span>
+          </div>
+        </div>
+
+        <!-- Video Play Popup Alerts (Dynamic Mock Playback) -->
+        <div class="video-alert" id="video-alert-box" style="display: none;">
+          <h4 style="color: var(--te-orange); margin-bottom: 0.5rem; font-family: var(--font-family-display);" data-i18n="video_alert_title">M&A Video Integration Service</h4>
+          <p style="font-size: 0.9rem; line-height: 1.6; margin-bottom: 1rem;" data-i18n="video_alert_body">
+            "On behalf of TE Connectivity, welcome! Your talent, knowledge, and innovation are what make this merger so powerful. Together, we will build connectivity systems that enable autonomous vehicles, smart factories, and medical technologies worldwide. Here is what to expect in your first 100 days..."
+          </p>
+          <p style="font-size: 0.85rem; color: var(--text-dim); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem; margin-bottom: 0;" data-i18n="video_alert_tip">
+            💡 *Admin Tip: To link your own executive MP4 or YouTube onboarding welcome video, edit the welcome video source.*
+          </p>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Interactive Events Hub Calendar Card -->
+    <div class="card events-hub-card" id="events-hub-card" style="max-width: 1050px; margin: 1.25rem auto 0; padding: 1.15rem; border-left: 4px solid var(--te-orange); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
+          <span>📅</span> <span data-i18n="events_hub_title">TE Integration Events &amp; Activity Hub</span>
+        </h3>
+        <button id="toggle-calendar-btn" style="background: rgba(36, 76, 90, 0.05); border: none; font-size: 1rem; color: var(--te-dark-teal); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0.25rem; border-radius: 50%; width: 28px; height: 28px; transition: all 0.2s;" title="Toggle Calendar">
+          <span id="toggle-calendar-arrow">▲</span>
+        </button>
+      </div>
+
+      <!-- Compact view when hidden (shows only the next upcoming event) -->
+      <div id="calendar-hidden-preview" style="display: none; background: rgba(36, 76, 90, 0.04); border: 1px dashed rgba(36, 76, 90, 0.2); border-radius: 8px; padding: 0.75rem 1rem; font-family: var(--font-family-sans); font-size: 0.85rem; align-items: center; justify-content: space-between; gap: 1rem; transition: all 0.2s;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0;">
+          <span style="font-size: 1.15rem; flex-shrink: 0;">⏳</span>
+          <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">
+            <strong style="color: var(--te-dark-teal);" data-i18n="next_upcoming_event_label">Next Upcoming Event:</strong>
+            <span id="hidden-next-event-text" style="margin-left: 0.5rem; font-weight: 500;">Loading next integration milestone...</span>
+          </div>
+        </div>
+        <button id="quick-expand-btn" style="background: var(--te-orange); color: white; border: none; padding: 0.3rem 0.65rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.2s; flex-shrink: 0;" data-i18n="expand_calendar">Expand Calendar</button>
+      </div>
+
+      <!-- The full grid is collapsible -->
+      <div class="events-hub-grid" id="calendar-collapsible-grid" style="display: flex;">
+        <!-- Left: Monthly Calendar -->
+        <div class="calendar-wrapper" style="padding: 1rem;">
+          <div class="calendar-header-row" style="margin-bottom: 0.75rem;">
+            <button class="calendar-nav-btn" id="prev-month-btn">◀</button>
+            <h4 class="calendar-month-title" id="calendar-title" style="font-size: 1.05rem;">May 2026</h4>
+            <button class="calendar-nav-btn" id="next-month-btn">▶</button>
+          </div>
+          <div class="calendar-weekdays" style="font-size: 0.68rem; margin-bottom: 0.35rem;">
+            <div>SU</div><div>MO</div><div>TU</div><div>WE</div><div>TH</div><div>FR</div><div>SA</div>
+          </div>
+          <div class="calendar-grid" id="events-calendar-grid">
+            <!-- Rendered Dynamically in JS -->
+          </div>
+        </div>
+        
+        <!-- Right: Selected Event & Future Timeline -->
+        <div class="events-sidebar" style="gap: 1rem;">
+          <div class="sidebar-block today-event-block" style="padding: 1rem;">
+            <h5 class="block-title" data-i18n="selected_day_event" style="margin-bottom: 0.65rem; padding-bottom: 0.25rem;">SELECTED DAY'S EVENT</h5>
+            <div id="selected-day-banner" class="event-banner-card empty">
+              <p class="empty-event-text" data-i18n="no_event_selected">Click a calendar day to see integration events, town halls, or system training courses scheduled.</p>
+            </div>
+          </div>
+          
+          <div class="sidebar-block future-events-block" style="padding: 1rem;">
+            <h5 class="block-title" data-i18n="upcoming_integration_events" style="margin-bottom: 0.65rem; padding-bottom: 0.25rem;">UPCOMING EVENTS TIMELINE</h5>
+            <div class="future-events-list" id="events-sidebar-deck">
+              <!-- Rendered Dynamically in JS (Shows next 3 future events) -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Frame -->
+    <main class="main-content">
+      
+      <!-- System Notification Banner Console -->
+      <div id="employee-notifications-area" style="display: none; margin-bottom: 2rem;">
+        <div class="card card-glass" style="border-left: 5px solid var(--te-orange); padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; position: relative;">
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; margin-bottom: 0.25rem;">
+            <h3 style="margin: 0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-family-display); font-size: 1.15rem;">
+              <span>🔔</span> <span data-i18n="notification_title">Urgent Integration Steering Alerts</span>
+            </h3>
+            <button id="btn-toggle-notifications" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; margin: 0; display: flex; align-items: center; gap: 0.25rem; font-weight: bold; border-radius: 20px; cursor: pointer;">
+              <span id="notifications-toggle-text">Collapse</span> <span>▼</span>
+            </button>
+          </div>
+
+          <div id="employee-notifications-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <!-- Dynamic alerts will load here -->
+          </div>
+        </div>
+      </div>
+
+      <div class="employee-grid">
+        
+        <!-- Left: Video & 100 Days Roadmap Timeline -->
+        <section>
+          
+          <!-- Sub-Tabs Navigation inside Left Column -->
+          <div class="portal-tabs-wrapper" style="margin-bottom: 1.5rem;">
+            <div class="portal-tabs" style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem;">
+              <button class="portal-tab-btn active" data-portal-tab="onboarding" data-i18n="tab_onboarding" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--te-dark-teal); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid var(--te-orange); margin-bottom: -0.65rem; transition: all 0.2s;">
+                🚀 Onboarding
+              </button>
+              <button class="portal-tab-btn" data-portal-tab="culture" data-i18n="tab_culture" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
+                🎭 Your TE
+              </button>
+              <button class="portal-tab-btn" data-portal-tab="roles" data-i18n="tab_roles" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
+                👤 Roles
+              </button>
+              <button class="portal-tab-btn" data-portal-tab="communication" data-i18n="tab_communication" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
+                📣 Communication
+              </button>
+            </div>
+          </div>
+
+          <!-- Onboarding Tab Content Pane -->
+          <div id="portal-tab-content-onboarding" class="portal-tab-content active">
+            
+            <!-- Dynamic Progress & Gamification Header Card -->
+            <div class="card academy-progress-card" style="margin-bottom: 2rem; position: relative; overflow: hidden;">
+              <!-- Pure CSS background glow -->
+              <div style="position: absolute; top: -100px; right: -100px; width: 250px; height: 250px; background: radial-gradient(circle, rgba(233,131,0,0.1) 0%, transparent 70%); pointer-events: none; border-radius: 50%;"></div>
+              
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; position: relative; z-index: 1;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                  <div class="academy-avatar-container" style="position: relative; width: 60px; height: 60px; background: var(--te-dark-teal); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                    <div class="academy-avatar-badge" id="academy-avatar-badge-tier" style="position: absolute; top: -5px; right: -5px; background: var(--te-orange); color: white; width: 20px; height: 20px; border-radius: 50%; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">⭐</div>
+                    <span class="academy-avatar-char" id="academy-avatar-char" style="font-size: 1.8rem; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));">👤</span>
+                  </div>
+                  <div>
+                    <h3 style="margin: 0; color: var(--te-dark-teal); font-size: 1.4rem;" id="academy-employee-name">Loading Profile...</h3>
+                    <p style="margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--text-secondary);" id="academy-employee-title">Initializing your integration desk...</p>
+                  </div>
+                </div>
+                <div style="text-align: right; min-width: 180px; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="mute-audio-trigger" id="audio-mute-toggle" title="Mute reward audio" style="font-size: 0.95rem;">🔊</span>
+                    <span class="badge" style="background-color: var(--te-orange); color: white; border: none; font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 20px;" id="academy-badge-display">New Recruit</span>
+                  </div>
+                  <div style="font-size: 1.6rem; font-weight: 700; color: var(--te-dark-teal); display: flex; align-items: center; justify-content: flex-end; gap: 0.3rem;" id="academy-xp-display">0 <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-dim);">XP</span></div>
+                </div>
+              </div>
+              
+              <div style="margin-top: 1.5rem; position: relative; z-index: 1;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">
+                  <span style="color: var(--text-secondary);">Academy Progress Matrix</span>
+                  <span id="academy-progress-percent" style="color: var(--te-orange);">0%</span>
+                </div>
+                <div class="progress-bar-container" style="background: rgba(36,76,90,0.1); height: 12px; border-radius: 6px; overflow: hidden; position: relative;">
+                  <div class="progress-bar-fill" id="academy-progress-bar-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--te-orange), #ffaa33); border-radius: 6px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.4rem;">
+                  <span id="academy-completed-text">0 completed</span>
+                  <span>9 lessons total</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Academy Curriculum Grid (3 Modules) -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 2rem;" id="academy-modules-container">
+              <p style="text-align:center; color: var(--text-dim); padding: 2rem;">Loading your curriculum…</p>
+            </div>
+
+            <!-- Milestones and Leaderboard Deck (2 Columns) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+              
+              <!-- Retention Milestones -->
+              <div class="card" style="padding: 1.5rem;">
+                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                  <h3 style="margin: 0; color: var(--te-dark-teal); font-size: 1.15rem;">🔒 Milestone Retention Rewards</h3>
+                </div>
+                <!-- Horizontal Stepper Progress Stepper -->
+                <div style="padding: 0.25rem 0;" id="academy-milestones-scroller">
+                  <div class="milestones-timeline-horizontal" id="milestones-timeline-container">
+                    <div class="milestones-timeline-progress-fill" id="milestones-timeline-progress-fill" style="width: 0%;"></div>
+                  </div>
+                </div>
+                <!-- Dynamic Detail Inspector Panel -->
+                <div id="milestone-details-panel" style="background: rgba(36, 76, 90, 0.03); border: 1px dashed rgba(36, 76, 90, 0.15); border-radius: 6px; padding: 0.85rem; font-size: 0.76rem; color: var(--text-secondary); text-align: center; margin-top: 1.25rem;">
+                  <div style="font-weight: 800; color: var(--te-dark-teal); font-size: 0.82rem; margin-bottom: 0.2rem;" id="milestone-detail-title">Select a milestone node above to view details</div>
+                  <div id="milestone-detail-desc">Hover or click any node on the progress bar to inspect locked/unlocked integration rewards!</div>
+                </div>
+              </div>
+
+              <!-- Active Leaderboard -->
+              <div class="card" style="padding: 1.5rem;">
+                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                  <h3 style="margin: 0; color: var(--te-dark-teal); font-size: 1.15rem;">🏆 Acquired Team Leaderboard</h3>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;" id="academy-leaderboard-container">
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 1.5rem 0;">Connecting leaderboard stands...</p>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 100-Day Dynamic Milestone Timeline Card -->
+            <div class="card" style="margin-top: 0;">
+              <div class="card-header">
+                <h2 data-i18n="roadmap_title">Your First 100 Days Roadmap</h2>
+                <span class="hero-badge" id="dept-timeline-badge" style="background-color: var(--te-orange-light); color: var(--te-orange); border-color: rgba(233,131,0,0.2);">General Track</span>
+              </div>
+              <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;" data-i18n="roadmap_desc">
+                We have structured your integration path into three core stages. Track your progress with these essential checklists:
+              </p>
+
+              <div class="timeline" id="employee-timeline-container">
+                <!-- Rendered dynamically based on URL department parameter -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Culture Tab Content Pane -->
+          <div id="portal-tab-content-culture" class="portal-tab-content" style="display: none;">
+            <!-- Onboarding 30-Day Pulse Feedback Card -->
+            <div class="pulse-onboarding-card" id="pulse-survey-card" style="margin-top: 0;">
+              <h3 data-i18n="pulse_title">Your Onboarding Health Check: 30-Day Pulse Survey</h3>
+              
+              <div id="pulse-success-message" style="display: none; text-align: center; padding: 1.5rem 0;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--status-success)" stroke-width="2" style="width: 48px; height: 48px; margin: 0 auto 1rem; display: block;">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M9 12l2 2 4-4"/>
+                </svg>
+                <h4 style="color: var(--te-dark-teal); font-size: 1.2rem; margin-bottom: 0.5rem;" data-i18n="pulse_success_title">Feedback Submitted!</h4>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;" data-i18n="pulse_success_desc">
+                  Thank you for checking in. Your satisfaction is key to our combined success.
+                </p>
+              </div>
+
+              <form id="pulse-survey-form">
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;" data-i18n="pulse_desc">
+                  How is your integration experience so far? Please click a rating number from 1 (poor) to 5 (excellent) and share your onboarding thoughts.
+                </p>
+                
+                <div class="form-group" style="text-align: center; margin-bottom: 1.5rem;">
+                  <label class="form-label" style="font-weight: 600; display: block; margin-bottom: 0.75rem; text-align: left;" data-i18n="pulse_label">Overall Onboarding Satisfaction</label>
+                  <div class="pulse-rating-group">
+                    <button type="button" class="pulse-rating-btn" data-rating="1">1</button>
+                    <button type="button" class="pulse-rating-btn" data-rating="2">2</button>
+                    <button type="button" class="pulse-rating-btn" data-rating="3">3</button>
+                    <button type="button" class="pulse-rating-btn" data-rating="4">4</button>
+                    <button type="button" class="pulse-rating-btn" data-rating="5">5</button>
+                  </div>
+                  <input type="hidden" id="pulse-rating-value" required>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="pulse-comments" style="font-weight: 600;" data-i18n="pulse_comments_label">Share Your Thoughts</label>
+                  <textarea class="form-control" id="pulse-comments" rows="3" placeholder="Tell us about systems setup, payroll alignments, or if you need immediate Integration Leader assistance..." required></textarea>
+                </div>
+
+                <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; border-top: 1px dashed var(--border-color); padding-top: 1rem;">
+                  <input type="checkbox" id="pulse-notify-pref" checked style="accent-color: var(--te-orange); width: 18px; height: 18px; cursor: pointer;">
+                  <label for="pulse-notify-pref" style="font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none; text-align: left; line-height: 1.4;">
+                    Receive critical integration news alerts and calendar meeting updates via simulated email channels.
+                  </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="btn-submit-pulse" style="width: 100%; margin-top: 1rem;" disabled>
+                  Submit Onboarding Feedback
+                </button>
+              </form>
+            </div>
+
+            <!-- Culture Values & Alignment Card -->
+            <div class="card" style="margin-top: 1.5rem; padding: 1.5rem;">
+              <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                <h3 data-i18n="culture_section_heading">🎭 Your TE Alignment &amp; Values</h3>
+              </div>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                TE Connectivity operates under four core values: <strong>Integrity</strong>, <strong>Accountability</strong>, <strong>Teamwork</strong>, and <strong>Innovation</strong>. We are committed to establishing a collaborative environment during this integration.
+              </p>
+              <div style="background: rgba(36, 76, 90, 0.03); border-radius: 6px; padding: 1rem; border-left: 4px solid var(--te-orange); font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary);">
+                <strong>💡 Collaborative Strategy:</strong> Participate in local town halls and team syncs to connect with your new peers and learn about TE global business channels.
+              </div>
+            </div>
+          </div>
+
+          <!-- Roles Tab Content Pane -->
+          <div id="portal-tab-content-roles" class="portal-tab-content" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem;">
+              
+              <!-- Profile Details -->
+              <div class="card" style="margin-top: 0; padding: 1.5rem;">
+                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                  <h3>👤 Employee Integration Profile</h3>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.88rem;">
+                  <div>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">Full Name</span>
+                    <strong id="role-profile-name" style="color: var(--te-dark-teal); font-size: 1.1rem;">Alex</strong>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">Assigned Title / Role</span>
+                    <span id="role-profile-title">R&amp;D Specialist</span>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">Integration Track Department</span>
+                    <span id="role-profile-dept">R&amp;D</span>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">System User Email</span>
+                    <span id="role-profile-email">alex@te-legacy.com</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Integration Buddy Card -->
+              <div class="card" style="margin-top: 0; padding: 1.5rem; border-top: 4px solid var(--te-orange);">
+                <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                  <h3>🤝 Assigned Integration Buddy</h3>
+                </div>
+                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                  <div style="width: 50px; height: 50px; background: var(--te-orange-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                    👩‍💼
+                  </div>
+                  <div>
+                    <strong id="buddy-profile-name" style="color: var(--te-dark-teal); font-size: 1rem;">Sarah Connor</strong>
+                    <span id="buddy-profile-email" style="display: block; font-size: 0.76rem; color: var(--text-dim);">sconnor@te.com</span>
+                  </div>
+                </div>
+                <p style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.75rem;">
+                  Your integration buddy is here to help you get settled, gain access to software resources, and navigate internal channels.
+                </p>
+                <div style="background: rgba(233,131,0,0.05); padding: 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: bold; color: var(--te-orange); text-align: center;">
+                  💬 Contact Buddy through Slack/Teams
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Communication Tab Content Pane -->
+          <div id="portal-tab-content-communication" class="portal-tab-content" style="display: none;">
+            <div class="card" style="margin-top: 0;">
+              <div class="card-header">
+                <h2>📣 Digital Broadcast Archive</h2>
+              </div>
+              <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
+                Official notifications, policy announcements, and integration guides dispatched to your email matching your profile track.
+              </p>
+              <div id="employee-communications-inbox" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; border-left: 4px solid var(--te-orange);">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                    <strong style="color: var(--te-dark-teal); font-size: 1rem;">Welcome to the TE Network</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-dim);">Day 1</span>
+                  </div>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;">Your TE credentials and network access instructions have been fully provisioned. Please review the attached guide to connect your devices to the global intranet.</p>
+                  <a href="#" style="font-size: 0.75rem; color: var(--te-orange); font-weight: bold; text-decoration: none;">View Attachment (PDF)</a>
+                </div>
+                
+                <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; border-left: 4px solid #8B5CF6;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                    <strong style="color: var(--te-dark-teal); font-size: 1rem;">Action Required: Compliance Training</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-dim);">Day 15</span>
+                  </div>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;">As part of the integration, all acquired staff must complete the TE Ethics & Compliance certification. Log into the academy portal to begin.</p>
+                  <button class="btn btn-primary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: #8B5CF6; border-color: #8B5CF6;">Go to Academy</button>
+                </div>
+
+                <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; border-left: 4px solid var(--te-dark-teal);">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                    <strong style="color: var(--te-dark-teal); font-size: 1rem;">Global Townhall Invitation</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-dim);">Day 30</span>
+                  </div>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">Join the executive leadership team for our quarterly global townhall, where we will welcome our newly integrated teams.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Right: HR Guidance & Other Functions Placeholders -->
+        <aside class="dashboard-sidebar">
+          
+          <!-- HR Helpdesk Card -->
+          <div class="card hr-help-card" id="helpdesk-section">
+            <h3 style="margin-bottom: 0.75rem; font-size: 1.3rem; color: var(--te-dark-teal);">HR Questions?</h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+              Transitioning companies can bring up questions regarding benefits, payroll conversion schedules, or systems transfers. Submit your inquiry below:
+            </p>
+
+            <div id="hr-form-success-message" class="hr-form-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9 12l2 2 4-4"/>
+              </svg>
+              <h4>Inquiry Received!</h4>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                Your local Integration Leader will review this ticket and get back to you within 24 hours.
+              </p>
+            </div>
+
+            <form id="hr-inquiry-form">
+              <div class="form-group">
+                <label class="form-label" style="font-size: 0.75rem;">Subject Area</label>
+                <select class="form-control form-select" id="hr-inquiry-subject" required>
+                  <option value="benefits">Benefits & Pension Onboarding</option>
+                  <option value="payroll">Payroll & Tax Transition</option>
+                  <option value="systems">IT Accounts & Security Access</option>
+                  <option value="reporting">Organizational Reporting Structure</option>
+                  <option value="other">General HR Inquiry</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" style="font-size: 0.75rem;">Explain Your Question</label>
+                <textarea class="form-control" id="hr-inquiry-msg" rows="3" placeholder="Explain your alignment query here..." required></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 0.85rem; padding: 0.6rem;">
+                Submit to Integration Leader
+              </button>
+            </form>
+          </div>
+
+          <!-- Did You Know Rotating Tip Widget -->
+          <div class="did-you-know-card">
+            <div class="did-you-know-header">
+              <span>💡</span>
+              <h4 class="did-you-know-title" data-i18n="did_you_know_title">Did You Know?</h4>
+            </div>
+            <p class="did-you-know-text" id="did-you-know-text">
+              Loading integration fact...
+            </p>
+            <button class="did-you-know-btn" id="did-you-know-next-btn">
+              <span data-i18n="next_tip">Next Fact</span> <span>→</span>
+            </button>
+          </div>
+
+          <!-- Other Functional Track Placeholders -->
+          <h4 style="color: var(--te-dark-teal); font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; margin: 1.5rem 0 0.5rem 0.5rem;">
+            Integration Tracks
+          </h4>
+          
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            
+            <!-- Sales Placeholder -->
+            <div class="card placeholder-card locked" style="padding: 1.25rem; margin-bottom: 0;">
+              <h4 style="font-size: 0.95rem; text-align: left; margin-bottom: 0.25rem;">Sales Integration</h4>
+              <p style="font-size: 0.75rem; text-align: left;">Customer catalog mergers & CRM pricing channels.</p>
+              <span class="placeholder-badge" style="font-size: 0.6rem; padding: 0.15rem 0.5rem; align-self: flex-start;">Pre-Onboarding</span>
+            </div>
+
+            <!-- Product Placeholder -->
+            <div class="card placeholder-card locked" style="padding: 1.25rem; margin-bottom: 0;">
+              <h4 style="font-size: 0.95rem; text-align: left; margin-bottom: 0.25rem;">Product & Patents</h4>
+              <p style="font-size: 0.75rem; text-align: left;">Engineering blueprint migrations and patent databases.</p>
+              <span class="placeholder-badge" style="font-size: 0.6rem; padding: 0.15rem 0.5rem; align-self: flex-start;">Pre-Onboarding</span>
+            </div>
+
+            <!-- Finance Placeholder -->
+            <div class="card placeholder-card locked" style="padding: 1.25rem; margin-bottom: 0;">
+              <h4 style="font-size: 0.95rem; text-align: left; margin-bottom: 0.25rem;">Finance & Taxes</h4>
+              <p style="font-size: 0.75rem; text-align: left;">Corporate fiscal calendars and tax consolidation ERPs.</p>
+              <span class="placeholder-badge" style="font-size: 0.6rem; padding: 0.15rem 0.5rem; align-self: flex-start;">Pre-Onboarding</span>
+            </div>
+
+          </div>
+
+        </aside>
+
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Post-Merger Integration IMO System.</p>
+    </footer>
+  </div>
+
+  <!-- Glassmorphic Welcome Video Edit Modal -->
+  <div class="video-edit-modal-overlay" id="video-edit-modal">
+    <div class="video-edit-modal-content">
+      <div class="video-edit-modal-header">
+        <h3 data-i18n="video_modal_title">Edit Welcome Video Source</h3>
+        <button class="video-edit-modal-close" id="btn-close-video-modal">&times;</button>
+      </div>
+      <form id="welcome-video-edit-form">
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="form-label" for="video-modal-type" style="font-weight: 600; display: block; margin-bottom: 0.5rem;" data-i18n="video_modal_type">Video Source Type</label>
+          <select class="form-control form-select" id="video-modal-type" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.2); color: white;">
+            <option value="local">Local Video File (MP4, WebM)</option>
+            <option value="youtube">YouTube Video Embedded URL or Link</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="form-label" for="video-modal-url" style="font-weight: 600; display: block; margin-bottom: 0.5rem;" data-i18n="video_modal_url">Video URL / Path</label>
+          <input type="text" class="form-control" id="video-modal-url" placeholder="e.g. /assets/welcome.mp4 or https://www.youtube.com/watch?v=dQw4w9WgXcQ" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.2); color: white;">
+          <small style="color: var(--text-dim); display: block; margin-top: 0.4rem; font-size: 0.75rem; line-height: 1.4;" data-i18n="video_modal_help">
+            For local videos, use a web-accessible directory. For YouTube, paste the standard YouTube watch URL or shared link.
+          </small>
+        </div>
+        <div class="video-edit-modal-actions">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-video-modal" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); color: white;" data-i18n="btn_cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;" data-i18n="btn_save">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/ted-launcher.js?v=1782361361859"></script>
+  <script src="/js/employee.js?v=1782361361859"></script>
+</body>
+</html>
+

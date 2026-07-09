@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - M&A PMO Integration Control Desk</title>
+  <meta name="description" content="Cross-functional Project Management Office (PMO) dashboard coordinating HR, IT, Finance, Sales, Legal, R&D, and Operations integrations.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <script src="/js/transitions.js?v=1782361361859"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
+          </svg>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title" style="display: flex; align-items: center; gap: 0.75rem;">
+          <span class="portal-badge" style="background: var(--te-dark-teal); color: white;">🏢 PMO CONSOLE</span>
+          <div id="demo-mode-switcher-container" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(36, 76, 90, 0.05); padding: 0.25rem 0.65rem; border-radius: 20px; border: 1.2px dashed var(--te-orange); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Click to toggle between Demo Mode and Custom M&amp;A Setup.">
+            <span id="demo-switcher-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
+            <span id="demo-switcher-text" style="color: var(--te-dark-teal);">DEMO MODE: ON</span>
+          </div>
+        </div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link active">PMO Console</a>
+        <a href="/survey.html" class="nav-link">Survey</a>
+        <a href="/playbook.html" class="nav-link">Playbook</a>
+        <a href="/dashboard.html" class="nav-btn-portal-hrbp">Integration Leader Portal</a>
+        <a href="/employee.html?name=Alex&role=R%26D%20Specialist&dept=R%26D" class="nav-btn-portal-emp">Employee Portal</a>
+        <a href="/leaders.html" class="nav-link">Leaders Portal</a>
+        <a href="/admin.html" class="nav-btn-admin">Admin Settings</a>
+      </nav>
+    </header>
+
+    <main class="main-content pmo-container">
+
+      <!-- PMO Onboarding Stepper Wizard -->
+      <div id="pmo-onboarding-wizard" class="card card-glass" style="display: none; border-top: 5px solid var(--te-orange); margin-bottom: 2rem; padding: 2.5rem;">
+        <div class="wizard-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid rgba(36,76,90,0.1); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+          <div>
+            <span data-i18n="pmo.wiz_eyebrow" style="font-size: 0.72rem; color: var(--te-orange); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: var(--te-orange-light); padding: 0.25rem 0.6rem; border-radius: 4px;">🚀 PMO Integration Onboarding</span>
+            <h2 id="wizard-title" style="margin: 0.5rem 0 0; color: var(--te-dark-teal); font-size: 1.6rem; font-family: var(--font-family-display);">Custom M&amp;A Setup Wizard</h2>
+          </div>
+          <div class="wizard-step-badge" style="background: var(--te-dark-teal); color: white; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700;">
+            Step <span id="current-step-num">1</span> of 4
+          </div>
+        </div>
+
+        <!-- Wizard Stepper Visual Progress Bar -->
+        <div class="wizard-progress-bar-container" style="height: 6px; background-color: var(--border-color); border-radius: 3px; margin-bottom: 2rem; overflow: hidden; display: flex; gap: 4px;">
+          <div id="wizard-step1-fill" style="height: 100%; width: 25%; background: var(--te-orange); transition: background-color 0.3s;"></div>
+          <div id="wizard-step2-fill" style="height: 100%; width: 25%; background: var(--border-color); transition: background-color 0.3s;"></div>
+          <div id="wizard-step3-fill" style="height: 100%; width: 25%; background: var(--border-color); transition: background-color 0.3s;"></div>
+          <div id="wizard-step4-fill" style="height: 100%; width: 25%; background: var(--border-color); transition: background-color 0.3s;"></div>
+        </div>
+
+        <!-- Step 1: Core M&A Specifications -->
+        <div class="wizard-step" id="wizard-step-1" style="display: block;">
+          <h3 data-i18n="pmo.wiz_s1_heading" style="margin-top: 0; color: var(--te-dark-teal); margin-bottom: 0.5rem;">🏢 Step 1: Core M&amp;A Integration Specifications</h3>
+          <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.5rem;">Specify corporate acquisition details for the custom integration pipeline. This updates target names across the platform.</p>
+          <form id="wizard-form-specs">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem;">
+              <label class="form-label" data-i18n="pmo.wiz_label_target_company" style="font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal);">Target Acquired Company Name</label>
+              <input type="text" class="form-control" id="wiz-target-company" data-i18n-ph="pmo.wiz_ph_target_company" placeholder="e.g. Apex Robotics Corp." style="padding: 0.6rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+            </div>
+            <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+              <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                <label class="form-label" data-i18n="pmo.wiz_label_sector" style="font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal);">Industry Sector</label>
+                <input type="text" class="form-control" id="wiz-sector" data-i18n-ph="pmo.wiz_ph_sector" placeholder="e.g. Industrial Automation &amp; AI" style="padding: 0.6rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                <label class="form-label" data-i18n="pmo.wiz_label_hq" style="font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal);">Headquarters Location</label>
+                <input type="text" class="form-control" id="wiz-hq" data-i18n-ph="pmo.wiz_ph_hq" placeholder="e.g. Zurich, Switzerland" style="padding: 0.6rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+              </div>
+            </div>
+            <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+              <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                <label class="form-label" data-i18n="pmo.wiz_label_size" style="font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal);">Corporate Size (Employee Count)</label>
+                <input type="text" class="form-control" id="wiz-size" data-i18n-ph="pmo.wiz_ph_size" placeholder="e.g. 120 Employees" style="padding: 0.6rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                <label class="form-label" data-i18n="pmo.wiz_label_closing_date" style="font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal);">Target Closing Date</label>
+                <input type="date" class="form-control" id="wiz-acq-date" style="padding: 0.6rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+              </div>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1.5rem;">
+              <label class="form-label" data-i18n="pmo.wiz_label_synergy" style="font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal);">Synergy &amp; Integration Objectives</label>
+              <textarea class="form-control" id="wiz-synergy" rows="3" data-i18n-ph="pmo.wiz_ph_synergy" placeholder="Describe strategic synergy goals..." style="padding: 0.6rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main); resize: vertical;" required></textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+              <button type="submit" class="btn btn-primary" data-i18n="pmo.wiz_s1_next" style="padding: 0.65rem 1.5rem; font-weight: 700; font-size: 0.9rem;">Next: Risk Assessment ➡️</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 2: Company-wide Alignment Assessment -->
+        <div class="wizard-step" id="wizard-step-2" style="display: none;">
+          <h3 data-i18n="pmo.wiz_s2_heading" style="margin-top: 0; color: var(--te-dark-teal); margin-bottom: 0.5rem;">📊 Step 2: Company-Wide Alignment &amp; Risk Assessment</h3>
+          <p data-i18n="pmo.wiz_s2_intro" style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.5rem;">Rate each of the following 10 risk and synergy alignment dimensions to synthesize a custom 100-day integration roadmap.</p>
+          <form id="wizard-form-survey">
+            <div id="wiz-questions-container" style="display: flex; flex-direction: column; gap: 1.25rem; max-height: 400px; overflow-y: auto; padding-right: 0.5rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color); padding: 1rem; border-radius: 8px; background: rgba(255,255,255,0.25);">
+              <!-- 10 Questions dynamically injected here -->
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <button type="button" class="btn btn-secondary" id="wiz-back-to-1" data-i18n="pmo.wiz_s2_back" style="padding: 0.65rem 1.5rem; font-weight: 700; font-size: 0.9rem;">⬅️ Back to Specs</button>
+              <button type="submit" class="btn btn-primary" data-i18n="pmo.wiz_s2_next" style="padding: 0.65rem 1.5rem; font-weight: 700; font-size: 0.9rem;">Analyze &amp; Synthesize Roadmap ➡️</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 3: Suggested Support Functions & Integration Leader Setup -->
+        <div class="wizard-step" id="wizard-step-3" style="display: none;">
+          <h3 data-i18n="pmo.wiz_s3_heading" style="margin-top: 0; color: var(--te-dark-teal); margin-bottom: 0.5rem;">🧬 Step 3: Dynamic Support Tracks &amp; Regional Integration Leader Setup</h3>
+          <p data-i18n="pmo.wiz_s3_intro" style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.5rem;">Based on the alignment assessment scores, the system has identified the critical integration risk profiles. Review support tracks and assign regional Integration Leaders.</p>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; align-items: start;">
+            <!-- Left: Dynamic Recommended Tracks -->
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <h4 data-i18n="pmo.wiz_s3_tracks_heading" style="margin: 0; color: var(--te-dark-teal); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.5px;">📋 Recommended Action Tracks</h4>
+              <div id="wiz-tracks-recommendations" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <!-- Dynamically populated suggested track cards -->
+              </div>
+            </div>
+
+            <!-- Right: Integration Leader Provisioning Form -->
+            <div class="card-glass" style="padding: 1.25rem; border-radius: 8px; border: 1.5px solid rgba(36,76,90,0.15); background: rgba(255,255,255,0.35);">
+              <h4 data-i18n="pmo.wiz_s3_provision_heading" style="margin: 0 0 0.75rem 0; color: var(--te-dark-teal); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.5px;">👤 Integration Leader Provisioning Desk</h4>
+              <form id="wizard-form-hrbp">
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem;">
+                  <label class="form-label" data-i18n="pmo.wiz_s3_label_name" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Integration Leader Name</label>
+                  <input type="text" class="form-control" id="wiz-hrbp-name" data-i18n-ph="pmo.wiz_s3_ph_name" placeholder="e.g. Sarah Jenkins" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;" required>
+                </div>
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem;">
+                  <label class="form-label" data-i18n="pmo.wiz_s3_label_region" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Assigned Region</label>
+                  <select class="form-control form-select" id="wiz-hrbp-region" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;" required>
+                    <option value="Americas" data-i18n="pmo.wiz_s3_region_americas">🌎 Americas Region</option>
+                    <option value="EMEA" data-i18n="pmo.wiz_s3_region_emea">🌍 EMEA Region</option>
+                    <option value="APAC" data-i18n="pmo.wiz_s3_region_apac">🌏 APAC Region</option>
+                  </select>
+                </div>
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1rem;">
+                  <label class="form-label" data-i18n="pmo.wiz_s3_label_email" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Email Address</label>
+                  <input type="email" class="form-control" id="wiz-hrbp-email" data-i18n-ph="pmo.wiz_s3_ph_email" placeholder="e.g. sarah.j@te.com" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;" required>
+                </div>
+                <button type="submit" class="btn btn-dark" data-i18n="pmo.wiz_s3_register_btn" style="width: 100%; padding: 0.5rem; font-weight: 700; font-size: 0.85rem; background: var(--te-dark-teal); border: none; color: white;">
+                  ➕ Register Regional Integration Leader
+                </button>
+              </form>
+              
+              <!-- Provisioned list in Wizard -->
+              <div style="margin-top: 1rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+                <h5 style="margin: 0 0 0.5rem 0; font-size: 0.8rem; color: var(--te-dark-teal);">Active Integration Leader Registry (<span id="wiz-hrbp-count">0</span>)</h5>
+                <div id="wiz-hrbp-list" style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 120px; overflow-y: auto;">
+                  <p style="font-size: 0.75rem; color: var(--text-dim); margin: 0; font-style: italic;">No Integration Leaders registered yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <button type="button" class="btn btn-secondary" id="wiz-back-to-2" data-i18n="pmo.wiz_s3_back" style="padding: 0.65rem 1.5rem; font-weight: 700; font-size: 0.9rem;">⬅️ Back to Risk Survey</button>
+            <button type="button" class="btn btn-primary" id="wiz-to-4" data-i18n="pmo.wiz_s3_next" style="padding: 0.65rem 1.5rem; font-weight: 700; font-size: 0.9rem;">Next: Employee Roster ➡️</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Workforce Provisioning Options -->
+        <div class="wizard-step" id="wizard-step-4" style="display: none;">
+          <h3 data-i18n="pmo.wiz_s4_heading" style="margin-top: 0; color: var(--te-dark-teal); margin-bottom: 0.5rem;">👥 Step 4: Workforce Roster Provisioning</h3>
+          <p data-i18n="pmo.wiz_s4_intro" style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.5rem;">Select your preferred strategy to register employees into the integration databases.</p>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+            <!-- Option A: Bulk Upload -->
+            <div class="card-glass" style="padding: 1.5rem; border-radius: 8px; border: 1.5px solid rgba(233,131,0,0.15); display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <h4 data-i18n="pmo.wiz_s4_optA_heading" style="margin: 0 0 0.5rem 0; color: var(--te-orange); font-size: 1.1rem;">⚡ Option A: Upload Employee Roster Instantly</h4>
+                <p data-i18n="pmo.wiz_s4_optA_desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+                  Directly upload a batch of employees (JSON array of roster or CSV text block) right now. This populates your workspace immediately.
+                </p>
+                
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem;">
+                  <label class="form-label" data-i18n="pmo.wiz_s4_label_roster" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Paste Roster JSON or CSV Content</label>
+                  <textarea class="form-control" id="wiz-roster-raw" rows="6" placeholder='[{"name":"John Doe","email":"john@apex.com","role":"Lead Designer","department":"R&D","region":"EMEA"}] or CSV headers' style="padding: 0.5rem; font-family: monospace; font-size: 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.05); color: var(--text-main);"></textarea>
+                </div>
+                <button type="button" class="btn btn-dark" id="btn-wiz-parse-roster" data-i18n="pmo.wiz_s4_parse_btn" style="width: 100%; padding: 0.5rem; font-weight: 700; font-size: 0.82rem; background: var(--te-dark-teal); border: none; color: white;">
+                  Parse &amp; Verify Roster Records
+                </button>
+                <div id="wiz-roster-preview-status" style="margin-top: 0.5rem; font-size: 0.75rem; font-weight: 600;"></div>
+              </div>
+            </div>
+
+            <!-- Option B: Delegate Later -->
+            <div class="card-glass" style="padding: 1.5rem; border-radius: 8px; border: 1.5px solid rgba(36,76,90,0.15); display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <h4 data-i18n="pmo.wiz_s4_optB_heading" style="margin: 0 0 0.5rem 0; color: var(--te-dark-teal); font-size: 1.1rem;">🗓️ Option B: Let Integration Leaders Coordinate Roster Later</h4>
+                <p data-i18n="pmo.wiz_s4_optB_desc1" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+                  You can safely bypass immediate onboarding bulk uploads. Integration Leaders assigned in Step 3 will be granted access to the Integration Leader Provisioning Portal.
+                </p>
+                <p data-i18n="pmo.wiz_s4_optB_desc2" style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                  They will be responsible for uploading and managing rosters inside their respective regional domains later.
+                </p>
+              </div>
+              <div data-i18n="pmo.wiz_s4_optB_tip" style="background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.2); border-radius: 6px; padding: 0.75rem; font-size: 0.8rem; color: #10B981; font-weight: 600;">
+                💡 Tip: This lets you configure and fine-tune tracks first without waiting for employee data lists.
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <button type="button" class="btn btn-secondary" id="wiz-back-to-3" data-i18n="pmo.wiz_s4_back" style="padding: 0.65rem 1.5rem; font-weight: 700; font-size: 0.9rem;">⬅️ Back to Integration Leaders</button>
+            <button type="button" class="btn btn-primary" id="btn-wiz-finalize" data-i18n="pmo.finalize_launch_btn" style="padding: 0.75rem 2rem; font-weight: 800; font-size: 0.95rem; background: linear-gradient(135deg, var(--te-orange) 0%, #FF9E2C 100%); border: none; color: white;">
+              ✨ Finalize and Launch PMO Control Console 🚀
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="pmo-dashboard-content">
+        <!-- PMO Welcome & Timeline Header -->
+        <div class="card card-glass" style="margin-bottom: 2rem; border-left: 5px solid var(--te-orange);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h2 data-i18n="pmo.dash_title" style="margin: 0; font-family: var(--font-family-display); color: var(--te-dark-teal);">PMO Integration Control Desk</h2>
+              <p data-i18n="pmo.dash_subtitle" style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.95rem;">
+                Coordinating cross-functional workflows, resolving alignment blockers, and steering key milestone gates across all 7 corporate tracks.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem; background: rgba(233, 131, 0, 0.08); padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid rgba(233, 131, 0, 0.2);">
+              <span style="font-size: 1.1rem;">⚡</span>
+              <span id="pmo-timeline-badge" style="font-weight: 700; color: var(--te-orange); font-size: 0.82rem; text-transform: uppercase;">INTEGRATION DAY: 12</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- PMO 4-Pillar Tab Selection -->
+        <div class="supporting-nav-tabs" style="margin-bottom: 1.5rem;">
+          <button type="button" class="supporting-tab-btn active" data-pmo-tab="communication" data-i18n="pmo.tab_communication">📣 Communication</button>
+          <button type="button" class="supporting-tab-btn" data-pmo-tab="culture" data-i18n="pmo.tab_culture">🎭 Culture &amp; Alignment</button>
+          <button type="button" class="supporting-tab-btn" data-pmo-tab="roles" data-i18n="pmo.tab_roles">👤 Roles &amp; Flowchart</button>
+          <button type="button" class="supporting-tab-btn" data-pmo-tab="onboarding" data-i18n="pmo.tab_onboarding">🚀 Onboarding &amp; Tracks</button>
+        </div>
+
+        <!-- Pillar 1: PMO Communication -->
+        <div class="pmo-tab-section active" id="pmo-pillar-communication">
+          <div class="landing-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+            
+            <!-- Left: Dispatcher Form -->
+            <div class="card card-glass" style="display: flex; flex-direction: column;">
+              <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                <h3 data-i18n-html="pmo.comm_broadcast_heading" style="margin: 0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem;">
+                  <span>📢</span> PMO Broadcast Steering Desk
+                </h3>
+              </div>
+              <p data-i18n="pmo.comm_broadcast_desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                Dispatch styled emails and real-time banner updates across all divisions. Writes fully-rendered simulation files persistently.
+              </p>
+              <form id="pmo-broadcast-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <label class="form-label" for="pmo-comm-sender" data-i18n="pmo.comm_label_sender" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Sender Name</label>
+                  <input type="text" class="form-control" id="pmo-comm-sender" value="PMO Steering Office" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+                </div>
+                
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <label class="form-label" for="pmo-comm-sender-role" data-i18n="pmo.comm_label_sender_role" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Sender Title / Role</label>
+                  <input type="text" class="form-control" id="pmo-comm-sender-role" value="Integration PMO Lead" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem;">
+                  <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                    <label class="form-label" for="pmo-comm-recipient-type" data-i18n="pmo.comm_label_recipient_group" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Recipient Group</label>
+                    <select class="form-control form-select" id="pmo-comm-recipient-type" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main);" required>
+                      <option value="all" selected data-i18n="pmo.comm_recipient_all">All Legacy Employees</option>
+                      <option value="hrbp" data-i18n="pmo.comm_recipient_hrbp">All Integration Leaders</option>
+                      <option value="individual" data-i18n="pmo.comm_recipient_individual">Specific Corporate User</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                    <label class="form-label" for="pmo-comm-template" data-i18n="pmo.comm_label_template" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Accent Template</label>
+                    <select class="form-control form-select" id="pmo-comm-template" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main);" required>
+                      <option value="synergy" selected data-i18n="pmo.comm_template_synergy">🟠 Values Synergy</option>
+                      <option value="welcome" data-i18n="pmo.comm_template_welcome">🟢 M&amp;A Welcome</option>
+                      <option value="security" data-i18n="pmo.comm_template_security">🔴 InfoSec Compliance</option>
+                      <option value="custom" data-i18n="pmo.comm_template_custom">🔵 System Notice</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Specific recipient dropdown: hidden by default -->
+                <div class="form-group" id="pmo-comm-recipient-specific-container" style="display: none; flex-direction: column; gap: 0.35rem;">
+                  <label class="form-label" for="pmo-comm-recipient-select" data-i18n="pmo.comm_label_target_recipient" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Target Recipient</label>
+                  <select class="form-control form-select" id="pmo-comm-recipient-select" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); width: 100%;">
+                    <!-- Dynamic content -->
+                  </select>
+                </div>
+
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <label class="form-label" for="pmo-comm-subject" data-i18n="pmo.comm_label_subject" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Subject Line</label>
+                  <input type="text" class="form-control" id="pmo-comm-subject" data-i18n-ph="pmo.comm_ph_subject" placeholder="e.g. Action Required: Synergy Alignment Survey" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main);" required>
+                </div>
+
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <label class="form-label" for="pmo-comm-body" data-i18n="pmo.comm_label_body" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Email Message Body</label>
+                  <textarea class="form-control" id="pmo-comm-body" rows="4" data-i18n-ph="pmo.comm_ph_body" placeholder="Write integration announcements..." style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-main); resize: vertical;" required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary" data-i18n="pmo.comm_dispatch_btn" style="padding: 0.6rem 1.25rem; font-weight: 700; width: 100%; border-radius: 6px; background: var(--te-dark-teal); border: none; color: white; cursor: pointer; transition: background 0.2s;">
+                  🚀 Dispatch M&amp;A Integration Alert
+                </button>
+              </form>
+            </div>
+
+            <!-- Right: Ledger List -->
+            <div class="card card-glass" style="display: flex; flex-direction: column; height: 100%; max-height: 650px;">
+              <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                <h3 data-i18n-html="pmo.comm_ledger_heading" style="margin: 0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem;">
+                  <span>📨</span> Integration Mail Ledger
+                </h3>
+                <span class="badge" id="pmo-comm-ledger-count" style="background: var(--te-orange); color: white; padding: 0.2rem 0.5rem; border-radius: 10px; font-size: 0.75rem; font-weight: bold;">0 Sent</span>
+              </div>
+              <p data-i18n="pmo.comm_ledger_desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                List of all dispatched messages from steering committees. Review visual HTML outputs.
+              </p>
+              
+              <div id="pmo-comm-ledger-container" style="display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; padding-right: 0.25rem; flex: 1;">
+                <p style="text-align: center; color: var(--text-dim); font-size: 0.85rem; padding: 1.5rem; font-style: italic;">No communication records found.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Pillar 2: PMO Culture & Alignment -->
+        <div class="pmo-tab-section" id="pmo-pillar-culture" style="display: none;">
+          <div class="pmo-dashboard-overview" style="margin-bottom: 2rem;">
+            <!-- Left: Overall Synergy Card -->
+            <div class="pmo-summary-card">
+              <div class="pmo-header-lockup">
+                <h4 data-i18n="pmo.culture_health_heading" style="margin: 0; text-transform: uppercase; font-size: 0.8rem; color: var(--text-secondary); letter-spacing: 0.5px;">Synergy & Integration Health</h4>
+                <span data-i18n="pmo.culture_imo_certified" style="font-size: 0.75rem; background: rgba(16, 185, 129, 0.1); color: #10B981; padding: 0.2rem 0.5rem; border-radius: 12px; font-weight: 700;">IMO CERTIFIED</span>
+              </div>
+              
+              <div class="pmo-synergy-gauge-container">
+                <div class="pmo-synergy-gauge">
+                  <svg viewBox="0 0 36 36">
+                    <circle class="gauge-bg" cx="18" cy="18" r="15.9155" />
+                    <circle id="pmo-synergy-fill" class="gauge-fill" cx="18" cy="18" r="15.9155" stroke-dasharray="0, 100" />
+                  </svg>
+                  <div id="pmo-synergy-percent" class="gauge-text-pct">0%</div>
+                </div>
+                <div class="pmo-synergy-text-block">
+                  <h3 id="pmo-synergy-status">Calibrating Synergy Matrix...</h3>
+                  <p id="pmo-synergy-desc">
+                    Overall integration index calculates the weighted task completions, local survey sentiment adjustments, and the resolution state of key cross-functional synergy blockers.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Blocker Cockpit -->
+            <div class="blocker-cockpit">
+              <div class="blocker-cockpit-header">
+                <h3 data-i18n="pmo.culture_blocker_cockpit">⚡ Synergy Blocker Cockpit</h3>
+                <span id="blocker-badge" class="blocker-count-badge">0 ACTIVE</span>
+              </div>
+              <div id="pmo-blocker-list" class="blocker-list">
+                <!-- Dynamic blocker items injected here -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pillar 3: PMO Roles & Flowchart -->
+        <div class="pmo-tab-section" id="pmo-pillar-roles" style="display: none;">
+          <div class="landing-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+            
+            <!-- Left: Integration Leader Provisioning Desk -->
+            <div class="card card-glass" style="display: flex; flex-direction: column;">
+              <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                <h3 data-i18n-html="pmo.roles_provision_heading" style="margin: 0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem;">
+                  <span>💼</span> Integration Leader Role Provisioning Desk
+                </h3>
+              </div>
+              <p data-i18n="pmo.roles_provision_desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                Provision regional Integration Leader access, defining their email, geographic region, and assigned integration tracks.
+              </p>
+              <form id="pmo-hrbp-provision-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <label class="form-label" for="pmo-hrbp-name" data-i18n="pmo.roles_label_name" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Integration Leader Full Name</label>
+                  <input type="text" class="form-control" id="pmo-hrbp-name" data-i18n-ph="pmo.roles_ph_name" placeholder="e.g. Karen Peterson" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px;" required>
+                </div>
+                
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <label class="form-label" for="pmo-hrbp-email" data-i18n="pmo.roles_label_email" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Corporate Email</label>
+                  <input type="email" class="form-control" id="pmo-hrbp-email" data-i18n-ph="pmo.roles_ph_email" placeholder="e.g. karen.peterson@te.com" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px;" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                  <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                    <label class="form-label" for="pmo-hrbp-region" data-i18n="pmo.roles_label_region" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Geographic Region</label>
+                    <select class="form-control form-select" id="pmo-hrbp-region" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px;" required>
+                      <option value="Munich, Germany" selected data-i18n="pmo.roles_region_munich">Munich (Germany)</option>
+                      <option value="Toulouse, France" data-i18n="pmo.roles_region_toulouse">Toulouse (France)</option>
+                      <option value="Shanghai, China" data-i18n="pmo.roles_region_shanghai">Shanghai (China)</option>
+                      <option value="Harrisburg, USA" data-i18n="pmo.roles_region_harrisburg">Harrisburg (USA)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group" style="display: flex; flex-direction: column; gap: 0.35rem;">
+                    <label class="form-label" for="pmo-hrbp-track" data-i18n="pmo.roles_label_track" style="font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);">Assigned Track</label>
+                    <select class="form-control form-select" id="pmo-hrbp-track" style="padding: 0.5rem 0.75rem; border: 1.5px solid var(--border-color); border-radius: 6px;" required>
+                      <option value="culture" selected data-i18n="pmo.roles_track_culture">Culture &amp; Values</option>
+                      <option value="talent" data-i18n="pmo.roles_track_talent">Talent &amp; Systems</option>
+                      <option value="value" data-i18n="pmo.roles_track_value">Value &amp; Synergies</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" data-i18n="pmo.roles_provision_btn" style="padding: 0.6rem 1.25rem; font-weight: 700; width: 100%; border-radius: 6px; background: var(--te-orange); border: none; color: white; cursor: pointer; transition: background 0.2s;">
+                  Provision Integration Leader Access
+                </button>
+              </form>
+
+              <!-- List of Active Integration Leaders -->
+              <div style="margin-top: 1.5rem; border-top: 1.5px solid rgba(0,0,0,0.08); padding-top: 1.25rem;">
+                <h4 data-i18n="pmo.roles_registry_heading" style="margin: 0 0 0.75rem 0; color: var(--te-dark-teal); font-size: 0.9rem; font-weight: 700;">Provisioned Integration Leaders Registry</h4>
+                <div id="pmo-hrbps-list" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 180px; overflow-y: auto; padding-right: 0.25rem;">
+                  <p style="text-align: center; color: var(--text-dim); font-size: 0.8rem; padding: 0.5rem;">Loading active Integration Leaders...</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Org Hierarchy Diagram -->
+            <div class="card card-glass" style="display: flex; flex-direction: column; height: 100%;">
+              <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                <h3 data-i18n-html="pmo.roles_flowchart_heading" style="margin: 0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem;">
+                  <span>👑</span> M&A Org Access Flowchart
+                </h3>
+              </div>
+              <p data-i18n="pmo.roles_flowchart_desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                Hierarchical authorization system mapping permission management layers and employee provisioning pipelines.
+              </p>
+              
+              <!-- Premium SVG Hierarchy Graph -->
+              <div style="background: rgba(36, 76, 90, 0.03); border: 1.5px dashed rgba(36, 76, 90, 0.15); border-radius: 8px; padding: 1rem; display: flex; align-items: center; justify-content: center;">
+                <svg viewBox="0 0 420 300" style="width: 100%; height: auto; font-family: var(--font-family-sans, sans-serif);">
+                  <!-- Definitions for gradients and shadows -->
+                  <defs>
+                    <linearGradient id="pmo-flow-admin" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#1e293b" />
+                      <stop offset="100%" stop-color="#334155" />
+                    </linearGradient>
+                    <linearGradient id="pmo-flow-pmo" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#244C5A" />
+                      <stop offset="100%" stop-color="#387082" />
+                    </linearGradient>
+                    <linearGradient id="pmo-flow-hrbp" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#E98300" />
+                      <stop offset="100%" stop-color="#FBBF24" />
+                    </linearGradient>
+                    <linearGradient id="pmo-flow-emp" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#10B981" />
+                      <stop offset="100%" stop-color="#34D399" />
+                    </linearGradient>
+                    
+                    <filter id="pmo-node-shadow" x="-10%" y="-10%" width="120%" height="120%">
+                      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.1" />
+                    </filter>
+                  </defs>
+
+                  <!-- Node connections (arrows) -->
+                  <path d="M 210,65 L 210,95" fill="none" stroke="#244C5A" stroke-width="2" marker-end="url(#arrow)" stroke-dasharray="3,3" />
+                  <path d="M 210,135 L 210,165" fill="none" stroke="#244C5A" stroke-width="2" />
+                  <path d="M 210,205 L 210,235" fill="none" stroke="#E98300" stroke-width="2" />
+                  
+                  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#244C5A" />
+                  </marker>
+
+                  <!-- Nodes -->
+                  <g filter="url(#pmo-node-shadow)">
+                    <rect x="130" y="15" width="160" height="50" rx="25" fill="url(#pmo-flow-admin)" />
+                    <text x="210" y="38" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="800" letter-spacing="0.5" data-i18n="pmo.flow_admin_title">🛠️ GLOBAL ADMIN</text>
+                    <text x="210" y="53" text-anchor="middle" fill="#94a3b8" font-size="8" data-i18n="pmo.flow_admin_desc">Creates PMO, Integration Leader, Employees</text>
+                  </g>
+                  <g filter="url(#pmo-node-shadow)">
+                    <rect x="130" y="85" width="160" height="50" rx="8" fill="url(#pmo-flow-pmo)" />
+                    <text x="210" y="108" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="800" letter-spacing="0.5" data-i18n="pmo.flow_pmo_title">🏢 PMO COORDINATOR</text>
+                    <text x="210" y="123" text-anchor="middle" fill="#a5f3fc" font-size="8" data-i18n="pmo.flow_pmo_desc">Creates Regional Integration Leader Roles</text>
+                  </g>
+                  <g filter="url(#pmo-node-shadow)">
+                    <rect x="130" y="155" width="160" height="50" rx="8" fill="url(#pmo-flow-hrbp)" />
+                    <text x="210" y="178" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="800" letter-spacing="0.5" data-i18n="pmo.flow_hrbp_title">💼 REGIONAL Integration Leader</text>
+                    <text x="210" y="193" text-anchor="middle" fill="#78350f" font-size="8" data-i18n="pmo.flow_hrbp_desc">Creates Employee Onboarding Roles</text>
+                  </g>
+                  <g filter="url(#pmo-node-shadow)">
+                    <rect x="130" y="225" width="160" height="50" rx="25" fill="url(#pmo-flow-emp)" />
+                    <text x="210" y="248" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="800" letter-spacing="0.5" data-i18n="pmo.flow_emp_title">👤 legacy EMPLOYEE</text>
+                    <text x="210" y="263" text-anchor="middle" fill="#064e3b" font-size="8" data-i18n="pmo.flow_emp_desc">Onboarding, Training &amp; Milestones</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Pillar 4: PMO Onboarding & Tracks -->
+        <div class="pmo-tab-section" id="pmo-pillar-onboarding" style="display: none;">
+          <!-- Functional Tracks Metrics Grid -->
+          <div class="pmo-tracks-grid" id="pmo-tracks-container" style="margin-bottom: 2rem;">
+            <!-- Rendered dynamically by JS -->
+          </div>
+
+          <!-- Multi-Tab Functional Checklist workspaces -->
+          <div class="pmo-workspaces-section" style="margin-bottom: 2rem;">
+            <h3 class="pmo-workspace-title" data-i18n="pmo.onb_workspaces_title">🛠️ Functional Integration Workspaces</h3>
+            <div class="pmo-tabs-row" id="pmo-tabs-container">
+              <!-- Rendered dynamically by JS -->
+            </div>
+            <div class="pmo-checklist-container" id="pmo-checklist-container">
+              <!-- Rendered dynamically by JS -->
+            </div>
+          </div>
+
+          <!-- Timeline Milestone Gates -->
+          <div class="pmo-milestones-section">
+            <h3 class="pmo-workspace-title" style="margin-bottom: 0;" data-i18n="pmo.onb_timeline_title">📅 Cross-Functional Integration Timeline</h3>
+            <div class="pmo-timeline" id="pmo-timeline-container">
+              <div class="pmo-timeline-fill" id="pmo-timeline-fill" style="width: 0%;"></div>
+              
+              <div class="pmo-timeline-gate" id="gate-day1">
+                <div class="timeline-dot">1</div>
+                <div class="timeline-info">
+                  <h4 class="timeline-gate-title" data-i18n="pmo.gate_day1_title">Day 1</h4>
+                  <p class="timeline-gate-desc" data-i18n="pmo.gate_day1_desc">Town Hall Announcement</p>
+                </div>
+              </div>
+              <div class="pmo-timeline-gate" id="gate-month1">
+                <div class="timeline-dot">2</div>
+                <div class="timeline-info">
+                  <h4 class="timeline-gate-title" data-i18n="pmo.gate_month1_title">Month 1</h4>
+                  <p class="timeline-gate-desc" data-i18n="pmo.gate_month1_desc">IT & InfoSec VPN Bridge</p>
+                </div>
+              </div>
+              <div class="pmo-timeline-gate" id="gate-month2">
+                <div class="timeline-dot">3</div>
+                <div class="timeline-info">
+                  <h4 class="timeline-gate-title" data-i18n="pmo.gate_month2_title">Month 2</h4>
+                  <p class="timeline-gate-desc" data-i18n="pmo.gate_month2_desc">HR Onboarding Transfer</p>
+                </div>
+              </div>
+              <div class="pmo-timeline-gate" id="gate-month3">
+                <div class="timeline-dot">4</div>
+                <div class="timeline-info">
+                  <h4 class="timeline-gate-title" data-i18n="pmo.gate_month3_title">Month 3</h4>
+                  <p class="timeline-gate-desc" data-i18n="pmo.gate_month3_desc">Commercial Product Launch</p>
+                </div>
+              </div>
+              <div class="pmo-timeline-gate" id="gate-day100">
+                <div class="timeline-dot">5</div>
+                <div class="timeline-info">
+                  <h4 class="timeline-gate-title" data-i18n="pmo.gate_day100_title">Day 100</h4>
+                  <p class="timeline-gate-desc" data-i18n="pmo.gate_day100_desc">Full Operations Sync</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div> <!-- End #pmo-dashboard-content -->
+    </main>
+  </div>
+
+  <script src="/js/pmo.js?v=1782361361859"></script>
+</body>
+</html>

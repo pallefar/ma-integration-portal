@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Admin Control Center</title>
+  <meta name="description" content="Manage post-merger integration settings, customize dynamic recommended action modules, compile personalized employee welcome portals, and publish system announcements.">
+  <link rel="stylesheet" href="/css/style.css?v=1782361361859">
+  <script src="/js/transitions.js?v=1782361361859"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
+            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
+            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
+          </svg>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title" style="display: flex; align-items: center; gap: 0.75rem;">
+          <span class="portal-badge" style="background: var(--te-dark-teal); color: white;">M&amp;A Integration</span>
+          <div id="demo-mode-switcher-container" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(36, 76, 90, 0.05); padding: 0.25rem 0.65rem; border-radius: 20px; border: 1.2px dashed var(--te-orange); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Click to toggle between Demo Mode and Custom M&amp;A Setup.">
+            <span id="demo-switcher-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
+            <span id="demo-switcher-text" style="color: var(--te-dark-teal);">DEMO MODE: ON</span>
+          </div>
+          <div id="edit-mode-switcher-container" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(36, 76, 90, 0.05); padding: 0.25rem 0.65rem; border-radius: 20px; border: 1.2px dashed var(--te-dark-teal); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Click to toggle inline Edit Mode (unlocks system settings and survey editing controls).">
+            <span id="edit-switcher-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; display: inline-block;"></span>
+            <span id="edit-switcher-text" style="color: var(--te-dark-teal);">EDIT MODE: OFF</span>
+          </div>
+        </div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">PMO Console</a>
+        <a href="/survey.html" class="nav-link">Survey</a>
+        <a href="/playbook.html" class="nav-link">Playbook</a>
+        <a href="/dashboard.html" class="nav-btn-portal-hrbp">Integration Leader Portal</a>
+        <a href="/employee.html?name=Alex&role=R%26D%20Specialist&dept=R%26D" class="nav-btn-portal-emp">Employee Portal</a>
+        <a href="/leaders.html" class="nav-link">Leaders Portal</a>
+        <a href="/admin.html" class="nav-btn-admin active">Admin Settings</a>
+      </nav>
+    </header>
+
+    <!-- Main Content Frame -->
+    <main class="main-content">
+      
+      <!-- ============ SaaS Admin Shell ============ -->
+      <div class="admin-shell">
+        <aside class="admin-rail" id="admin-rail">
+          <div class="admin-rail-brand">
+            <span class="admin-rail-logo">TE</span>
+            <span class="admin-rail-brand-text"><strong>M&amp;A Admin</strong><small>Content &amp; System</small></span>
+          </div>
+          <nav class="admin-rail-nav">
+            <div class="admin-rail-group">
+              <span class="admin-rail-label">Content</span>
+              <button class="admin-tab-btn active" data-tab="courses"><span class="admin-rail-ic">🎓</span> Courses</button>
+              <button class="admin-tab-btn" data-tab="modules"><span class="admin-rail-ic">🧩</span> Action Modules</button>
+              <button class="admin-tab-btn" data-tab="pages"><span class="admin-rail-ic">📄</span> Pages &amp; Playbook</button>
+            </div>
+            <div class="admin-rail-group">
+              <span class="admin-rail-label">People</span>
+              <button class="admin-tab-btn" data-tab="employees"><span class="admin-rail-ic">👤</span> Employees</button>
+              <button class="admin-tab-btn" data-tab="hrbp"><span class="admin-rail-ic">📊</span> Integration Leaders</button>
+            </div>
+            <div class="admin-rail-group">
+              <span class="admin-rail-label">Engagement</span>
+              <button class="admin-tab-btn" data-tab="communication"><span class="admin-rail-ic">📣</span> Communications</button>
+            </div>
+            <div class="admin-rail-group">
+              <span class="admin-rail-label">Localization</span>
+              <button class="admin-tab-btn" data-tab="translations"><span class="admin-rail-ic">🌐</span> Translations</button>
+              <button class="admin-tab-btn" data-tab="menus"><span class="admin-rail-ic">🧭</span> Menus</button>
+              <button class="admin-tab-btn" data-tab="media"><span class="admin-rail-ic">🖼️</span> Media</button>
+            </div>
+            <div class="admin-rail-group">
+              <span class="admin-rail-label">System</span>
+              <button class="admin-tab-btn" data-tab="system"><span class="admin-rail-ic">⚙️</span> Settings &amp; Survey</button>
+            </div>
+          </nav>
+          <div class="admin-rail-foot">
+            <a href="/" class="admin-rail-live">↗ View live portal</a>
+          </div>
+        </aside>
+
+        <div class="admin-content-area">
+          <div class="admin-topbar">
+            <div class="admin-topbar-heading">
+              <h1 class="admin-topbar-title" id="admin-section-title">Courses</h1>
+              <p class="admin-topbar-sub" id="admin-section-sub">Manage the academy curriculum — courses, modules, lessons &amp; quizzes</p>
+            </div>
+            <div class="admin-topbar-actions">
+              <span class="admin-topbar-badge" id="admin-topbar-mode">DEMO</span>
+            </div>
+          </div>
+
+          <!-- ===== Content: Courses (CMS) ===== -->
+          <div class="tab-content tab-content-panel active" id="tab-courses">
+            <div class="card card-glass">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Course Catalog</h2>
+                <span style="font-size:0.78rem; color:var(--text-secondary);">Academy curriculum, migrated from the employee portal</span>
+              </div>
+              <div id="courses-admin-list" style="display:flex; flex-direction:column; gap:1rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading courses…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Content: Pages & Playbook ===== -->
+          <div class="tab-content tab-content-panel" id="tab-pages" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header"><h2>Pages &amp; Playbook</h2></div>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.25rem;">CMS-owned page content. Full WYSIWYG editing arrives in the page-CMS phase; these records are already live in the database.</p>
+              <div id="pages-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading pages…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Localization: Translations ===== -->
+          <div class="tab-content tab-content-panel" id="tab-translations" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header"><h2>Translations</h2></div>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.25rem;">Languages and the app-wide string dictionary served to every page. The per-key translation editor arrives in the i18n phase.</p>
+              <div id="translations-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading languages…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Localization: Menus ===== -->
+          <div class="tab-content tab-content-panel" id="tab-menus" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header"><h2>Menus &amp; Navigation</h2></div>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.25rem;">Edit sidebar labels, icons, order, and per-role visibility, add custom links, and manage the demo-home role cards. Changes apply to the live sidebar on next load.</p>
+              <div id="menus-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading menus…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Localization: Media ===== -->
+          <div class="tab-content tab-content-panel" id="tab-media" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header"><h2>Media Library</h2></div>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.25rem;">Uploaded images and video used across content and the per-language welcome video.</p>
+              <div id="media-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading media…</p>
+              </div>
+            </div>
+          </div>
+
+      <!-- Tab 1: System & Survey -->
+      <div class="tab-content tab-content-panel" id="tab-system" style="display: none;">
+        <div class="landing-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+          
+          <!-- Left Column: Settings Configuration -->
+          <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <!-- System Settings Card -->
+            <div class="card card-glass">
+              <div class="card-header">
+                <h2>Merger System Settings</h2>
+              </div>
+              
+              <form id="settings-form">
+                <!-- Target Company Name -->
+                <div class="form-group">
+                  <label class="form-label" for="setting-target-company">Target Integration Company</label>
+                  <input type="text" class="form-control" id="setting-target-company" placeholder="e.g. NextGen Sensors Ltd." required>
+                  <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    The name of the acquired entity displayed across portal headers, charts, and employee greets.
+                  </p>
+                </div>
+
+                <!-- Industry Sector -->
+                <div class="form-group">
+                  <label class="form-label" for="setting-sector">Industry Sector</label>
+                  <input type="text" class="form-control" id="setting-sector" placeholder="e.g. Industrial R&D Sensors" required>
+                </div>
+
+                <!-- Size and HQ -->
+                <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                  <div>
+                    <label class="form-label" for="setting-size">Company Size</label>
+                    <input type="text" class="form-control" id="setting-size" placeholder="e.g. 240 Employees" required>
+                  </div>
+                  <div>
+                    <label class="form-label" for="setting-hq">Headquarters Location</label>
+                    <input type="text" class="form-control" id="setting-hq" placeholder="e.g. Munich, Germany" required>
+                  </div>
+                </div>
+
+                <!-- Acquisition closing date -->
+                <div class="form-group">
+                  <label class="form-label" for="setting-acq-date">Acquisition Closing Date</label>
+                  <input type="date" class="form-control" id="setting-acq-date" required>
+                </div>
+
+                <!-- Strategic Synergy Objective -->
+                <div class="form-group">
+                  <label class="form-label" for="setting-synergy-objective">Key Synergy Objective</label>
+                  <textarea class="form-control" id="setting-synergy-objective" rows="2" placeholder="Describe the strategic business case for this integration..." required></textarea>
+                </div>
+
+                <!-- Secure Gemini API Key -->
+                <div class="form-group" style="position: relative;">
+                  <label class="form-label" for="setting-gemini-key">Google Gemini API Key (Optional)</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="password" class="form-control" id="setting-gemini-key" placeholder="Enter API Key for custom AI roadmaps...">
+                    <button type="button" class="btn btn-secondary" id="btn-toggle-key-visibility" style="padding: 0.7rem 1rem; border-radius: var(--radius-md); font-size: 0.8rem; margin: 0;">Show</button>
+                  </div>
+                  <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    If provided, the system automatically queries Gemini models to generate hyper-tailored 100-day plans. If blank, local expert rules are used instead.
+                  </p>
+                </div>
+
+                 <!-- In-Browser Local LLM Model for Duck Coach -->
+                 <div class="form-group">
+                   <label class="form-label" for="setting-browser-model">TEodor Duck Coach AI Model (In-Browser LLM)</label>
+                   <select class="form-control form-select" id="setting-browser-model" required>
+                     <option value="none">None (Static PMI FAQs Only)</option>
+                     <option value="lamini-78m">Xenova/LaMini-Flan-T5-78M (Client-Side, ~250MB - Ultra Light &amp; Fast!)</option>
+                     <option value="qwen-0.5b">Xenova/Qwen1.5-0.5B-Chat (Client-Side, ~940MB - High Quality)</option>
+                     <option value="simulated-duck">TEodor Neural Duck Engine (Local Simulation, Instantly Available)</option>
+                   </select>
+                   <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                     Select the model that newly acquired employees will download in their browser to activate TEodor the yellow rubber duck's local AI chat support.
+                   </p>
+                 </div>
+
+                  <!-- Onboarding Welcome Video (Per Language) -->
+                  <h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--te-dark-teal); font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Onboarding Welcome Video (Per Language)</h4>
+                  
+                  <!-- English Video -->
+                  <div style="border: 1px solid rgba(36, 76, 90, 0.15); border-radius: var(--radius-md); padding: 0.75rem; margin-bottom: 1rem; background: rgba(36, 76, 90, 0.02);">
+                    <h5 style="margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--te-dark-teal); font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
+                      <span>🇺🇸</span> English (EN)
+                    </h5>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+                      <select class="form-control form-select" id="setting-video-type-en" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                        <option value="local">Local Video</option>
+                        <option value="youtube">YouTube</option>
+                      </select>
+                      <input type="text" class="form-control" id="setting-video-url-en" placeholder="Video URL or YouTube Link" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                    </div>
+                  </div>
+
+                  <!-- German Video -->
+                  <div style="border: 1px solid rgba(36, 76, 90, 0.15); border-radius: var(--radius-md); padding: 0.75rem; margin-bottom: 1rem; background: rgba(36, 76, 90, 0.02);">
+                    <h5 style="margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--te-dark-teal); font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
+                      <span>🇩🇪</span> German (DE)
+                    </h5>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+                      <select class="form-control form-select" id="setting-video-type-de" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                        <option value="local">Local Video</option>
+                        <option value="youtube">YouTube</option>
+                      </select>
+                      <input type="text" class="form-control" id="setting-video-url-de" placeholder="Video URL or YouTube Link" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                    </div>
+                  </div>
+
+                  <!-- Chinese Video -->
+                  <div style="border: 1px solid rgba(36, 76, 90, 0.15); border-radius: var(--radius-md); padding: 0.75rem; margin-bottom: 1rem; background: rgba(36, 76, 90, 0.02);">
+                    <h5 style="margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--te-dark-teal); font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
+                      <span>🇨🇳</span> Chinese (ZH)
+                    </h5>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+                      <select class="form-control form-select" id="setting-video-type-zh" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                        <option value="local">Local Video</option>
+                        <option value="youtube">YouTube</option>
+                      </select>
+                      <input type="text" class="form-control" id="setting-video-url-zh" placeholder="Video URL or YouTube Link" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                    </div>
+                  </div>
+
+                  <!-- Czech Video -->
+                  <div style="border: 1px solid rgba(36, 76, 90, 0.15); border-radius: var(--radius-md); padding: 0.75rem; margin-bottom: 1rem; background: rgba(36, 76, 90, 0.02);">
+                    <h5 style="margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--te-dark-teal); font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
+                      <span>🇨🇿</span> Czech (CS)
+                    </h5>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+                      <select class="form-control form-select" id="setting-video-type-cs" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                        <option value="local">Local Video</option>
+                        <option value="youtube">YouTube</option>
+                      </select>
+                      <input type="text" class="form-control" id="setting-video-url-cs" placeholder="Video URL or YouTube Link" style="font-size: 0.8rem; padding: 0.4rem 0.5rem; height: auto;">
+                    </div>
+                  </div>
+
+
+                 <button type="submit" class="btn btn-primary" id="btn-save-settings" style="width: 100%;">
+                   Save System Configuration
+                 </button>
+              </form>
+            </div>
+
+            <!-- Demo Role Visibility & Feature Toggles Card -->
+            <div class="card card-glass" id="admin-role-visibility-card" style="margin-top: 1rem; border-left: 5px solid #10B981;">
+              <div class="card-header">
+                <h2>🎛️ Demo Role Visibility</h2>
+              </div>
+              <form id="role-visibility-form" style="padding: 0.25rem 0.5rem 0.75rem;">
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 1rem; line-height: 1.4;">
+                  Choose which role portals appear on the demo landing page, in the Portals menu, and in the header role switcher. Hidden portals stay reachable by direct URL (this Admin console included).
+                </p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; margin-bottom: 1rem;">
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="rv-hrbp" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> 📊 Integration Leader Dashboard
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="rv-employee" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> 👤 Employee Portal
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="rv-pmo" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> 🏢 PMO Console
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="rv-supporting" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> 👥 Supporting Teams
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="rv-leaders" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> 👑 Leaders Portal
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="rv-admin" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> ⚙️ Admin Console Card
+                  </label>
+                </div>
+                <div style="border-top: 1px solid var(--border-color); padding-top: 0.85rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="ted-game-enabled" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> 👾 TEd Reward Game (Employee milestone)
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; font-weight: 600;">
+                    Unlock XP:
+                    <input type="number" id="ted-unlock-xp" min="10" step="10" class="form-control" style="width: 90px; padding: 0.3rem 0.5rem; height: auto; font-size: 0.85rem;">
+                  </label>
+                </div>
+                <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                  <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="rv-floating-menu" style="width: 16px; height: 16px; accent-color: var(--te-orange); cursor: pointer;"> 🧭 Floating Quick-Nav Menu (jump to any section, ignores hidden roles)
+                  </label>
+                </div>
+                <button type="submit" class="btn btn-primary" id="btn-save-role-visibility" style="width: 100%;">
+                  Save Demo Visibility
+                </button>
+              </form>
+            </div>
+
+            <!-- Custom M&A Virtualization Control Card -->
+            <div class="card card-glass" id="admin-custom-ma-card" style="margin-top: 1rem; border-left: 5px solid var(--te-orange); display: none;">
+              <div class="card-header">
+                <h2>Custom M&amp;A Workspace Controls</h2>
+              </div>
+              <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0; line-height: 1.4;">
+                  You are currently running in <strong>Custom M&amp;A Mode</strong>. All data displayed across employee rosters, Integration Leader logs, roadmaps, and communications are served from a segregated virtual workspace.
+                </p>
+                <div style="background: rgba(233,131,0,0.05); border: 1px solid rgba(233,131,0,0.15); border-radius: 6px; padding: 0.75rem; font-size: 0.8rem; color: var(--te-orange); font-weight: 600;">
+                  ⚠️ Warning: Clearing the custom workspace will wipe all provisioned Integration Leaders, custom employees, sent emails, and roadmaps for this project.
+                </div>
+                <button type="button" class="btn btn-secondary" id="btn-reset-custom-ma" style="width: 100%; border-color: #ef4444; color: #ef4444; font-weight: 700; padding: 0.6rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: transparent; cursor: pointer; transition: background 0.2s;">
+                  <span>🗑️</span> Reset Custom M&A & Re-open Wizard
+                </button>
+              </div>
+            </div>
+
+            <!-- Database Migration & Cloud Deployment Hub Card -->
+            <div class="card card-glass" id="admin-db-migration-card" style="margin-top: 1rem; border-left: 5px solid var(--te-dark-teal);">
+              <div class="card-header" style="border-bottom: 1.5px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.5rem; font-size: 1.25rem;">
+                  <span>📊</span> Database Migration Hub
+                </h2>
+                <span class="badge" id="db-migration-status-badge" style="background: var(--text-dim); color: white; padding: 0.2rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase;">LOCAL JSON DB</span>
+              </div>
+              
+              <div style="padding: 0.25rem 0.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0; line-height: 1.4;">
+                  Migrate your M&A integration database from local JSON persistence files to a high-end SQL Relational Database to prepare the application for production cloud deployment.
+                </p>
+
+                <form id="db-migration-form" style="display: flex; flex-direction: column; gap: 0.85rem;">
+                  <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                    <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">SQL Database Provider</label>
+                    <select class="form-control form-select" id="mig-db-provider" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;" required>
+                      <option value="supabase" selected>🟢 Supabase (PostgreSQL)</option>
+                      <option value="azure">🔵 Microsoft Azure SQL Database</option>
+                      <option value="aws">🟠 Amazon AWS RDS (PostgreSQL)</option>
+                      <option value="sql">⚙️ Generic Relational SQL Database</option>
+                    </select>
+                  </div>
+
+                  <!-- Provider Subforms (hidden/shown dynamically) -->
+                  <!-- 1. Supabase credentials -->
+                  <div class="mig-subform" id="mig-subform-supabase" style="display: block; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                      <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Supabase API Project URL</label>
+                      <input type="url" class="form-control" id="mig-sup-url" placeholder="https://yourproject.supabase.co" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;" required>
+                    </div>
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                      <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Service Role API Key (Writability)</label>
+                      <input type="password" class="form-control" id="mig-sup-key" placeholder="eyJhbGciOi..." style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;" required>
+                    </div>
+                  </div>
+
+                  <!-- 2. Azure SQL credentials -->
+                  <div class="mig-subform" id="mig-subform-azure" style="display: none; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                      <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Azure SQL Connection String</label>
+                      <input type="text" class="form-control" id="mig-az-conn" placeholder="Server=tcp:sqlserver.database.windows.net... Password=***" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                    </div>
+                  </div>
+
+                  <!-- 3. Generic SQL & AWS RDS credentials -->
+                  <div class="mig-subform" id="mig-subform-generic" style="display: none; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0.75rem;">
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Database Host</label>
+                        <input type="text" class="form-control" id="mig-gen-host" placeholder="localhost or rds.amazonaws.com" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                      </div>
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Port</label>
+                        <input type="number" class="form-control" id="mig-gen-port" placeholder="5432" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                      </div>
+                    </div>
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                      <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Database Name</label>
+                      <input type="text" class="form-control" id="mig-gen-dbname" placeholder="te_pmi_db" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Username</label>
+                        <input type="text" class="form-control" id="mig-gen-user" placeholder="postgres" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                      </div>
+                      <div class="form-group" style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <label class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">Password</label>
+                        <input type="password" class="form-control" id="mig-gen-pass" placeholder="••••••••" style="padding: 0.5rem; border: 1.5px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                      </div>
+                    </div>
+                  </div>
+
+                  <button type="submit" class="btn btn-primary" id="btn-migrate-database" style="width: 100%; font-weight: 700; padding: 0.6rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--te-dark-teal); border: none; color: white; cursor: pointer; transition: background 0.2s; border-radius: 6px;">
+                    <span>⚡</span> Migrate &amp; Generate Relational Schema
+                  </button>
+                </form>
+
+                <!-- Step-by-step progress checklist -->
+                <div id="migration-progress-panel" style="display: none; background: rgba(36, 76, 90, 0.05); border: 1.5px dashed rgba(36, 76, 90, 0.2); border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
+                  <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--te-dark-teal); font-weight: bold;">⚡ Cloud Migration Progress</h4>
+                  <div style="height: 6px; background-color: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 0.75rem;">
+                    <div id="migration-progress-fill" style="height: 100%; width: 0%; background: var(--te-orange); transition: width 0.1s;"></div>
+                  </div>
+                  <div id="migration-progress-checklist" style="display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.75rem; font-weight: 600;">
+                    <!-- checklist lines dynamically injected here -->
+                  </div>
+                </div>
+
+                <!-- Syntax Highlighted Compiled Schema Output -->
+                <div id="migration-schema-output-container" style="display: none; margin-top: 1rem; border-top: 1.5px dashed rgba(0,0,0,0.08); padding-top: 1rem;">
+                  <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--te-dark-teal); font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+                    <span>📜 Generated SQL Deployment Schema</span>
+                    <button type="button" id="btn-copy-sql-schema" style="background: rgba(36,76,90,0.08); border: none; color: var(--te-dark-teal); font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer; transition: background 0.2s;">📋 Copy SQL</button>
+                  </h4>
+                  <p style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.35;">
+                    The SQL database script below is compiled dynamically based on your workspace dialect. Copy/paste or run this in your cloud console to initialize database schemas.
+                  </p>
+                  <pre style="background: #1e293b; color: #38bdf8; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.7rem; max-height: 220px; overflow-y: auto; white-space: pre; border: 1.5px solid rgba(0,0,0,0.1);"><code id="compiled-sql-schema-block">-- SQL Schema output</code></pre>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- PMO Control Desk Diagnostics & Command Card -->
+            <div class="card card-glass" style="margin-top: 1rem; border: 1px solid rgba(36, 76, 90, 0.2); background: linear-gradient(135deg, rgba(36, 76, 90, 0.02) 0%, rgba(233, 131, 0, 0.03) 100%);">
+              <div class="card-header" style="border-bottom: 1px solid rgba(36, 76, 90, 0.1); padding-bottom: 0.75rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">🏢</span>
+                <h3 style="color: var(--te-dark-teal); font-weight: 700; margin: 0; font-family: var(--font-family-display); font-size: 1.15rem;">PMO Integration Diagnostics</h3>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+                Monitor operational task metrics and active synergy blocker states from the cross-functional PMO Control Desk.
+              </p>
+              
+              <div style="background: rgba(255,255,255,0.45); border-radius: var(--radius-sm); padding: 0.85rem; border: 1px solid rgba(0,0,0,0.05); margin-bottom: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal);">
+                  <span>Overall Synergy Index:</span>
+                  <span id="admin-pmo-synergy-val" style="color: var(--te-orange); font-size: 0.9rem;">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: rgba(36, 76, 90, 0.1); border-radius: 4px; overflow: hidden; margin-bottom: 0.75rem;">
+                  <div id="admin-pmo-synergy-bar" style="width: 0%; height: 100%; background: var(--te-orange); transition: width 0.3s ease;"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                  <div>Checklist Progress: <strong id="admin-pmo-tasks-val" style="color: var(--te-dark-teal);">0/28 Done</strong></div>
+                  <div style="text-align: right;">Blockers Active: <strong id="admin-pmo-blockers-val" style="color: #EF4444;">3 Active</strong></div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary" id="btn-admin-view-pmo" style="flex: 1; min-width: 120px; font-size: 0.8rem; padding: 0.5rem 0.75rem; text-align: center; margin: 0; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;" onclick="window.location.href='/pmo.html'">
+                  <span>Open PMO Desk</span>
+                </button>
+                <button type="button" class="btn btn-dark" id="btn-admin-reset-pmo" style="flex: 1; min-width: 120px; font-size: 0.8rem; padding: 0.5rem 0.75rem; text-align: center; margin: 0; background-color: #EF4444; border-color: #EF4444; color: white; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;">
+                  <span>⚡ Reset PMO Desk</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- TE TEd Command Card -->
+            <div class="card card-glass" style="margin-top: 1rem; border: 1px solid rgba(233, 131, 0, 0.35); background: linear-gradient(135deg, rgba(20, 15, 10, 0.35) 0%, rgba(233, 131, 0, 0.04) 100%);">
+              <div class="card-header" style="border-bottom: 1px solid rgba(233, 131, 0, 0.2); padding-bottom: 0.75rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">👾</span>
+                <h3 style="color: var(--te-orange); font-weight: 700; margin: 0; font-family: var(--font-family-display); font-size: 1.15rem; text-shadow: 0 0 5px rgba(233, 131, 0, 0.25);">TE TEd Bypass</h3>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+                Authorized administration bypass allows initiating the retro TEd game gateway. Play the full custom platformer inside the browser portal.
+              </p>
+              <button type="button" class="btn" id="btn-admin-launch-doom" style="width: 100%; font-size: 0.85rem; padding: 0.6rem 0.75rem; text-align: center; margin: 0; background: var(--te-orange); border: 1px solid var(--te-orange); color: white; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; box-shadow: 0 0 10px rgba(233, 131, 0, 0.15); transition: all 0.2s;" onclick="window.launchDoomProtocol()">
+                <span>👾 RUN TEd</span>
+              </button>
+            </div>
+
+            <!-- Portable Application Package Download Card -->
+            <div class="card card-glass" style="margin-top: 1rem; border: 1px solid rgba(233, 131, 0, 0.25); background: linear-gradient(135deg, rgba(36, 76, 90, 0.03) 0%, rgba(233, 131, 0, 0.05) 100%);">
+              <div class="card-header" style="border-bottom: 1px solid rgba(233, 131, 0, 0.15); padding-bottom: 0.75rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <svg style="width: 20px; height: 20px; color: var(--te-orange);" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                </svg>
+                <h3 style="color: var(--te-dark-teal); font-weight: 700; margin: 0; font-family: var(--font-family-display); font-size: 1.15rem;">Portable IMO App Package</h3>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+                Deploy this Post-Merger Integration IMO System onto any computer. Download a complete, self-contained, and lightweight zipped project bundle containing all interfaces, APIs, database seeds, and cross-platform runners.
+              </p>
+              <div style="background: rgba(36, 76, 90, 0.04); border-radius: var(--radius-sm); padding: 0.85rem; margin-bottom: 1.5rem; border-left: 3px solid var(--te-orange);">
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal); margin: 0 0 0.4rem 0;">How to Run:</h4>
+                <ol style="margin: 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--text-primary); line-height: 1.4;">
+                  <li>Extract the downloaded <strong>.zip</strong> archive on any machine.</li>
+                  <li>Ensure Node.js is installed on that machine.</li>
+                  <li>Double-click <strong>start_app.bat</strong> (Windows) or execute <strong>start_app.sh</strong> (Mac/Linux).</li>
+                  <li>The app will auto-install dependencies, start the server, and launch the browser!</li>
+                </ol>
+              </div>
+              <a href="/api/admin/download-zip" class="btn btn-primary" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-decoration: none; font-weight: 700; background-color: var(--te-orange); border-color: var(--te-orange); transition: all 0.2s ease;">
+                <svg style="width: 18px; height: 18px;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Download Portable App Zip
+              </a>
+            </div>
+
+            <!-- AI Playbook RAG Training Ingestion Card -->
+            <div class="card card-glass" style="margin-top: 1rem; border: 1px solid rgba(36, 76, 90, 0.25); background: linear-gradient(135deg, rgba(36, 76, 90, 0.05) 0%, rgba(233, 131, 0, 0.02) 100%);">
+              <div class="card-header" style="border-bottom: 1px solid rgba(36, 76, 90, 0.15); padding-bottom: 0.75rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <svg style="width: 20px; height: 20px; color: var(--te-orange);" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                </svg>
+                <h3 style="color: var(--te-dark-teal); font-weight: 700; margin: 0; font-family: var(--font-family-display); font-size: 1.15rem;">AI RAG PDF Trainer (AI Insight)</h3>
+              </div>
+              
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+                Train the local RAG integration engine using your custom playbook PDF files. The <strong>AI Insight</strong> cognitive reviewer will parse your document, extract operational directives, and build compliance training chunks automatically.
+              </p>
+              
+              <!-- Drag and Drop Zone -->
+              <div id="rag-upload-zone" style="border: 2px dashed rgba(36, 76, 90, 0.3); border-radius: var(--radius-md); padding: 2rem 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s ease; background: rgba(255,255,255,0.4); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;">
+                <input type="file" id="rag-file-input" accept="application/pdf" style="display: none;" />
+                <svg style="width: 48px; height: 48px; color: var(--te-dark-teal); opacity: 0.7;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                <div style="font-weight: 700; color: var(--te-dark-teal); font-size: 0.9rem;">
+                  Drag & Drop Playbook PDF here
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                  or click to browse local files (Max 20MB)
+                </div>
+              </div>
+              
+              <!-- Progress Indicators (Hidden by default) -->
+              <div id="rag-processing-container" style="display: none; margin-top: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal); margin-bottom: 0.5rem;">
+                  <span id="rag-status-text">Uploading playbook PDF...</span>
+                  <span id="rag-percent-text">0%</span>
+                </div>
+                <!-- Progress Bar -->
+                <div style="width: 100%; height: 8px; background: rgba(36, 76, 90, 0.1); border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
+                  <div id="rag-progress-bar" style="width: 0%; height: 100%; background: var(--te-orange); transition: width 0.3s ease;"></div>
+                </div>
+                <!-- Step by step indicators -->
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.78rem; color: var(--text-secondary); background: rgba(36, 76, 90, 0.04); padding: 0.75rem; border-radius: var(--radius-sm); border-left: 3px solid var(--te-dark-teal);">
+                  <div id="step-upload" style="display: flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+                    <span class="step-bullet">•</span> Extracting playbook text from file...
+                  </div>
+                  <div id="step-cognitive" style="display: flex; align-items: center; gap: 0.4rem; opacity: 0.5;">
+                    <span class="step-bullet">•</span> AI Insight cognitive analysis & review...
+                  </div>
+                  <div id="step-indexing" style="display: flex; align-items: center; gap: 0.4rem; opacity: 0.5;">
+                    <span class="step-bullet">•</span> Indexing & compiling RAG chunks...
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Results feedback block (Hidden by default) -->
+              <div id="rag-result-container" style="display: none; margin-top: 1.25rem; border-top: 1px solid rgba(36,76,90,0.1); padding-top: 1rem;">
+                <h4 id="rag-result-title" style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: var(--te-dark-teal); display: flex; align-items: center; gap: 0.4rem;">
+                  <svg style="width: 16px; height: 16px; color: green;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  RAG Model Trained Successfully!
+                </h4>
+                <div id="rag-result-summary" style="font-size: 0.8rem; line-height: 1.4; color: var(--text-primary); margin-bottom: 0.75rem; background: rgba(255,255,255,0.6); padding: 0.6rem; border-radius: 4px; border: 1px solid rgba(0,0,0,0.05);">
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary);">
+                  <span>Dimension: <strong id="rag-result-dim" style="color: var(--te-orange);">Culture</strong></span>
+                  <span>Chunked Totals: <strong id="rag-result-chunks">4 rules</strong></span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Past Diagnostic Assessments History Card -->
+            <div class="card">
+              <div class="card-header">
+                <h2>Assessment Archive</h2>
+              </div>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                Inspect or manage previously compiled post-merger diagnostics. Promoting an entry automatically targets it for dashboard rendering.
+              </p>
+              
+              <div id="assessments-history-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
+                <p style="text-align: center; color: var(--text-dim); padding: 1.5rem;">Loading archive index...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Question CRUD Board -->
+          <div class="card card-glass">
+            <div class="card-header">
+              <h2>Survey Blueprint Builder</h2>
+            </div>
+            
+            <!-- Question Creation Form -->
+            <form id="add-question-form" style="border-bottom: 1.5px solid var(--border-color); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+              <h4 style="margin-bottom: 1rem; color: var(--te-dark-teal); font-size: 1.1rem; font-family: var(--font-family-display);">Add Diagnostic Question</h4>
+              
+              <div class="form-group">
+                <label class="form-label" for="new-q-text">Question Prompt</label>
+                <textarea class="form-control" id="new-q-text" rows="2" placeholder="e.g. How aligned are decision loops..." required></textarea>
+              </div>
+
+              <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                  <label class="form-label" for="new-q-dim">Dimension</label>
+                  <select class="form-control form-select" id="new-q-dim" required>
+                    <option value="culture">Culture &amp; Values</option>
+                    <option value="talent">Talent &amp; Systems</option>
+                    <option value="value">Value &amp; Synergies</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label" for="new-q-weight">Importance Weight</label>
+                  <select class="form-control form-select" id="new-q-weight">
+                    <option value="1.0">1.0 (Standard)</option>
+                    <option value="1.5">1.5 (High)</option>
+                    <option value="0.5">0.5 (Low)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-dark" style="width: 100%;">
+                Add Question to Survey
+              </button>
+            </form>
+
+            <!-- Active Question Index List -->
+            <h4 style="color: var(--te-dark-teal); margin-bottom: 0.5rem; font-size: 1.1rem; font-family: var(--font-family-display);">Active Survey Questions</h4>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+              These questions are served to integration teams during diagnostics. 
+            </p>
+
+            <div class="admin-question-list" id="questions-index-list" style="max-height: 480px; overflow-y: auto;">
+              <!-- Loaded dynamically -->
+              <p style="text-align: center; color: var(--text-dim);">Loading active blueprint...</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Tab 2: Action Modules -->
+      <div class="tab-content tab-content-panel" id="tab-modules" style="display: none;">
+        <div class="landing-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+          <!-- Left Side: Add/Edit Action Module Form -->
+          <div class="card card-glass">
+            <div class="card-header">
+              <h2>Manage Integration Modules</h2>
+            </div>
+            <form id="add-module-form">
+              <input type="hidden" id="module-id" value="">
+              
+              <div class="form-group">
+                <label class="form-label" for="module-title">Module Title</label>
+                <input type="text" class="form-control" id="module-title" placeholder="e.g. Cultural Value Sync Workshop" required>
+              </div>
+
+              <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                  <label class="form-label" for="module-dimension">Dimension</label>
+                  <select class="form-control form-select" id="module-dimension" required>
+                    <option value="culture">Culture &amp; Values</option>
+                    <option value="talent">Talent &amp; Systems</option>
+                    <option value="value">Value &amp; Synergies</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label" for="module-urgency">Urgency / Timeline</label>
+                  <input type="text" class="form-control" id="module-urgency" placeholder="e.g. Weeks 1-2" required>
+                </div>
+              </div>
+
+              <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                  <label class="form-label" for="module-min-score">Min Score Recommendation</label>
+                  <input type="number" class="form-control" id="module-min-score" step="0.1" min="1.0" max="5.0" value="1.0" required>
+                </div>
+                <div>
+                  <label class="form-label" for="module-max-score">Max Score Recommendation</label>
+                  <input type="number" class="form-control" id="module-max-score" step="0.1" min="1.0" max="5.0" value="3.5" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="module-teams">Supporting Teams</label>
+                <input type="text" class="form-control" id="module-teams" placeholder="e.g. IMO, Corporate Communications" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="module-link">Playbook Link Anchor</label>
+                <input type="text" class="form-control" id="module-link" placeholder="e.g. /playbook.html#culture" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="module-desc">Module Description</label>
+                <textarea class="form-control" id="module-desc" rows="3" placeholder="Briefly describe the module's key integration steps..." required></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary" id="btn-save-module" style="width: 100%;">
+                Save Integration Module
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-cancel-module-edit" style="width: 100%; margin-top: 0.5rem; display: none;">
+                Cancel Edit
+              </button>
+            </form>
+          </div>
+
+          <!-- Right Side: Active Modules List -->
+          <div class="card card-glass" style="display: flex; flex-direction: column; height: 100%;">
+            <div class="card-header">
+              <h2>Active Action Modules</h2>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+              These action roadmap items are suggested dynamically on the Steering Dashboard based on integration survey scores.
+            </p>
+            <div id="modules-index-list" style="display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; max-height: 520px; padding-right: 0.5rem;">
+              <p style="text-align: center; color: var(--text-dim); padding: 1.5rem;">Loading active modules...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Employee Roster -->
+      <div class="tab-content tab-content-panel" id="tab-employees" style="display: none;">
+        <div class="landing-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+          <!-- Left Side: Add Employee Form -->
+          <div class="card card-glass">
+            <div class="card-header">
+              <h2>Add Acquired Employee</h2>
+            </div>
+            <form id="add-employee-form">
+              <input type="hidden" id="emp-id" value="">
+              <div class="form-group">
+                <label class="form-label" for="emp-name">Employee Full Name</label>
+                <input type="text" class="form-control" id="emp-name" placeholder="e.g. Sarah Jenkins" required>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label" for="emp-role">Corporate Role</label>
+                <input type="text" class="form-control" id="emp-role" placeholder="e.g. Senior R&D Scientist" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="emp-dept">Functional Department</label>
+                <select class="form-control form-select" id="emp-dept" required>
+                  <option value="R&D">R&D / Technology</option>
+                  <option value="Sales">Sales &amp; Marketing</option>
+                  <option value="Finance">Finance &amp; Reporting</option>
+                  <option value="HR">Human Resources</option>
+                  <option value="Operations">Operations / Supply Chain</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="emp-company">Acquired Company Name (Optional)</label>
+                <input type="text" class="form-control" id="emp-company" placeholder="Leave blank to use global setting...">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="emp-lang">Language Preference</label>
+                <select class="form-control form-select" id="emp-lang" required>
+                  <option value="en" selected>🌐 English</option>
+                  <option value="de">🌐 Deutsch (German)</option>
+                  <option value="zh">🌐 中文 (Chinese)</option>
+                  <option value="cs">🌐 Čeština (Czech)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.25rem; margin-bottom: 1.25rem;">
+                <input type="checkbox" id="emp-is-leader" style="width: 18px; height: 18px; cursor: pointer;">
+                <label class="form-label" for="emp-is-leader" style="margin-bottom: 0; cursor: pointer; font-weight: 600; color: var(--te-dark-teal);">👑 Mark as Acquired Leader</label>
+              </div>
+
+              <div class="form-group" id="leader-role-group" style="display: none;">
+                <label class="form-label" for="emp-leader-role">Acquired Leadership Role</label>
+                <select class="form-control form-select" id="emp-leader-role">
+                  <option value="None" selected>None</option>
+                  <option value="Local HR">Local HR Manager</option>
+                  <option value="Manager">Functional Manager</option>
+                  <option value="Site Leader">Plant / Site Leader</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="emp-buddy-name">Assigned Integration Buddy</label>
+                <input type="text" class="form-control" id="emp-buddy-name" placeholder="e.g. Sarah Connor">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="emp-buddy-email">Integration Buddy Email</label>
+                <input type="email" class="form-control" id="emp-buddy-email" placeholder="e.g. sconnor@te.com">
+              </div>
+
+              <button type="submit" class="btn btn-primary" id="btn-save-emp" style="width: 100%;">
+                Register Employee
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-cancel-emp-edit" style="width: 100%; margin-top: 0.5rem; display: none;">
+                Cancel Edit
+              </button>
+            </form>
+          </div>
+
+          <!-- Right Side: Employee Roster & Welcome URL Compiler -->
+          <div class="card card-glass" style="display: flex; flex-direction: column; height: 100%;">
+            <div class="card-header">
+              <h2>Acquired Staff &amp; Welcome Portals</h2>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+              Compile custom employee welcome portals with dynamic milestone trackers and success logs out of the box.
+            </p>
+            <div id="employees-index-list" style="display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; max-height: 480px; padding-right: 0.5rem;">
+              <p style="text-align: center; color: var(--text-dim); padding: 1.5rem;">Loading employee roster...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Integration Leader & Alerts Desk -->
+      <div class="tab-content tab-content-panel" id="tab-hrbp" style="display: none;">
+        <div class="landing-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+          <!-- Left Side: Integration Leaders CRUD -->
+          <div class="card card-glass" style="display: flex; flex-direction: column;">
+            <div class="card-header">
+              <h2>Integration Leader Registry</h2>
+            </div>
+            
+            <form id="add-hrbp-form" style="border-bottom: 1.5px solid var(--border-color); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+              <input type="hidden" id="hrbp-id" value="">
+              <h4 style="margin-bottom: 1rem; color: var(--te-dark-teal); font-size: 1.1rem; font-family: var(--font-family-display);">Register PMO / Integration Leader User</h4>
+              
+              <div class="form-group">
+                <label class="form-label" for="hrbp-name">Full Name</label>
+                <input type="text" class="form-control" id="hrbp-name" placeholder="e.g. Karen Peterson" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="hrbp-email">Corporate Email</label>
+                <input type="email" class="form-control" id="hrbp-email" placeholder="e.g. karen.peterson@te.com" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="hrbp-role">System Role</label>
+                <select class="form-control form-select" id="hrbp-role" required>
+                  <option value="hrbp" selected>Integration Leader</option>
+                  <option value="pmo">PMO Lead (IMO Coordinator)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Assigned Dimensions</label>
+                <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+                  <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                    <input type="checkbox" name="hrbp-tracks" value="culture" style="accent-color: var(--te-orange);"> Culture
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                    <input type="checkbox" name="hrbp-tracks" value="talent" style="accent-color: var(--te-orange);"> Talent
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                    <input type="checkbox" name="hrbp-tracks" value="value" style="accent-color: var(--te-orange);"> Value
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="hrbp-teams">Supporting Teams (comma-separated)</label>
+                <input type="text" class="form-control" id="hrbp-teams" placeholder="e.g. IMO, Compensation &amp; Benefits" required>
+              </div>
+
+              <button type="submit" class="btn btn-primary" id="btn-save-hrbp" style="width: 100%;">
+                Register Partner
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-cancel-hrbp-edit" style="width: 100%; margin-top: 0.5rem; display: none;">
+                Cancel Edit
+              </button>
+            </form>
+
+            <h4 style="color: var(--te-dark-teal); margin-bottom: 0.5rem; font-size: 1.1rem; font-family: var(--font-family-display);">Registered Partners</h4>
+            <div id="hrbp-index-list" style="display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; max-height: 250px; padding-right: 0.5rem;">
+              <p style="text-align: center; color: var(--text-dim);">Loading partners...</p>
+            </div>
+          </div>
+
+          <!-- Right Side: Alert Banners & News Alerts CRUD -->
+          <div class="card card-glass" style="display: flex; flex-direction: column;">
+            <div class="card-header">
+              <h2>Announcements &amp; Alerts</h2>
+            </div>
+
+            <form id="add-alert-form" style="border-bottom: 1.5px solid var(--border-color); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+              <input type="hidden" id="alert-id" value="">
+              <h4 style="margin-bottom: 1rem; color: var(--te-dark-teal); font-size: 1.1rem; font-family: var(--font-family-display);">Publish System Announcement</h4>
+              
+              <div class="form-group">
+                <label class="form-label" for="alert-title">Alert Title / Topic</label>
+                <input type="text" class="form-control" id="alert-title" placeholder="e.g. 📅 Cultural Welcome Town Hall" required>
+              </div>
+
+              <div class="form-group" style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+                <div>
+                  <label class="form-label" for="alert-type">Alert Style Category</label>
+                  <select class="form-control form-select" id="alert-type" required>
+                    <option value="news">News Announcement (Info)</option>
+                    <option value="training">Training Schedule (Green)</option>
+                    <option value="meeting">Important Meeting (Orange)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="alert-message">Alert Details / Call-to-Action</label>
+                <textarea class="form-control" id="alert-message" rows="2" placeholder="Provide instructions, Teams link, or schedule details..." required></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary" id="btn-save-alert" style="width: 100%;">
+                Publish System Alert
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-cancel-alert-edit" style="width: 100%; margin-top: 0.5rem; display: none;">
+                Cancel Edit
+              </button>
+            </form>
+
+            <h4 style="color: var(--te-dark-teal); margin-bottom: 0.5rem; font-size: 1.1rem; font-family: var(--font-family-display);">Active Notifications</h4>
+            <div id="alerts-index-list" style="display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; max-height: 250px; padding-right: 0.5rem;">
+              <p style="text-align: center; color: var(--text-dim);">Loading active alerts...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: Steering & Broadcast Communications -->
+      <div class="tab-content tab-content-panel" id="tab-communication" style="display: none;">
+        <div class="landing-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+          
+          <!-- Left Column: Dispatch Center -->
+          <div class="card card-glass" style="display: flex; flex-direction: column;">
+            <div class="card-header">
+              <h2>Broadcast Communications Dispatcher</h2>
+            </div>
+            
+            <form id="admin-broadcast-form" style="display: flex; flex-direction: column; gap: 1.2rem; padding: 1.5rem;">
+              <div class="form-group">
+                <label class="form-label" for="comm-sender">Sender Name</label>
+                <input type="text" class="form-control" id="comm-sender" value="Global Steering Committee" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="comm-sender-role">Sender Title / Role</label>
+                <input type="text" class="form-control" id="comm-sender-role" value="IMO Steering Leads" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="comm-recipient-type">Target Recipient Group</label>
+                <select class="form-control" id="comm-recipient-type" required style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem;">
+                  <option value="all">All Legacy Employees (Broadcast)</option>
+                  <option value="hrbp">All Integration Leaders (Broadcast)</option>
+                  <option value="individual">Specific Corporate Employee / Integration Leader</option>
+                </select>
+              </div>
+
+              <!-- Recipient Selector: visible only when Specific is chosen -->
+              <div class="form-group" id="comm-recipient-specific-container" style="display: none;">
+                <label class="form-label" for="comm-recipient-select">Choose Specific Recipient</label>
+                <select class="form-control" id="comm-recipient-select" style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; width: 100%;">
+                  <!-- Dynamic content -->
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="comm-template">Corporate Email Template Theme</label>
+                <select class="form-control" id="comm-template" required style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem;">
+                  <option value="custom">🔵 System Notice Theme (Charcoal / Teal Accent)</option>
+                  <option value="welcome">🟢 M&A Welcome Theme (Dark Teal / Orange Accent)</option>
+                  <option value="security">🔴 InfoSec Compliance Theme (Crimson Accent)</option>
+                  <option value="synergy">🟠 Values Synergy Theme (Orange Accent)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="comm-subject">Subject Line</label>
+                <input type="text" class="form-control" id="comm-subject" placeholder="e.g. Critical: Safe Harbour Certification Deadline" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="comm-body">Message Body (Plain text, double line breaks for paragraph)</label>
+                <textarea class="form-control" id="comm-body" rows="6" placeholder="Write your corporate broadcast email details here. Explain integration steps, milestones, or requirements..." required style="resize: vertical;"></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.8rem; border-radius: var(--radius-md); font-weight: 600;">
+                <span>📢</span> Dispatch Broadcast &amp; Generate HTML Email
+              </button>
+            </form>
+          </div>
+
+          <!-- Right Column: Ledger and Previews -->
+          <div class="card card-glass" style="display: flex; flex-direction: column;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <h2>Dispatched Ledger &amp; Live Previews</h2>
+              <span class="badge" id="comm-ledger-count" style="background: var(--te-dark-teal); color: var(--text-light); padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.8rem; font-weight: bold;">0 Sent</span>
+            </div>
+            
+            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; max-height: 700px;" id="comm-ledger-container">
+              <p style="text-align: center; color: var(--text-dim); font-style: italic; margin-top: 2rem;">No broadcasts sent yet. Use the dispatcher to send one!</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+        </div><!-- /.admin-content-area -->
+      </div><!-- /.admin-shell -->
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Post-Merger Integration IMO System.</p>
+    </footer>
+  </div>
+
+  <script src="/js/ted-launcher.js?v=1782361361859"></script>
+  <script src="/js/admin.js?v=1782361361859"></script>
+  <script src="/js/admin-cms.js?v=1782361361859"></script>
+</body>
+</html>
