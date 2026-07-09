@@ -4,9 +4,14 @@
   "description": "TE Connectivity Post-Merger Integration Portal - First 100 Days",
   "main": "server.js",
   "scripts": {
-    "start": "(sleep 1 && open http://localhost:3000) & node server.js"
+    "start": "node server.js",
+    "dev": "(sleep 1 && open http://localhost:3000) & node server.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
+    "compression": "^1.8.1",
     "express": "^4.19.2",
     "pdf-parse": "^2.4.5"
   },

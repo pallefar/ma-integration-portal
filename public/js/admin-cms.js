@@ -583,12 +583,158 @@
     });
   }
 
+  // ---------- Notification / alert banners ----------
+  let banners = [];
+  const BTYPES = [['info', 'ℹ️ Info'], ['success', '✅ Success'], ['warning', '⚠️ Warning'], ['critical', '⛔ Critical']];
+  const BICON = { info: 'ℹ️', success: '✅', warning: '⚠️', critical: '⛔' };
+  const BPAGES = ['home', 'dashboard', 'pmo', 'leaders', 'supporting', 'employee', 'playbook', 'capability-hub', 'integration-excellence', 'survey', 'signage'];
+  const BROLES = [['all', 'All roles'], ['admin', 'Admin'], ['pmo', 'PMO'], ['hrbp', 'Integration Leader'], ['supporting', 'Supporting'], ['employee', 'Employee']];
+
+  const saveBanner = (b) => fetch('/api/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
+  const isoToLocal = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso); if (isNaN(d)) return '';
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  };
+  const localToIso = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString(); };
+  const scopeText = (b) => {
+    if (b.scope === 'global') return 'All pages';
+    const n = (b.pages || []).length;
+    return n ? (b.pages.slice(0, 3).join(', ') + (n > 3 ? ' +' + (n - 3) : '')) : 'No pages selected';
+  };
+
+  function loadBanners() {
+    const wrap = document.getElementById('banners-admin-list');
+    if (!wrap) return;
+    fetch('/api/banners').then(r => r.json()).then(list => {
+      banners = Array.isArray(list) ? list : [];
+      renderBanners();
+    }).catch(() => { wrap.innerHTML = '<p style="text-align:center;color:#B91C1C;padding:1.5rem;">Failed to load banners.</p>'; });
+  }
+
+  function renderBanners() {
+    const wrap = document.getElementById('banners-admin-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!banners.length) {
+      const none = document.createElement('p');
+      none.style.cssText = 'text-align:center;color:var(--text-dim);padding:1rem;';
+      none.textContent = 'No banners yet — create one to greet users on any page.';
+      wrap.appendChild(none);
+    }
+    banners.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0)).forEach(b => {
+      const row = document.createElement('div');
+      row.className = 'cms-row';
+      const roleTxt = (b.roleScope && b.roleScope !== 'all') ? ' · ' + b.roleScope : '';
+      const scheduled = (b.start || b.end) ? ' · scheduled' : '';
+      row.innerHTML = `<div class="cms-row-main"><span class="cms-row-title">${BICON[b.type] || BICON.info} ${esc(label(b.title) || label(b.message) || '(untitled)')}</span>
+          <span class="cms-row-sub">${esc(scopeText(b))}${esc(roleTxt)}${scheduled}${b.dismissible === false ? ' · not dismissible' : ''}</span></div>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          <button type="button" class="cms-mini" data-edit>Edit</button>
+          <button type="button" class="cms-mini danger" data-del>✕</button>
+          <label class="admin-toggle" title="Active"><input type="checkbox" ${b.active !== false ? 'checked' : ''}><span class="track"></span><span class="thumb"></span></label>
+        </div>`;
+      row.querySelector('[data-edit]').addEventListener('click', () => editBanner(b));
+      row.querySelector('[data-del]').addEventListener('click', () => {
+        if (!confirm('Delete this banner?')) return;
+        fetch('/api/banners/' + b.id, { method: 'DELETE' }).then(r => r.json()).then(() => { toast('Banner deleted.'); loadBanners(); });
+      });
+      row.querySelector('input').addEventListener('change', e => {
+        b.active = e.target.checked;
+        saveBanner({ id: b.id, active: b.active }).then(() => toast('Banner ' + (b.active ? 'activated' : 'paused') + '.'));
+      });
+      wrap.appendChild(row);
+    });
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'btn btn-secondary'; add.style.cssText = 'align-self:flex-start;margin-top:0.5rem;';
+    add.textContent = '+ New banner';
+    add.addEventListener('click', () => editBanner(null));
+    wrap.appendChild(add);
+  }
+
+  function editBanner(b) {
+    const isNew = !b;
+    b = b || { type: 'info', title: {}, message: {}, scope: 'global', pages: [], roleScope: 'all', dismissible: true, active: true, priority: 10, start: null, end: null };
+    const form = document.createElement('div');
+    const titleF = buildLangField('input', b.title);
+    const msgF = buildLangField('textarea', b.message);
+    form.appendChild(field('Banner title', titleF.wrap));
+    form.appendChild(field('Message', msgF.wrap));
+
+    const row = document.createElement('div');
+    row.className = 'cms-inline-row';
+    row.innerHTML = `
+      <div class="form-group"><label class="form-label">Type</label><select class="form-control form-select" id="cms-b-type">${BTYPES.map(([v, l]) => `<option value="${v}"${b.type === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Show on</label><select class="form-control form-select" id="cms-b-scope"><option value="global"${b.scope === 'global' ? ' selected' : ''}>All pages</option><option value="page"${b.scope === 'page' ? ' selected' : ''}>Specific pages</option></select></div>`;
+    form.appendChild(row);
+
+    const pagesWrap = document.createElement('div');
+    pagesWrap.className = 'form-group';
+    pagesWrap.innerHTML = `<label class="form-label">Pages</label><div id="cms-b-pages" style="display:flex;flex-wrap:wrap;gap:0.4rem 0.9rem;">${BPAGES.map(s => `<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.82rem;font-weight:600;"><input type="checkbox" value="${s}"${(b.pages || []).indexOf(s) > -1 ? ' checked' : ''}> ${s}</label>`).join('')}</div>`;
+    form.appendChild(pagesWrap);
+    const syncPagesVis = () => { pagesWrap.style.display = form.querySelector('#cms-b-scope').value === 'page' ? '' : 'none'; };
+    form.querySelector('#cms-b-scope').addEventListener('change', syncPagesVis);
+    syncPagesVis();
+
+    const row2 = document.createElement('div');
+    row2.className = 'cms-inline-row';
+    row2.innerHTML = `
+      <div class="form-group"><label class="form-label">Role scope</label><select class="form-control form-select" id="cms-b-role">${BROLES.map(([v, l]) => `<option value="${v}"${(b.roleScope || 'all') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Priority</label><input type="number" class="form-control" id="cms-b-priority" value="${b.priority != null ? b.priority : 10}"></div>`;
+    form.appendChild(row2);
+
+    const row3 = document.createElement('div');
+    row3.className = 'cms-inline-row';
+    row3.innerHTML = `
+      <div class="form-group"><label class="form-label">Start (optional)</label><input type="datetime-local" class="form-control" id="cms-b-start" value="${isoToLocal(b.start)}"></div>
+      <div class="form-group"><label class="form-label">End (optional)</label><input type="datetime-local" class="form-control" id="cms-b-end" value="${isoToLocal(b.end)}"></div>`;
+    form.appendChild(row3);
+
+    const row4 = document.createElement('div');
+    row4.className = 'cms-inline-row';
+    row4.innerHTML = `
+      <div class="form-group"><label class="form-label">Dismissible</label><select class="form-control form-select" id="cms-b-dismiss"><option value="yes"${b.dismissible !== false ? ' selected' : ''}>Yes — users can close it</option><option value="no"${b.dismissible === false ? ' selected' : ''}>No — always shown</option></select></div>
+      <div class="form-group"><label class="form-label">Active</label><select class="form-control form-select" id="cms-b-active"><option value="yes"${b.active !== false ? ' selected' : ''}>Yes — live</option><option value="no"${b.active === false ? ' selected' : ''}>Paused</option></select></div>`;
+    form.appendChild(row4);
+
+    if (!isNew) {
+      const note = document.createElement('p');
+      note.style.cssText = 'font-size:0.76rem;color:var(--text-secondary);margin:0.25rem 0 0;';
+      note.textContent = 'Saving bumps the revision, so anyone who already dismissed this banner will see the updated version again.';
+      form.appendChild(note);
+    }
+
+    modal(isNew ? 'New banner' : 'Edit banner', form, async () => {
+      const scope = form.querySelector('#cms-b-scope').value;
+      const payload = {
+        id: b.id,
+        type: form.querySelector('#cms-b-type').value,
+        title: titleF.get(),
+        message: msgF.get(),
+        scope: scope,
+        pages: scope === 'page' ? Array.from(form.querySelectorAll('#cms-b-pages input:checked')).map(i => i.value) : [],
+        roleScope: form.querySelector('#cms-b-role').value,
+        priority: parseInt(form.querySelector('#cms-b-priority').value, 10) || 0,
+        start: localToIso(form.querySelector('#cms-b-start').value),
+        end: localToIso(form.querySelector('#cms-b-end').value),
+        dismissible: form.querySelector('#cms-b-dismiss').value === 'yes',
+        active: form.querySelector('#cms-b-active').value === 'yes'
+      };
+      if (!isNew) payload.rev = (b.rev || 1) + 1;
+      if (isNew) delete payload.id;
+      await saveBanner(payload); toast('Banner saved.'); loadBanners();
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
-    // Own the Courses + Pages + Menus panels (replaces admin.js's read-only renders)
+    // Own the Courses + Pages + Menus + Banners panels (replaces admin.js's read-only renders)
     render();
     renderPages();
     loadMenus();
+    loadBanners();
   });
   window.reloadCoursesCms = render;
   window.reloadMenusCms = loadMenus;
+  window.reloadBannersCms = loadBanners;
 })();

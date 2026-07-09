@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     employees: ['Employees', 'Acquired-employee roster and personalized welcome portals'],
     hrbp: ['Integration Leaders & Alerts', 'Provisioned Integration Leaders and workforce announcements'],
     communication: ['Communications', 'Broadcast email dispatcher and sent ledger'],
+    banners: ['Notification Banners', 'Per-page and global alerts that users can dismiss'],
     translations: ['Translations', 'Languages and the app-wide string dictionary'],
     menus: ['Menus & Navigation', 'Sidebar, groups, and landing-page cards'],
     media: ['Media Library', 'Uploaded images and per-language welcome video'],

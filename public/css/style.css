@@ -7818,3 +7818,30 @@ body.cms-inline-on [data-i18n-html]:hover {
   transition: background 0.15s, color 0.15s; z-index: 6;
 }
 .banner-dismiss-btn:hover { background: rgba(233,131,0,0.16); color: var(--te-orange); }
+
+/* Per-page notification / alert banners (banners.js) */
+.page-banner {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-bottom: 1.5rem;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--te-dark-teal);
+  border-radius: 8px;
+  background: rgba(36,76,90,0.05);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  animation: page-banner-in 0.25s ease;
+}
+@keyframes page-banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.page-banner-icon { font-size: 1.15rem; line-height: 1.4; flex-shrink: 0; }
+.page-banner-body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.page-banner-title { font-size: 0.9rem; font-weight: 800; color: var(--te-dark-teal); }
+.page-banner-msg { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45; }
+.page-banner--success { border-left-color: #10896B; background: rgba(16,137,107,0.08); }
+.page-banner--success .page-banner-title { color: #0B6B53; }
+.page-banner--warning { border-left-color: var(--te-orange); background: rgba(233,131,0,0.09); }
+.page-banner--warning .page-banner-title { color: #B25E00; }
+.page-banner--critical { border-left-color: #C0341D; background: rgba(192,52,29,0.08); }
+.page-banner--critical .page-banner-title { color: #9C2A17; }

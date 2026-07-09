@@ -1,24 +1,51 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const compression = require('compression');
 const aiService = require('./aiService');
 const ragService = require('./ragService');
 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 const DB_FILE = path.join(__dirname, 'db.json');
 
+app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+// Long-cache versioned static assets (JS/CSS/images already carry ?v= busting);
+// always revalidate HTML so users never get a stale page pointing at old assets.
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: true,
+  setHeaders: (res, filePath) => {
+    if (/\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000');
+    } else if (/\.html$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
+
+// Lightweight health check for uptime monitors and platform probes
+app.get('/healthz', (req, res) => {
+  try { readDb(); res.json({ status: 'ok', ts: Date.now() }); }
+  catch (e) { res.status(503).json({ status: 'degraded' }); }
+});
 
 // Helper functions for database I/O
+// In-memory cache keyed on file mtime: a single page load fires ~30 read requests;
+// re-parsing the ~300KB db.json each time is wasteful. Re-read only when the file changes.
+let _dbCache = null;
+let _dbMtime = 0;
+
 function readDb() {
   try {
     if (!fs.existsSync(DB_FILE)) {
       return { settings: { geminiApiKey: "", targetCompany: "NewCo Ltd." }, questions: [], assessments: [], modules: [], employees: [], hrbps: [], alerts: [], pulses: [] };
     }
+    const mtime = fs.statSync(DB_FILE).mtimeMs;
+    if (_dbCache && mtime === _dbMtime) return _dbCache;
     const data = fs.readFileSync(DB_FILE, 'utf8');
     const parsed = JSON.parse(data);
     parsed.settings = parsed.settings || {};
@@ -34,8 +61,11 @@ function readDb() {
     parsed.courses = parsed.courses || [];
     parsed.pages = parsed.pages || [];
     parsed.media = parsed.media || [];
+    parsed.banners = parsed.banners || [];
     parsed.i18n = parsed.i18n || { languages: [{ code: 'en', label: 'English', flag: '🇬🇧', enabled: true }], defaultLang: 'en', strings: { en: {} } };
     parsed.menus = parsed.menus || { sidebar: [], groups: [], landingCards: [] };
+    _dbCache = parsed;
+    _dbMtime = mtime;
     return parsed;
   } catch (error) {
     console.error('Error reading database file:', error);
@@ -46,6 +76,8 @@ function readDb() {
 function writeDb(data) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+    _dbCache = data;
+    _dbMtime = fs.statSync(DB_FILE).mtimeMs;
     return true;
   } catch (error) {
     console.error('Error writing to database file:', error);
@@ -560,6 +592,53 @@ app.delete('/api/pages/:id', (req, res) => {
   db.pages = (db.pages || []).filter(p => p.id !== req.params.id);
   writeDb(db);
   res.json({ success: true, message: 'Page deleted.' });
+});
+
+// ---- Notification / alert banners (admin-configurable, per-page or global) ----
+app.get('/api/banners', (req, res) => {
+  const db = readDb();
+  const all = db.banners || [];
+  if (!req.query.slug) return res.json(all); // admin: full list
+  const slug = req.query.slug;
+  const now = Date.now();
+  const applies = all.filter(b => {
+    if (!b || b.active === false) return false;
+    if (b.start && now < Date.parse(b.start)) return false;
+    if (b.end && now > Date.parse(b.end)) return false;
+    if (b.scope === 'global') return true;
+    return Array.isArray(b.pages) && b.pages.indexOf(slug) > -1;
+  });
+  applies.sort((a, b) => (b.priority || 0) - (a.priority || 0)); // higher priority renders on top
+  res.json(applies);
+});
+
+app.post('/api/banners', (req, res) => {
+  const db = readDb();
+  db.banners = db.banners || [];
+  const b = req.body || {};
+  const TYPES = ['info', 'success', 'warning', 'critical'];
+  if (b.type && TYPES.indexOf(b.type) === -1) b.type = 'info';
+  const nowIso = new Date().toISOString();
+  if (b.id) {
+    const idx = db.banners.findIndex(x => x.id === b.id);
+    if (idx >= 0) db.banners[idx] = { ...db.banners[idx], ...b, updatedAt: nowIso };
+    else db.banners.push({ ...b, updatedAt: nowIso });
+  } else {
+    b.id = 'banner_' + Date.now();
+    b.createdAt = nowIso;
+    b.updatedAt = nowIso;
+    if (b.rev == null) b.rev = 1;
+    db.banners.push(b);
+  }
+  const ok = writeDb(db);
+  res.json({ success: ok, banner: db.banners.find(x => x.id === b.id) || b });
+});
+
+app.delete('/api/banners/:id', (req, res) => {
+  const db = readDb();
+  db.banners = (db.banners || []).filter(b => b.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true, message: 'Banner deleted.' });
 });
 
 // ---- Media library (base64 upload to /public/uploads) ----
@@ -1765,7 +1844,7 @@ function compileHtmlEmail({ sender, senderRole, recipientName, recipientEmail, s
       </p>
       
       <div style="text-align: center;">
-        <a href="http://localhost:3000/" class="cta-button">Launch Integration Workspace</a>
+        <a href="${PUBLIC_BASE_URL}/" class="cta-button">Launch Integration Workspace</a>
       </div>
     </div>
     <div class="email-footer">
@@ -1779,9 +1858,9 @@ function compileHtmlEmail({ sender, senderRole, recipientName, recipientEmail, s
         CONFIDENTIALITY NOTICE: This message contains confidential information intended solely for the recipient's internal integration coordination purposes.
       </p>
       <div class="footer-links">
-        <a href="http://localhost:3000/">PMO Workspace</a> &bull; 
-        <a href="http://localhost:3000/playbook.html">M&A Playbook</a> &bull; 
-        <a href="http://localhost:3000/dashboard.html">Integration Leader Console</a>
+        <a href="${PUBLIC_BASE_URL}/">PMO Workspace</a> &bull; 
+        <a href="${PUBLIC_BASE_URL}/playbook.html">M&A Playbook</a> &bull; 
+        <a href="${PUBLIC_BASE_URL}/dashboard.html">Integration Leader Console</a>
       </div>
     </div>
   </div>
@@ -1791,6 +1870,10 @@ function compileHtmlEmail({ sender, senderRole, recipientName, recipientEmail, s
 
 // Fallback for SPA routing/direct URLs
 app.get('*', (req, res, next) => {
+  // Unknown API routes get a real 404 (not the HTML fallback)
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   // Let express static handle real files
   const fileExt = path.extname(req.path);
   if (fileExt) {
@@ -1799,6 +1882,17 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Final error handler — log server-side, return a generic message without internal details
+app.use((err, req, res, next) => {
+  console.error('Unhandled route error:', err && err.stack ? err.stack : err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Keep the single process alive on unexpected errors rather than crashing silently
+process.on('uncaughtException', (err) => console.error('uncaughtException:', err));
+process.on('unhandledRejection', (err) => console.error('unhandledRejection:', err));
+
 app.listen(PORT, () => {
-  console.log(`TE Connectivity M&A Portal server running at http://localhost:${PORT}`);
+  console.log(`TE Connectivity M&A Portal server running on port ${PORT} (${PUBLIC_BASE_URL})`);
 });

@@ -984,8 +984,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('inline-edit-js')) {
       const ieScript = document.createElement('script');
       ieScript.id = 'inline-edit-js';
-      ieScript.src = '/js/inline-edit.js?v=1783600000';
+      ieScript.src = '/js/inline-edit.js?v=1783577700';
       document.body.appendChild(ieScript);
+    }
+
+    // Notification/alert banners: load the per-page banner renderer once (app-wide)
+    if (!document.getElementById('banners-js')) {
+      const bScript = document.createElement('script');
+      bScript.id = 'banners-js';
+      bScript.src = '/js/banners.js?v=1783577700';
+      document.body.appendChild(bScript);
     }
 
     if (topRow) {
@@ -2402,7 +2410,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Role Guidance & Action Timeline Banner Injection ---
   // Shared: add a dismiss (X) button to an injected top-of-page notification banner.
   // Dismissal persists for the session (sessionStorage) so it reappears on a fresh demo.
-  function makeBannerDismissible(el, storageKey) {
+  function makeBannerDismissible(el, storageKey, store) {
     if (el.querySelector('.banner-dismiss-btn')) return;
     el.style.paddingRight = '2.4rem';
     const btn = document.createElement('button');
@@ -2417,10 +2425,11 @@ document.addEventListener('DOMContentLoaded', () => {
       el.style.opacity = '0';
       el.style.transform = 'translateY(-6px)';
       setTimeout(function () { el.remove(); }, 190);
-      try { sessionStorage.setItem(storageKey, 'true'); } catch (_) {}
+      try { (store === 'local' ? localStorage : sessionStorage).setItem(storageKey, 'true'); } catch (_) {}
     });
     el.appendChild(btn);
   }
+  window.makeBannerDismissible = makeBannerDismissible;
 
   function injectRoleGuidanceBanner() {
     const path = window.location.pathname;

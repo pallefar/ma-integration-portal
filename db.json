@@ -3995,5 +3995,31 @@
       "order": 3
     }
   ],
-  "media": []
+  "media": [],
+  "banners": [
+    {
+      "type": "info",
+      "title": {
+        "en": "Welcome to the Integration Portal",
+        "de": "Willkommen im Integrationsportal",
+        "zh": "欢迎使用整合门户",
+        "cs": "Vítejte v integračním portálu"
+      },
+      "message": {
+        "en": "Explore each role to see the Day 1–100 journey. This banner is managed in Admin → Banners.",
+        "de": "Erkunden Sie jede Rolle, um die Reise von Tag 1 bis 100 zu sehen. Dieses Banner wird unter Admin → Banner verwaltet.",
+        "zh": "探索每个角色，查看第 1 到第 100 天的旅程。此横幅在“管理 → 横幅”中管理。",
+        "cs": "Prozkoumejte jednotlivé role a projděte si cestu od 1. do 100. dne. Tento banner se spravuje v Administrace → Bannery."
+      },
+      "scope": "global",
+      "roleScope": "all",
+      "dismissible": true,
+      "active": true,
+      "priority": 10,
+      "id": "banner_1783577313438",
+      "createdAt": "2026-07-09T06:08:33.438Z",
+      "updatedAt": "2026-07-09T06:08:33.438Z",
+      "rev": 1
+    }
+  ]
 }
