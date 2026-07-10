@@ -6964,6 +6964,31 @@ body.preview-mobile .app-container {
   box-shadow: 0 0 30px rgba(0,0,0,0.2);
 }
 
+/* Floating "you are in device preview" pill — makes the shrunk frame obviously a
+   preview (not a broken site) and gives a one-click exit. Shown by transitions.js. */
+#device-preview-indicator {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100000;
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--te-orange, #E98300);
+  color: #fff;
+  border: none;
+  font-family: var(--font-family-display, inherit);
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.2px;
+  padding: 0.5rem 0.95rem;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+}
+#device-preview-indicator:hover { filter: brightness(1.06); }
+
 .device-preview-controls {
   display: flex;
   gap: 0.5rem;

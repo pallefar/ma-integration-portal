@@ -1082,8 +1082,33 @@ document.addEventListener('DOMContentLoaded', () => {
       const btnDesk = document.getElementById('btn-preview-desktop');
       const btnTab = document.getElementById('btn-preview-tablet');
       const btnMob = document.getElementById('btn-preview-mobile');
-      
+
       if (!btnDesk || !btnTab || !btnMob) return;
+
+      // Floating indicator so it's obvious you're inside a device-preview frame — the
+      // shrunk mobile/tablet frame otherwise looks like the site "broke". Click to exit.
+      const ensurePill = () => {
+        let pill = document.getElementById('device-preview-indicator');
+        if (!pill) {
+          pill = document.createElement('button');
+          pill.id = 'device-preview-indicator';
+          pill.type = 'button';
+          pill.title = 'Exit device preview (back to desktop)';
+          pill.addEventListener('click', () => setView('desktop'));
+          document.body.appendChild(pill);
+        }
+        return pill;
+      };
+      const updatePill = (mode) => {
+        if (mode === 'tablet' || mode === 'mobile') {
+          const pill = ensurePill();
+          pill.textContent = (mode === 'mobile' ? '📱 Mobile preview' : '🔲 Tablet preview') + ' — exit ✕';
+          pill.style.display = 'flex';
+        } else {
+          const pill = document.getElementById('device-preview-indicator');
+          if (pill) pill.style.display = 'none';
+        }
+      };
 
       const setView = (mode) => {
         document.body.classList.remove('preview-tablet', 'preview-mobile');
@@ -1098,13 +1123,23 @@ document.addEventListener('DOMContentLoaded', () => {
           document.body.classList.add('preview-mobile');
           btnMob.classList.add('active');
         } else {
+          mode = 'desktop';
           btnDesk.classList.add('active');
         }
+        // Persist the choice so a reload keeps the intended view instead of silently
+        // snapping back to desktop (which made the toggle feel broken).
+        try { localStorage.setItem('preview_device', mode); } catch (e) {}
+        updatePill(mode);
       };
 
       btnDesk.addEventListener('click', () => setView('desktop'));
       btnTab.addEventListener('click', () => setView('tablet'));
       btnMob.addEventListener('click', () => setView('mobile'));
+
+      // Restore the last-selected device preview on load (desktop = no-op default).
+      let saved = 'desktop';
+      try { saved = localStorage.getItem('preview_device') || 'desktop'; } catch (e) {}
+      if (saved === 'tablet' || saved === 'mobile') setView(saved);
     };
     // Need to bind slightly after DOM paint
     setTimeout(bindPreviewEvents, 100);
