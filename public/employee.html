@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Employee Welcome Portal</title>
   <meta name="description" content="Welcome to the TE Connectivity family. Review your personalized onboarding roadmap, systems guidelines, and HR resources.">
-  <link rel="stylesheet" href="/css/style.css?v=1783710000">
-  <script src="/js/transitions.js?v=1783710000"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1783800005">
+  <script src="/js/transitions.js?v=1783800005"></script>
 </head>
 <body>
 
@@ -554,34 +554,13 @@
             </button>
           </div>
 
-          <!-- Other Functional Track Placeholders -->
-          <h4 style="color: var(--te-dark-teal); font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; margin: 1.5rem 0 0.5rem 0.5rem;">
+          <!-- Department Integration Tracks (live from /api/departments; read-only employee view) -->
+          <h4 data-i18n="sidebar_tracks_title" style="color: var(--te-dark-teal); font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; margin: 1.5rem 0 0.5rem 0.5rem;">
             Integration Tracks
           </h4>
-          
-          <div style="display: flex; flex-direction: column; gap: 1rem;">
-            
-            <!-- Sales Placeholder -->
-            <div class="card placeholder-card locked" style="padding: 1.25rem; margin-bottom: 0;">
-              <h4 style="font-size: 0.95rem; text-align: left; margin-bottom: 0.25rem;">Sales Integration</h4>
-              <p style="font-size: 0.75rem; text-align: left;">Customer catalog mergers & CRM pricing channels.</p>
-              <span class="placeholder-badge" style="font-size: 0.6rem; padding: 0.15rem 0.5rem; align-self: flex-start;">Pre-Onboarding</span>
-            </div>
 
-            <!-- Product Placeholder -->
-            <div class="card placeholder-card locked" style="padding: 1.25rem; margin-bottom: 0;">
-              <h4 style="font-size: 0.95rem; text-align: left; margin-bottom: 0.25rem;">Product & Patents</h4>
-              <p style="font-size: 0.75rem; text-align: left;">Engineering blueprint migrations and patent databases.</p>
-              <span class="placeholder-badge" style="font-size: 0.6rem; padding: 0.15rem 0.5rem; align-self: flex-start;">Pre-Onboarding</span>
-            </div>
-
-            <!-- Finance Placeholder -->
-            <div class="card placeholder-card locked" style="padding: 1.25rem; margin-bottom: 0;">
-              <h4 style="font-size: 0.95rem; text-align: left; margin-bottom: 0.25rem;">Finance & Taxes</h4>
-              <p style="font-size: 0.75rem; text-align: left;">Corporate fiscal calendars and tax consolidation ERPs.</p>
-              <span class="placeholder-badge" style="font-size: 0.6rem; padding: 0.15rem 0.5rem; align-self: flex-start;">Pre-Onboarding</span>
-            </div>
-
+          <div id="employee-dept-tracks" style="display: flex; flex-direction: column; gap: 1rem;">
+            <!-- Populated by renderEmployeeDeptTracks() in employee.js -->
           </div>
 
         </aside>
@@ -625,8 +604,8 @@
     </div>
   </div>
 
-  <script src="/js/ted-launcher.js?v=1783710000"></script>
-  <script src="/js/employee.js?v=1783710000"></script>
+  <script src="/js/ted-launcher.js?v=1783800005"></script>
+  <script src="/js/employee.js?v=1783800005"></script>
 </body>
 </html>
 

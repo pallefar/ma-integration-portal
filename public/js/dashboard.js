@@ -121,26 +121,39 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!container) return;
     fetch('/api/departments').then(r => r.json()).then(depts => {
       container.innerHTML = '';
+      // Known demo departments map to existing translated strings so the tracks
+      // localize on DE/ZH/CS; custom (admin-added) departments fall back to their
+      // raw name until per-language department fields exist.
+      const TRACK_I18N = {
+        dept_sales:   { title: 'dashboard.track_sales_title',   desc: 'dashboard.track_sales_desc',   badge: 'dashboard.track_badge_phase2_sales' },
+        dept_product: { title: 'dashboard.track_product_title', desc: 'dashboard.track_product_desc', badge: 'dashboard.track_badge_phase2_product' },
+        dept_finance: { title: 'dashboard.track_finance_title', desc: 'dashboard.track_finance_desc', badge: 'dashboard.track_badge_phase3_finance' }
+      };
+      const attr = (k) => k ? ` data-i18n="${k}"` : '';
       (depts || []).forEach(d => {
+        const tk = TRACK_I18N[d.id] || {};
         const card = document.createElement('div');
         card.className = 'placeholder-card' + (d.locked ? ' locked' : ' unlocked');
         if (d.locked) {
           card.innerHTML = `
             <svg class="placeholder-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
-            <h4>${escapeHtml((d.icon ? d.icon + ' ' : '') + d.name)}</h4>
-            <p>${escapeHtml(d.desc || '')}</p>
-            <span class="placeholder-badge">🔒 Locked${d.phase ? ' - ' + escapeHtml(d.phase) : ''}</span>`;
+            <h4>${d.icon ? escapeHtml(d.icon) + ' ' : ''}<span${attr(tk.title)}>${escapeHtml(d.name)}</span></h4>
+            <p${attr(tk.desc)}>${escapeHtml(d.desc || '')}</p>
+            <span class="placeholder-badge">🔒 <span${attr(tk.badge)}>Locked${d.phase ? ' - ' + escapeHtml(d.phase) : ''}</span></span>`;
         } else {
           card.style.cursor = 'pointer';
           card.innerHTML = `
             <div style="font-size:2rem;line-height:1;">${escapeHtml(d.icon || '🏭')}</div>
-            <h4>${escapeHtml(d.name)}</h4>
-            <p>${escapeHtml(d.desc || '')}</p>
+            <h4><span${attr(tk.title)}>${escapeHtml(d.name)}</span></h4>
+            <p${attr(tk.desc)}>${escapeHtml(d.desc || '')}</p>
             <span class="placeholder-badge" style="background:rgba(16,185,129,0.12);color:#059669;border-color:rgba(16,185,129,0.3);">● Active — open module</span>`;
           card.addEventListener('click', () => openDepartmentModal(d, scores));
         }
         container.appendChild(card);
       });
+      // Localize the freshly-injected [data-i18n] cards (safe no-op if the
+      // dictionary hasn't loaded yet — the engine re-applies on load/switch).
+      if (window.applyPortalI18n) window.applyPortalI18n();
     }).catch(err => console.error('Error loading department tracks:', err));
   }
 
@@ -207,16 +220,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 100);
 
     badgeEl.className = 'gauge-status-badge';
+    let badgeKey, badgeText;
     if (score < 3.0) {
-      badgeEl.textContent = 'Critical Risk';
+      badgeKey = 'dashboard.badge_critical_risk'; badgeText = 'Critical Risk';
       badgeEl.classList.add('status-badge-risk-low');
     } else if (score < 4.2) {
-      badgeEl.textContent = 'Moderate Gap';
+      badgeKey = 'dashboard.gauge_badge_moderate_gap'; badgeText = 'Moderate Gap';
       badgeEl.classList.add('status-badge-risk-med');
     } else {
-      badgeEl.textContent = 'Strong Align';
+      badgeKey = 'dashboard.gauge_badge_strong_align'; badgeText = 'Strong Align';
       badgeEl.classList.add('status-badge-risk-high');
     }
+    // Tag with an i18n key so the badge localizes on load and on language switch.
+    badgeEl.setAttribute('data-i18n', badgeKey);
+    badgeEl.textContent = badgeText;
+    if (window.applyPortalI18n) window.applyPortalI18n();
   }
 
   // 3. Tab Navigation Switches

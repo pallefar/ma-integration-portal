@@ -1,3 +1,40 @@
+// Admin API auth bridge: when the server requires an admin token (production, i.e.
+// ADMIN_TOKEN is set), attach it to same-origin /api requests and prompt for it once
+// on a 401 write. Completely inert in the demo — the server leaves the API open when
+// ADMIN_TOKEN is unset, so no token is stored, no header is added, and writes never 401.
+(function () {
+  if (window.__adminAuthWrapped || !window.fetch) return;
+  window.__adminAuthWrapped = true;
+  const KEY = 'admin_token';
+  const origFetch = window.fetch.bind(window);
+  const isApi = (url) => {
+    try { const u = new URL(url, location.href); return u.origin === location.origin && u.pathname.startsWith('/api/'); }
+    catch (e) { return false; }
+  };
+  const withToken = (init, tok) => {
+    const h = new Headers((init && init.headers) || {});
+    h.set('X-Admin-Token', tok);
+    return Object.assign({}, init, { headers: h });
+  };
+  window.fetch = function (input, init) {
+    init = init || {};
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const method = (init.method || (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
+    const tok = localStorage.getItem(KEY);
+    if (tok && isApi(url)) init = withToken(init, tok);
+    return origFetch(input, init).then((res) => {
+      if (res.status === 401 && isApi(url) && method !== 'GET' && typeof input === 'string') {
+        const entered = window.prompt('Admin token required to save changes:');
+        if (entered && entered.trim()) {
+          localStorage.setItem(KEY, entered.trim());
+          return origFetch(input, withToken(init, entered.trim()));
+        }
+      }
+      return res;
+    });
+  };
+})();
+
 // Access Control redirection check
 (function() {
   const path = window.location.pathname;
@@ -2917,9 +2954,16 @@ document.addEventListener('DOMContentLoaded', () => {
   window.applyPortalI18n = function (lang) {
     lang = lang || getLang();
     if (!dict) return;
+    // Lightweight markdown bold: **text** -> <strong>text</strong>.
+    // For plain [data-i18n] we HTML-escape first (stays XSS-safe); for
+    // [data-i18n-html] we keep the intentional markup and only bold on top.
+    const escHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const mdBold = (s) => s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const v = t(el.getAttribute('data-i18n'), lang);
-      if (v != null) el.textContent = v;
+      if (v == null) return;
+      if (v.indexOf('**') !== -1) el.innerHTML = mdBold(escHtml(v));
+      else el.textContent = v;
     });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => {
       const v = t(el.getAttribute('data-i18n-ph'), lang);
@@ -2927,7 +2971,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.querySelectorAll('[data-i18n-html]').forEach(el => {
       const v = t(el.getAttribute('data-i18n-html'), lang);
-      if (v != null) el.innerHTML = v;
+      if (v != null) el.innerHTML = mdBold(v);
     });
     document.documentElement.setAttribute('lang', lang);
   };

@@ -1511,7 +1511,18 @@
         "dashboard.tab_hr_modules": "HR Action Modules",
         "dashboard.tab_academy": "Academy Tracking",
         "dashboard.tab_teams": "Involved TE Teams",
-        "dashboard.tab_communication": "Communications Desk"
+        "dashboard.tab_communication": "Communications Desk",
+        "dashboard.gauge_based_on_label": "Based on Survey Questions:",
+        "dashboard.badge_critical_risk": "Critical Risk",
+        "dashboard.gauge_badge_moderate_gap": "Moderate Gap",
+        "dashboard.gauge_badge_strong_align": "Strong Align",
+        "dashboard.gauge_badge_pending": "Pending",
+        "survey.tick_critical": "Critical",
+        "survey.tick_friction": "Friction",
+        "survey.tick_moderate": "Moderate",
+        "survey.tick_aligned": "Aligned",
+        "survey.tick_excellent": "Excellent",
+        "survey.step_diagnostics_suffix": "Diagnostics"
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2211,7 +2222,18 @@
         "dashboard.tab_hr_modules": "HR-Aktionsmodule",
         "dashboard.tab_academy": "Academy-Tracking",
         "dashboard.tab_teams": "Beteiligte TE-Teams",
-        "dashboard.tab_communication": "Kommunikations-Desk"
+        "dashboard.tab_communication": "Kommunikations-Desk",
+        "dashboard.gauge_based_on_label": "Basierend auf Umfragefragen:",
+        "dashboard.badge_critical_risk": "Kritisches Risiko",
+        "dashboard.gauge_badge_moderate_gap": "Mäßige Lücke",
+        "dashboard.gauge_badge_strong_align": "Starke Ausrichtung",
+        "dashboard.gauge_badge_pending": "Ausstehend",
+        "survey.tick_critical": "Kritisch",
+        "survey.tick_friction": "Reibung",
+        "survey.tick_moderate": "Mäßig",
+        "survey.tick_aligned": "Ausgerichtet",
+        "survey.tick_excellent": "Ausgezeichnet",
+        "survey.step_diagnostics_suffix": "Diagnostik"
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -2911,7 +2933,18 @@
         "dashboard.tab_hr_modules": "HR 行动模块",
         "dashboard.tab_academy": "学院跟踪",
         "dashboard.tab_teams": "参与的 TE 团队",
-        "dashboard.tab_communication": "沟通台"
+        "dashboard.tab_communication": "沟通台",
+        "dashboard.gauge_based_on_label": "基于调查问题：",
+        "dashboard.badge_critical_risk": "严重风险",
+        "dashboard.gauge_badge_moderate_gap": "中度差距",
+        "dashboard.gauge_badge_strong_align": "高度一致",
+        "dashboard.gauge_badge_pending": "待定",
+        "survey.tick_critical": "严重",
+        "survey.tick_friction": "摩擦",
+        "survey.tick_moderate": "中等",
+        "survey.tick_aligned": "一致",
+        "survey.tick_excellent": "优秀",
+        "survey.step_diagnostics_suffix": "诊断"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -3611,7 +3644,18 @@
         "dashboard.tab_hr_modules": "Akční moduly HR",
         "dashboard.tab_academy": "Sledování akademie",
         "dashboard.tab_teams": "Zapojené týmy TE",
-        "dashboard.tab_communication": "Komunikační pult"
+        "dashboard.tab_communication": "Komunikační pult",
+        "dashboard.gauge_based_on_label": "Na základě otázek z průzkumu:",
+        "dashboard.badge_critical_risk": "Kritické riziko",
+        "dashboard.gauge_badge_moderate_gap": "Střední mezera",
+        "dashboard.gauge_badge_strong_align": "Silné sladění",
+        "dashboard.gauge_badge_pending": "Čeká se",
+        "survey.tick_critical": "Kritické",
+        "survey.tick_friction": "Tření",
+        "survey.tick_moderate": "Střední",
+        "survey.tick_aligned": "Sladěné",
+        "survey.tick_excellent": "Vynikající",
+        "survey.step_diagnostics_suffix": "Diagnostika"
       }
     }
   },
@@ -4858,7 +4902,7 @@
           {
             "id": "dept_finance",
             "name": "Finance & Reporting",
-            "icon": "💶",
+            "icon": "💰",
             "locked": true,
             "phase": "Phase 3",
             "desc": "Harmonize fiscal accounts, tax structures, and migrate to TE Connectivity accounting ERPs.",
@@ -4948,7 +4992,7 @@
     {
       "id": "dept_finance",
       "name": "Finance & Reporting",
-      "icon": "💶",
+      "icon": "💰",
       "locked": true,
       "phase": "Phase 3",
       "desc": "Harmonize fiscal accounts, tax structures, and migrate to TE Connectivity accounting ERPs.",

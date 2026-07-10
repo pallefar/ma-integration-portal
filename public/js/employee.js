@@ -1187,6 +1187,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. Dynamic timeline checklists
     generateTimeline(dept, lang);
 
+    // Department integration tracks (re-render so labels follow the language)
+    renderEmployeeDeptTracks();
+
     // 4. Academy Tab programmatic translations
     // Translate Module 1
     const m1Header = document.querySelector('#module-culture-card .card-header h3');
@@ -1907,6 +1910,94 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       })
       .catch(err => console.error("Error loading employee profile:", err));
+  }
+
+  // ===== Employee-facing Department Integration Tracks (read-only) =====
+  // Renders the live department modules (from /api/departments) so employees can
+  // explore each department's shared culture/comms + its systems & trainings.
+  // The employee's own department (from the ?dept= param) is highlighted.
+  const DEPT_TRACK_LABELS = {
+    en: { your: '★ Your Track', view: 'View integration module →', module: 'Integration Module', culture: 'Culture & Values', comms: 'Communication', systems: 'Systems', trainings: 'Trainings', shared: 'Shared org-wide', empty: 'Details coming soon.', cultureNote: 'Culture & communication onboarding is shared across every department — no matter which track you join.' },
+    de: { your: '★ Ihr Bereich', view: 'Integrationsmodul ansehen →', module: 'Integrationsmodul', culture: 'Kultur & Werte', comms: 'Kommunikation', systems: 'Systeme', trainings: 'Schulungen', shared: 'Organisationsweit geteilt', empty: 'Details folgen in Kürze.', cultureNote: 'Das Onboarding für Kultur & Kommunikation ist abteilungsübergreifend – unabhängig von Ihrem Bereich.' },
+    zh: { your: '★ 您的板块', view: '查看整合模块 →', module: '整合模块', culture: '文化与价值观', comms: '沟通', systems: '系统', trainings: '培训', shared: '全组织共享', empty: '详情即将公布。', cultureNote: '文化与沟通入职培训在所有部门间共享——无论您加入哪个板块。' },
+    cs: { your: '★ Váš úsek', view: 'Zobrazit integrační modul →', module: 'Integrační modul', culture: 'Kultura a hodnoty', comms: 'Komunikace', systems: 'Systémy', trainings: 'Školení', shared: 'Sdíleno v celé organizaci', empty: 'Podrobnosti již brzy.', cultureNote: 'Onboarding kultury a komunikace je sdílený napříč všemi odděleními – bez ohledu na váš úsek.' }
+  };
+
+  function deptTrackLabels() {
+    const lang = localStorage.getItem('employeeLanguage') || 'en';
+    return DEPT_TRACK_LABELS[lang] || DEPT_TRACK_LABELS.en;
+  }
+
+  function employeeOwnsDept(d) {
+    // Map the employee's free-text department to a track, mirroring the timeline
+    // mapping (rd/sales/finance) used elsewhere on this page, then match the dept id.
+    const own = (dept || '').trim().toLowerCase();
+    if (!own) return false;
+    let deptId = null;
+    if (own.includes('r&d') || own.includes('eng') || own.includes('prod') || own.includes('tech')) deptId = 'dept_product';
+    else if (own.includes('sale') || own.includes('mkt') || own.includes('biz')) deptId = 'dept_sales';
+    else if (own.includes('fin') || own.includes('audit') || own.includes('tax')) deptId = 'dept_finance';
+    if (deptId && d.id === deptId) return true;
+    // Fallback for custom departments: direct name substring match.
+    return own.length > 2 && (d.name || '').toLowerCase().includes(own);
+  }
+
+  function renderEmployeeDeptTracks() {
+    const container = document.getElementById('employee-dept-tracks');
+    if (!container) return;
+    fetch('/api/departments').then(r => r.json()).then(depts => {
+      const L = deptTrackLabels();
+      container.innerHTML = '';
+      (depts || []).forEach(d => {
+        const mine = employeeOwnsDept(d);
+        const card = document.createElement('div');
+        card.className = 'card placeholder-card';
+        card.style.cssText = 'padding:1.25rem;margin-bottom:0;cursor:pointer;text-align:left;' + (mine ? 'border:1.5px solid var(--te-orange);' : '');
+        card.innerHTML = `
+          <h4 style="font-size:0.95rem;text-align:left;margin-bottom:0.25rem;">${d.icon ? escapeHtml(d.icon) + ' ' : ''}${escapeHtml(d.name || '')}</h4>
+          <p style="font-size:0.75rem;text-align:left;">${escapeHtml(d.desc || '')}</p>
+          <span class="placeholder-badge" style="font-size:0.6rem;padding:0.15rem 0.5rem;align-self:flex-start;${mine ? 'background:rgba(233,131,0,0.12);color:var(--te-orange);border-color:rgba(233,131,0,0.3);' : ''}">${mine ? L.your : L.view}</span>`;
+        card.addEventListener('click', () => openEmployeeDeptModal(d));
+        container.appendChild(card);
+      });
+    }).catch(err => console.error('Error loading department tracks:', err));
+  }
+
+  function openEmployeeDeptModal(d) {
+    const L = deptTrackLabels();
+    const list = (items) => (items && items.length)
+      ? `<ul style="margin:0.35rem 0 0;padding-left:1.1rem;">${items.map(i => `<li style="margin-bottom:0.35rem;"><strong>${escapeHtml(i.title || '')}</strong>${i.desc ? ' — <span style="color:var(--text-secondary);">' + escapeHtml(i.desc) + '</span>' : ''}</li>`).join('')}</ul>`
+      : `<p style="color:var(--text-dim);font-size:0.85rem;margin:0.35rem 0 0;">${L.empty}</p>`;
+    const overlay = document.createElement('div');
+    overlay.className = 'cms-modal-overlay';
+    const box = document.createElement('div');
+    box.className = 'cms-modal';
+    box.style.maxWidth = '560px';
+    box.innerHTML = `
+      <div class="cms-modal-head"><h3>${d.icon ? escapeHtml(d.icon) + ' ' : ''}${escapeHtml(d.name || '')} — ${L.module}</h3><button type="button" class="cms-modal-x" aria-label="Close">✕</button></div>
+      <div class="cms-modal-body">
+        <div class="dept-section">
+          <h4 class="dept-section-h">🎭 ${L.culture} <span class="dept-shared">${L.shared}</span></h4>
+          <p style="font-size:0.83rem;color:var(--text-secondary);margin:0.35rem 0 0;">${L.cultureNote}</p>
+        </div>
+        <div class="dept-section">
+          <h4 class="dept-section-h">📣 ${L.comms} <span class="dept-shared">${L.shared}</span></h4>
+        </div>
+        <div class="dept-section">
+          <h4 class="dept-section-h">⚙️ ${L.systems} <span class="dept-own">${escapeHtml(d.name || '')}</span></h4>
+          ${list(d.systems)}
+        </div>
+        <div class="dept-section">
+          <h4 class="dept-section-h">🎓 ${L.trainings} <span class="dept-own">${escapeHtml(d.name || '')}</span></h4>
+          ${list(d.trainings)}
+        </div>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    box.querySelector('.cms-modal-x').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
   }
 
   // Populate profiles

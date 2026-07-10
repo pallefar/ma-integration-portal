@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const compression = require('compression');
 const aiService = require('./aiService');
 const ragService = require('./ragService');
@@ -26,6 +27,26 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
   }
 }));
+
+// --- Optional admin auth gate ------------------------------------------------
+// Production locks down every state-changing endpoint (POST/PUT/DELETE) and the
+// /api/admin/* routes behind a shared secret. Set ADMIN_TOKEN in the environment
+// to enable it; when unset (e.g. the local demo) the gate stays OPEN but logs a
+// warning, so the running demo is unaffected until you set the env var. The admin
+// browser UI sends the secret via the X-Admin-Token header (fetch bridge in transitions.js).
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+if (!ADMIN_TOKEN) {
+  console.warn('[security] ADMIN_TOKEN not set — write/admin API endpoints are OPEN. Set ADMIN_TOKEN in production to require authentication.');
+}
+app.use('/api', (req, res, next) => {
+  const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+  const isAdminPath = req.path.startsWith('/admin'); // /api/admin/* (download-zip, migrate-db)
+  if (!isWrite && !isAdminPath) return next();        // public read-only GETs stay open (visitor demo)
+  if (!ADMIN_TOKEN) return next();                    // dev/demo: no token configured -> open
+  const supplied = req.get('X-Admin-Token') || (req.query && req.query.admin_token) || '';
+  if (supplied && supplied === ADMIN_TOKEN) return next();
+  return res.status(401).json({ error: 'Admin authentication required. Provide a valid X-Admin-Token.' });
+});
 
 // Lightweight health check for uptime monitors and platform probes
 app.get('/healthz', (req, res) => {
@@ -99,13 +120,31 @@ function readDb() {
     return parsed;
   } catch (error) {
     console.error('Error reading database file:', error);
+    // Never silently hand back an EMPTY database when a real db.json exists — the
+    // next writeDb() would then persist that empty skeleton over all the real data
+    // (permanent wipe). Prefer the last good in-memory copy; if there is none but a
+    // non-empty file is present, fail loudly so mutating endpoints 500 instead of
+    // clobbering. Only fall back to a fresh skeleton when there is genuinely no data.
+    if (_dbCache) return _dbCache;
+    try {
+      if (fs.existsSync(DB_FILE) && fs.statSync(DB_FILE).size > 0) {
+        throw new Error('db.json exists but could not be parsed; refusing to serve/overwrite it with an empty database.');
+      }
+    } catch (guardErr) {
+      if (/refusing to serve/.test(guardErr.message)) throw guardErr;
+    }
     return { settings: { geminiApiKey: "", targetCompany: "NewCo Ltd." }, questions: [], assessments: [], modules: [], employees: [], hrbps: [], alerts: [], pulses: [] };
   }
 }
 
 function writeDb(data) {
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+    // Atomic write: serialize to a temp file, then rename over the real file.
+    // rename() is atomic on the same filesystem, so a crash mid-write can never
+    // leave db.json truncated/half-written (which would corrupt the whole DB).
+    const tmp = DB_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tmp, DB_FILE);
     _dbCache = data;
     _dbMtime = fs.statSync(DB_FILE).mtimeMs;
     return true;
@@ -115,22 +154,36 @@ function writeDb(data) {
   }
 }
 
+// Strip server-only secrets from any settings object before returning it to a
+// client. The real API key / DB connection string must never leave the server;
+// the client only needs to know WHETHER a key is configured.
+function publicSettings(s) {
+  const out = { ...(s || {}) };
+  out.hasGeminiApiKey = !!(out.geminiApiKey && String(out.geminiApiKey).trim());
+  delete out.geminiApiKey;
+  if (out.databaseConfig && out.databaseConfig.connectionDetails) {
+    out.databaseConfig = { ...out.databaseConfig };
+    delete out.databaseConfig.connectionDetails;
+  }
+  return out;
+}
+
 // REST API Endpoints
 
 // GET Portable Application Package Download (Dynamic ZIP creation)
 app.get('/api/admin/download-zip', (req, res) => {
   try {
     const { execSync } = require('child_process');
-    const zipPath = path.join(__dirname, 'public', 'ma-app.zip');
-    
-    // Execute command to zip the workspace dynamically, excluding heavy modules, archives, and local tooling artifacts
-    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store"`, { cwd: __dirname });
-    
-    // Trigger download response
+    // Build the archive in the OS temp dir — NOT under public/, which express.static
+    // would otherwise serve at /ma-app.zip to anyone. Exclude everything holding data
+    // or secrets (db.json = API key + all records; .env; sent_emails). The downloaded
+    // package boots with a fresh database. The temp file is deleted after sending.
+    const zipPath = path.join(os.tmpdir(), `ma-app-${Date.now()}.zip`);
+    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
+
     res.download(zipPath, 'te-ma-integration-portal.zip', (err) => {
-      if (err) {
-        console.error('Error sending zip file to browser:', err);
-      }
+      if (err) console.error('Error sending zip file to browser:', err);
+      fs.unlink(zipPath, () => {}); // clean up the temp archive regardless
     });
   } catch (error) {
     console.error('Error generating zip archive dynamically:', error);
@@ -398,9 +451,9 @@ app.get('/api/settings', (req, res) => {
     // shared fields (targetCompany, roleVisibility, ...) instead of a sparse object.
     const custom = { ...(db.settings || {}), ...(db.customSettings || {}), demoMode: false };
     custom.timeTravelDay = custom.timeTravelDay !== undefined ? custom.timeTravelDay : (db.settings.timeTravelDay || 30);
-    res.json(custom);
+    res.json(publicSettings(custom));
   } else {
-    res.json(db.settings || {});
+    res.json(publicSettings(db.settings || {}));
   }
 });
 
@@ -415,22 +468,28 @@ app.post('/api/settings', (req, res) => {
       db.customSettings = { demoMode: false };
     }
     writeDb(db);
-    return res.json({ success: true, settings: db.settings.demoMode ? db.settings : db.customSettings });
+    return res.json({ success: true, settings: publicSettings(db.settings.demoMode ? db.settings : db.customSettings) });
   }
+
+  // Copy incoming keys, but NEVER overwrite a stored API key with a blank value —
+  // the client sends the field empty when it hasn't been re-entered (the real key
+  // is no longer sent to the browser), so a blank means "leave it unchanged".
+  const applySettings = (target) => {
+    Object.keys(req.body).forEach(key => {
+      if (key === 'geminiApiKey' && !String(req.body[key] || '').trim()) return;
+      target[key] = req.body[key];
+    });
+  };
 
   if (db.settings.demoMode === false) {
     db.customSettings = db.customSettings || { demoMode: false };
-    Object.keys(req.body).forEach(key => {
-      db.customSettings[key] = req.body[key];
-    });
+    applySettings(db.customSettings);
   } else {
-    Object.keys(req.body).forEach(key => {
-      db.settings[key] = req.body[key];
-    });
+    applySettings(db.settings);
   }
-  
+
   writeDb(db);
-  res.json({ success: true, settings: (db.settings.demoMode === false ? db.customSettings : db.settings) });
+  res.json({ success: true, settings: publicSettings(db.settings.demoMode === false ? db.customSettings : db.settings) });
 });
 
 // POST Reset Custom M&A Wizard state
@@ -471,7 +530,13 @@ function findProject(db, id) { return (db.projects || []).find(p => p.id === id)
 // Each custom project owns its full workspace bundle (roster/assessment/leaders/comms/
 // settings). The demo project uses the top-level demo collections and is never bundled.
 function saveCustomLaneToProject(db, project) {
-  if (!project || project.isDemo) return;
+  if (!project) return;
+  // The demo project is normally never bundled. EXCEPTION: if the app is in
+  // Custom-M&A mode (demoMode:false) while the demo is still the active project, the
+  // live custom collections belong to no project — persist them onto the demo's data
+  // bundle so creating/switching a project can't silently wipe them (regression F1).
+  const inCustomModeOnDemo = project.isDemo && db.settings && db.settings.demoMode === false && db.activeProjectId === project.id;
+  if (project.isDemo && !inCustomModeOnDemo) return;
   project.data = {
     settings: db.customSettings || { demoMode: false },
     employees: db.customEmployees || [],
@@ -502,7 +567,10 @@ function loadProjectIntoCustomLane(db, project) {
 // project is active, so its in-progress work isn't lost when we switch away.
 function stashActiveCustomProject(db) {
   const current = findProject(db, db.activeProjectId);
-  if (current && !current.isDemo) saveCustomLaneToProject(db, current);
+  // saveCustomLaneToProject() is a no-op for the demo project unless we're in
+  // Custom-M&A mode with it active (see F1 guard there), so this is safe to call
+  // unconditionally and preserves an orphaned custom lane before it gets overwritten.
+  if (current) saveCustomLaneToProject(db, current);
 }
 
 // --- Per-project CMS content isolation (phase 3) ---

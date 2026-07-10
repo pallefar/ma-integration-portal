@@ -1211,6 +1211,14 @@ body.page-exiting .main-content {
   .employee-grid {
     grid-template-columns: 1fr;
   }
+  /* Let the stacked columns shrink to the viewport instead of being forced
+     wide by the non-wrapping academy tab row (which then overflows the page). */
+  .employee-grid > * {
+    min-width: 0;
+  }
+  .employee-grid .portal-tabs {
+    overflow-x: auto;
+  }
 }
 
 /* Interactive SVG Welcome Video Mockup */
@@ -1728,7 +1736,7 @@ textarea.form-control {
 
 /* Custom fluid range slider styles */
 .slider-wrapper {
-  margin: 2rem 0 3rem 0;
+  margin: 3.5rem 0 3rem 0;
   position: relative;
 }
 
@@ -6857,6 +6865,22 @@ textarea.form-control {
   
   .supporting-grid {
     grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Employee & Survey use .dashboard-sidebar as a VERTICAL stack of cards
+     (form + info cards), not the dashboard's single nav card. The base
+     horizontal-scroll treatment turns them into a clipped 250px row, so keep
+     them stacked full-width on tablet/mobile. */
+  .employee-grid .dashboard-sidebar,
+  .landing-grid .dashboard-sidebar {
+    flex-direction: column;
+    overflow-x: visible;
+    padding-bottom: 0;
+  }
+  .employee-grid .dashboard-sidebar > div,
+  .landing-grid .dashboard-sidebar > div {
+    width: auto;
+    margin-right: 0;
   }
 }
 

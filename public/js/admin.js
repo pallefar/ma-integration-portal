@@ -94,7 +94,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (settings.hq) hqInput.value = settings.hq;
         if (settings.acquisitionDate) acqDateInput.value = settings.acquisitionDate;
         if (settings.synergyObjective) synergyObjectiveInput.value = settings.synergyObjective;
-        if (settings.geminiApiKey) geminiKeyInput.value = settings.geminiApiKey;
+        // The real API key is never sent to the browser. Show a "saved" hint when
+        // one is configured; leaving the field blank on save keeps the stored key.
+        if (geminiKeyInput) {
+          geminiKeyInput.value = '';
+          geminiKeyInput.placeholder = settings.hasGeminiApiKey
+            ? '•••••••••••• (saved — leave blank to keep)'
+            : 'Enter Gemini API key';
+        }
         if (settings.browserModel) browserModelInput.value = settings.browserModel;
         
         if (videoTypeEnInput) videoTypeEnInput.value = settings.welcomeVideoType_en || settings.welcomeVideoType || 'local';

@@ -183,11 +183,11 @@ document.addEventListener('DOMContentLoaded', () => {
           ticksDiv.className = 'slider-ticks';
 
           const ticks = [
-            { val: 1.0, label: 'Critical' },
-            { val: 2.0, label: 'Friction' },
-            { val: 3.0, label: 'Moderate' },
-            { val: 4.0, label: 'Aligned' },
-            { val: 5.0, label: 'Excellent' }
+            { val: 1.0, label: 'Critical', key: 'survey.tick_critical' },
+            { val: 2.0, label: 'Friction', key: 'survey.tick_friction' },
+            { val: 3.0, label: 'Moderate', key: 'survey.tick_moderate' },
+            { val: 4.0, label: 'Aligned', key: 'survey.tick_aligned' },
+            { val: 5.0, label: 'Excellent', key: 'survey.tick_excellent' }
           ];
 
           ticks.forEach(t => {
@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Math.abs(parseFloat(slider.value) - t.val) < 0.05) {
               tick.classList.add('active');
             }
-            tick.innerHTML = `<span class="tick-number">${t.val.toFixed(0)}</span><span class="tick-label">${t.label}</span>`;
+            tick.innerHTML = `<span class="tick-number">${t.val.toFixed(0)}</span><span class="tick-label" data-i18n="${t.key}">${t.label}</span>`;
             
             // Clicking a tick snaps the slider to that value
             tick.addEventListener('click', () => {
@@ -238,6 +238,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     updateUI();
+    // Localize freshly-rendered slider tick labels (and any other [data-i18n]).
+    if (window.applyPortalI18n) window.applyPortalI18n();
   }
 
   // 4. Update Progress Bar and Buttons
