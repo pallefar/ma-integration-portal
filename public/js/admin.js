@@ -11,8 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Section metadata drives the topbar heading
   const SECTION_META = {
+    projects: ['M&A Projects', 'Each acquisition is a project at the top of the hierarchy — create, switch, and manage them'],
     courses: ['Courses', 'Manage the academy curriculum — courses, modules, lessons & quizzes'],
     modules: ['Action Modules', 'Score-gated recommendations shown on the Integration Leader dashboard'],
+    departments: ['Department Modules', 'Functional integration tracks — shared culture & communication, per-department systems & trainings'],
     pages: ['Pages & Playbook', 'CMS-owned page content and the integration playbook'],
     employees: ['Employees', 'Acquired-employee roster and personalized welcome portals'],
     hrbp: ['Integration Leaders & Alerts', 'Provisioned Integration Leaders and workforce announcements'],
@@ -2420,6 +2422,8 @@ document.addEventListener('DOMContentLoaded', () => {
       badge.textContent = s.demoMode === false ? 'CUSTOM M&A' : 'DEMO';
     }).catch(() => {});
   }
+  // Exposed so the Projects panel (admin-cms.js) can refresh the DEMO/CUSTOM badge on switch.
+  window.syncTopbarMode = syncTopbarMode;
 
   // --- Initial runs ---
   loadSettings();

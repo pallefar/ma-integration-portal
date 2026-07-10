@@ -1057,7 +1057,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Floating quick-nav: jump to ANY app section (admin-controlled via settings.floatingMenuEnabled)
     const buildQuickNav = () => {
-      if (document.querySelector('.quicknav-container')) return;
+      const host = document.getElementById('unified-nav-groups');
+      if (!host || host.dataset.filled) return;
       const allResources = [
         { href: '/capability-hub.html', icon: '\u{1F9E0}', title: 'Capability Hub', match: 'capability-hub.html' },
         { href: '/integration-excellence.html', icon: '\u{1F31F}', title: 'Integration Excellence', match: 'integration-excellence.html' },
@@ -1083,34 +1084,17 @@ document.addEventListener('DOMContentLoaded', () => {
           ${items.map(renderQuickLink).join('')}
         </div>`;
 
-      const quickNav = document.createElement('div');
-      quickNav.className = 'quicknav-container';
-      quickNav.innerHTML = `
-        <div class="quicknav-panel" id="quicknav-panel">
-          <div class="quicknav-header">\u{1F9ED} Quick Navigation <span>jump to any section of the app</span></div>
-          <div class="quicknav-groups">
-            ${renderQuickGroup('Portals', Object.values(portalCatalog))}
-            ${renderQuickGroup('Resources', allResources)}
-            ${renderQuickGroup('General', generalItems)}
-          </div>
-        </div>
-        <button type="button" class="quicknav-fab" id="quicknav-fab" title="Quick navigation — jump to any section">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
-        </button>
-      `;
-      document.body.appendChild(quickNav);
+      // Fill the Navigation tab pane of the unified assistant window.
+      host.innerHTML =
+        renderQuickGroup('Portals', Object.values(portalCatalog)) +
+        renderQuickGroup('Resources', allResources) +
+        renderQuickGroup('General', generalItems);
+      host.dataset.filled = '1';
 
-      const fab = quickNav.querySelector('#quicknav-fab');
-      fab.addEventListener('click', (e) => {
-        e.stopPropagation();
-        quickNav.classList.toggle('open');
-      });
-      document.addEventListener('click', (e) => {
-        if (!quickNav.contains(e.target)) quickNav.classList.remove('open');
-      });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') quickNav.classList.remove('open');
-      });
+      // Selecting a destination closes the unified window.
+      host.querySelectorAll('.quicknav-link').forEach(a => a.addEventListener('click', () => {
+        document.getElementById('unified-panel')?.classList.remove('open');
+      }));
     };
 
     // Menu store overrides: apply admin-authored labels, icons, order, visibility & custom links
@@ -1183,7 +1167,14 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('/api/settings')
       .then(res => res.json())
       .then(settings => {
-        if (settings.floatingMenuEnabled !== false) buildQuickNav();
+        // Fill the unified assistant's Navigation tab; the admin "Floating Quick-Nav"
+        // toggle now controls whether the Navigation TAB is offered (chat stays available).
+        buildQuickNav();
+        if (settings.floatingMenuEnabled === false) {
+          const navTab = document.querySelector('.unified-tab[data-tab="nav"]');
+          if (navTab) navTab.style.display = 'none';
+          document.querySelector('.unified-tab[data-tab="chat"]')?.click();
+        }
         const rv = settings.roleVisibility || {};
         const rolePages = { pmo: 'pmo.html', hrbp: 'dashboard.html', supporting: 'supporting.html', employee: 'employee.html', admin: 'admin.html', leaders: 'leaders.html' };
         Object.keys(rolePages).forEach(roleKey => {
@@ -1821,56 +1812,58 @@ document.addEventListener('DOMContentLoaded', () => {
       widgetContainer.className = 'global-teodor-widget';
       
       widgetContainer.innerHTML = `
-        <div class="teodor-floating-btn" id="teodor-global-trigger" title="Ask TEodor the AI Integration Coach">
-          <span class="active-pulse-dot"></span>
-          ${getTeodorDuckSvg('44px')}
-        </div>
-        <div class="teodor-chat-panel" id="teodor-global-panel">
-          <div class="teodor-chat-header">
-            <div style="display: flex; align-items: center; gap: 0.6rem;">
-              <div class="teodor-chat-avatar">${getTeodorDuckSvg('26px')}</div>
+        <div class="unified-panel" id="unified-panel">
+          <div class="unified-tabbar">
+            <div class="unified-tabs">
+              <button type="button" class="unified-tab active" data-tab="nav"><span>🧭</span><span>Navigation</span></button>
+              <button type="button" class="unified-tab" data-tab="chat"><span class="unified-tab-duck">${getTeodorDuckSvg('20px')}</span><span>Ask TEodor</span></button>
+            </div>
+            <button type="button" class="unified-close" id="unified-close" title="Close">&times;</button>
+          </div>
+
+          <!-- Tab pane: Quick Navigation -->
+          <div class="unified-pane unified-pane-nav" id="unified-nav-pane" data-pane="nav">
+            <div class="quicknav-groups" id="unified-nav-groups"></div>
+          </div>
+
+          <!-- Tab pane: TEodor AI chat (same element IDs the chat logic binds to) -->
+          <div class="unified-pane unified-pane-chat" id="unified-chat-pane" data-pane="chat" style="display:none;">
+            <div class="teodor-chat-subhead">
+              <div class="teodor-chat-avatar">${getTeodorDuckSvg('24px')}</div>
               <div>
-                <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: #FFF; font-family: var(--font-family-display), 'Outfit', sans-serif;">TEodor Duck Coach</h4>
-                <span style="font-size: 0.7rem; color: #A5F3FC; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
-                  <span style="display:inline-block; width:6px; height:6px; background-color:#10B981; border-radius:50%; animation: pulse-dot 1.5s infinite;"></span>
-                  Active AI Insight AI
-                </span>
+                <h4>TEodor Duck Coach</h4>
+                <span class="teodor-chat-status"><span class="teodor-status-dot"></span> Active AI Insight</span>
               </div>
+              <button type="button" class="teodor-chat-clear-btn" id="teodor-global-clear" title="Clear Chat History">🧹 Clear</button>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <button type="button" class="teodor-chat-clear-btn" id="teodor-global-clear" title="Clear Chat History" style="background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 20px; color: #FFF; padding: 0.25rem 0.65rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.2rem; transition: all 0.2s; font-family: var(--font-family-base), sans-serif;">
-                🧹 Clear
-              </button>
-              <button type="button" class="teodor-chat-close-btn" id="teodor-global-close" style="margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; height: 24px; width: 24px;">&times;</button>
+            <div class="teodor-chat-body" id="teodor-global-history"></div>
+            <div class="teodor-global-reasoning-logs" id="teodor-global-logs-container" style="display: none;">
+              <div class="teodor-logs-header">
+                <span>⚙️ SMOLAGENT REASONING LOGS:</span>
+                <span class="pulse-text">● RUNNING TOOL</span>
+              </div>
+              <div class="teodor-logs-content" id="teodor-global-logs-content"></div>
             </div>
+            <div class="teodor-global-suggestions" id="teodor-global-suggestions-container"></div>
+            <form class="teodor-chat-input-form" id="teodor-global-form">
+              <input type="text" id="teodor-global-input" placeholder="Ask TEodor anything..." required autocomplete="off">
+              <button type="submit">Send</button>
+            </form>
           </div>
-          
-          <div class="teodor-chat-body" id="teodor-global-history"></div>
-          
-          <!-- Live Reasoning Log drawer -->
-          <div class="teodor-global-reasoning-logs" id="teodor-global-logs-container" style="display: none;">
-            <div class="teodor-logs-header">
-              <span>⚙️ SMOLAGENT REASONING LOGS:</span>
-              <span class="pulse-text">● RUNNING TOOL</span>
-            </div>
-            <div class="teodor-logs-content" id="teodor-global-logs-content"></div>
-          </div>
-          
-          <!-- Quick-Ask Context Suggestions -->
-          <div class="teodor-global-suggestions" id="teodor-global-suggestions-container"></div>
-          
-          <form class="teodor-chat-input-form" id="teodor-global-form">
-            <input type="text" id="teodor-global-input" placeholder="Ask TEodor anything..." required autocomplete="off">
-            <button type="submit">Send</button>
-          </form>
         </div>
+        <button type="button" class="unified-fab" id="unified-fab" title="Navigate & Ask TEodor">
+          <span class="active-pulse-dot"></span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+        </button>
       `;
 
       document.body.appendChild(widgetContainer);
 
-      const trigger = document.getElementById('teodor-global-trigger');
-      const panel = document.getElementById('teodor-global-panel');
-      const closeBtn = document.getElementById('teodor-global-close');
+      const fab = document.getElementById('unified-fab');
+      const unifiedPanel = document.getElementById('unified-panel');
+      const closeBtn = document.getElementById('unified-close');
+      const tabButtons = widgetContainer.querySelectorAll('.unified-tab');
+      const paneEls = { nav: document.getElementById('unified-nav-pane'), chat: document.getElementById('unified-chat-pane') };
       const chatHistory = document.getElementById('teodor-global-history');
       const logsContainer = document.getElementById('teodor-global-logs-container');
       const logsContent = document.getElementById('teodor-global-logs-content');
@@ -1927,23 +1920,35 @@ document.addEventListener('DOMContentLoaded', () => {
       // Populate suggestions dynamically
       renderSuggestions(currentSuggestions);
 
-      // Open/Close Handlers
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = panel.style.display === 'flex';
-        panel.style.display = isOpen ? 'none' : 'flex';
-        if (!isOpen) {
+      // Unified tab switching (Navigation <-> Chat). Each pane sizes its own content,
+      // so swapping tabs dynamically resizes the window (nav = compact, chat = tall).
+      let activeTab = 'nav';
+      function switchUnifiedTab(tab) {
+        if (!paneEls[tab]) return;
+        activeTab = tab;
+        tabButtons.forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab));
+        Object.keys(paneEls).forEach(k => { if (paneEls[k]) paneEls[k].style.display = (k === tab) ? '' : 'none'; });
+        unifiedPanel.setAttribute('data-active', tab);
+        if (tab === 'chat') {
           chatInput.focus();
-
-          // Animate the rubber duck in the chat window when it pops up
-          const chatAvatar = panel.querySelector('.teodor-chat-avatar .teodor-duck-svg');
-          if (chatAvatar) {
-            chatAvatar.classList.remove('duck-pop-jump');
-            void chatAvatar.offsetWidth; // Force DOM reflow
-            chatAvatar.classList.add('duck-pop-jump');
-          }
+          chatHistory.scrollTop = chatHistory.scrollHeight;
+          const chatAvatar = unifiedPanel.querySelector('.teodor-chat-avatar .teodor-duck-svg');
+          if (chatAvatar) { chatAvatar.classList.remove('duck-pop-jump'); void chatAvatar.offsetWidth; chatAvatar.classList.add('duck-pop-jump'); }
         }
+      }
+      tabButtons.forEach(t => t.addEventListener('click', (e) => { e.stopPropagation(); switchUnifiedTab(t.getAttribute('data-tab')); }));
+
+      // FAB opens/closes the single unified window
+      function openUnified(tab) { unifiedPanel.classList.add('open'); switchUnifiedTab(tab || activeTab); }
+      function closeUnified() { unifiedPanel.classList.remove('open'); }
+      fab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (unifiedPanel.classList.contains('open')) closeUnified(); else openUnified();
       });
+      closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeUnified(); });
+      unifiedPanel.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', (e) => { if (!widgetContainer.contains(e.target)) closeUnified(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeUnified(); });
 
       // Clear Chat Handler
       const clearBtn = document.getElementById('teodor-global-clear');
@@ -1956,19 +1961,6 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       }
-
-      closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        panel.style.display = 'none';
-      });
-
-      // Prevent clicks inside panel from closing it
-      panel.addEventListener('click', (e) => e.stopPropagation());
-
-      // Global click to dismiss chat
-      document.addEventListener('click', () => {
-        panel.style.display = 'none';
-      });
 
       // Helper to render suggestion chips
       function renderSuggestions(suggs) {
@@ -2262,7 +2254,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!portal) return; // Only run on PMO and Integration Leader
 
-    const mainContainer = document.querySelector('.main-content');
+    // index.html's landing uses <main class="demo-showcase-container">, not .main-content —
+    // fall back to <main> so the AI-insight card injects there too (matches the role-guidance banner).
+    const mainContainer = document.querySelector('.main-content') || document.querySelector('main');
     if (!mainContainer) return;
 
     // Check if it's already injected

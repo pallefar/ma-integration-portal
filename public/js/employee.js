@@ -1801,20 +1801,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const dict = (typeof TRANSLATIONS !== 'undefined' && TRANSLATIONS[lang]) ? TRANSLATIONS[lang] : {};
     const readLink = dict.read_playbook_link || '📖 Read Playbook Section →';
     const badgeMap = { culture: 'Culture', talent: 'Systems', value: 'Synergy' };
+    const doneSet = new Set((activeEmployee && activeEmployee.completedLessons) || []);
     let html = '';
     academyCourses.forEach(course => {
       if (course.published === false) return;
+      const gatingHard = course.gating === 'hard';
       (course.modules || []).forEach(m => {
         const lessons = (m.lessons || []).map(l => {
           const qn = (l.quiz && l.quiz.questions ? l.quiz.questions.length : 0);
           const quizBtn = `<button type="button" class="academy-view-lesson" data-lesson="${cmsEsc(l.id)}" style="font-size:0.75rem;color:var(--te-dark-teal);font-weight:600;background:none;border:none;cursor:pointer;padding:0;">📖 View lesson${qn ? ' &amp; quiz' : ''} &rarr;</button>`;
           const pb = l.playbookLink ? `<a href="${cmsEsc(l.playbookLink)}" target="_blank" class="playbook-anchor-link" style="font-size:0.75rem;color:var(--te-orange);font-weight:600;text-decoration:none;">${readLink}</a>` : '';
-          return `<li class="academy-lesson-item" style="display:flex;align-items:flex-start;gap:0.75rem;">
-            <input type="checkbox" id="lesson_${cmsEsc(l.id)}" class="academy-lesson-checkbox" data-lesson-id="${cmsEsc(l.id)}" style="margin-top:0.25rem;accent-color:var(--te-orange);width:18px;height:18px;cursor:pointer;">
+          // Enforce CMS "hard" course gating: a lesson whose prerequisite isn't done stays locked.
+          const prereqOk = !(gatingHard && l.prerequisite && !doneSet.has(l.prerequisite));
+          const lockNote = prereqOk ? '' : `<span style="font-size:0.75rem;color:var(--te-orange);font-weight:700;">🔒 Complete the prerequisite lesson to unlock</span>`;
+          return `<li class="academy-lesson-item" style="display:flex;align-items:flex-start;gap:0.75rem;${prereqOk ? '' : 'opacity:0.6;'}">
+            <input type="checkbox" id="lesson_${cmsEsc(l.id)}" class="academy-lesson-checkbox" data-lesson-id="${cmsEsc(l.id)}" ${prereqOk ? '' : 'disabled'} style="margin-top:0.25rem;accent-color:var(--te-orange);width:18px;height:18px;cursor:${prereqOk ? 'pointer' : 'not-allowed'};">
             <div style="flex-grow:1;">
-              <label for="lesson_${cmsEsc(l.id)}" style="font-weight:600;color:var(--text-main);font-size:0.95rem;cursor:pointer;">${cmsEsc(cmsLabel(l.title, lang))}</label>
+              <label for="lesson_${cmsEsc(l.id)}" style="font-weight:600;color:var(--text-main);font-size:0.95rem;cursor:${prereqOk ? 'pointer' : 'not-allowed'};">${cmsEsc(cmsLabel(l.title, lang))}</label>
               <p style="margin:0.15rem 0 0.4rem;font-size:0.8rem;color:var(--text-secondary);line-height:1.4;">${cmsEsc(cmsLabel(l.description, lang))}</p>
-              <div style="display:flex;align-items:center;gap:0.9rem;flex-wrap:wrap;">${pb}${quizBtn}</div>
+              <div style="display:flex;align-items:center;gap:0.9rem;flex-wrap:wrap;">${pb}${quizBtn}${lockNote}</div>
             </div></li>`;
         }).join('');
         const badgeTxt = badgeMap[m.dimension] || cmsLabel(m.badge, lang);
@@ -2152,9 +2157,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('milestones-timeline-container');
     if (!container) return;
 
-    // TEd game milestone follows the admin-controlled settings flag
+    // TEd game milestone follows the admin-controlled settings flag.
     const isDoomEnabled = portalSettings.doomGloballyEnabled !== false;
-    const doomXp = portalSettings.doomUnlockXp || 220;
+    // Cap the unlock at the lesson XP ceiling so completing ALL lessons is always enough
+    // to reach it — otherwise the reward is unreachable (lessons top out below 220 XP).
+    const lessonCount = (typeof academyCourses !== 'undefined' && academyCourses)
+      ? academyCourses.reduce((n, c) => n + (c.modules || []).reduce((mn, m) => mn + ((m.lessons || []).length), 0), 0)
+      : 9;
+    const lessonCeilingXp = (lessonCount || 9) * 20;
+    const doomXp = Math.min(portalSettings.doomUnlockXp || 220, lessonCeilingXp);
 
     const lang = localStorage.getItem('employeeLanguage') || 'en';
     const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;

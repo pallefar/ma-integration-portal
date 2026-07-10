@@ -402,18 +402,115 @@
   }
 
   function editPage(p) {
+    const REG = window.PageBlockRegistry || {};
+    let layout = Array.isArray(p.layout) ? p.layout.map(b => ({ ...b, data: { ...(b.data || {}) } })) : [];
+
     const form = document.createElement('div');
     const titleF = buildLangField('input', p.title);
-    const bodyF = buildLangField('wysiwyg', p.body);
     form.appendChild(field('Page title', titleF.wrap));
-    form.appendChild(field('Page content', bodyF.wrap));
+
+    // ---- Layout blocks builder (ordered, typed content blocks) ----
+    const blocksWrap = document.createElement('div');
+    blocksWrap.className = 'form-group';
+    blocksWrap.innerHTML = '<label class="form-label">Layout blocks</label>';
+    const blocksList = document.createElement('div');
+    blocksList.className = 'pl-builder-list';
+    blocksWrap.appendChild(blocksList);
+    const addRow = document.createElement('div');
+    addRow.style.cssText = 'display:flex;gap:0.5rem;margin-top:0.5rem;';
+    const typeSel = document.createElement('select');
+    typeSel.className = 'form-control form-select';
+    typeSel.style.maxWidth = '220px';
+    typeSel.innerHTML = Object.keys(REG).map(t => `<option value="${t}">${REG[t].icon} ${esc(REG[t].label)}</option>`).join('');
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button'; addBtn.className = 'btn btn-secondary'; addBtn.textContent = '+ Add block';
+    addBtn.addEventListener('click', () => {
+      const block = { id: 'blk_' + Date.now(), type: typeSel.value, order: layout.length, visible: true, data: {} };
+      layout.push(block);
+      renderBlocks();
+      blockEditor(block, renderBlocks);
+    });
+    addRow.appendChild(typeSel); addRow.appendChild(addBtn);
+    blocksWrap.appendChild(addRow);
+    form.appendChild(blocksWrap);
+
+    function reindex() { layout.forEach((b, i) => b.order = i); }
+    function blockPreview(b) {
+      const meta = REG[b.type]; if (!meta || !meta.fields.length) return '';
+      const v = b.data && b.data[meta.fields[0].key];
+      const s = (v && typeof v === 'object') ? (v.en || Object.values(v).find(Boolean) || '') : (v || '');
+      return String(s).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || '(empty)';
+    }
+    function renderBlocks() {
+      layout.sort((a, b) => (a.order || 0) - (b.order || 0));
+      reindex();
+      blocksList.innerHTML = '';
+      if (!layout.length) {
+        blocksList.innerHTML = '<p style="font-size:0.8rem;color:var(--text-dim);margin:0.35rem 0;">No blocks yet — add one below, or leave empty to use the legacy body / static page.</p>';
+      }
+      layout.forEach((b, idx) => {
+        const meta = REG[b.type] || { icon: '❓', label: b.type };
+        const row = document.createElement('div');
+        row.className = 'cms-row';
+        row.innerHTML = `<div class="cms-row-main"><span class="cms-row-title">${meta.icon} ${esc(meta.label)}</span>
+            <span class="cms-row-sub">${esc(blockPreview(b))}</span></div>
+          <div style="display:flex;align-items:center;gap:0.3rem;">
+            <button type="button" class="cms-mini" data-up ${idx === 0 ? 'disabled' : ''}>▲</button>
+            <button type="button" class="cms-mini" data-down ${idx === layout.length - 1 ? 'disabled' : ''}>▼</button>
+            <button type="button" class="cms-mini" data-edit>Edit</button>
+            <button type="button" class="cms-mini danger" data-del>✕</button>
+            <label class="admin-toggle" title="Visible"><input type="checkbox" ${b.visible !== false ? 'checked' : ''}><span class="track"></span><span class="thumb"></span></label>
+          </div>`;
+        row.querySelector('[data-up]').addEventListener('click', () => { if (idx > 0) { const t = layout[idx].order; layout[idx].order = layout[idx - 1].order; layout[idx - 1].order = t; renderBlocks(); } });
+        row.querySelector('[data-down]').addEventListener('click', () => { if (idx < layout.length - 1) { const t = layout[idx].order; layout[idx].order = layout[idx + 1].order; layout[idx + 1].order = t; renderBlocks(); } });
+        row.querySelector('[data-edit]').addEventListener('click', () => blockEditor(b, renderBlocks));
+        row.querySelector('[data-del]').addEventListener('click', () => { layout = layout.filter(x => x !== b); renderBlocks(); });
+        row.querySelector('input').addEventListener('change', e => { b.visible = e.target.checked; });
+        blocksList.appendChild(row);
+      });
+    }
+
+    // Legacy body (fallback when there are no blocks)
+    const bodyF = buildLangField('wysiwyg', p.body);
+    form.appendChild(field('Legacy body (fallback when no blocks)', bodyF.wrap));
     const note = document.createElement('p');
     note.style.cssText = 'font-size:0.78rem;color:var(--text-secondary);margin:0.25rem 0 0;';
-    note.textContent = 'When published with content, this replaces the live page body in the selected language. Leave empty to keep the original static page.';
+    note.textContent = 'Blocks take precedence when present; with no blocks the legacy body is used; with neither, the original static page shows. Publish the page to make it live.';
     form.appendChild(note);
+
+    renderBlocks();
+
     modal(`Edit page — ${label(p.title) || p.slug}`, form, async () => {
-      await fetch('/api/pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, title: titleF.get(), body: bodyF.get() }) }).then(r => r.json());
+      reindex();
+      await fetch('/api/pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, title: titleF.get(), body: bodyF.get(), layout }) }).then(r => r.json());
       toast('Page saved.'); renderPages();
+    });
+  }
+
+  // Edit one block's fields — i18n kinds via buildLangField, plain kinds via inputs.
+  function blockEditor(block, onDone) {
+    const REG = window.PageBlockRegistry || {};
+    const meta = REG[block.type];
+    if (!meta) return;
+    const form = document.createElement('div');
+    const getters = {};
+    meta.fields.forEach(f => {
+      if (f.kind === 'input' || f.kind === 'textarea' || f.kind === 'wysiwyg') {
+        const bf = buildLangField(f.kind, block.data[f.key]);
+        form.appendChild(field(f.label, bf.wrap));
+        getters[f.key] = () => bf.get();
+      } else {
+        const el = f.kind === 'lines' ? document.createElement('textarea') : document.createElement('input');
+        el.className = 'form-control';
+        if (f.kind === 'lines') el.rows = 4;
+        el.value = block.data[f.key] || '';
+        form.appendChild(field(f.label, el));
+        getters[f.key] = () => el.value;
+      }
+    });
+    modal(`${meta.icon} ${meta.label} block`, form, async () => {
+      meta.fields.forEach(f => { block.data[f.key] = getters[f.key](); });
+      if (onDone) onDone();
     });
   }
 
@@ -727,13 +824,189 @@
     });
   }
 
+  // ---------- Department modules (functional integration tracks) ----------
+  let departments = [];
+
+  function loadDepartments() {
+    const wrap = document.getElementById('departments-admin-list');
+    if (!wrap) return;
+    fetch('/api/departments').then(r => r.json()).then(list => {
+      departments = Array.isArray(list) ? list : [];
+      renderDepartments();
+    }).catch(() => { wrap.innerHTML = '<p style="text-align:center;color:#B91C1C;padding:1.5rem;">Failed to load departments.</p>'; });
+  }
+
+  function saveDepartment(d) {
+    return fetch('/api/departments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) }).then(r => r.json());
+  }
+
+  function renderDepartments() {
+    const wrap = document.getElementById('departments-admin-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    departments.forEach(d => {
+      const row = document.createElement('div');
+      row.className = 'cms-row';
+      row.innerHTML = `<div class="cms-row-main">
+          <span class="cms-row-title">${esc((d.icon ? d.icon + ' ' : '') + d.name)}${d.locked ? ' <span style="color:var(--text-dim);font-size:0.72rem;font-weight:700;">🔒 LOCKED</span>' : ' <span style="color:#059669;font-size:0.72rem;font-weight:800;">● ACTIVE</span>'}</span>
+          <span class="cms-row-sub">${esc(d.desc || '')} · ${(d.systems || []).length} systems · ${(d.trainings || []).length} trainings</span></div>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          <button type="button" class="cms-mini" data-edit>Edit</button>
+          <button type="button" class="cms-mini danger" data-del>✕</button>
+          <label class="admin-toggle" title="Unlocked"><input type="checkbox" ${d.locked ? '' : 'checked'}><span class="track"></span><span class="thumb"></span></label>
+        </div>`;
+      row.querySelector('[data-edit]').addEventListener('click', () => editDepartment(d));
+      row.querySelector('[data-del]').addEventListener('click', () => {
+        if (!confirm('Delete "' + d.name + '"?')) return;
+        fetch('/api/departments/' + d.id, { method: 'DELETE' }).then(r => r.json()).then(() => { toast('Department deleted.'); loadDepartments(); });
+      });
+      row.querySelector('input').addEventListener('change', e => {
+        d.locked = !e.target.checked;
+        saveDepartment(d).then(() => toast('Department ' + (d.locked ? 'locked' : 'unlocked') + '.'));
+      });
+      wrap.appendChild(row);
+    });
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'btn btn-secondary'; add.style.cssText = 'align-self:flex-start;margin-top:0.5rem;';
+    add.textContent = '+ New department module';
+    add.addEventListener('click', () => editDepartment(null));
+    wrap.appendChild(add);
+  }
+
+  function editDepartment(d) {
+    const isNew = !d;
+    d = d || { name: '', icon: '🏭', locked: true, phase: '', desc: '', systems: [], trainings: [] };
+    const linesOf = (arr) => (arr || []).map(s => (s.title || '') + (s.desc ? ' | ' + s.desc : '')).join('\n');
+    const form = document.createElement('div');
+    form.innerHTML = `
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin:0 0 0.75rem;">Culture &amp; Communication are shared across all departments — only Systems &amp; Trainings differ here.</p>
+      <div class="cms-inline-row">
+        <div class="form-group" style="flex:0 0 90px;"><label class="form-label">Icon</label><input type="text" class="form-control" id="dp-icon" value="${esc(d.icon || '')}"></div>
+        <div class="form-group"><label class="form-label">Name *</label><input type="text" class="form-control" id="dp-name" value="${esc(d.name || '')}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-control" id="dp-desc" rows="2">${esc(d.desc || '')}</textarea></div>
+      <div class="cms-inline-row">
+        <div class="form-group"><label class="form-label">Phase label (when locked)</label><input type="text" class="form-control" id="dp-phase" value="${esc(d.phase || '')}" placeholder="e.g. Phase 2"></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-control form-select" id="dp-locked"><option value="locked"${d.locked ? ' selected' : ''}>🔒 Locked</option><option value="open"${!d.locked ? ' selected' : ''}>● Active</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Systems — one per line as "Title | description"</label><textarea class="form-control" id="dp-systems" rows="3">${esc(linesOf(d.systems))}</textarea></div>
+      <div class="form-group"><label class="form-label">Trainings — one per line as "Title | description"</label><textarea class="form-control" id="dp-trainings" rows="3">${esc(linesOf(d.trainings))}</textarea></div>`;
+    modal(isNew ? 'New department module' : 'Edit department module', form, async () => {
+      const name = form.querySelector('#dp-name').value.trim();
+      if (!name) { toast('Name is required.', true); throw new Error('name required'); }
+      const parseLines = (t) => t.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const p = l.split('|'); return { title: (p[0] || '').trim(), desc: p.slice(1).join('|').trim() }; });
+      const payload = {
+        id: d.id, name, icon: form.querySelector('#dp-icon').value.trim(),
+        desc: form.querySelector('#dp-desc').value.trim(),
+        phase: form.querySelector('#dp-phase').value.trim(),
+        locked: form.querySelector('#dp-locked').value === 'locked',
+        systems: parseLines(form.querySelector('#dp-systems').value),
+        trainings: parseLines(form.querySelector('#dp-trainings').value)
+      };
+      if (isNew) delete payload.id;
+      await saveDepartment(payload); toast('Department saved.'); loadDepartments();
+    });
+  }
+
+  // ---------- Projects (top-of-hierarchy M&A workspaces) ----------
+  let projects = [];
+  let activeProjectId = 'proj_demo';
+
+  function loadProjects() {
+    const wrap = document.getElementById('projects-admin-list');
+    if (!wrap) return;
+    fetch('/api/projects').then(r => r.json()).then(data => {
+      projects = Array.isArray(data.projects) ? data.projects : [];
+      activeProjectId = data.activeProjectId || 'proj_demo';
+      renderProjects();
+    }).catch(() => { wrap.innerHTML = '<p style="text-align:center;color:#B91C1C;padding:1.5rem;">Failed to load projects.</p>'; });
+  }
+
+  function renderProjects() {
+    const wrap = document.getElementById('projects-admin-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    projects.forEach(p => {
+      const isActive = p.id === activeProjectId;
+      const row = document.createElement('div');
+      row.className = 'cms-row';
+      if (isActive) row.style.borderLeft = '3px solid var(--te-orange)';
+      const meta = [p.sector, p.size, p.hq].filter(Boolean).join(' · ');
+      row.innerHTML = `<div class="cms-row-main">
+          <span class="cms-row-title">${p.isDemo ? '🎬' : '🏢'} ${esc(p.name)}${isActive ? ' <span style="color:var(--te-orange);font-size:0.72rem;font-weight:800;">● ACTIVE</span>' : ''}</span>
+          <span class="cms-row-sub">${esc(p.targetCompany || '')}${meta ? ' — ' + esc(meta) : ''}${p.isDemo ? ' · demo workspace' : ''}</span></div>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          ${isActive ? '<span class="cms-mini" style="opacity:0.6;cursor:default;">Active</span>' : '<button type="button" class="cms-mini" data-activate>Switch to</button>'}
+          ${p.isDemo ? '' : '<button type="button" class="cms-mini danger" data-del>✕</button>'}
+        </div>`;
+      const act = row.querySelector('[data-activate]');
+      if (act) act.addEventListener('click', () => {
+        fetch('/api/projects/' + p.id + '/activate', { method: 'POST' }).then(r => r.json()).then(() => {
+          toast('Switched to "' + p.name + '".');
+          loadProjects();
+          if (typeof window.syncTopbarMode === 'function') window.syncTopbarMode();
+        });
+      });
+      const del = row.querySelector('[data-del]');
+      if (del) del.addEventListener('click', () => {
+        if (!confirm('Delete project "' + p.name + '"? Its custom workspace data is removed.')) return;
+        fetch('/api/projects/' + p.id, { method: 'DELETE' }).then(r => r.json()).then(res => {
+          if (res.error) { toast(res.error, true); return; }
+          toast('Project deleted.');
+          loadProjects();
+          if (typeof window.syncTopbarMode === 'function') window.syncTopbarMode();
+        });
+      });
+      wrap.appendChild(row);
+    });
+  }
+
+  function newProjectWizard() {
+    const form = document.createElement('div');
+    form.innerHTML = `
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin:0 0 1rem;">Intake survey — capture the acquired company. Creating the project starts a fresh workspace and makes it the active one.</p>
+      <div class="form-group"><label class="form-label">Company name *</label><input type="text" class="form-control" id="pw-name" placeholder="e.g. Orion Robotics GmbH"></div>
+      <div class="cms-inline-row">
+        <div class="form-group"><label class="form-label">Sector</label><input type="text" class="form-control" id="pw-sector" placeholder="e.g. Industrial Automation"></div>
+        <div class="form-group"><label class="form-label">Size (employees)</label><input type="text" class="form-control" id="pw-size" placeholder="e.g. 450"></div>
+      </div>
+      <div class="cms-inline-row">
+        <div class="form-group"><label class="form-label">Headquarters</label><input type="text" class="form-control" id="pw-hq" placeholder="e.g. Munich, DE"></div>
+        <div class="form-group"><label class="form-label">Acquisition date</label><input type="date" class="form-control" id="pw-date"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Synergy objective</label><textarea class="form-control" id="pw-objective" rows="2" placeholder="Primary integration goal…"></textarea></div>`;
+    modal('New M&A Project', form, async () => {
+      const name = form.querySelector('#pw-name').value.trim();
+      if (!name) { toast('Company name is required.', true); throw new Error('name required'); }
+      const payload = {
+        name, targetCompany: name,
+        sector: form.querySelector('#pw-sector').value.trim(),
+        size: form.querySelector('#pw-size').value.trim(),
+        hq: form.querySelector('#pw-hq').value.trim(),
+        acquisitionDate: form.querySelector('#pw-date').value,
+        synergyObjective: form.querySelector('#pw-objective').value.trim()
+      };
+      const res = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(r => r.json());
+      if (res.error) { toast(res.error, true); throw new Error(res.error); }
+      toast('Project "' + name + '" created & activated.');
+      loadProjects();
+      if (typeof window.syncTopbarMode === 'function') window.syncTopbarMode();
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
-    // Own the Courses + Pages + Menus + Banners panels (replaces admin.js's read-only renders)
+    // Own the Projects + Courses + Pages + Menus + Banners panels (replaces admin.js's read-only renders)
+    loadProjects();
+    const bnp = document.getElementById('btn-new-project');
+    if (bnp) bnp.addEventListener('click', newProjectWizard);
+    loadDepartments();
     render();
     renderPages();
     loadMenus();
     loadBanners();
   });
+  window.reloadProjectsCms = loadProjects;
+  window.reloadDepartmentsCms = loadDepartments;
   window.reloadCoursesCms = render;
   window.reloadMenusCms = loadMenus;
   window.reloadBannersCms = loadBanners;

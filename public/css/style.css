@@ -1098,6 +1098,66 @@ body.page-exiting .main-content {
   text-transform: uppercase;
 }
 
+/* Unlocked department track (interactive module card) */
+.placeholder-card.unlocked {
+  background-color: var(--bg-white);
+  border-style: solid;
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: var(--shadow-sm);
+}
+.placeholder-card.unlocked:hover {
+  transform: translateY(-3px);
+  border-color: var(--te-orange);
+  box-shadow: var(--shadow-md);
+}
+.placeholder-card.unlocked h4 { color: var(--te-dark-teal); }
+.placeholder-card.unlocked p { color: var(--text-secondary); }
+
+/* Department module detail modal sections */
+.dept-section {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.dept-section:last-child { border-bottom: none; }
+.dept-section-h {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--te-dark-teal);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dept-shared, .dept-own {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 50px;
+}
+.dept-shared { background: rgba(36, 76, 90, 0.1); color: var(--te-dark-teal); }
+.dept-own { background: rgba(233, 131, 0, 0.12); color: var(--te-orange); }
+
+/* ===== Page Layout Builder — rendered content blocks ===== */
+.pl-block { margin-bottom: 1.75rem; }
+.pl-block:last-child { margin-bottom: 0; }
+.pl-richtext { line-height: 1.7; color: var(--text-primary); }
+.pl-richtext h1, .pl-richtext h2, .pl-richtext h3 { color: var(--te-dark-teal); }
+.pl-hero { text-align: center; padding: 2.25rem 1.5rem; background: linear-gradient(135deg, rgba(36, 76, 90, 0.06), rgba(233, 131, 0, 0.06)); border-radius: var(--radius-lg); }
+.pl-hero h2 { font-size: 2rem; color: var(--te-dark-teal); margin: 0 0 0.5rem; }
+.pl-hero p { color: var(--text-secondary); max-width: 620px; margin: 0 auto 1.25rem; }
+.pl-cards-wrap h3 { color: var(--te-dark-teal); margin: 0 0 1rem; }
+.pl-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.pl-card { background: var(--bg-white); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; box-shadow: var(--shadow-sm); }
+.pl-card-icon { font-size: 1.75rem; margin-bottom: 0.5rem; line-height: 1; }
+.pl-card h4 { margin: 0 0 0.35rem; color: var(--te-dark-teal); }
+.pl-card p { margin: 0; font-size: 0.88rem; color: var(--text-secondary); }
+.pl-cta { text-align: center; padding: 1.75rem; border: 2px dashed var(--te-orange); border-radius: var(--radius-lg); background: rgba(233, 131, 0, 0.04); }
+.pl-cta h3 { color: var(--te-dark-teal); margin: 0 0 0.5rem; }
+.pl-cta p { color: var(--text-secondary); margin: 0 0 1rem; }
+/* Admin block-builder list */
+.pl-builder-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
 /* Personalized Employee Portal Elements */
 .employee-header-banner {
   background: linear-gradient(135deg, var(--bg-dark) 0%, var(--te-dark-teal) 100%);
@@ -7539,6 +7599,186 @@ body.sidebar-collapsed .sidebar-toggle-btn svg {
     display: none !important;
   }
 }
+
+/* =========================================================
+   UNIFIED ASSISTANT (Quick-Nav + TEodor chat, one window/two tabs)
+   ========================================================= */
+.unified-fab {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--te-dark-teal);
+  border: 3px solid var(--te-orange);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+  box-shadow: 0 6px 20px rgba(36, 76, 90, 0.35), 0 0 0 4px rgba(255, 168, 52, 0.2);
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s, box-shadow 0.2s;
+}
+.unified-fab:hover {
+  transform: scale(1.1);
+  background: var(--te-orange);
+  box-shadow: 0 8px 24px rgba(233, 131, 0, 0.4), 0 0 0 6px rgba(255, 168, 52, 0.35);
+}
+.unified-fab:active { transform: scale(0.95); }
+.unified-fab .active-pulse-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background-color: #10B981;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  animation: pulse-dot 1.8s infinite;
+}
+.unified-panel.open ~ .unified-fab { background: var(--te-orange); }
+
+.unified-panel {
+  position: absolute;
+  bottom: 74px;
+  right: 0;
+  width: 380px;
+  max-width: calc(100vw - 3rem);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(36, 76, 90, 0.16);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 50px rgba(10, 20, 26, 0.22);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.unified-panel.open {
+  display: flex;
+  animation: teodorSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.unified-tabbar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  background: var(--te-dark-teal);
+  border-bottom: 2px solid var(--te-orange);
+  padding: 0.35rem 0.4rem 0;
+  gap: 0.4rem;
+}
+.unified-tabs { display: flex; gap: 0.2rem; }
+.unified-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px 8px 0 0;
+  border-bottom: 3px solid transparent;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  font-family: var(--font-family-base), sans-serif;
+}
+.unified-tab .unified-tab-duck { display: inline-flex; align-items: center; }
+.unified-tab:hover { color: #fff; }
+.unified-tab.active {
+  color: #fff;
+  border-bottom-color: var(--te-orange);
+  background: rgba(255, 255, 255, 0.08);
+}
+.unified-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  align-self: center;
+  transition: color 0.2s;
+}
+.unified-close:hover { color: #fff; }
+
+.unified-pane-nav {
+  padding: 1rem 1.1rem;
+  max-height: min(62vh, 460px);
+  overflow-y: auto;
+}
+.unified-pane-nav .quicknav-groups {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+.unified-pane-chat {
+  display: flex;
+  flex-direction: column;
+  height: 480px;
+  max-height: calc(100vh - 170px);
+}
+.teodor-chat-subhead {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.9rem;
+  background: rgba(36, 76, 90, 0.05);
+  border-bottom: 1px solid var(--border-color);
+}
+.teodor-chat-subhead h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--te-dark-teal);
+  font-family: var(--font-family-display), 'Outfit', sans-serif;
+}
+.teodor-chat-status {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.teodor-status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #10B981;
+  border-radius: 50%;
+  animation: pulse-dot 1.5s infinite;
+}
+.teodor-chat-subhead .teodor-chat-clear-btn {
+  margin-left: auto;
+  background: rgba(36, 76, 90, 0.08);
+  border: 1px solid rgba(36, 76, 90, 0.15);
+  border-radius: 20px;
+  color: var(--te-dark-teal);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  transition: all 0.2s;
+}
+.teodor-chat-subhead .teodor-chat-clear-btn:hover {
+  background: var(--te-orange);
+  color: #fff;
+  border-color: var(--te-orange);
+}
+
+@media (max-width: 480px) {
+  .unified-panel { width: calc(100vw - 2rem); }
+  .unified-pane-chat { height: 60vh; }
+}
+@media print { .global-teodor-widget { display: none !important; } }
 
 /* =========================================================
    SAAS ADMIN SHELL (Phase 2 redesign)

@@ -64,6 +64,36 @@ function readDb() {
     parsed.banners = parsed.banners || [];
     parsed.i18n = parsed.i18n || { languages: [{ code: 'en', label: 'English', flag: '🇬🇧', enabled: true }], defaultLang: 'en', strings: { en: {} } };
     parsed.menus = parsed.menus || { sidebar: [], groups: [], landingCards: [] };
+    // Projects = top of the M&A hierarchy. The seeded demo is always project "proj_demo".
+    parsed.projects = parsed.projects || [];
+    if (!parsed.projects.some(p => p.id === 'proj_demo')) {
+      const s = parsed.settings || {};
+      parsed.projects.unshift({
+        id: 'proj_demo', isDemo: true,
+        name: s.targetCompany || 'NextGen Sensors Ltd.',
+        targetCompany: s.targetCompany || 'NextGen Sensors Ltd.',
+        sector: s.sector || '', size: s.size || '', hq: s.hq || '',
+        acquisitionDate: s.acquisitionDate || '', synergyObjective: s.synergyObjective || '',
+        intake: {}, createdAt: '2026-01-01T00:00:00.000Z'
+      });
+    }
+    parsed.activeProjectId = parsed.activeProjectId || 'proj_demo';
+    // Department modules = the functional integration tracks. Culture & Communication
+    // are SHARED across all departments; only Systems & Trainings differ per department.
+    parsed.departments = parsed.departments || [
+      { id: 'dept_sales', name: 'Sales & Pipelines', icon: '📈', locked: true, phase: 'Phase 2',
+        desc: 'Standardize customer distribution channels, pricing structures, and CRM transfers.',
+        systems: [ { title: 'CRM Migration', desc: 'Consolidate the legacy CRM into TE Salesforce.' }, { title: 'Pricing Harmonization', desc: 'Align pricing books and quote-to-cash flows.' } ],
+        trainings: [ { title: 'TE Sales Playbook', desc: 'Commercial process and tooling onboarding.' }, { title: 'Pipeline Hygiene', desc: 'Forecasting discipline and CRM data quality.' } ] },
+      { id: 'dept_product', name: 'Product & Tech Transfer', icon: '🔧', locked: true, phase: 'Phase 2',
+        desc: 'Migrate engineering documents, shared patents, and synchronize catalog parts directories.',
+        systems: [ { title: 'PLM Integration', desc: 'Merge product-lifecycle and BOM systems.' }, { title: 'Catalog Sync', desc: 'Unify part numbering and product catalogs.' } ],
+        trainings: [ { title: 'Engineering Standards', desc: 'TE design and documentation standards.' }, { title: 'IP & Patents', desc: 'Handling shared patents and IP transfer.' } ] },
+      { id: 'dept_finance', name: 'Finance & Reporting', icon: '💶', locked: true, phase: 'Phase 3',
+        desc: 'Harmonize fiscal accounts, tax structures, and migrate to TE Connectivity accounting ERPs.',
+        systems: [ { title: 'ERP Migration', desc: 'Cut over to the TE accounting ERP.' }, { title: 'Chart of Accounts', desc: 'Map the legacy CoA to the TE standard.' } ],
+        trainings: [ { title: 'Financial Controls', desc: 'SOX and TE reporting compliance.' }, { title: 'Close Process', desc: 'Monthly close and consolidation.' } ] }
+    ];
     _dbCache = parsed;
     _dbMtime = mtime;
     return parsed;
@@ -430,6 +460,196 @@ app.post('/api/settings/new-ma', (req, res) => {
 
   writeDb(db);
   res.json({ success: true, message: 'Custom M&A successfully reset.' });
+});
+
+// =====================================================================
+// Projects — top of the M&A hierarchy (admin sets up each acquisition)
+// =====================================================================
+function findProject(db, id) { return (db.projects || []).find(p => p.id === id); }
+
+// --- Per-project data isolation (phase 2) ---
+// Each custom project owns its full workspace bundle (roster/assessment/leaders/comms/
+// settings). The demo project uses the top-level demo collections and is never bundled.
+function saveCustomLaneToProject(db, project) {
+  if (!project || project.isDemo) return;
+  project.data = {
+    settings: db.customSettings || { demoMode: false },
+    employees: db.customEmployees || [],
+    hrbps: db.customHrbps || [],
+    assessments: db.customAssessments || [],
+    alerts: db.customAlerts || [],
+    communications: db.customCommunications || []
+  };
+}
+
+// Load a project's bundle into the live custom lane. Intake fields always win for the
+// company identity so switching visibly re-scopes the app to the acquired company.
+function loadProjectIntoCustomLane(db, project) {
+  const d = project.data || {};
+  db.customSettings = {
+    ...(d.settings || {}), demoMode: false,
+    targetCompany: project.targetCompany, sector: project.sector, size: project.size,
+    hq: project.hq, acquisitionDate: project.acquisitionDate, synergyObjective: project.synergyObjective
+  };
+  db.customEmployees = d.employees || [];
+  db.customHrbps = d.hrbps || [];
+  db.customAssessments = d.assessments || [];
+  db.customAlerts = d.alerts || [];
+  db.customCommunications = d.communications || [];
+}
+
+// Persist whatever the live custom lane currently holds back to whichever custom
+// project is active, so its in-progress work isn't lost when we switch away.
+function stashActiveCustomProject(db) {
+  const current = findProject(db, db.activeProjectId);
+  if (current && !current.isDemo) saveCustomLaneToProject(db, current);
+}
+
+// --- Per-project CMS content isolation (phase 3) ---
+// The top-level courses/pages/menus/banners/departments ARE the ACTIVE project's live CMS.
+// Each project (demo included) owns a `cms` snapshot; activate/create swaps it in/out.
+// This keeps every CMS endpoint unchanged. i18n UI strings + media stay app-wide shared.
+function snapshotCms(db) {
+  const clone = (v) => JSON.parse(JSON.stringify(v == null ? null : v));
+  return {
+    courses: clone(db.courses || []),
+    pages: clone(db.pages || []),
+    menus: clone(db.menus || { sidebar: [], groups: [], landingCards: [] }),
+    banners: clone(db.banners || []),
+    departments: clone(db.departments || [])
+  };
+}
+function applyCmsToTopLevel(db, cms) {
+  if (!cms) return;
+  db.courses = cms.courses || [];
+  db.pages = cms.pages || [];
+  db.menus = cms.menus || { sidebar: [], groups: [], landingCards: [] };
+  db.banners = cms.banners || [];
+  db.departments = cms.departments || [];
+}
+// Save the live CMS back to whichever project is active (demo included) before switching.
+function stashActiveProjectCms(db) {
+  const cur = findProject(db, db.activeProjectId);
+  if (cur) cur.cms = snapshotCms(db);
+}
+function loadProjectCms(db, project) {
+  if (project && project.cms) applyCmsToTopLevel(db, project.cms);
+}
+// A new acquisition starts from the demo's default CMS structure, then tailors it.
+function defaultCms(db) {
+  const demo = findProject(db, 'proj_demo');
+  return (demo && demo.cms) ? JSON.parse(JSON.stringify(demo.cms)) : snapshotCms(db);
+}
+
+app.get('/api/projects', (req, res) => {
+  const db = readDb();
+  // Strip the heavy per-project data + cms bundles from the list response.
+  const list = (db.projects || []).map(({ data, cms, ...meta }) => meta);
+  res.json({ projects: list, activeProjectId: db.activeProjectId || 'proj_demo' });
+});
+
+// Create a new acquisition project from the admin intake wizard (activates it).
+app.post('/api/projects', (req, res) => {
+  const db = readDb();
+  const b = req.body || {};
+  const name = String(b.name || b.targetCompany || '').trim();
+  if (!name) return res.status(400).json({ error: 'Project name / target company is required.' });
+  const project = {
+    id: 'proj_' + Date.now(), isDemo: false, name,
+    targetCompany: String(b.targetCompany || name).trim(),
+    sector: b.sector || '', size: b.size || '', hq: b.hq || '',
+    acquisitionDate: b.acquisitionDate || '', synergyObjective: b.synergyObjective || '',
+    intake: b.intake || {}, createdAt: new Date().toISOString(),
+    data: { settings: { demoMode: false }, employees: [], hrbps: [], assessments: [], alerts: [], communications: [] }
+  };
+  db.projects = db.projects || [];
+  // Preserve the currently-active project's work & CMS before switching to the new one.
+  stashActiveCustomProject(db);
+  stashActiveProjectCms(db);
+  project.cms = defaultCms(db); // clone the default (demo) CMS structure to tailor
+  db.projects.push(project);
+  db.settings = db.settings || {};
+  db.settings.demoMode = false;
+  loadProjectIntoCustomLane(db, project); // fresh, empty workspace scoped to the intake
+  applyCmsToTopLevel(db, project.cms);
+  db.activeProjectId = project.id;
+  writeDb(db);
+  res.json({ success: true, project: (({ data, cms, ...m }) => m)(project), activeProjectId: project.id });
+});
+
+// Switch the active project (demo <-> a specific acquisition), isolating each workspace.
+app.post('/api/projects/:id/activate', (req, res) => {
+  const db = readDb();
+  const target = findProject(db, req.params.id);
+  if (!target) return res.status(404).json({ error: 'Project not found.' });
+  db.settings = db.settings || {};
+  if (target.id !== db.activeProjectId) { stashActiveCustomProject(db); stashActiveProjectCms(db); }
+  if (target.isDemo) {
+    db.settings.demoMode = true;
+  } else {
+    db.settings.demoMode = false;
+    loadProjectIntoCustomLane(db, target);
+  }
+  loadProjectCms(db, target); // swap in the target project's CMS content
+  db.activeProjectId = target.id;
+  writeDb(db);
+  res.json({ success: true, activeProjectId: target.id, demoMode: db.settings.demoMode });
+});
+
+app.delete('/api/projects/:id', (req, res) => {
+  const db = readDb();
+  const project = findProject(db, req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found.' });
+  if (project.isDemo) return res.status(400).json({ error: 'The demo project cannot be deleted.' });
+  const wasActive = db.activeProjectId === req.params.id;
+  db.projects = (db.projects || []).filter(p => p.id !== req.params.id);
+  // Deleting the active project falls back to the demo workspace (restore its CMS too).
+  if (wasActive) {
+    db.activeProjectId = 'proj_demo';
+    db.settings = db.settings || {};
+    db.settings.demoMode = true;
+    loadProjectCms(db, findProject(db, 'proj_demo'));
+  }
+  writeDb(db);
+  res.json({ success: true, activeProjectId: db.activeProjectId });
+});
+
+// =====================================================================
+// Department modules — functional integration tracks (Sales, Product, ...)
+// Culture & Communication are shared; Systems & Trainings are per-department.
+// =====================================================================
+app.get('/api/departments', (req, res) => {
+  res.json(readDb().departments || []);
+});
+
+app.post('/api/departments', (req, res) => {
+  const db = readDb();
+  db.departments = db.departments || [];
+  const d = req.body || {};
+  const nameOk = d.name && String(d.name).trim();
+  let stored;
+  if (d.id) {
+    const i = db.departments.findIndex(x => x.id === d.id);
+    // Existing department: merge (partial updates like the lock toggle are allowed).
+    if (i > -1) { db.departments[i] = { ...db.departments[i], ...d }; stored = db.departments[i]; }
+    else {
+      if (!nameOk) return res.status(400).json({ error: 'Department name is required.' });
+      db.departments.push(d); stored = d;
+    }
+  } else {
+    if (!nameOk) return res.status(400).json({ error: 'Department name is required.' });
+    stored = { locked: true, systems: [], trainings: [], ...d, id: 'dept_' + Date.now() };
+    db.departments.push(stored);
+  }
+  writeDb(db);
+  res.json({ success: true, department: stored });
+});
+
+app.delete('/api/departments/:id', (req, res) => {
+  const db = readDb();
+  db.departments = (db.departments || []).filter(x => x.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true });
 });
 
 // =====================================================================
@@ -1184,8 +1404,12 @@ app.get('/api/employees', (req, res) => {
   const day = db.settings.timeTravelDay || 30;
   const isCustom = db.settings && db.settings.demoMode === false;
   const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
-  const scaled = scaleEmployeesForDay(employeesList, day, getCatalogLessonIds(db));
-  res.json(scaled);
+  // Demo mode keeps the time-machine simulation (Day 1 = fresh org, Day 100 = fully
+  // certified) so the org-wide ramp reads consistently. Custom mode shows REAL stored
+  // progress so live lesson completions and +50 merit awards actually appear on the
+  // leaderboard / dashboard roster / signage.
+  const result = isCustom ? employeesList : scaleEmployeesForDay(employeesList, day, getCatalogLessonIds(db));
+  res.json(result);
 });
 
 // POST Employee

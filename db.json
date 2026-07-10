@@ -40,37 +40,14 @@
   },
   "customSettings": {
     "demoMode": false,
-    "databaseConfig": {
-      "enabled": true,
-      "provider": "azure",
-      "status": "connected",
-      "connectionDetails": {
-        "connectionString": "Server=tcp:sqlserver.database.windows.net..."
-      },
-      "timestamp": "2026-05-26T05:28:06.811Z"
-    },
-    "browserModel": "simulated-duck",
-    "timeTravelDay": 1
+    "targetCompany": "Orion Robotics",
+    "sector": "",
+    "size": "",
+    "hq": "",
+    "acquisitionDate": "",
+    "synergyObjective": ""
   },
-  "customEmployees": [
-    {
-      "id": "emp_tqhy43o",
-      "name": "Alex",
-      "role": "R&D Specialist",
-      "department": "R&D",
-      "company": "NextGen Sensors",
-      "completedLessons": [
-        "l1_1"
-      ],
-      "points": 20,
-      "badge": "Culture Champion",
-      "bonusPoints": 0,
-      "isLeader": false,
-      "leaderRole": "None",
-      "buddyName": "",
-      "buddyEmail": ""
-    }
-  ],
+  "customEmployees": [],
   "customHrbps": [],
   "customAssessments": [],
   "customAlerts": [],
@@ -329,6 +306,21 @@
       "leaderRole": "None",
       "buddyName": "Sarah Connor",
       "buddyEmail": "sconnor@te.com"
+    },
+    {
+      "id": "emp_hfy1yfj",
+      "name": "Valued Team Member",
+      "role": "Team Specialist",
+      "department": "Operations",
+      "company": "NextGen Sensors",
+      "completedLessons": [],
+      "points": 0,
+      "badge": "New Recruit",
+      "bonusPoints": 0,
+      "isLeader": false,
+      "leaderRole": "None",
+      "buddyName": "",
+      "buddyEmail": ""
     }
   ],
   "hrbps": [
@@ -3954,7 +3946,8 @@
       },
       "published": false,
       "source": "public/playbook.html",
-      "order": 1
+      "order": 1,
+      "layout": []
     },
     {
       "id": "page_capability",
@@ -4020,6 +4013,965 @@
       "createdAt": "2026-07-09T06:08:33.438Z",
       "updatedAt": "2026-07-09T06:08:33.438Z",
       "rev": 1
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj_demo",
+      "isDemo": true,
+      "name": "NextGen Sensors Ltd.",
+      "targetCompany": "NextGen Sensors Ltd.",
+      "sector": "Industrial R&D Sensors",
+      "size": "240 Employees",
+      "hq": "Munich, Germany",
+      "acquisitionDate": "2026-05-15",
+      "synergyObjective": "Accelerate automotive autonomous testing pipelines and integrate multi-beam sensor array technologies into TE Connectivity global sales catalogs.",
+      "intake": {},
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "cms": {
+        "courses": [
+          {
+            "id": "course_academy",
+            "slug": "te-integration-academy",
+            "title": {
+              "en": "TE Integration Academy",
+              "de": "TE Integration Academy",
+              "zh": "TE Integration Academy",
+              "cs": "TE Integration Academy"
+            },
+            "description": {
+              "en": "Your 100-day onboarding curriculum: TE values, systems, and synergy. Earn +20 XP per lesson.",
+              "de": "Your 100-day onboarding curriculum: TE values, systems, and synergy. Earn +20 XP per lesson.",
+              "zh": "Your 100-day onboarding curriculum: TE values, systems, and synergy. Earn +20 XP per lesson.",
+              "cs": "Your 100-day onboarding curriculum: TE values, systems, and synergy. Earn +20 XP per lesson."
+            },
+            "xpPerLesson": 20,
+            "gating": "soft",
+            "certificateOnComplete": true,
+            "published": true,
+            "order": 1,
+            "modules": [
+              {
+                "id": "mod_m1",
+                "title": {
+                  "en": "Module 1: TE Values & Collaboration",
+                  "de": "Modul 1: TE Werte & Zusammenarbeit",
+                  "zh": "模块 1：TE 价值观与协作",
+                  "cs": "Modul 1: Hodnoty TE a spolupráce"
+                },
+                "subtitle": {
+                  "en": "Your TE Dimension • Earn +20 XP per Lesson",
+                  "de": "Ihr TE Bereich • Verdienen Sie +20 XP pro Lektion",
+                  "zh": "您的 TE 维度 • 每完成一课获得 +20 XP",
+                  "cs": "Sekce Vaše TE • Získejte +20 XP za lekci"
+                },
+                "badge": {
+                  "en": "Your TE",
+                  "de": "Ihr TE",
+                  "zh": "您的 TE",
+                  "cs": "Vaše TE"
+                },
+                "dimension": "culture",
+                "order": 1,
+                "lessons": [
+                  {
+                    "id": "l1_1",
+                    "title": {
+                      "en": "Lesson 1.1: Welcome & Core TE Values",
+                      "de": "Lektion 1.1: Willkommen & TE-Grundwerte",
+                      "zh": "课 1.1：欢迎与核心 TE 价值观",
+                      "cs": "Lekce 1.1: Vítejte a základní hodnoty TE"
+                    },
+                    "description": {
+                      "en": "Understand the 4 core TE pillars: Integrity, Accountability, Teamwork, and Innovation.",
+                      "de": "Verstehen Sie die 4 TE-Grundpfeiler: Integrität, Rechenschaftspflicht, Teamarbeit und Innovation.",
+                      "zh": "了解 TE 的 4 大核心支柱：诚信、担当、合作和创新。",
+                      "cs": "Pochopte 4 základní pilíře TE: Integrita, Odpovědnost, Týmová práce a Inovace."
+                    },
+                    "body": {
+                      "en": "<p>Understand the 4 core TE pillars: Integrity, Accountability, Teamwork, and Innovation.</p>",
+                      "de": "<p>Verstehen Sie die 4 TE-Grundpfeiler: Integrität, Rechenschaftspflicht, Teamarbeit und Innovation.</p>",
+                      "zh": "<p>了解 TE 的 4 大核心支柱：诚信、担当、合作和创新。</p>",
+                      "cs": "<p>Pochopte 4 základní pilíře TE: Integrita, Odpovědnost, Týmová práce a Inovace.</p>"
+                    },
+                    "xp": 20,
+                    "order": 1,
+                    "dimension": "culture",
+                    "playbookLink": "/playbook.html#culture",
+                    "prerequisite": null,
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  },
+                  {
+                    "id": "l1_2",
+                    "title": {
+                      "en": "Lesson 1.2: Rhythms & Communication Channels",
+                      "de": "Lektion 1.2: Rhythmen & Kommunikationskanäle",
+                      "zh": "课 1.2：工作节奏与沟通渠道",
+                      "cs": "Lekce 1.2: Rytmy a komunikační kanály"
+                    },
+                    "description": {
+                      "en": "Learn about company-wide newsletters, MS Teams etiquette, and recurring IMO town halls.",
+                      "de": "Erfahren Sie mehr über unternehmensweite Newsletter, MS Teams-Etikette und IMO Town Halls.",
+                      "zh": "了解公司范围的简报、MS Teams 礼仪和定期 IMO 全员大会。",
+                      "cs": "Dozvíte se o celopodnikových newsletterech, etiketě MS Teams a pravidelných IMO town hallech."
+                    },
+                    "body": {
+                      "en": "<p>Learn about company-wide newsletters, MS Teams etiquette, and recurring IMO town halls.</p>",
+                      "de": "<p>Erfahren Sie mehr über unternehmensweite Newsletter, MS Teams-Etikette und IMO Town Halls.</p>",
+                      "zh": "<p>了解公司范围的简报、MS Teams 礼仪和定期 IMO 全员大会。</p>",
+                      "cs": "<p>Dozvíte se o celopodnikových newsletterech, etiketě MS Teams a pravidelných IMO town hallech.</p>"
+                    },
+                    "xp": 20,
+                    "order": 2,
+                    "dimension": "culture",
+                    "playbookLink": "/playbook.html#culture",
+                    "prerequisite": "l1_1",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  },
+                  {
+                    "id": "l1_3",
+                    "title": {
+                      "en": "Lesson 1.3: Integration Town Hall Highlights",
+                      "de": "Lektion 1.3: Highlights des Integration Town Halls",
+                      "zh": "课 1.3：整合全员大会亮点",
+                      "cs": "Lekce 1.3: Hlavní body integračního town hallu"
+                    },
+                    "description": {
+                      "en": "Watch key clips from the CEO town hall and find answers to common merger questions.",
+                      "de": "Sehen Sie sich Clips aus dem CEO Town Hall an und finden Sie Antworten auf häufige Fragen.",
+                      "zh": "观看首席执行官全员大会的关键剪辑，并寻找常见合并问题的答案。",
+                      "cs": "Sledujte klíčové klipy z town hallu s generálním ředitelem a najděte odpovědi na běžné dotazy."
+                    },
+                    "body": {
+                      "en": "<p>Watch key clips from the CEO town hall and find answers to common merger questions.</p>",
+                      "de": "<p>Sehen Sie sich Clips aus dem CEO Town Hall an und finden Sie Antworten auf häufige Fragen.</p>",
+                      "zh": "<p>观看首席执行官全员大会的关键剪辑，并寻找常见合并问题的答案。</p>",
+                      "cs": "<p>Sledujte klíčové klipy z town hallu s generálním ředitelem a najděte odpovědi na běžné dotazy.</p>"
+                    },
+                    "xp": 20,
+                    "order": 3,
+                    "dimension": "culture",
+                    "playbookLink": "/playbook.html#culture",
+                    "prerequisite": "l1_2",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "mod_m2",
+                "title": {
+                  "en": "Module 2: Systems, Access & Compliance",
+                  "de": "Modul 2: Systeme, Zugriff & Compliance",
+                  "zh": "模块 2：系统、访问与合规性",
+                  "cs": "Modul 2: Systémy, přístup a shoda"
+                },
+                "subtitle": {
+                  "en": "Talent & Systems Dimension • Earn +20 XP per Lesson",
+                  "de": "Talent- & Systemdimension • Verdienen Sie +20 XP pro Lektion",
+                  "zh": "人才与系统维度 • 每完成一课获得 +20 XP",
+                  "cs": "Dimenze talentů a systémů • Získejte +20 XP za lekci"
+                },
+                "badge": {
+                  "en": "Systems",
+                  "de": "Systeme",
+                  "zh": "系统",
+                  "cs": "Systémy"
+                },
+                "dimension": "talent",
+                "order": 2,
+                "lessons": [
+                  {
+                    "id": "l2_1",
+                    "title": {
+                      "en": "Lesson 2.1: SSO Credentials & Network Setup",
+                      "de": "Lektion 2.1: SSO-Zugangsdaten & Netzwerkeinrichtung",
+                      "zh": "课 2.1：SSO 凭据与网络设置",
+                      "cs": "Lekce 2.1: SSO údaje a nastavení sítě"
+                    },
+                    "description": {
+                      "en": "Set up your secure TE Single Sign-On and activate standard network credentials.",
+                      "de": "Richten Sie Ihr sicheres TE Single Sign-On ein und aktivieren Sie Standardnetzwerke.",
+                      "zh": "设置您安全的 TE 单点登录并激活标准网络凭据。",
+                      "cs": "Nastavte si zabezpečené přihlášení TE Single Sign-On a aktivujte standardní síťové přihlašovací údaje."
+                    },
+                    "body": {
+                      "en": "<p>Set up your secure TE Single Sign-On and activate standard network credentials.</p>",
+                      "de": "<p>Richten Sie Ihr sicheres TE Single Sign-On ein und aktivieren Sie Standardnetzwerke.</p>",
+                      "zh": "<p>设置您安全的 TE 单点登录并激活标准网络凭据。</p>",
+                      "cs": "<p>Nastavte si zabezpečené přihlášení TE Single Sign-On a aktivujte standardní síťové přihlašovací údaje.</p>"
+                    },
+                    "xp": 20,
+                    "order": 1,
+                    "dimension": "talent",
+                    "playbookLink": "/playbook.html#talent",
+                    "prerequisite": "l1_3",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  },
+                  {
+                    "id": "l2_2",
+                    "title": {
+                      "en": "Lesson 2.2: Benefits Transition & Enrollment",
+                      "de": "Lektion 2.2: Übergang & Registrierung von Leistungen",
+                      "zh": "课 2.2：福利过渡与加入",
+                      "cs": "Lekce 2.2: Přechod benefitů a registrace"
+                    },
+                    "description": {
+                      "en": "Explore healthcare migration plans and select retirement contribution profiles.",
+                      "de": "Erkunden Sie Krankenversicherungspläne und wählen Sie Profile für die Altersvorsorge.",
+                      "zh": "探索医疗保健迁移计划并选择退休金缴纳配置。",
+                      "cs": "Prozkoumejte plány migrace zdravotní péče a vyberte profily příspěvků na penzi."
+                    },
+                    "body": {
+                      "en": "<p>Explore healthcare migration plans and select retirement contribution profiles.</p>",
+                      "de": "<p>Erkunden Sie Krankenversicherungspläne und wählen Sie Profile für die Altersvorsorge.</p>",
+                      "zh": "<p>探索医疗保健迁移计划并选择退休金缴纳配置。</p>",
+                      "cs": "<p>Prozkoumejte plány migrace zdravotní péče a vyberte profily příspěvků na penzi.</p>"
+                    },
+                    "xp": 20,
+                    "order": 2,
+                    "dimension": "talent",
+                    "playbookLink": "/playbook.html#talent",
+                    "prerequisite": "l2_1",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  },
+                  {
+                    "id": "l2_3",
+                    "title": {
+                      "en": "Lesson 2.3: Cybersecurity & Compliance Onboarding",
+                      "de": "Lektion 2.3: Cybersicherheit & Compliance-Einführung",
+                      "zh": "课 2.3：网络安全与合规入职培训",
+                      "cs": "Lekce 2.3: Onboarding kybernetické bezpečnosti a dodržování předpisů"
+                    },
+                    "description": {
+                      "en": "Complete basic compliance certificates and understand IP protection protocols.",
+                      "de": "Schließen Sie Compliance-Zertifikate ab und verstehen Sie IP-Schutzprotokolle.",
+                      "zh": "完成基础合规证书并了解知识产权保护协议。",
+                      "cs": "Dokončete základní certifikáty o shodě a pochopte protokoly na ochranu duševního vlastnictví."
+                    },
+                    "body": {
+                      "en": "<p>Complete basic compliance certificates and understand IP protection protocols.</p>",
+                      "de": "<p>Schließen Sie Compliance-Zertifikate ab und verstehen Sie IP-Schutzprotokolle.</p>",
+                      "zh": "<p>完成基础合规证书并了解知识产权保护协议。</p>",
+                      "cs": "<p>Dokončete základní certifikáty o shodě a pochopte protokoly na ochranu duševního vlastnictví.</p>"
+                    },
+                    "xp": 20,
+                    "order": 3,
+                    "dimension": "talent",
+                    "playbookLink": "/playbook.html#talent",
+                    "prerequisite": "l2_2",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "mod_m3",
+                "title": {
+                  "en": "Module 3: Growth & Synergy Capture",
+                  "de": "Modul 3: Wachstum & Synergieerfassung",
+                  "zh": "模块 3：增长与协同效益捕获",
+                  "cs": "Modul 3: Růst a zachycení synergií"
+                },
+                "subtitle": {
+                  "en": "Value Dimension • Earn +20 XP per Lesson",
+                  "de": "Wertdimension • Verdienen Sie +20 XP pro Lektion",
+                  "zh": "价值维度 • 每完成一课获得 +20 XP",
+                  "cs": "Hodnotová dimenze • Získejte +20 XP za lekci"
+                },
+                "badge": {
+                  "en": "Synergy",
+                  "de": "Synergie",
+                  "zh": "协同",
+                  "cs": "Synergie"
+                },
+                "dimension": "value",
+                "order": 3,
+                "lessons": [
+                  {
+                    "id": "l3_1",
+                    "title": {
+                      "en": "Lesson 3.1: Synergy Strategy & Catalog Capture",
+                      "de": "Lektion 3.1: Synergiestrategie & Katalogerfassung",
+                      "zh": "课 3.1：协同战略与目录捕获",
+                      "cs": "Lekce 3.1: Strategie synergie a zachycení katalogu"
+                    },
+                    "description": {
+                      "en": "Learn about the commercial rationale for the acquisition and combined catalog highlights.",
+                      "de": "Erfahren Sie mehr über die kommerziellen Gründe für die Übernahme und Katalog-Highlights.",
+                      "zh": "了解收购的商业合理性以及合并目录的亮点。",
+                      "cs": "Přečtěte si o komerčních důvodech akvizice a hlavních bodech kombinovaného katalogu."
+                    },
+                    "body": {
+                      "en": "<p>Learn about the commercial rationale for the acquisition and combined catalog highlights.</p>",
+                      "de": "<p>Erfahren Sie mehr über die kommerziellen Gründe für die Übernahme und Katalog-Highlights.</p>",
+                      "zh": "<p>了解收购的商业合理性以及合并目录的亮点。</p>",
+                      "cs": "<p>Přečtěte si o komerčních důvodech akvizice a hlavních bodech kombinovaného katalogu.</p>"
+                    },
+                    "xp": 20,
+                    "order": 1,
+                    "dimension": "value",
+                    "playbookLink": "/playbook.html#value",
+                    "prerequisite": "l2_3",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  },
+                  {
+                    "id": "l3_2",
+                    "title": {
+                      "en": "Lesson 3.2: Technology Transfer & Patents",
+                      "de": "Lektion 3.2: Technologietransfer & Patente",
+                      "zh": "课 3.2：技术转让与专利",
+                      "cs": "Lekce 3.2: Přenos technologií a patenty"
+                    },
+                    "description": {
+                      "en": "Synchronize patent filing procedures and adapt co-development safety checklists.",
+                      "de": "Synchronisieren Sie Patentanmeldeverfahren und passen Sie Sicherheitschecklisten an.",
+                      "zh": "同步专利申请程序并调整共同开发安全清单。",
+                      "cs": "Synchronizujte postupy přihlašování patentů a přizpůsobte bezpečnostní seznamy pro společný vývoj."
+                    },
+                    "body": {
+                      "en": "<p>Synchronize patent filing procedures and adapt co-development safety checklists.</p>",
+                      "de": "<p>Synchronisieren Sie Patentanmeldeverfahren und passen Sie Sicherheitschecklisten an.</p>",
+                      "zh": "<p>同步专利申请程序并调整共同开发安全清单。</p>",
+                      "cs": "<p>Synchronizujte postupy přihlašování patentů a přizpůsobte bezpečnostní seznamy pro společný vývoj.</p>"
+                    },
+                    "xp": 20,
+                    "order": 2,
+                    "dimension": "value",
+                    "playbookLink": "/playbook.html#value",
+                    "prerequisite": "l3_1",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  },
+                  {
+                    "id": "l3_3",
+                    "title": {
+                      "en": "Lesson 3.3: Joint Sales Margins & Channels",
+                      "de": "Lektion 3.3: Gemeinsame Vertriebsmargen & Kanäle",
+                      "zh": "课 3.3：联合销售利润率与渠道",
+                      "cs": "Lekce 3.3: Společné prodejní marže a prodejní kanály"
+                    },
+                    "description": {
+                      "en": "Map regional sales boundaries and learn client transfer procedures.",
+                      "de": "Ordnen Sie regionale Vertriebsgrenzen zu und lernen Sie Kundenübertragungsverfahren.",
+                      "zh": "规划区域销售边界并学习客户转移程序。",
+                      "cs": "Zmapujte regionální hranice prodeje a osvojte si postupy převodu klientů."
+                    },
+                    "body": {
+                      "en": "<p>Map regional sales boundaries and learn client transfer procedures.</p>",
+                      "de": "<p>Ordnen Sie regionale Vertriebsgrenzen zu und lernen Sie Kundenübertragungsverfahren.</p>",
+                      "zh": "<p>规划区域销售边界并学习客户转移程序。</p>",
+                      "cs": "<p>Zmapujte regionální hranice prodeje a osvojte si postupy převodu klientů.</p>"
+                    },
+                    "xp": 20,
+                    "order": 3,
+                    "dimension": "value",
+                    "playbookLink": "/playbook.html#value",
+                    "prerequisite": "l3_2",
+                    "quiz": {
+                      "passMark": 70,
+                      "questions": []
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "pages": [
+          {
+            "id": "page_playbook",
+            "slug": "playbook",
+            "title": {
+              "en": "Integration Playbook",
+              "de": "Integration Playbook",
+              "zh": "Integration Playbook",
+              "cs": "Integration Playbook"
+            },
+            "body": {
+              "en": "",
+              "de": "",
+              "zh": "",
+              "cs": ""
+            },
+            "published": false,
+            "source": "public/playbook.html",
+            "order": 1,
+            "layout": []
+          },
+          {
+            "id": "page_capability",
+            "slug": "capability-hub",
+            "title": {
+              "en": "Integration Capability Hub",
+              "de": "Integration Capability Hub",
+              "zh": "Integration Capability Hub",
+              "cs": "Integration Capability Hub"
+            },
+            "body": {
+              "en": "",
+              "de": "",
+              "zh": "",
+              "cs": ""
+            },
+            "published": false,
+            "source": "public/capability-hub.html",
+            "order": 2
+          },
+          {
+            "id": "page_excellence",
+            "slug": "integration-excellence",
+            "title": {
+              "en": "People Integration Excellence",
+              "de": "People Integration Excellence",
+              "zh": "People Integration Excellence",
+              "cs": "People Integration Excellence"
+            },
+            "body": {
+              "en": "",
+              "de": "",
+              "zh": "",
+              "cs": ""
+            },
+            "published": false,
+            "source": "public/integration-excellence.html",
+            "order": 3
+          }
+        ],
+        "menus": {
+          "sidebar": [
+            {
+              "id": "nav_home",
+              "group": "general",
+              "label": {
+                "en": "Demo Home",
+                "de": "Demo Home",
+                "zh": "Demo Home",
+                "cs": "Demo Home"
+              },
+              "icon": "🏠",
+              "href": "/",
+              "order": 1,
+              "visible": true,
+              "roleScope": "all"
+            },
+            {
+              "id": "nav_survey",
+              "group": "general",
+              "label": {
+                "en": "Survey",
+                "de": "Survey",
+                "zh": "Survey",
+                "cs": "Survey"
+              },
+              "icon": "📋",
+              "href": "#survey-modal",
+              "order": 2,
+              "visible": true,
+              "roleScope": "admin,pmo,hrbp"
+            },
+            {
+              "id": "nav_employee",
+              "group": "portals",
+              "label": {
+                "en": "Employee Portal",
+                "de": "Employee Portal",
+                "zh": "Employee Portal",
+                "cs": "Employee Portal"
+              },
+              "icon": "👤",
+              "href": "/employee.html?name=Alex&role=R%26D%20Specialist&dept=R%26D",
+              "order": 1,
+              "visible": true,
+              "roleScope": "admin,pmo,employee"
+            },
+            {
+              "id": "nav_leaders",
+              "group": "portals",
+              "label": {
+                "en": "Leaders Portal",
+                "de": "Leaders Portal",
+                "zh": "Leaders Portal",
+                "cs": "Leaders Portal"
+              },
+              "icon": "👑",
+              "href": "/leaders.html",
+              "order": 2,
+              "visible": true,
+              "roleScope": "admin,pmo"
+            },
+            {
+              "id": "nav_pmo",
+              "group": "portals",
+              "label": {
+                "en": "PMO Console",
+                "de": "PMO Console",
+                "zh": "PMO Console",
+                "cs": "PMO Console"
+              },
+              "icon": "🏢",
+              "href": "/pmo.html",
+              "order": 3,
+              "visible": true,
+              "roleScope": "admin,pmo"
+            },
+            {
+              "id": "nav_dashboard",
+              "group": "portals",
+              "label": {
+                "en": "Leader Dashboard",
+                "de": "Leader Dashboard",
+                "zh": "Leader Dashboard",
+                "cs": "Leader Dashboard"
+              },
+              "icon": "📊",
+              "href": "/dashboard.html",
+              "order": 4,
+              "visible": true,
+              "roleScope": "admin,pmo,hrbp"
+            },
+            {
+              "id": "nav_supporting",
+              "group": "portals",
+              "label": {
+                "en": "Supporting Teams",
+                "de": "Supporting Teams",
+                "zh": "Supporting Teams",
+                "cs": "Supporting Teams"
+              },
+              "icon": "👥",
+              "href": "/supporting.html",
+              "order": 5,
+              "visible": true,
+              "roleScope": "admin,pmo,supporting"
+            },
+            {
+              "id": "nav_admin",
+              "group": "portals",
+              "label": {
+                "en": "Admin Console",
+                "de": "Admin Console",
+                "zh": "Admin Console",
+                "cs": "Admin Console"
+              },
+              "icon": "⚙️",
+              "href": "/admin.html",
+              "order": 6,
+              "visible": true,
+              "roleScope": "admin"
+            },
+            {
+              "id": "nav_capability",
+              "group": "resources",
+              "label": {
+                "en": "Capability Hub",
+                "de": "Capability Hub",
+                "zh": "Capability Hub",
+                "cs": "Capability Hub"
+              },
+              "icon": "🧠",
+              "href": "/capability-hub.html",
+              "order": 1,
+              "visible": true,
+              "roleScope": "admin,pmo,hrbp,supporting"
+            },
+            {
+              "id": "nav_excellence",
+              "group": "resources",
+              "label": {
+                "en": "Integration Excellence",
+                "de": "Integration Excellence",
+                "zh": "Integration Excellence",
+                "cs": "Integration Excellence"
+              },
+              "icon": "🌟",
+              "href": "/integration-excellence.html",
+              "order": 2,
+              "visible": true,
+              "roleScope": "admin,pmo,hrbp,supporting"
+            },
+            {
+              "id": "nav_playbook",
+              "group": "resources",
+              "label": {
+                "en": "Integration Playbook",
+                "de": "Integration Playbook",
+                "zh": "Integration Playbook",
+                "cs": "Integration Playbook"
+              },
+              "icon": "📖",
+              "href": "/playbook.html",
+              "order": 3,
+              "visible": true,
+              "roleScope": "admin,pmo,hrbp,supporting"
+            },
+            {
+              "id": "nav_lessons_learned",
+              "group": "resources",
+              "label": {
+                "en": "Lessons Learned",
+                "de": "Lessons Learned",
+                "zh": "Lessons Learned",
+                "cs": "Lessons Learned"
+              },
+              "icon": "💡",
+              "href": "/playbook.html#lessons-learned",
+              "order": 4,
+              "visible": true,
+              "roleScope": "admin,pmo,hrbp,supporting"
+            }
+          ],
+          "groups": [
+            {
+              "id": "general",
+              "label": {
+                "en": "",
+                "de": "",
+                "zh": "",
+                "cs": ""
+              },
+              "order": 1
+            },
+            {
+              "id": "portals",
+              "label": {
+                "en": "Portals",
+                "de": "Portals",
+                "zh": "Portals",
+                "cs": "Portals"
+              },
+              "order": 2
+            },
+            {
+              "id": "resources",
+              "label": {
+                "en": "Resources",
+                "de": "Resources",
+                "zh": "Resources",
+                "cs": "Resources"
+              },
+              "order": 3
+            }
+          ],
+          "landingCards": [
+            {
+              "id": "card_pmo",
+              "role": "pmo",
+              "icon": "🏢",
+              "title": {
+                "en": "PMO Coordinator",
+                "de": "PMO Coordinator",
+                "zh": "PMO Coordinator",
+                "cs": "PMO Coordinator"
+              },
+              "desc": {
+                "en": "Steer functional integration tracks, manage synergy blockers, and govern stage timeline gates.",
+                "de": "Steer functional integration tracks, manage synergy blockers, and govern stage timeline gates.",
+                "zh": "Steer functional integration tracks, manage synergy blockers, and govern stage timeline gates.",
+                "cs": "Steer functional integration tracks, manage synergy blockers, and govern stage timeline gates."
+              },
+              "order": 1,
+              "visible": true
+            },
+            {
+              "id": "card_hrbp",
+              "role": "hrbp",
+              "icon": "📊",
+              "title": {
+                "en": "Integration Leader",
+                "de": "Integration Leader",
+                "zh": "Integration Leader",
+                "cs": "Integration Leader"
+              },
+              "desc": {
+                "en": "Onboard acquired teams, run bulk CSV data mappers, and broadcast workforce communications.",
+                "de": "Onboard acquired teams, run bulk CSV data mappers, and broadcast workforce communications.",
+                "zh": "Onboard acquired teams, run bulk CSV data mappers, and broadcast workforce communications.",
+                "cs": "Onboard acquired teams, run bulk CSV data mappers, and broadcast workforce communications."
+              },
+              "order": 2,
+              "visible": true
+            },
+            {
+              "id": "card_supporting",
+              "role": "supporting",
+              "icon": "👥",
+              "title": {
+                "en": "Supporting Teams",
+                "de": "Supporting Teams",
+                "zh": "Supporting Teams",
+                "cs": "Supporting Teams"
+              },
+              "desc": {
+                "en": "Verify divisional checklists and payroll syncs across HRSS, Regional HR, Legal, and Rewards.",
+                "de": "Verify divisional checklists and payroll syncs across HRSS, Regional HR, Legal, and Rewards.",
+                "zh": "Verify divisional checklists and payroll syncs across HRSS, Regional HR, Legal, and Rewards.",
+                "cs": "Verify divisional checklists and payroll syncs across HRSS, Regional HR, Legal, and Rewards."
+              },
+              "order": 3,
+              "visible": true
+            },
+            {
+              "id": "card_employee",
+              "role": "employee",
+              "icon": "👤",
+              "title": {
+                "en": "Acquired Employee",
+                "de": "Acquired Employee",
+                "zh": "Acquired Employee",
+                "cs": "Acquired Employee"
+              },
+              "desc": {
+                "en": "Experience the 100-day onboarding academy, complete tasks, earn points, and unlock rewards.",
+                "de": "Experience the 100-day onboarding academy, complete tasks, earn points, and unlock rewards.",
+                "zh": "Experience the 100-day onboarding academy, complete tasks, earn points, and unlock rewards.",
+                "cs": "Experience the 100-day onboarding academy, complete tasks, earn points, and unlock rewards."
+              },
+              "order": 4,
+              "visible": true
+            },
+            {
+              "id": "card_admin",
+              "role": "admin",
+              "icon": "⚙️",
+              "title": {
+                "en": "System Admin",
+                "de": "System Admin",
+                "zh": "System Admin",
+                "cs": "System Admin"
+              },
+              "desc": {
+                "en": "Configure API integrations, compile relational SQL scripts, and audit cloud database status.",
+                "de": "Configure API integrations, compile relational SQL scripts, and audit cloud database status.",
+                "zh": "Configure API integrations, compile relational SQL scripts, and audit cloud database status.",
+                "cs": "Configure API integrations, compile relational SQL scripts, and audit cloud database status."
+              },
+              "order": 5,
+              "visible": true
+            }
+          ]
+        },
+        "banners": [
+          {
+            "type": "info",
+            "title": {
+              "en": "Welcome to the Integration Portal",
+              "de": "Willkommen im Integrationsportal",
+              "zh": "欢迎使用整合门户",
+              "cs": "Vítejte v integračním portálu"
+            },
+            "message": {
+              "en": "Explore each role to see the Day 1–100 journey. This banner is managed in Admin → Banners.",
+              "de": "Erkunden Sie jede Rolle, um die Reise von Tag 1 bis 100 zu sehen. Dieses Banner wird unter Admin → Banner verwaltet.",
+              "zh": "探索每个角色，查看第 1 到第 100 天的旅程。此横幅在“管理 → 横幅”中管理。",
+              "cs": "Prozkoumejte jednotlivé role a projděte si cestu od 1. do 100. dne. Tento banner se spravuje v Administrace → Bannery."
+            },
+            "scope": "global",
+            "roleScope": "all",
+            "dismissible": true,
+            "active": true,
+            "priority": 10,
+            "id": "banner_1783577313438",
+            "createdAt": "2026-07-09T06:08:33.438Z",
+            "updatedAt": "2026-07-09T06:08:33.438Z",
+            "rev": 1
+          }
+        ],
+        "departments": [
+          {
+            "id": "dept_sales",
+            "name": "Sales & Pipelines",
+            "icon": "📈",
+            "locked": true,
+            "phase": "Phase 2",
+            "desc": "Standardize customer distribution channels, pricing structures, and CRM transfers.",
+            "systems": [
+              {
+                "title": "CRM Migration",
+                "desc": "Consolidate the legacy CRM into TE Salesforce."
+              },
+              {
+                "title": "Pricing Harmonization",
+                "desc": "Align pricing books and quote-to-cash flows."
+              }
+            ],
+            "trainings": [
+              {
+                "title": "TE Sales Playbook",
+                "desc": "Commercial process and tooling onboarding."
+              },
+              {
+                "title": "Pipeline Hygiene",
+                "desc": "Forecasting discipline and CRM data quality."
+              }
+            ]
+          },
+          {
+            "id": "dept_product",
+            "name": "Product & Tech Transfer",
+            "icon": "🔧",
+            "locked": true,
+            "phase": "Phase 2",
+            "desc": "Migrate engineering documents, shared patents, and synchronize catalog parts directories.",
+            "systems": [
+              {
+                "title": "PLM Integration",
+                "desc": "Merge product-lifecycle and BOM systems."
+              },
+              {
+                "title": "Catalog Sync",
+                "desc": "Unify part numbering and product catalogs."
+              }
+            ],
+            "trainings": [
+              {
+                "title": "Engineering Standards",
+                "desc": "TE design and documentation standards."
+              },
+              {
+                "title": "IP & Patents",
+                "desc": "Handling shared patents and IP transfer."
+              }
+            ]
+          },
+          {
+            "id": "dept_finance",
+            "name": "Finance & Reporting",
+            "icon": "💶",
+            "locked": true,
+            "phase": "Phase 3",
+            "desc": "Harmonize fiscal accounts, tax structures, and migrate to TE Connectivity accounting ERPs.",
+            "systems": [
+              {
+                "title": "ERP Migration",
+                "desc": "Cut over to the TE accounting ERP."
+              },
+              {
+                "title": "Chart of Accounts",
+                "desc": "Map the legacy CoA to the TE standard."
+              }
+            ],
+            "trainings": [
+              {
+                "title": "Financial Controls",
+                "desc": "SOX and TE reporting compliance."
+              },
+              {
+                "title": "Close Process",
+                "desc": "Monthly close and consolidation."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "activeProjectId": "proj_demo",
+  "departments": [
+    {
+      "id": "dept_sales",
+      "name": "Sales & Pipelines",
+      "icon": "📈",
+      "locked": true,
+      "phase": "Phase 2",
+      "desc": "Standardize customer distribution channels, pricing structures, and CRM transfers.",
+      "systems": [
+        {
+          "title": "CRM Migration",
+          "desc": "Consolidate the legacy CRM into TE Salesforce."
+        },
+        {
+          "title": "Pricing Harmonization",
+          "desc": "Align pricing books and quote-to-cash flows."
+        }
+      ],
+      "trainings": [
+        {
+          "title": "TE Sales Playbook",
+          "desc": "Commercial process and tooling onboarding."
+        },
+        {
+          "title": "Pipeline Hygiene",
+          "desc": "Forecasting discipline and CRM data quality."
+        }
+      ]
+    },
+    {
+      "id": "dept_product",
+      "name": "Product & Tech Transfer",
+      "icon": "🔧",
+      "locked": true,
+      "phase": "Phase 2",
+      "desc": "Migrate engineering documents, shared patents, and synchronize catalog parts directories.",
+      "systems": [
+        {
+          "title": "PLM Integration",
+          "desc": "Merge product-lifecycle and BOM systems."
+        },
+        {
+          "title": "Catalog Sync",
+          "desc": "Unify part numbering and product catalogs."
+        }
+      ],
+      "trainings": [
+        {
+          "title": "Engineering Standards",
+          "desc": "TE design and documentation standards."
+        },
+        {
+          "title": "IP & Patents",
+          "desc": "Handling shared patents and IP transfer."
+        }
+      ]
+    },
+    {
+      "id": "dept_finance",
+      "name": "Finance & Reporting",
+      "icon": "💶",
+      "locked": true,
+      "phase": "Phase 3",
+      "desc": "Harmonize fiscal accounts, tax structures, and migrate to TE Connectivity accounting ERPs.",
+      "systems": [
+        {
+          "title": "ERP Migration",
+          "desc": "Cut over to the TE accounting ERP."
+        },
+        {
+          "title": "Chart of Accounts",
+          "desc": "Map the legacy CoA to the TE standard."
+        }
+      ],
+      "trainings": [
+        {
+          "title": "Financial Controls",
+          "desc": "SOX and TE reporting compliance."
+        },
+        {
+          "title": "Close Process",
+          "desc": "Monthly close and consolidation."
+        }
+      ]
     }
   ]
 }

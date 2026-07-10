@@ -15,7 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     navLinks.forEach(link => {
       link.classList.remove('active');
-      if (link.getAttribute('href').includes(current)) {
+      // Only highlight when a section is actually in view — `includes('')` is always
+      // true, which would light up every TOC link while scrolled above the first section.
+      if (current && link.getAttribute('href').includes(current)) {
         link.classList.add('active');
       }
     });

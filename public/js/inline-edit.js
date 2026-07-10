@@ -99,6 +99,12 @@
     if (!(editOn() && isAdmin() && slug && region)) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = 'flex';
     if (!editing) {
+      // Pages driven by the block Layout Builder are edited in Admin ▸ Pages, not inline
+      // (a single contentEditable blob would fight the block model).
+      if (region.querySelector('[data-cms-layout]')) {
+        bar.innerHTML = '<span class="pe-label">📐 Block layout — edit in Admin ▸ Pages</span>';
+        return;
+      }
       bar.innerHTML = '<span class="pe-label">Live page</span><button type="button" class="pe-edit">📄 Edit page body</button>';
       bar.querySelector('.pe-edit').addEventListener('click', startPage);
     } else {

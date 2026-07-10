@@ -13,3 +13,7 @@ npm-debug.log*
 
 # Uploaded media (runtime-generated)
 public/uploads/
+
+# Local dev / verification artifacts
+.playwright-mcp/
+/*.png

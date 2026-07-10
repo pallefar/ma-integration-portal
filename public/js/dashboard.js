@@ -95,12 +95,104 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Render dynamic Integration Leader Coaching Desk
       renderCoachingCorner(assessment.scores);
+
+      // Render the functional department tracks (Sales/Product/Finance + admin-created)
+      renderFunctionalTracks(assessment.scores);
     })
     .catch(err => {
       console.error("Error loading latest assessment:", err);
       mainView.style.display = 'none';
       emptyState.style.display = 'block';
     });
+
+  // ===== Functional Integration Tracks (department modules) =====
+  // Culture & Communication are shared org-wide; Systems & Trainings are per-department.
+  function focusAreasFromScores(scores) {
+    if (!scores) return [];
+    return [
+      { key: 'culture', label: 'Culture & Values', score: scores.culture },
+      { key: 'talent', label: 'Talent & Systems', score: scores.talent },
+      { key: 'value', label: 'Value & Synergies', score: scores.value }
+    ].filter(d => typeof d.score === 'number' && d.score < 3).sort((a, b) => a.score - b.score);
+  }
+
+  function renderFunctionalTracks(scores) {
+    const container = document.getElementById('functional-tracks-container');
+    if (!container) return;
+    fetch('/api/departments').then(r => r.json()).then(depts => {
+      container.innerHTML = '';
+      (depts || []).forEach(d => {
+        const card = document.createElement('div');
+        card.className = 'placeholder-card' + (d.locked ? ' locked' : ' unlocked');
+        if (d.locked) {
+          card.innerHTML = `
+            <svg class="placeholder-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+            <h4>${escapeHtml((d.icon ? d.icon + ' ' : '') + d.name)}</h4>
+            <p>${escapeHtml(d.desc || '')}</p>
+            <span class="placeholder-badge">🔒 Locked${d.phase ? ' - ' + escapeHtml(d.phase) : ''}</span>`;
+        } else {
+          card.style.cursor = 'pointer';
+          card.innerHTML = `
+            <div style="font-size:2rem;line-height:1;">${escapeHtml(d.icon || '🏭')}</div>
+            <h4>${escapeHtml(d.name)}</h4>
+            <p>${escapeHtml(d.desc || '')}</p>
+            <span class="placeholder-badge" style="background:rgba(16,185,129,0.12);color:#059669;border-color:rgba(16,185,129,0.3);">● Active — open module</span>`;
+          card.addEventListener('click', () => openDepartmentModal(d, scores));
+        }
+        container.appendChild(card);
+      });
+    }).catch(err => console.error('Error loading department tracks:', err));
+  }
+
+  function openDepartmentModal(d, scores) {
+    const cultureScore = scores && typeof scores.culture === 'number' ? scores.culture : null;
+    const culturePct = cultureScore != null ? Math.round((cultureScore / 5) * 100) : 0;
+    const focus = focusAreasFromScores(scores);
+    const list = (items, empty) => (items && items.length)
+      ? `<ul style="margin:0.35rem 0 0;padding-left:1.1rem;">${items.map(i => `<li style="margin-bottom:0.35rem;"><strong>${escapeHtml(i.title || '')}</strong>${i.desc ? ' — <span style="color:var(--text-secondary);">' + escapeHtml(i.desc) + '</span>' : ''}</li>`).join('')}</ul>`
+      : `<p style="color:var(--text-dim);font-size:0.85rem;margin:0.35rem 0 0;">${empty}</p>`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cms-modal-overlay';
+    const box = document.createElement('div');
+    box.className = 'cms-modal';
+    box.style.maxWidth = '640px';
+    box.innerHTML = `
+      <div class="cms-modal-head"><h3>${escapeHtml((d.icon ? d.icon + ' ' : '') + d.name)} — Integration Module</h3><button type="button" class="cms-modal-x" aria-label="Close">✕</button></div>
+      <div class="cms-modal-body">
+        <div class="dept-section">
+          <h4 class="dept-section-h">🎭 Culture &amp; Values <span class="dept-shared">Shared org-wide</span></h4>
+          <p style="font-size:0.83rem;color:var(--text-secondary);margin:0 0 0.5rem;">Culture onboarding is shared across every department — progress made with HR is reflected here.</p>
+          <div style="display:flex;align-items:center;gap:0.75rem;">
+            <div style="flex:1;height:10px;background:rgba(36,76,90,0.1);border-radius:6px;overflow:hidden;"><div style="height:100%;width:${culturePct}%;background:var(--te-orange);"></div></div>
+            <strong style="font-size:0.85rem;">${cultureScore != null ? cultureScore.toFixed(1) + '/5' : 'n/a'}</strong>
+          </div>
+        </div>
+        <div class="dept-section">
+          <h4 class="dept-section-h">📣 Communication <span class="dept-shared">Shared org-wide</span></h4>
+          <p style="font-size:0.83rem;color:var(--text-secondary);margin:0.35rem 0 0;">Town halls, integration newsletters and leadership alignment reuse the same shared communication cadence as HR — broadcast once, reaches every department.</p>
+        </div>
+        <div class="dept-section">
+          <h4 class="dept-section-h">⚙️ Systems <span class="dept-own">${escapeHtml(d.name)}</span></h4>
+          ${list(d.systems, 'No systems defined yet — add them in Admin ▸ Departments.')}
+        </div>
+        <div class="dept-section">
+          <h4 class="dept-section-h">🎓 Trainings <span class="dept-own">${escapeHtml(d.name)}</span></h4>
+          ${list(d.trainings, 'No trainings defined yet — add them in Admin ▸ Departments.')}
+        </div>
+        <div class="dept-section">
+          <h4 class="dept-section-h">🎯 Focus Areas <span class="dept-shared">from survey feedback</span></h4>
+          ${focus.length
+            ? `<ul style="margin:0.35rem 0 0;padding-left:1.1rem;">${focus.map(f => `<li style="margin-bottom:0.25rem;"><strong style="color:#B45309;">${escapeHtml(f.label)}</strong> — score ${f.score.toFixed(1)}/5 needs attention</li>`).join('')}</ul>`
+            : '<p style="color:#059669;font-size:0.85rem;margin:0.35rem 0 0;">✓ No critical focus areas — all assessment dimensions are on track.</p>'}
+        </div>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    box.querySelector('.cms-modal-x').addEventListener('click', close);
+  }
 
   // 2. Animate Circular Gauges
   function updateGauge(circleEl, valEl, badgeEl, score) {
@@ -404,7 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (employees && employees.length > 0) {
               const totalXp = employees.reduce((sum, e) => sum + (e.points || 0), 0);
               const avgLessons = employees.reduce((sum, e) => sum + (e.completedLessons ? e.completedLessons.length : 0), 0) / employees.length;
-              const certified = employees.filter(e => e.points >= 120).length;
+              const certified = employees.filter(e => (e.points || 0) >= 100).length;
               return `Acquisition Analytics: Roster lists ${employees.length} employees, total accrued XP is ${totalXp}, average lessons completed is ${avgLessons.toFixed(1)}/9, and ${certified} employee(s) have reached Certified status.`;
             }
             return `Acquisition Analytics: No employees found in the database.`;
@@ -813,9 +905,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const completedCount = e.completedLessons ? e.completedLessons.length : 0;
         totalLessonsCompleted += completedCount;
         totalPoints += (e.points || 0);
-        
-        // Certified means Synergy Scout (6+ lessons completed) or Ultimate Integrator (9 lessons)
-        if (completedCount >= 6) {
+
+        // Certified === reached the "Certified Integrator" milestone at 100 XP
+        // (single source of truth; matches the employee milestone label and the AI insight).
+        if ((e.points || 0) >= 100) {
           certifiedCount++;
         }
       });
@@ -1205,48 +1298,36 @@ document.addEventListener('DOMContentLoaded', () => {
       layoutOrder = ["gauges", "roadmap", "modules", "coach", "pulses", "teams"];
     }
 
-    // 1. Sort the tab panels inside .dashboard-panels-container
+    // Sort the tab panels INSIDE .dashboard-panels-container. Every panel —
+    // including the Integration KPIs (gauges) panel — must stay a child of this
+    // container so it behaves like a normal tab. (Previously the gauges panel
+    // was hoisted out of the container and re-parented next to .dashboard-grid,
+    // which detached the "Integration KPIs" tab: it rendered full-width above the
+    // grid instead of switching in the tab area. Keep it in the tab flow.)
     const container = document.querySelector('.dashboard-panels-container');
-    if (container) {
-      // Get all elements with data-widget inside container
-      const widgets = Array.from(container.querySelectorAll(':scope > [data-widget]'));
-      
-      // Sort them in DOM order based on layoutOrder indices
-      widgets.sort((a, b) => {
-        const aVal = a.getAttribute('data-widget');
-        const bVal = b.getAttribute('data-widget');
-        return layoutOrder.indexOf(aVal) - layoutOrder.indexOf(bVal);
-      });
+    if (!container) return;
 
-      // Re-append sorted widgets to container
-      widgets.forEach(w => container.appendChild(w));
-      
-      // Keep tab-academy-tracking at the end
-      const academyTracking = container.querySelector('#tab-academy-tracking');
-      if (academyTracking) {
-        container.appendChild(academyTracking);
-      }
+    // Guard: if a previous build hoisted the gauges panel out of the container,
+    // pull it back in as the first tab.
+    const gaugesPanel = document.getElementById('tab-integration-gauges');
+    if (gaugesPanel && gaugesPanel.parentElement !== container) {
+      container.insertBefore(gaugesPanel, container.firstChild);
     }
 
-    // 2. Decide placement of analytics-panel relative to dashboard-grid
-    const gaugesPanel = document.querySelector('.analytics-panel[data-widget="gauges"]');
-    const grid = document.querySelector('.dashboard-grid');
-    const mainViewElement = document.getElementById('dashboard-main-view');
-    
-    if (gaugesPanel && grid && mainViewElement) {
-      const gaugesIndex = layoutOrder.indexOf('gauges');
-      if (gaugesIndex >= 3) {
-        // Move gauges panel below grid (after it in DOM)
-        if (grid.nextSibling !== gaugesPanel) {
-          mainViewElement.insertBefore(gaugesPanel, grid.nextSibling);
-        }
-      } else {
-        // Move gauges panel above grid (before it in DOM)
-        if (grid.previousSibling !== gaugesPanel) {
-          mainViewElement.insertBefore(gaugesPanel, grid);
-        }
-      }
-    }
+    // Order: gauges first, then the rest by saved layout order (unlisted panels
+    // keep their authored order at the end), academy tracking always last.
+    const rank = id => {
+      const i = layoutOrder.indexOf(id);
+      return i === -1 ? 900 : i;
+    };
+    const widgets = Array.from(container.querySelectorAll(':scope > [data-widget]'))
+      .filter(w => w.getAttribute('data-widget') !== 'gauges' && w.id !== 'tab-academy-tracking');
+    widgets.sort((a, b) => rank(a.getAttribute('data-widget')) - rank(b.getAttribute('data-widget')));
+    widgets.forEach(w => container.appendChild(w));
+
+    const academyTracking = container.querySelector('#tab-academy-tracking');
+    if (academyTracking) container.appendChild(academyTracking);
+    if (gaugesPanel) container.insertBefore(gaugesPanel, container.firstChild);
   }
 
   function saveLayoutOrder(layoutOrder, highlightedWidgetId) {

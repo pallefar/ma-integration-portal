@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Admin Control Center</title>
   <meta name="description" content="Manage post-merger integration settings, customize dynamic recommended action modules, compile personalized employee welcome portals, and publish system announcements.">
-  <link rel="stylesheet" href="/css/style.css?v=1783577700">
-  <script src="/js/transitions.js?v=1783577700"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1783710000">
+  <script src="/js/transitions.js?v=1783710000"></script>
 </head>
 <body>
 
@@ -56,9 +56,14 @@
           </div>
           <nav class="admin-rail-nav">
             <div class="admin-rail-group">
+              <span class="admin-rail-label">Workspace</span>
+              <button class="admin-tab-btn active" data-tab="projects"><span class="admin-rail-ic">🏢</span> Projects</button>
+            </div>
+            <div class="admin-rail-group">
               <span class="admin-rail-label">Content</span>
-              <button class="admin-tab-btn active" data-tab="courses"><span class="admin-rail-ic">🎓</span> Courses</button>
+              <button class="admin-tab-btn" data-tab="courses"><span class="admin-rail-ic">🎓</span> Courses</button>
               <button class="admin-tab-btn" data-tab="modules"><span class="admin-rail-ic">🧩</span> Action Modules</button>
+              <button class="admin-tab-btn" data-tab="departments"><span class="admin-rail-ic">🏭</span> Departments</button>
               <button class="admin-tab-btn" data-tab="pages"><span class="admin-rail-ic">📄</span> Pages &amp; Playbook</button>
             </div>
             <div class="admin-rail-group">
@@ -90,16 +95,44 @@
         <div class="admin-content-area">
           <div class="admin-topbar">
             <div class="admin-topbar-heading">
-              <h1 class="admin-topbar-title" id="admin-section-title">Courses</h1>
-              <p class="admin-topbar-sub" id="admin-section-sub">Manage the academy curriculum — courses, modules, lessons &amp; quizzes</p>
+              <h1 class="admin-topbar-title" id="admin-section-title">M&amp;A Projects</h1>
+              <p class="admin-topbar-sub" id="admin-section-sub">Each acquisition is a project at the top of the hierarchy — create, switch, and manage them</p>
             </div>
             <div class="admin-topbar-actions">
               <span class="admin-topbar-badge" id="admin-topbar-mode">DEMO</span>
             </div>
           </div>
 
+          <!-- ===== Workspace: Projects (top of the M&A hierarchy) ===== -->
+          <div class="tab-content tab-content-panel active" id="tab-projects">
+            <div class="card card-glass">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>M&amp;A Projects</h2>
+                <button class="btn btn-primary" id="btn-new-project" style="font-size:0.82rem;">+ New Project</button>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each acquired company is a project at the top of the hierarchy. Create one from an intake survey, then switch the active workspace — the demo project is always available.</p>
+              <div id="projects-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading projects…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Content: Department modules (functional integration tracks) ===== -->
+          <div class="tab-content tab-content-panel" id="tab-departments" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Department Modules</h2>
+                <span style="font-size:0.78rem; color:var(--text-secondary);">Functional integration tracks on the Leader dashboard</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each department reuses the shared <strong>Culture</strong> &amp; <strong>Communication</strong> setup — only its <strong>Systems</strong> &amp; <strong>Trainings</strong> differ. Keep a track locked until its phase begins, or unlock it to make the module interactive.</p>
+              <div id="departments-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading departments…</p>
+              </div>
+            </div>
+          </div>
+
           <!-- ===== Content: Courses (CMS) ===== -->
-          <div class="tab-content tab-content-panel active" id="tab-courses">
+          <div class="tab-content tab-content-panel" id="tab-courses" style="display:none;">
             <div class="card card-glass">
               <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <h2>Course Catalog</h2>
@@ -1073,8 +1106,9 @@
     </footer>
   </div>
 
-  <script src="/js/ted-launcher.js?v=1783577700"></script>
-  <script src="/js/admin.js?v=1783577700"></script>
-  <script src="/js/admin-cms.js?v=1783577700"></script>
+  <script src="/js/ted-launcher.js?v=1783710000"></script>
+  <script src="/js/admin.js?v=1783710000"></script>
+  <script src="/js/page-layout.js?v=1783710000"></script>
+  <script src="/js/admin-cms.js?v=1783710000"></script>
 </body>
 </html>
