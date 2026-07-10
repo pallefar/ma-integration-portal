@@ -35,6 +35,42 @@
   };
 })();
 
+// Playbook slide viewer: any element with data-playbook-slide="N" (or a call to
+// window.openPlaybookSlide(N)) opens the HR M&A Guidebook PDF at that slide in a modal.
+// Slide number == PDF page number (1:1 from the pptx conversion).
+(function () {
+  const PDF = '/playbook/hr-ma-guidebook.pdf';
+  function openPlaybookSlide(n, label) {
+    n = parseInt(n, 10) || 1;
+    const existing = document.getElementById('playbook-modal-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'playbook-modal-overlay';
+    overlay.className = 'playbook-modal-overlay';
+    overlay.innerHTML =
+      '<div class="playbook-modal" role="dialog" aria-modal="true">' +
+        '<div class="playbook-modal-head">' +
+          '<span class="playbook-modal-title">📘 HR M&amp;A Guidebook' + (label ? ' — ' + label : ' — Slide ' + n) + '</span>' +
+          '<div class="playbook-modal-actions">' +
+            '<a href="' + PDF + '#page=' + n + '" target="_blank" rel="noopener" class="playbook-modal-open">Open full deck ↗</a>' +
+            '<button type="button" class="playbook-modal-x" aria-label="Close">✕</button>' +
+          '</div>' +
+        '</div>' +
+        '<iframe class="playbook-modal-frame" src="' + PDF + '#page=' + n + '&view=FitH" title="HR M&amp;A Guidebook slide ' + n + '"></iframe>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('.playbook-modal-x').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
+  }
+  window.openPlaybookSlide = openPlaybookSlide;
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest && e.target.closest('[data-playbook-slide]');
+    if (t) { e.preventDefault(); openPlaybookSlide(t.getAttribute('data-playbook-slide'), t.getAttribute('data-playbook-label')); }
+  });
+})();
+
 // Access Control redirection check
 (function() {
   const path = window.location.pathname;

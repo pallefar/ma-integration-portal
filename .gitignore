@@ -17,3 +17,6 @@ public/uploads/
 # Local dev / verification artifacts
 .playwright-mcp/
 /*.png
+
+# Source deck (converted to public/playbook/*.pdf which IS served/committed)
+HR M&A Guidebook_03.2026.pptx

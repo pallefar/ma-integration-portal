@@ -8109,3 +8109,43 @@ body.cms-inline-on [data-i18n-html]:hover {
 .page-banner--warning .page-banner-title { color: #B25E00; }
 .page-banner--critical { border-left-color: #C0341D; background: rgba(192,52,29,0.08); }
 .page-banner--critical .page-banner-title { color: #9C2A17; }
+
+/* ===== Playbook slide-viewer modal (HR M&A Guidebook) ===== */
+.playbook-modal-overlay {
+  position: fixed; inset: 0; z-index: 12000;
+  background: rgba(15, 30, 38, 0.72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 2rem; backdrop-filter: blur(3px);
+}
+.playbook-modal {
+  background: #fff; border-radius: 14px;
+  width: min(1040px, 96vw); height: min(88vh, 800px);
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.4);
+}
+.playbook-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.85rem 1.1rem; background: var(--te-dark-teal, #244C5A); color: #fff;
+}
+.playbook-modal-title { font-family: var(--font-family-display, inherit); font-weight: 800; font-size: 0.95rem; }
+.playbook-modal-actions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+.playbook-modal-open { color: #fff; font-size: 0.8rem; font-weight: 700; text-decoration: underline; white-space: nowrap; }
+.playbook-modal-x {
+  background: rgba(255,255,255,0.15); color: #fff; border: none; border-radius: 8px;
+  width: 30px; height: 30px; font-size: 1rem; cursor: pointer; line-height: 1;
+}
+.playbook-modal-x:hover { background: rgba(255,255,255,0.3); }
+.playbook-modal-frame { flex: 1; width: 100%; border: 0; background: #f1f5f9; }
+/* Inline "Open in Playbook" trigger link/pill */
+.playbook-slide-link {
+  display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer;
+  color: var(--te-orange, #E98300); font-weight: 700; font-size: 0.8rem;
+  text-decoration: none; border: 1px solid rgba(233,131,0,0.35);
+  padding: 0.2rem 0.65rem; border-radius: 20px; background: rgba(233,131,0,0.07);
+  transition: background 0.15s ease;
+}
+.playbook-slide-link:hover { background: rgba(233,131,0,0.16); }
+@media (max-width: 600px) {
+  .playbook-modal-overlay { padding: 0; }
+  .playbook-modal { width: 100vw; height: 100vh; border-radius: 0; }
+}
