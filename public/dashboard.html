@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Integration Dashboard</title>
   <meta name="description" content="Review organizational assessment metrics, custom AI post-merger integration plans, and Integration Leader coaching resources.">
-  <link rel="stylesheet" href="/css/style.css?v=1783800006">
-  <script src="/js/transitions.js?v=1783800006"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1783900000">
+  <script src="/js/transitions.js?v=1783900000"></script>
 </head>
 <body>
 
@@ -143,6 +143,14 @@
                   <span data-i18n="dashboard.tab_communication">Communications Desk</span>
                 </button>
 
+                <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem; margin-top: 1.25rem;">
+                  <span>🔄</span> <span data-i18n="dashboard.sidebar_group_transformation">TRANSFORMATION</span>
+                </div>
+                <button class="dashboard-nav-btn" data-tab="process-integration">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-9L21 3m0 0l-4.5 4.5M21 3H7.5" /></svg>
+                  <span data-i18n="dashboard.tab_process_integration">Process Integration</span>
+                </button>
+
               </div>
             </div>
           </aside>
@@ -243,6 +251,19 @@
               
               <div id="hr-modules-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
                 <!-- Loaded dynamically -->
+              </div>
+            </div>
+
+            <!-- TRANSFORMATION: Process Integration & Transformation (sending org → receiving org) -->
+            <div id="tab-process-integration" class="card card-glass tab-content tab-content-panel" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <div class="card-header">
+                <h2 data-i18n="dashboard.process_heading">Process Integration &amp; Transformation</h2>
+              </div>
+              <p data-i18n="dashboard.process_intro" style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                How each core business process moves from the acquired company (Sending) to TE Connectivity (Receiving) — the current state, the target state, and the transformation approach for every process in scope.
+              </p>
+              <div id="process-integration-container">
+                <!-- Loaded dynamically from /api/processes -->
               </div>
             </div>
 
@@ -1056,6 +1077,6 @@
     </div>
   </div>
 
-  <script src="/js/dashboard.js?v=1783800006"></script>
+  <script src="/js/dashboard.js?v=1783900000"></script>
 </body>
 </html>

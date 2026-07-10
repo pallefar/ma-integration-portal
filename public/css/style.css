@@ -8149,3 +8149,53 @@ body.cms-inline-on [data-i18n-html]:hover {
   .playbook-modal-overlay { padding: 0; }
   .playbook-modal { width: 100vw; height: 100vh; border-radius: 0; }
 }
+
+/* ===== Process Integration & Transformation (dashboard TRANSFORMATION tab) ===== */
+.proc-flow { display: flex; align-items: stretch; gap: 0.75rem; margin-bottom: 1.5rem; }
+.proc-flow-org { flex: 1; border-radius: 12px; padding: 0.9rem 1rem; border: 1px solid rgba(36,76,90,0.12); }
+.proc-flow-sending { background: rgba(233,131,0,0.06); border-color: rgba(233,131,0,0.25); }
+.proc-flow-receiving { background: rgba(36,76,90,0.06); border-color: rgba(36,76,90,0.22); }
+.proc-flow-label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-dim); }
+.proc-flow-name { font-family: var(--font-family-display); font-size: 1.1rem; font-weight: 800; color: var(--text-primary); margin-top: 0.15rem; }
+.proc-flow-sub { font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.15rem; }
+.proc-flow-arrow { display: flex; align-items: center; color: var(--te-orange); font-size: 1.4rem; font-weight: 800; }
+
+.proc-metrics { display: flex; gap: 0.75rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
+.proc-metric { flex: 1; min-width: 120px; background: rgba(36,76,90,0.04); border: 1px solid rgba(36,76,90,0.1); border-radius: 10px; padding: 0.75rem 1rem; display: flex; flex-direction: column; }
+.proc-metric-num { font-family: var(--font-family-display); font-size: 1.7rem; font-weight: 800; color: var(--te-orange); line-height: 1; }
+.proc-metric-lbl { font-size: 0.74rem; color: var(--text-secondary); margin-top: 0.25rem; }
+
+.proc-domain-h { font-family: var(--font-family-display); font-size: 0.95rem; font-weight: 800; color: var(--te-dark-teal); margin: 1.5rem 0 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+.proc-domain-count { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); background: rgba(36,76,90,0.08); border-radius: 20px; padding: 0.1rem 0.55rem; }
+
+.proc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
+.proc-card { border: 1px solid rgba(36,76,90,0.14); border-radius: 12px; padding: 0.9rem 1rem; cursor: pointer; transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s; background: #ffffff; }
+.proc-card:hover { box-shadow: 0 6px 18px rgba(36,76,90,0.12); transform: translateY(-2px); border-color: rgba(233,131,0,0.4); }
+.proc-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; }
+.proc-card-name { font-family: var(--font-family-display); font-weight: 700; color: var(--text-primary); font-size: 0.95rem; line-height: 1.25; }
+.proc-status { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.3px; padding: 0.18rem 0.55rem; border-radius: 20px; white-space: nowrap; }
+.proc-card-move { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem; flex-wrap: wrap; }
+.proc-move-from, .proc-move-to { background: rgba(36,76,90,0.06); border-radius: 6px; padding: 0.12rem 0.4rem; }
+.proc-move-arrow { color: var(--te-orange); font-weight: 800; }
+.proc-card-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.proc-tag { font-size: 0.68rem; font-weight: 700; color: var(--text-secondary); border: 1px solid rgba(36,76,90,0.2); border-radius: 20px; padding: 0.12rem 0.5rem; }
+.proc-tag-phase { color: var(--te-dark-teal); border-color: rgba(36,76,90,0.3); }
+
+/* Process detail modal — side-by-side sending vs receiving */
+.proc-modal-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+.proc-sides { display: flex; align-items: stretch; gap: 0.6rem; margin-bottom: 0.5rem; }
+.proc-side { flex: 1; border-radius: 10px; padding: 0.85rem; border: 1px solid rgba(36,76,90,0.14); }
+.proc-side-sending { background: rgba(233,131,0,0.05); border-color: rgba(233,131,0,0.22); }
+.proc-side-receiving { background: rgba(36,76,90,0.05); border-color: rgba(36,76,90,0.2); }
+.proc-side-org { font-family: var(--font-family-display); font-weight: 800; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 0.6rem; }
+.proc-side-field { font-size: 0.82rem; color: var(--text-primary); margin-bottom: 0.55rem; }
+.proc-side-k { display: block; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-dim); margin-bottom: 0.1rem; }
+.proc-sides-arrow { display: flex; align-items: center; color: var(--te-orange); font-size: 1.3rem; font-weight: 800; }
+
+@media (max-width: 768px) {
+  .proc-flow { flex-direction: column; }
+  .proc-flow-arrow { justify-content: center; transform: rotate(90deg); }
+  .proc-sides { flex-direction: column; }
+  .proc-sides-arrow { justify-content: center; transform: rotate(90deg); }
+  .proc-grid { grid-template-columns: 1fr; }
+}

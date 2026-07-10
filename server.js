@@ -115,6 +115,9 @@ function readDb() {
         systems: [ { title: 'ERP Migration', desc: 'Cut over to the TE accounting ERP.' }, { title: 'Chart of Accounts', desc: 'Map the legacy CoA to the TE standard.' } ],
         trainings: [ { title: 'Financial Controls', desc: 'SOX and TE reporting compliance.' }, { title: 'Close Process', desc: 'Monthly close and consolidation.' } ] }
     ];
+    // Per-project process catalog (Sending org → Receiving org). Lives in the cms
+    // bundle so it swaps on project switch, exactly like `departments`.
+    parsed.processCatalog = parsed.processCatalog || [];
     _dbCache = parsed;
     _dbMtime = mtime;
     return parsed;
@@ -584,7 +587,8 @@ function snapshotCms(db) {
     pages: clone(db.pages || []),
     menus: clone(db.menus || { sidebar: [], groups: [], landingCards: [] }),
     banners: clone(db.banners || []),
-    departments: clone(db.departments || [])
+    departments: clone(db.departments || []),
+    processCatalog: clone(db.processCatalog || [])
   };
 }
 function applyCmsToTopLevel(db, cms) {
@@ -594,6 +598,7 @@ function applyCmsToTopLevel(db, cms) {
   db.menus = cms.menus || { sidebar: [], groups: [], landingCards: [] };
   db.banners = cms.banners || [];
   db.departments = cms.departments || [];
+  db.processCatalog = cms.processCatalog || [];
 }
 // Save the live CMS back to whichever project is active (demo included) before switching.
 function stashActiveProjectCms(db) {
@@ -716,6 +721,47 @@ app.post('/api/departments', (req, res) => {
 app.delete('/api/departments/:id', (req, res) => {
   const db = readDb();
   db.departments = (db.departments || []).filter(x => x.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// =====================================================================
+// Process Integration & Transformation — the per-project Process Catalog.
+// Models how each business process moves from the Sending org (the acquired
+// company) to the Receiving org (TE), where it is adopted/harmonized/retired.
+// Project-scoped via the cms bundle, so it swaps on project switch just
+// like `departments`. Writes are behind the ADMIN_TOKEN gate + atomic writeDb.
+// =====================================================================
+app.get('/api/processes', (req, res) => {
+  res.json(readDb().processCatalog || []);
+});
+
+app.post('/api/processes', (req, res) => {
+  const db = readDb();
+  db.processCatalog = db.processCatalog || [];
+  const p = req.body || {};
+  const nameOk = p.name && String(p.name).trim();
+  let stored;
+  if (p.id) {
+    const i = db.processCatalog.findIndex(x => x.id === p.id);
+    // Existing process: merge (allows partial updates like a status change).
+    if (i > -1) { db.processCatalog[i] = { ...db.processCatalog[i], ...p }; stored = db.processCatalog[i]; }
+    else {
+      if (!nameOk) return res.status(400).json({ error: 'Process name is required.' });
+      db.processCatalog.push(p); stored = p;
+    }
+  } else {
+    if (!nameOk) return res.status(400).json({ error: 'Process name is required.' });
+    stored = { domain: '', approach: 'Harmonize', status: 'not-started', risk: 'Medium', phase: '', notes: '', sending: {}, receiving: {}, ...p, id: 'proc_' + Date.now() };
+    db.processCatalog.push(stored);
+  }
+  writeDb(db);
+  res.json({ success: true, process: stored });
+});
+
+app.delete('/api/processes/:id', (req, res) => {
+  const db = readDb();
+  db.processCatalog = (db.processCatalog || []).filter(x => x.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
 });

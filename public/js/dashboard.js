@@ -98,6 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Render the functional department tracks (Sales/Product/Finance + admin-created)
       renderFunctionalTracks(assessment.scores);
+
+      // Render the Process Integration & Transformation catalog (sending → receiving)
+      renderProcessCatalog();
     })
     .catch(err => {
       console.error("Error loading latest assessment:", err);
@@ -199,6 +202,139 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `<ul style="margin:0.35rem 0 0;padding-left:1.1rem;">${focus.map(f => `<li style="margin-bottom:0.25rem;"><strong style="color:#B45309;">${escapeHtml(f.label)}</strong> — score ${f.score.toFixed(1)}/5 needs attention</li>`).join('')}</ul>`
             : '<p style="color:#059669;font-size:0.85rem;margin:0.35rem 0 0;">✓ No critical focus areas — all assessment dimensions are on track.</p>'}
         </div>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    box.querySelector('.cms-modal-x').addEventListener('click', close);
+  }
+
+  // ===== Process Integration & Transformation (Sending org → Receiving org) =====
+  // The per-project Process Catalog: how each business process moves from the
+  // acquired company (sending) to TE (receiving), with a transformation approach.
+  const PROC_STATUS = {
+    'not-started': { label: 'Not started', color: '#64748B', bg: 'rgba(100,116,139,0.12)' },
+    'in-progress': { label: 'In progress', color: '#2563EB', bg: 'rgba(37,99,235,0.12)' },
+    'harmonized':  { label: 'Harmonized',  color: '#0891B2', bg: 'rgba(8,145,178,0.12)' },
+    'go-live':     { label: 'Go-live',     color: '#E98300', bg: 'rgba(233,131,0,0.14)' },
+    'complete':    { label: 'Complete',    color: '#059669', bg: 'rgba(16,185,129,0.14)' }
+  };
+  const PROC_RISK = { Low: '#059669', Medium: '#D97706', High: '#DC2626' };
+  function procStatusMeta(s) { return PROC_STATUS[s] || { label: s || '—', color: '#64748B', bg: 'rgba(100,116,139,0.12)' }; }
+
+  function renderProcessCatalog() {
+    const container = document.getElementById('process-integration-container');
+    if (!container) return;
+    Promise.all([
+      fetch('/api/processes').then(r => r.json()).catch(() => []),
+      fetch('/api/settings').then(r => r.json()).catch(() => ({}))
+    ]).then(([procs, settings]) => {
+      procs = Array.isArray(procs) ? procs : [];
+      const sendingOrg = (settings && settings.targetCompany) ? settings.targetCompany : 'Acquired Company';
+      const receivingOrg = 'TE Connectivity';
+
+      const total = procs.length;
+      const done = procs.filter(p => p.status === 'complete').length;
+      const active = procs.filter(p => p.status === 'in-progress' || p.status === 'go-live' || p.status === 'harmonized').length;
+
+      // Group by domain so related processes cluster together.
+      const byDomain = {};
+      procs.forEach(p => { const d = p.domain || 'Other'; (byDomain[d] = byDomain[d] || []).push(p); });
+
+      let html = `
+        <div class="proc-flow">
+          <div class="proc-flow-org proc-flow-sending">
+            <div class="proc-flow-label">Sending organisation</div>
+            <div class="proc-flow-name">${escapeHtml(sendingOrg)}</div>
+            <div class="proc-flow-sub">Acquired — current-state processes</div>
+          </div>
+          <div class="proc-flow-arrow">▶</div>
+          <div class="proc-flow-org proc-flow-receiving">
+            <div class="proc-flow-label">Receiving organisation</div>
+            <div class="proc-flow-name">${escapeHtml(receivingOrg)}</div>
+            <div class="proc-flow-sub">Target-state processes</div>
+          </div>
+        </div>
+        <div class="proc-metrics">
+          <div class="proc-metric"><span class="proc-metric-num">${total}</span><span class="proc-metric-lbl">Processes in scope</span></div>
+          <div class="proc-metric"><span class="proc-metric-num">${active}</span><span class="proc-metric-lbl">In transformation</span></div>
+          <div class="proc-metric"><span class="proc-metric-num">${done}</span><span class="proc-metric-lbl">Completed</span></div>
+        </div>`;
+
+      if (!total) {
+        html += '<p style="color:var(--text-dim);padding:1.5rem 0;">No processes defined yet — add them in Admin ▸ Processes.</p>';
+        container.innerHTML = html;
+        return;
+      }
+
+      Object.keys(byDomain).sort().forEach(domain => {
+        html += `<h3 class="proc-domain-h">${escapeHtml(domain)} <span class="proc-domain-count">${byDomain[domain].length}</span></h3><div class="proc-grid">`;
+        byDomain[domain].forEach(p => {
+          const st = procStatusMeta(p.status);
+          const risk = PROC_RISK[p.risk] || '#64748B';
+          html += `
+            <div class="proc-card" data-proc-id="${escapeHtml(p.id)}">
+              <div class="proc-card-top">
+                <span class="proc-card-name">${escapeHtml(p.name)}</span>
+                <span class="proc-status" style="color:${st.color};background:${st.bg};">${escapeHtml(st.label)}</span>
+              </div>
+              <div class="proc-card-move">
+                <span class="proc-move-from">${escapeHtml((p.sending && p.sending.system) || '—')}</span>
+                <span class="proc-move-arrow">→</span>
+                <span class="proc-move-to">${escapeHtml((p.receiving && p.receiving.system) || '—')}</span>
+              </div>
+              <div class="proc-card-tags">
+                <span class="proc-tag">${escapeHtml(p.approach || '—')}</span>
+                ${p.phase ? `<span class="proc-tag proc-tag-phase">${escapeHtml(p.phase)}</span>` : ''}
+                <span class="proc-tag" style="color:${risk};border-color:${risk};">${escapeHtml(p.risk || '—')} risk</span>
+              </div>
+            </div>`;
+        });
+        html += '</div>';
+      });
+      container.innerHTML = html;
+
+      container.querySelectorAll('.proc-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const p = procs.find(x => x.id === card.getAttribute('data-proc-id'));
+          if (p) openProcessModal(p, sendingOrg, receivingOrg);
+        });
+      });
+      if (window.applyPortalI18n) window.applyPortalI18n();
+    }).catch(err => console.error('Error loading process catalog:', err));
+  }
+
+  function openProcessModal(p, sendingOrg, receivingOrg) {
+    const st = procStatusMeta(p.status);
+    const side = (org, o, cls) => `
+      <div class="proc-side ${cls}">
+        <div class="proc-side-org">${escapeHtml(org)}</div>
+        <div class="proc-side-field"><span class="proc-side-k">State</span>${escapeHtml((o && o.state) || '—')}</div>
+        <div class="proc-side-field"><span class="proc-side-k">System</span>${escapeHtml((o && o.system) || '—')}</div>
+        <div class="proc-side-field"><span class="proc-side-k">Owner</span>${escapeHtml((o && o.owner) || '—')}</div>
+      </div>`;
+    const overlay = document.createElement('div');
+    overlay.className = 'cms-modal-overlay';
+    const box = document.createElement('div');
+    box.className = 'cms-modal';
+    box.style.maxWidth = '680px';
+    box.innerHTML = `
+      <div class="cms-modal-head"><h3>${escapeHtml(p.name)} — Process Transformation</h3><button type="button" class="cms-modal-x" aria-label="Close">✕</button></div>
+      <div class="cms-modal-body">
+        <div class="proc-modal-tags">
+          <span class="proc-status" style="color:${st.color};background:${st.bg};">${escapeHtml(st.label)}</span>
+          <span class="proc-tag">${escapeHtml(p.domain || '—')}</span>
+          <span class="proc-tag">${escapeHtml(p.approach || '—')}</span>
+          ${p.phase ? `<span class="proc-tag proc-tag-phase">${escapeHtml(p.phase)}</span>` : ''}
+          <span class="proc-tag">${escapeHtml(p.risk || '—')} risk</span>
+        </div>
+        <div class="proc-sides">
+          ${side(sendingOrg, p.sending, 'proc-side-sending')}
+          <div class="proc-sides-arrow">▶</div>
+          ${side(receivingOrg, p.receiving, 'proc-side-receiving')}
+        </div>
+        ${p.notes ? `<div class="dept-section"><h4 class="dept-section-h">📝 Transformation notes</h4><p style="font-size:0.86rem;color:var(--text-secondary);margin:0.35rem 0 0;">${escapeHtml(p.notes)}</p></div>` : ''}
       </div>`;
     overlay.appendChild(box);
     document.body.appendChild(overlay);

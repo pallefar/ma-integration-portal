@@ -908,6 +908,102 @@
     });
   }
 
+  // ---------- Process catalog (integration & transformation) ----------
+  let processCatalog = [];
+
+  function loadProcesses() {
+    const wrap = document.getElementById('processes-admin-list');
+    if (!wrap) return;
+    fetch('/api/processes').then(r => r.json()).then(list => {
+      processCatalog = Array.isArray(list) ? list : [];
+      renderProcesses();
+    }).catch(() => { wrap.innerHTML = '<p style="text-align:center;color:#B91C1C;padding:1.5rem;">Failed to load processes.</p>'; });
+  }
+
+  function saveProcess(p) {
+    return fetch('/api/processes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).then(r => r.json());
+  }
+
+  function renderProcesses() {
+    const wrap = document.getElementById('processes-admin-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!processCatalog.length) {
+      wrap.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:1rem;">No processes yet.</p>';
+    }
+    processCatalog.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'cms-row';
+      const from = (p.sending && p.sending.system) || '—', to = (p.receiving && p.receiving.system) || '—';
+      row.innerHTML = `<div class="cms-row-main">
+          <span class="cms-row-title">${esc(p.name)}${p.domain ? ' <span style="color:var(--text-dim);font-size:0.72rem;font-weight:700;">' + esc(p.domain) + '</span>' : ''}</span>
+          <span class="cms-row-sub">${esc(from)} → ${esc(to)}${p.approach ? ' · ' + esc(p.approach) : ''}${p.status ? ' · ' + esc(p.status) : ''}${p.risk ? ' · ' + esc(p.risk) + ' risk' : ''}</span></div>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          <button type="button" class="cms-mini" data-edit>Edit</button>
+          <button type="button" class="cms-mini danger" data-del>✕</button>
+        </div>`;
+      row.querySelector('[data-edit]').addEventListener('click', () => editProcess(p));
+      row.querySelector('[data-del]').addEventListener('click', () => {
+        if (!confirm('Delete "' + p.name + '"?')) return;
+        fetch('/api/processes/' + p.id, { method: 'DELETE' }).then(r => r.json()).then(() => { toast('Process deleted.'); loadProcesses(); });
+      });
+      wrap.appendChild(row);
+    });
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'btn btn-secondary'; add.style.cssText = 'align-self:flex-start;margin-top:0.5rem;';
+    add.textContent = '+ New process';
+    add.addEventListener('click', () => editProcess(null));
+    wrap.appendChild(add);
+  }
+
+  function editProcess(p) {
+    const isNew = !p;
+    p = p || { name: '', domain: '', approach: 'Harmonize', status: 'not-started', risk: 'Medium', phase: '', notes: '', sending: {}, receiving: {} };
+    const s = p.sending || {}, r = p.receiving || {};
+    const opt = (val, cur) => `<option value="${esc(val)}"${val === cur ? ' selected' : ''}>${esc(val)}</option>`;
+    const form = document.createElement('div');
+    form.innerHTML = `
+      <div class="cms-inline-row">
+        <div class="form-group"><label class="form-label">Process name *</label><input type="text" class="form-control" id="pr-name" value="${esc(p.name)}"></div>
+        <div class="form-group" style="flex:0 0 190px;"><label class="form-label">Domain</label><input type="text" class="form-control" id="pr-domain" value="${esc(p.domain)}" placeholder="e.g. Finance"></div>
+      </div>
+      <div class="cms-inline-row">
+        <div class="form-group"><label class="form-label">Approach</label><select class="form-control form-select" id="pr-approach">${['Adopt TE', 'Harmonize', 'Retain', 'Retire', 'Build-new'].map(v => opt(v, p.approach)).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-control form-select" id="pr-status">${['not-started', 'in-progress', 'harmonized', 'go-live', 'complete'].map(v => opt(v, p.status)).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Risk</label><select class="form-control form-select" id="pr-risk">${['Low', 'Medium', 'High'].map(v => opt(v, p.risk)).join('')}</select></div>
+        <div class="form-group" style="flex:0 0 120px;"><label class="form-label">Phase</label><input type="text" class="form-control" id="pr-phase" value="${esc(p.phase)}" placeholder="Phase 2"></div>
+      </div>
+      <div class="cms-inline-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" style="color:var(--te-orange);font-weight:800;">▶ Sending (acquired)</label>
+          <input type="text" class="form-control" id="pr-s-state" value="${esc(s.state || '')}" placeholder="Current state" style="margin-bottom:0.4rem;">
+          <input type="text" class="form-control" id="pr-s-system" value="${esc(s.system || '')}" placeholder="System" style="margin-bottom:0.4rem;">
+          <input type="text" class="form-control" id="pr-s-owner" value="${esc(s.owner || '')}" placeholder="Owner">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" style="color:var(--te-dark-teal);font-weight:800;">▶ Receiving (TE)</label>
+          <input type="text" class="form-control" id="pr-r-state" value="${esc(r.state || '')}" placeholder="Target state" style="margin-bottom:0.4rem;">
+          <input type="text" class="form-control" id="pr-r-system" value="${esc(r.system || '')}" placeholder="System" style="margin-bottom:0.4rem;">
+          <input type="text" class="form-control" id="pr-r-owner" value="${esc(r.owner || '')}" placeholder="Owner">
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Transformation notes</label><textarea class="form-control" id="pr-notes" rows="2">${esc(p.notes || '')}</textarea></div>`;
+    modal(isNew ? 'New process' : 'Edit process', form, async () => {
+      const name = form.querySelector('#pr-name').value.trim();
+      if (!name) { toast('Process name is required.', true); throw new Error('name required'); }
+      const val = (id) => form.querySelector(id).value.trim();
+      const payload = {
+        id: p.id, name, domain: val('#pr-domain'),
+        approach: val('#pr-approach'), status: val('#pr-status'), risk: val('#pr-risk'), phase: val('#pr-phase'),
+        notes: val('#pr-notes'),
+        sending: { state: val('#pr-s-state'), system: val('#pr-s-system'), owner: val('#pr-s-owner') },
+        receiving: { state: val('#pr-r-state'), system: val('#pr-r-system'), owner: val('#pr-r-owner') }
+      };
+      if (isNew) delete payload.id;
+      await saveProcess(payload); toast('Process saved.'); loadProcesses();
+    });
+  }
+
   // ---------- Projects (top-of-hierarchy M&A workspaces) ----------
   let projects = [];
   let activeProjectId = 'proj_demo';
@@ -1000,6 +1096,7 @@
     const bnp = document.getElementById('btn-new-project');
     if (bnp) bnp.addEventListener('click', newProjectWizard);
     loadDepartments();
+    loadProcesses();
     render();
     renderPages();
     loadMenus();
@@ -1007,6 +1104,7 @@
   });
   window.reloadProjectsCms = loadProjects;
   window.reloadDepartmentsCms = loadDepartments;
+  window.reloadProcessesCms = loadProcesses;
   window.reloadCoursesCms = render;
   window.reloadMenusCms = loadMenus;
   window.reloadBannersCms = loadBanners;

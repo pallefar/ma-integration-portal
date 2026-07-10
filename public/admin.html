@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Admin Control Center</title>
   <meta name="description" content="Manage post-merger integration settings, customize dynamic recommended action modules, compile personalized employee welcome portals, and publish system announcements.">
-  <link rel="stylesheet" href="/css/style.css?v=1783800006">
-  <script src="/js/transitions.js?v=1783800006"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1783900000">
+  <script src="/js/transitions.js?v=1783900000"></script>
 </head>
 <body>
 
@@ -64,6 +64,7 @@
               <button class="admin-tab-btn" data-tab="courses"><span class="admin-rail-ic">🎓</span> Courses</button>
               <button class="admin-tab-btn" data-tab="modules"><span class="admin-rail-ic">🧩</span> Action Modules</button>
               <button class="admin-tab-btn" data-tab="departments"><span class="admin-rail-ic">🏭</span> Departments</button>
+              <button class="admin-tab-btn" data-tab="processes"><span class="admin-rail-ic">🔄</span> Processes</button>
               <button class="admin-tab-btn" data-tab="pages"><span class="admin-rail-ic">📄</span> Pages &amp; Playbook</button>
             </div>
             <div class="admin-rail-group">
@@ -127,6 +128,20 @@
               <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each department reuses the shared <strong>Culture</strong> &amp; <strong>Communication</strong> setup — only its <strong>Systems</strong> &amp; <strong>Trainings</strong> differ. Keep a track locked until its phase begins, or unlock it to make the module interactive.</p>
               <div id="departments-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
                 <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading departments…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Content: Process Integration & Transformation catalog ===== -->
+          <div class="tab-content tab-content-panel" id="tab-processes" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Process Catalog</h2>
+                <span style="font-size:0.78rem; color:var(--text-secondary);">Sending org → Receiving org — shown on the Leader dashboard</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each process moves from the acquired company (<strong>Sending</strong>) to TE (<strong>Receiving</strong>) with a transformation <strong>approach</strong> and <strong>status</strong>. This catalog is scoped to the active project.</p>
+              <div id="processes-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading processes…</p>
               </div>
             </div>
           </div>
@@ -1106,9 +1121,9 @@
     </footer>
   </div>
 
-  <script src="/js/ted-launcher.js?v=1783800006"></script>
-  <script src="/js/admin.js?v=1783800006"></script>
-  <script src="/js/page-layout.js?v=1783800006"></script>
-  <script src="/js/admin-cms.js?v=1783800006"></script>
+  <script src="/js/ted-launcher.js?v=1783900000"></script>
+  <script src="/js/admin.js?v=1783900000"></script>
+  <script src="/js/page-layout.js?v=1783900000"></script>
+  <script src="/js/admin-cms.js?v=1783900000"></script>
 </body>
 </html>

@@ -4927,6 +4927,208 @@
               }
             ]
           }
+        ],
+        "processCatalog": [
+          {
+            "id": "proc_o2c",
+            "name": "Order-to-Cash",
+            "domain": "Commercial",
+            "sending": {
+              "state": "Manual quoting and order entry in a legacy on-prem ERP; approvals by email.",
+              "system": "Legacy ERP (Sage)",
+              "owner": "NextGen Sales Operations"
+            },
+            "receiving": {
+              "state": "Automated CPQ, credit checks and billing on the TE commercial stack.",
+              "system": "TE Salesforce CPQ",
+              "owner": "TE Commercial Operations"
+            },
+            "approach": "Adopt TE",
+            "status": "in-progress",
+            "risk": "Medium",
+            "phase": "Phase 2",
+            "notes": "Cut over customer accounts in two waves; run parallel billing for one cycle."
+          },
+          {
+            "id": "proc_p2p",
+            "name": "Procure-to-Pay",
+            "domain": "Supply Chain",
+            "sending": {
+              "state": "Spreadsheet-driven purchase orders with no 3-way match.",
+              "system": "Legacy ERP (Sage)",
+              "owner": "NextGen Procurement"
+            },
+            "receiving": {
+              "state": "Catalog-based requisitions with automated 3-way match.",
+              "system": "TE SAP Ariba",
+              "owner": "TE Global Procurement"
+            },
+            "approach": "Adopt TE",
+            "status": "not-started",
+            "risk": "High",
+            "phase": "Phase 3",
+            "notes": "Depends on vendor-master consolidation and the finance ERP migration."
+          },
+          {
+            "id": "proc_r2r",
+            "name": "Record-to-Report",
+            "domain": "Finance",
+            "sending": {
+              "state": "Local-GAAP close in 10 days with manual consolidation.",
+              "system": "Legacy ERP + Excel",
+              "owner": "NextGen Finance"
+            },
+            "receiving": {
+              "state": "IFRS / TE close in 5 days with automated consolidation.",
+              "system": "TE SAP S/4HANA",
+              "owner": "TE Corporate Controllership"
+            },
+            "approach": "Harmonize",
+            "status": "in-progress",
+            "risk": "High",
+            "phase": "Phase 3",
+            "notes": "Map the legacy chart of accounts to the TE standard; onboard SOX controls."
+          },
+          {
+            "id": "proc_h2r",
+            "name": "Hire-to-Retire",
+            "domain": "HR",
+            "sending": {
+              "state": "Paper onboarding on a standalone HRIS.",
+              "system": "BambooHR",
+              "owner": "NextGen People Ops"
+            },
+            "receiving": {
+              "state": "Digital onboarding integrated with payroll and access.",
+              "system": "TE Workday",
+              "owner": "TE HR Shared Services"
+            },
+            "approach": "Adopt TE",
+            "status": "harmonized",
+            "risk": "Low",
+            "phase": "Phase 1",
+            "notes": "Employee records migrated; badges and org tree aligned."
+          },
+          {
+            "id": "proc_payroll",
+            "name": "Payroll",
+            "domain": "HR",
+            "sending": {
+              "state": "Outsourced monthly payroll bureau.",
+              "system": "External bureau",
+              "owner": "NextGen People Ops"
+            },
+            "receiving": {
+              "state": "Regional payroll runs on the TE platform.",
+              "system": "TE Workday / ADP",
+              "owner": "TE Payroll"
+            },
+            "approach": "Harmonize",
+            "status": "in-progress",
+            "risk": "Medium",
+            "phase": "Phase 2",
+            "notes": "Preserve local statutory rules through the transition."
+          },
+          {
+            "id": "proc_plan",
+            "name": "Demand & Supply Planning",
+            "domain": "Supply Chain",
+            "sending": {
+              "state": "Reactive planning maintained in spreadsheets.",
+              "system": "Excel",
+              "owner": "NextGen Operations"
+            },
+            "receiving": {
+              "state": "Statistical forecasting on a formal S&OP cadence.",
+              "system": "TE Kinaxis",
+              "owner": "TE Supply Chain Planning"
+            },
+            "approach": "Build-new",
+            "status": "not-started",
+            "risk": "Medium",
+            "phase": "Phase 3",
+            "notes": "Stand up a joint S&OP once part masters are unified."
+          },
+          {
+            "id": "proc_plm",
+            "name": "Product Lifecycle (PLM)",
+            "domain": "Engineering",
+            "sending": {
+              "state": "Local PDM with siloed CAD vaults.",
+              "system": "SolidWorks PDM",
+              "owner": "NextGen Engineering"
+            },
+            "receiving": {
+              "state": "Enterprise PLM with controlled BOM and change management.",
+              "system": "TE Windchill",
+              "owner": "TE Product Engineering"
+            },
+            "approach": "Harmonize",
+            "status": "in-progress",
+            "risk": "High",
+            "phase": "Phase 2",
+            "notes": "Migrate active part numbers first; archive legacy revisions."
+          },
+          {
+            "id": "proc_qms",
+            "name": "Quality Management (NCR/CAPA)",
+            "domain": "Quality",
+            "sending": {
+              "state": "Paper NCRs and manual CAPA tracking.",
+              "system": "Paper / Excel",
+              "owner": "NextGen Quality"
+            },
+            "receiving": {
+              "state": "Closed-loop QMS with electronic NCR / CAPA.",
+              "system": "TE eQMS",
+              "owner": "TE Quality"
+            },
+            "approach": "Adopt TE",
+            "status": "go-live",
+            "risk": "Medium",
+            "phase": "Phase 2",
+            "notes": "IATF / ISO scope re-certification scheduled post cut-over."
+          },
+          {
+            "id": "proc_iam",
+            "name": "IT Access & Identity",
+            "domain": "IT",
+            "sending": {
+              "state": "Local Active Directory with manual provisioning.",
+              "system": "On-prem AD",
+              "owner": "NextGen IT"
+            },
+            "receiving": {
+              "state": "Single sign-on with role-based provisioning.",
+              "system": "TE Azure AD / Okta",
+              "owner": "TE IT Security"
+            },
+            "approach": "Adopt TE",
+            "status": "complete",
+            "risk": "Low",
+            "phase": "Phase 1",
+            "notes": "All users migrated to TE SSO; legacy AD decommissioned."
+          },
+          {
+            "id": "proc_mdm",
+            "name": "Customer Master Data",
+            "domain": "Commercial",
+            "sending": {
+              "state": "Duplicated customer records across disconnected tools.",
+              "system": "Legacy ERP + CRM",
+              "owner": "NextGen Sales Ops"
+            },
+            "receiving": {
+              "state": "Governed customer master with de-duplication rules.",
+              "system": "TE MDM",
+              "owner": "TE Data Governance"
+            },
+            "approach": "Harmonize",
+            "status": "in-progress",
+            "risk": "Medium",
+            "phase": "Phase 2",
+            "notes": "De-duplicate and enrich before the Order-to-Cash cut-over."
+          }
         ]
       }
     }
@@ -5016,6 +5218,208 @@
           "desc": "Monthly close and consolidation."
         }
       ]
+    }
+  ],
+  "processCatalog": [
+    {
+      "id": "proc_o2c",
+      "name": "Order-to-Cash",
+      "domain": "Commercial",
+      "sending": {
+        "state": "Manual quoting and order entry in a legacy on-prem ERP; approvals by email.",
+        "system": "Legacy ERP (Sage)",
+        "owner": "NextGen Sales Operations"
+      },
+      "receiving": {
+        "state": "Automated CPQ, credit checks and billing on the TE commercial stack.",
+        "system": "TE Salesforce CPQ",
+        "owner": "TE Commercial Operations"
+      },
+      "approach": "Adopt TE",
+      "status": "in-progress",
+      "risk": "Medium",
+      "phase": "Phase 2",
+      "notes": "Cut over customer accounts in two waves; run parallel billing for one cycle."
+    },
+    {
+      "id": "proc_p2p",
+      "name": "Procure-to-Pay",
+      "domain": "Supply Chain",
+      "sending": {
+        "state": "Spreadsheet-driven purchase orders with no 3-way match.",
+        "system": "Legacy ERP (Sage)",
+        "owner": "NextGen Procurement"
+      },
+      "receiving": {
+        "state": "Catalog-based requisitions with automated 3-way match.",
+        "system": "TE SAP Ariba",
+        "owner": "TE Global Procurement"
+      },
+      "approach": "Adopt TE",
+      "status": "not-started",
+      "risk": "High",
+      "phase": "Phase 3",
+      "notes": "Depends on vendor-master consolidation and the finance ERP migration."
+    },
+    {
+      "id": "proc_r2r",
+      "name": "Record-to-Report",
+      "domain": "Finance",
+      "sending": {
+        "state": "Local-GAAP close in 10 days with manual consolidation.",
+        "system": "Legacy ERP + Excel",
+        "owner": "NextGen Finance"
+      },
+      "receiving": {
+        "state": "IFRS / TE close in 5 days with automated consolidation.",
+        "system": "TE SAP S/4HANA",
+        "owner": "TE Corporate Controllership"
+      },
+      "approach": "Harmonize",
+      "status": "in-progress",
+      "risk": "High",
+      "phase": "Phase 3",
+      "notes": "Map the legacy chart of accounts to the TE standard; onboard SOX controls."
+    },
+    {
+      "id": "proc_h2r",
+      "name": "Hire-to-Retire",
+      "domain": "HR",
+      "sending": {
+        "state": "Paper onboarding on a standalone HRIS.",
+        "system": "BambooHR",
+        "owner": "NextGen People Ops"
+      },
+      "receiving": {
+        "state": "Digital onboarding integrated with payroll and access.",
+        "system": "TE Workday",
+        "owner": "TE HR Shared Services"
+      },
+      "approach": "Adopt TE",
+      "status": "harmonized",
+      "risk": "Low",
+      "phase": "Phase 1",
+      "notes": "Employee records migrated; badges and org tree aligned."
+    },
+    {
+      "id": "proc_payroll",
+      "name": "Payroll",
+      "domain": "HR",
+      "sending": {
+        "state": "Outsourced monthly payroll bureau.",
+        "system": "External bureau",
+        "owner": "NextGen People Ops"
+      },
+      "receiving": {
+        "state": "Regional payroll runs on the TE platform.",
+        "system": "TE Workday / ADP",
+        "owner": "TE Payroll"
+      },
+      "approach": "Harmonize",
+      "status": "in-progress",
+      "risk": "Medium",
+      "phase": "Phase 2",
+      "notes": "Preserve local statutory rules through the transition."
+    },
+    {
+      "id": "proc_plan",
+      "name": "Demand & Supply Planning",
+      "domain": "Supply Chain",
+      "sending": {
+        "state": "Reactive planning maintained in spreadsheets.",
+        "system": "Excel",
+        "owner": "NextGen Operations"
+      },
+      "receiving": {
+        "state": "Statistical forecasting on a formal S&OP cadence.",
+        "system": "TE Kinaxis",
+        "owner": "TE Supply Chain Planning"
+      },
+      "approach": "Build-new",
+      "status": "not-started",
+      "risk": "Medium",
+      "phase": "Phase 3",
+      "notes": "Stand up a joint S&OP once part masters are unified."
+    },
+    {
+      "id": "proc_plm",
+      "name": "Product Lifecycle (PLM)",
+      "domain": "Engineering",
+      "sending": {
+        "state": "Local PDM with siloed CAD vaults.",
+        "system": "SolidWorks PDM",
+        "owner": "NextGen Engineering"
+      },
+      "receiving": {
+        "state": "Enterprise PLM with controlled BOM and change management.",
+        "system": "TE Windchill",
+        "owner": "TE Product Engineering"
+      },
+      "approach": "Harmonize",
+      "status": "in-progress",
+      "risk": "High",
+      "phase": "Phase 2",
+      "notes": "Migrate active part numbers first; archive legacy revisions."
+    },
+    {
+      "id": "proc_qms",
+      "name": "Quality Management (NCR/CAPA)",
+      "domain": "Quality",
+      "sending": {
+        "state": "Paper NCRs and manual CAPA tracking.",
+        "system": "Paper / Excel",
+        "owner": "NextGen Quality"
+      },
+      "receiving": {
+        "state": "Closed-loop QMS with electronic NCR / CAPA.",
+        "system": "TE eQMS",
+        "owner": "TE Quality"
+      },
+      "approach": "Adopt TE",
+      "status": "go-live",
+      "risk": "Medium",
+      "phase": "Phase 2",
+      "notes": "IATF / ISO scope re-certification scheduled post cut-over."
+    },
+    {
+      "id": "proc_iam",
+      "name": "IT Access & Identity",
+      "domain": "IT",
+      "sending": {
+        "state": "Local Active Directory with manual provisioning.",
+        "system": "On-prem AD",
+        "owner": "NextGen IT"
+      },
+      "receiving": {
+        "state": "Single sign-on with role-based provisioning.",
+        "system": "TE Azure AD / Okta",
+        "owner": "TE IT Security"
+      },
+      "approach": "Adopt TE",
+      "status": "complete",
+      "risk": "Low",
+      "phase": "Phase 1",
+      "notes": "All users migrated to TE SSO; legacy AD decommissioned."
+    },
+    {
+      "id": "proc_mdm",
+      "name": "Customer Master Data",
+      "domain": "Commercial",
+      "sending": {
+        "state": "Duplicated customer records across disconnected tools.",
+        "system": "Legacy ERP + CRM",
+        "owner": "NextGen Sales Ops"
+      },
+      "receiving": {
+        "state": "Governed customer master with de-duplication rules.",
+        "system": "TE MDM",
+        "owner": "TE Data Governance"
+      },
+      "approach": "Harmonize",
+      "status": "in-progress",
+      "risk": "Medium",
+      "phase": "Phase 2",
+      "notes": "De-duplicate and enrich before the Order-to-Cash cut-over."
     }
   ]
 }
