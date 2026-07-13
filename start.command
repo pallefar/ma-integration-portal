@@ -12,8 +12,15 @@ if ! "$NODE_CMD" -v >/dev/null 2>&1; then
   exit 1
 fi
 
+# Install dependencies only if they are not already bundled (the release bundles
+# include them; the lightweight admin "Download ZIP" export omits them).
+if [ ! -d "./node_modules" ]; then
+  echo "First run: installing dependencies (one time)..."
+  npm install --omit=dev
+fi
+
 echo "Starting the TE Connectivity M&A Integration Portal ..."
-echo "Opening http://localhost:3000 — keep this window open; close it to stop the server."
+echo "Opening http://localhost:3000 - keep this window open; close it to stop the server."
 
 # Open the browser a few seconds after the server begins booting.
 ( sleep 3; (command -v open >/dev/null && open "http://localhost:3000") || (command -v xdg-open >/dev/null && xdg-open "http://localhost:3000") ) >/dev/null 2>&1 &

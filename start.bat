@@ -17,6 +17,15 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM Install dependencies only if they are not already bundled (they are, in the
+REM release bundles). The lightweight admin "Download ZIP" export omits them, so
+REM this makes the same launcher work for both.
+if not exist "%~dp0node_modules" (
+  echo.
+  echo   First run: installing dependencies ^(one time^)...
+  call npm install --omit=dev
+)
+
 echo.
 echo   Starting the TE Connectivity M^&A Integration Portal ...
 echo   Opening http://localhost:3000 in your browser.
