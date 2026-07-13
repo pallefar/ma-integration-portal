@@ -20,7 +20,12 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: true,
   setHeaders: (res, filePath) => {
-    if (/\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i.test(filePath)) {
+    if (/\.wasm$/i.test(filePath)) {
+      // Vendored Transformers.js ONNX runtime — needs the application/wasm MIME for
+      // streaming compilation, and is safe to long-cache (versioned by vendor bump).
+      res.setHeader('Content-Type', 'application/wasm');
+      res.setHeader('Cache-Control', 'public, max-age=2592000');
+    } else if (/\.(js|css|png|jpe?g|svg|webp|ico|woff2?)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=2592000');
     } else if (/\.html$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'no-cache');

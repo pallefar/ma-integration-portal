@@ -1,5 +1,5 @@
-# Dependencies
-node_modules/
+# Dependencies — committed so `node server.js` runs with no `npm install`.
+# (node_modules/ intentionally NOT ignored.)
 
 # Large / unrelated artifacts
 ma-portal.zip

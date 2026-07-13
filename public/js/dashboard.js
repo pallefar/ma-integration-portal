@@ -868,13 +868,15 @@ document.addEventListener('DOMContentLoaded', () => {
           // Real Transformers.js CDN loading
           try {
             const modelName = browserModel === 'lamini-78m' ? 'Xenova/LaMini-Flan-T5-78M' : 'Xenova/Qwen1.5-0.5B-Chat';
-            statusLabelEl.textContent = `Importing Transformers.js CDN...`;
-            
-            // Dynamic import of transformers
-            const transformers = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-            
-            // Configure transformers environmental variables for browser execution
+            statusLabelEl.textContent = `Loading Transformers.js (local)...`;
+
+            // Dynamic import of the locally-vendored Transformers.js (no external CDN).
+            const transformers = await import('/vendor/transformers/transformers.min.js');
+
+            // Library + ONNX WASM runtime are served locally; the model weights still
+            // stream from the Hugging Face Hub on first use (then cached in the browser).
             transformers.env.allowLocalModels = false;
+            transformers.env.backends.onnx.wasm.wasmPaths = '/vendor/transformers/';
             
             statusLabelEl.textContent = `Connecting to Hugging Face Hub...`;
             

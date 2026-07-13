@@ -1789,9 +1789,10 @@ document.addEventListener('DOMContentLoaded', () => {
       labelEl.textContent = "Importing client-side Deep Learning library...";
       statusEl.textContent = "Connecting to Hugging Face Hub...";
 
-      import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2')
+      import('/vendor/transformers/transformers.min.js')
         .then(async (transformers) => {
           transformers.env.allowLocalModels = false;
+          transformers.env.backends.onnx.wasm.wasmPaths = '/vendor/transformers/';
           labelEl.textContent = `Downloading AI Brain weights (${model})...`;
           
           try {
