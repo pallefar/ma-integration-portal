@@ -402,6 +402,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Deep-link support for Quick-Nav bookmarks: a hash like #tab-process-integration
+  // opens that dashboard tab; any other #id just scrolls the matching element in.
+  (function activateFromHash() {
+    const raw = (location.hash || '').replace(/^#/, '');
+    if (!raw) return;
+    const go = () => {
+      const btn = document.querySelector(`.dashboard-nav-btn[data-tab="${raw.replace(/^tab-/, '')}"]`);
+      if (btn) { btn.click(); btn.scrollIntoView({ block: 'nearest' }); }
+      else { const el = document.getElementById(raw); if (el) el.scrollIntoView(); }
+    };
+    setTimeout(go, 400);
+  })();
+
   // 4. Render Dynamic HR Modules from database
   function renderActionModules(scores) {
     hrModulesContainer.innerHTML = '<p style="text-align: center; color: var(--text-dim); padding: 1rem;">Scanning database modules...</p>';

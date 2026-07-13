@@ -1192,17 +1192,37 @@ document.addEventListener('DOMContentLoaded', () => {
           ${items.map(renderQuickLink).join('')}
         </div>`;
 
+      // Selecting a destination closes the unified window.
+      const bindQuickClicks = () => {
+        host.querySelectorAll('.quicknav-link').forEach(a => {
+          if (a.dataset.bound) return;
+          a.dataset.bound = '1';
+          a.addEventListener('click', () => document.getElementById('unified-panel')?.classList.remove('open'));
+        });
+      };
+
       // Fill the Navigation tab pane of the unified assistant window.
-      host.innerHTML =
+      const staticHtml =
         renderQuickGroup('Portals', Object.values(portalCatalog)) +
         renderQuickGroup('Resources', allResources) +
         renderQuickGroup('General', generalItems);
+      host.innerHTML = staticHtml;
       host.dataset.filled = '1';
+      bindQuickClicks();
 
-      // Selecting a destination closes the unified window.
-      host.querySelectorAll('.quicknav-link').forEach(a => a.addEventListener('click', () => {
-        document.getElementById('unified-panel')?.classList.remove('open');
-      }));
+      // Admin-authored Quick-Nav bookmarks (page + section) → prepend a Bookmarks group.
+      fetch('/api/menus').then(r => r.json()).then(menus => {
+        const bms = (menus && menus.bookmarks) || [];
+        if (!bms.length) return;
+        const items = bms.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map(b => ({
+          href: (b.page || '') + (b.section ? '#' + b.section : ''),
+          icon: b.icon || '\u{1F516}',
+          title: b.label || b.page || 'Bookmark',
+          match: '__bookmark__'
+        }));
+        host.innerHTML = renderQuickGroup('Bookmarks', items) + staticHtml;
+        bindQuickClicks();
+      }).catch(() => {});
     };
 
     // Menu store overrides: apply admin-authored labels, icons, order, visibility & custom links

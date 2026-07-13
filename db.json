@@ -3970,6 +3970,24 @@
         "order": 5,
         "visible": true
       }
+    ],
+    "bookmarks": [
+      {
+        "id": "bm_process",
+        "icon": "🔄",
+        "label": "Process Integration",
+        "page": "/dashboard.html",
+        "section": "tab-process-integration",
+        "order": 1
+      },
+      {
+        "id": "bm_lessons",
+        "icon": "💡",
+        "label": "Lessons Learned",
+        "page": "/playbook.html",
+        "section": "lessons-learned",
+        "order": 2
+      }
     ]
   },
   "pages": [
@@ -4813,6 +4831,24 @@
               },
               "order": 5,
               "visible": true
+            }
+          ],
+          "bookmarks": [
+            {
+              "id": "bm_process",
+              "icon": "🔄",
+              "label": "Process Integration",
+              "page": "/dashboard.html",
+              "section": "tab-process-integration",
+              "order": 1
+            },
+            {
+              "id": "bm_lessons",
+              "icon": "💡",
+              "label": "Lessons Learned",
+              "page": "/playbook.html",
+              "section": "lessons-learned",
+              "order": 2
             }
           ]
         },

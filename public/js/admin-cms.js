@@ -528,7 +528,7 @@
     const wrap = document.getElementById('menus-admin-list');
     if (!wrap) return;
     fetch('/api/menus').then(r => r.json()).then(m => {
-      menus = { sidebar: (m && m.sidebar) || [], groups: (m && m.groups) || [], landingCards: (m && m.landingCards) || [] };
+      menus = { sidebar: (m && m.sidebar) || [], groups: (m && m.groups) || [], landingCards: (m && m.landingCards) || [], bookmarks: (m && m.bookmarks) || [] };
       renderMenus();
     }).catch(() => { wrap.innerHTML = '<p style="text-align:center;color:#B91C1C;padding:1.5rem;">Failed to load menus.</p>'; });
   }
@@ -571,6 +571,72 @@
       wrap.appendChild(none);
     }
     cards.forEach(card => wrap.appendChild(landingRow(card)));
+
+    // Quick-Nav bookmarks — page + section shortcuts shown in the floating Quick-Nav.
+    wrap.appendChild(sectionHead('Quick-Nav bookmarks', 'Shortcut links (page + section) shown in the floating Quick-Nav assistant.', '1.25rem'));
+    const bms = (menus.bookmarks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    if (!bms.length) {
+      const none = document.createElement('p');
+      none.style.cssText = 'font-size:0.8rem;color:var(--text-dim);'; none.textContent = 'No bookmarks yet.';
+      wrap.appendChild(none);
+    }
+    bms.forEach(bm => wrap.appendChild(bookmarkRow(bm)));
+    const addBm = document.createElement('button');
+    addBm.type = 'button'; addBm.className = 'btn btn-secondary'; addBm.style.cssText = 'align-self:flex-start;margin-top:0.5rem;';
+    addBm.textContent = '+ Add bookmark';
+    addBm.addEventListener('click', () => editBookmark(null));
+    wrap.appendChild(addBm);
+  }
+
+  function bookmarkRow(bm) {
+    const row = document.createElement('div');
+    row.className = 'cms-row';
+    const target = (bm.page || '') + (bm.section ? '#' + bm.section : '');
+    row.innerHTML = `<div class="cms-row-main"><span class="cms-row-title">${esc(bm.icon || '🔖')} ${esc(bm.label || target)}</span>
+        <span class="cms-row-sub">${esc(target || '—')}</span></div>
+      <div style="display:flex;align-items:center;gap:0.4rem;">
+        <button type="button" class="cms-mini" data-edit>Edit</button>
+        <button type="button" class="cms-mini danger" data-del>✕</button>
+      </div>`;
+    row.querySelector('[data-edit]').addEventListener('click', () => editBookmark(bm));
+    row.querySelector('[data-del]').addEventListener('click', () => {
+      if (!confirm('Delete this bookmark?')) return;
+      menus.bookmarks = (menus.bookmarks || []).filter(x => x.id !== bm.id);
+      saveMenus().then(() => { toast('Bookmark deleted.'); renderMenus(); });
+    });
+    return row;
+  }
+
+  function editBookmark(bm) {
+    const isNew = !bm;
+    bm = bm || { id: 'bm_' + Date.now(), icon: '🔖', label: '', page: '/dashboard.html', section: '', order: (menus.bookmarks || []).length + 1 };
+    const PAGES = [
+      ['/', 'Demo Home'], ['/dashboard.html', 'Integration Leader Dashboard'], ['/employee.html', 'Employee Portal'],
+      ['/pmo.html', 'PMO'], ['/capability-hub.html', 'Capability Hub'], ['/playbook.html', 'Playbook'],
+      ['/integration-excellence.html', 'Integration Excellence'], ['/survey.html', 'Survey'],
+      ['/leaders.html', 'Leaders'], ['/supporting.html', 'Supporting'], ['/signage.html', 'Signage']
+    ];
+    const form = document.createElement('div');
+    form.innerHTML = `
+      <div class="cms-inline-row">
+        <div class="form-group" style="flex:0 0 90px;"><label class="form-label">Icon</label><input type="text" class="form-control" id="bm-icon" value="${esc(bm.icon || '')}"></div>
+        <div class="form-group"><label class="form-label">Label *</label><input type="text" class="form-control" id="bm-label" value="${esc(bm.label || '')}" placeholder="e.g. Process Integration"></div>
+      </div>
+      <div class="cms-inline-row">
+        <div class="form-group"><label class="form-label">Page</label><select class="form-control form-select" id="bm-page">${PAGES.map(([v, l]) => `<option value="${v}"${bm.page === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Section (optional)</label><input type="text" class="form-control" id="bm-section" value="${esc(bm.section || '')}" placeholder="e.g. tab-process-integration"></div>
+      </div>
+      <p style="font-size:0.76rem;color:var(--text-secondary);margin:0.25rem 0 0;">Section is an element id / anchor on the target page (no leading #). On the dashboard, use a tab id like <code>tab-process-integration</code> to open that tab directly.</p>`;
+    modal(isNew ? 'New bookmark' : 'Edit bookmark', form, async () => {
+      const labelV = form.querySelector('#bm-label').value.trim();
+      if (!labelV) { toast('Label is required.', true); throw new Error('label required'); }
+      bm.icon = form.querySelector('#bm-icon').value.trim();
+      bm.label = labelV;
+      bm.page = form.querySelector('#bm-page').value;
+      bm.section = form.querySelector('#bm-section').value.trim().replace(/^#/, '');
+      if (isNew) { menus.bookmarks = menus.bookmarks || []; menus.bookmarks.push(bm); }
+      await saveMenus(); toast('Bookmark saved.'); renderMenus();
+    });
   }
 
   function sidebarRow(it, siblings, idx) {

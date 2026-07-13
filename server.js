@@ -89,7 +89,10 @@ function readDb() {
     parsed.media = parsed.media || [];
     parsed.banners = parsed.banners || [];
     parsed.i18n = parsed.i18n || { languages: [{ code: 'en', label: 'English', flag: '🇬🇧', enabled: true }], defaultLang: 'en', strings: { en: {} } };
-    parsed.menus = parsed.menus || { sidebar: [], groups: [], landingCards: [] };
+    parsed.menus = parsed.menus || { sidebar: [], groups: [], landingCards: [], bookmarks: [] };
+    // Quick-Nav bookmarks (admin-authored page+section shortcuts) live inside menus,
+    // so they ride the per-project cms bundle automatically.
+    parsed.menus.bookmarks = parsed.menus.bookmarks || [];
     // Projects = top of the M&A hierarchy. The seeded demo is always project "proj_demo".
     parsed.projects = parsed.projects || [];
     if (!parsed.projects.some(p => p.id === 'proj_demo')) {
@@ -896,6 +899,7 @@ app.post('/api/menus', (req, res) => {
   if (Array.isArray(body.sidebar)) db.menus.sidebar = body.sidebar;
   if (Array.isArray(body.groups)) db.menus.groups = body.groups;
   if (Array.isArray(body.landingCards)) db.menus.landingCards = body.landingCards;
+  if (Array.isArray(body.bookmarks)) db.menus.bookmarks = body.bookmarks;
   writeDb(db);
   res.json({ success: true, menus: db.menus });
 });
