@@ -1070,6 +1070,108 @@
     });
   }
 
+  // ---------- HTML slides (full-screen slide launchers) ----------
+  let slides = [];
+
+  function loadSlides() {
+    const wrap = document.getElementById('slides-admin-list');
+    if (!wrap) return;
+    fetch('/api/slides').then(r => r.json()).then(list => {
+      slides = Array.isArray(list) ? list : [];
+      renderSlides();
+    }).catch(() => { wrap.innerHTML = '<p style="text-align:center;color:#B91C1C;padding:1.5rem;">Failed to load slides.</p>'; });
+  }
+
+  function saveSlide(s) {
+    return fetch('/api/slides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) }).then(r => r.json());
+  }
+
+  function renderSlides() {
+    const wrap = document.getElementById('slides-admin-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!slides.length) {
+      const none = document.createElement('p');
+      none.style.cssText = 'text-align:center;color:var(--text-dim);padding:1rem;'; none.textContent = 'No slides yet.';
+      wrap.appendChild(none);
+    }
+    slides.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'cms-row';
+      row.innerHTML = `<div class="cms-row-main">
+          <span class="cms-row-title">${esc(s.icon || '🖥️')} ${esc(s.label || s.url)}</span>
+          <span class="cms-row-sub">${esc(s.url || '')} · ${esc(s.pages || 'all')}</span></div>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          <button type="button" class="cms-mini" data-open>Preview</button>
+          <button type="button" class="cms-mini" data-edit>Edit</button>
+          <button type="button" class="cms-mini danger" data-del>✕</button>
+        </div>`;
+      row.querySelector('[data-open]').addEventListener('click', () => { if (window.openHtmlSlide) window.openHtmlSlide(s.url, s.label); else window.open(s.url, '_blank'); });
+      row.querySelector('[data-edit]').addEventListener('click', () => editSlide(s));
+      row.querySelector('[data-del]').addEventListener('click', () => {
+        if (!confirm('Delete "' + (s.label || s.url) + '"?')) return;
+        fetch('/api/slides/' + s.id, { method: 'DELETE' }).then(r => r.json()).then(() => { toast('Slide deleted.'); loadSlides(); });
+      });
+      wrap.appendChild(row);
+    });
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'btn btn-secondary'; add.style.cssText = 'align-self:flex-start;margin-top:0.5rem;';
+    add.textContent = '+ New slide';
+    add.addEventListener('click', () => editSlide(null));
+    wrap.appendChild(add);
+  }
+
+  function editSlide(s) {
+    const isNew = !s;
+    s = s || { id: 'slide_' + Date.now(), icon: '🖥️', label: '', url: '', pages: 'all' };
+    const form = document.createElement('div');
+    form.innerHTML = `
+      <div class="cms-inline-row">
+        <div class="form-group" style="flex:0 0 90px;"><label class="form-label">Icon</label><input type="text" class="form-control" id="sl-icon" value="${esc(s.icon || '')}"></div>
+        <div class="form-group"><label class="form-label">Label *</label><input type="text" class="form-control" id="sl-label" value="${esc(s.label || '')}" placeholder="e.g. Kickoff Deck"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Show on pages</label><input type="text" class="form-control" id="sl-pages" value="${esc(s.pages || 'all')}" placeholder="all, or /dashboard.html,/employee.html"></div>
+      <div class="form-group">
+        <label class="form-label">Slide source</label>
+        <div style="display:flex;gap:1rem;margin:0.2rem 0 0.5rem;font-size:0.85rem;">
+          <label style="display:flex;align-items:center;gap:0.3rem;"><input type="radio" name="sl-src" value="link" checked> Paste a link</label>
+          <label style="display:flex;align-items:center;gap:0.3rem;"><input type="radio" name="sl-src" value="upload"> Upload HTML file</label>
+        </div>
+        <input type="text" class="form-control" id="sl-url" value="${esc(s.url || '')}" placeholder="https://… or /slides/deck.html">
+        <input type="file" class="form-control" id="sl-file" accept=".html,.htm,text/html" style="display:none;margin-top:0.4rem;">
+      </div>`;
+    const urlInput = form.querySelector('#sl-url');
+    const fileInput = form.querySelector('#sl-file');
+    form.querySelectorAll('input[name="sl-src"]').forEach(r => r.addEventListener('change', () => {
+      const up = form.querySelector('input[name="sl-src"]:checked').value === 'upload';
+      urlInput.style.display = up ? 'none' : '';
+      fileInput.style.display = up ? '' : 'none';
+    }));
+    modal(isNew ? 'New slide' : 'Edit slide', form, async () => {
+      const label = form.querySelector('#sl-label').value.trim();
+      if (!label) { toast('Label is required.', true); throw new Error('label required'); }
+      const mode = form.querySelector('input[name="sl-src"]:checked').value;
+      let url = urlInput.value.trim();
+      if (mode === 'upload') {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file && !s.url) { toast('Choose an HTML file to upload.', true); throw new Error('file required'); }
+        if (file) {
+          const content = await file.text();
+          const up = await fetch('/api/slides/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: file.name, content }) }).then(r => r.json());
+          if (up.error || !up.url) { toast(up.error || 'Upload failed.', true); throw new Error('upload failed'); }
+          url = up.url;
+        } else { url = s.url; }
+      }
+      if (!url) { toast('A link or uploaded file is required.', true); throw new Error('url required'); }
+      s.icon = form.querySelector('#sl-icon').value.trim();
+      s.label = label;
+      s.pages = form.querySelector('#sl-pages').value.trim() || 'all';
+      s.url = url;
+      if (isNew) delete s.id;
+      await saveSlide(s); toast('Slide saved.'); loadSlides();
+    });
+  }
+
   // ---------- Projects (top-of-hierarchy M&A workspaces) ----------
   let projects = [];
   let activeProjectId = 'proj_demo';
@@ -1163,6 +1265,7 @@
     if (bnp) bnp.addEventListener('click', newProjectWizard);
     loadDepartments();
     loadProcesses();
+    loadSlides();
     render();
     renderPages();
     loadMenus();
@@ -1171,6 +1274,7 @@
   window.reloadProjectsCms = loadProjects;
   window.reloadDepartmentsCms = loadDepartments;
   window.reloadProcessesCms = loadProcesses;
+  window.reloadSlidesCms = loadSlides;
   window.reloadCoursesCms = render;
   window.reloadMenusCms = loadMenus;
   window.reloadBannersCms = loadBanners;

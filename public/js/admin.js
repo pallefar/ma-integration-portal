@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modules: ['Action Modules', 'Score-gated recommendations shown on the Integration Leader dashboard'],
     departments: ['Department Modules', 'Functional integration tracks — shared culture & communication, per-department systems & trainings'],
     processes: ['Process Catalog', 'Process integration & transformation — sending org → receiving org, scoped to the active project'],
+    slides: ['HTML Slides', 'Full-screen HTML slide decks (link or upload) launched from a per-page sidebar icon'],
     pages: ['Pages & Playbook', 'CMS-owned page content and the integration playbook'],
     employees: ['Employees', 'Acquired-employee roster and personalized welcome portals'],
     hrbp: ['Integration Leaders & Alerts', 'Provisioned Integration Leaders and workforce announcements'],

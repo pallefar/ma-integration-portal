@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Admin Control Center</title>
   <meta name="description" content="Manage post-merger integration settings, customize dynamic recommended action modules, compile personalized employee welcome portals, and publish system announcements.">
-  <link rel="stylesheet" href="/css/style.css?v=1784100001">
-  <script src="/js/transitions.js?v=1784100001"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1784100002">
+  <script src="/js/transitions.js?v=1784100002"></script>
 </head>
 <body>
 
@@ -65,6 +65,7 @@
               <button class="admin-tab-btn" data-tab="modules"><span class="admin-rail-ic">🧩</span> Action Modules</button>
               <button class="admin-tab-btn" data-tab="departments"><span class="admin-rail-ic">🏭</span> Departments</button>
               <button class="admin-tab-btn" data-tab="processes"><span class="admin-rail-ic">🔄</span> Processes</button>
+              <button class="admin-tab-btn" data-tab="slides"><span class="admin-rail-ic">🖥️</span> Slides</button>
               <button class="admin-tab-btn" data-tab="pages"><span class="admin-rail-ic">📄</span> Pages &amp; Playbook</button>
             </div>
             <div class="admin-rail-group">
@@ -142,6 +143,20 @@
               <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each process moves from the acquired company (<strong>Sending</strong>) to TE (<strong>Receiving</strong>) with a transformation <strong>approach</strong> and <strong>status</strong>. This catalog is scoped to the active project.</p>
               <div id="processes-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
                 <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading processes…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Content: HTML Slides ===== -->
+          <div class="tab-content tab-content-panel" id="tab-slides" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>HTML Slides</h2>
+                <span style="font-size:0.78rem; color:var(--text-secondary);">Full-screen slide launchers shown in the sidebar</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Add a slide by pasting a <strong>link</strong> or <strong>uploading an HTML file</strong>, then choose which page(s) show its launcher icon. Clicking the icon opens the slide as a full overlay over the app.</p>
+              <div id="slides-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading slides…</p>
               </div>
             </div>
           </div>
@@ -1121,9 +1136,9 @@
     </footer>
   </div>
 
-  <script src="/js/ted-launcher.js?v=1784100001"></script>
-  <script src="/js/admin.js?v=1784100001"></script>
-  <script src="/js/page-layout.js?v=1784100001"></script>
-  <script src="/js/admin-cms.js?v=1784100001"></script>
+  <script src="/js/ted-launcher.js?v=1784100002"></script>
+  <script src="/js/admin.js?v=1784100002"></script>
+  <script src="/js/page-layout.js?v=1784100002"></script>
+  <script src="/js/admin-cms.js?v=1784100002"></script>
 </body>
 </html>

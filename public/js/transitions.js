@@ -69,6 +69,38 @@
     const t = e.target.closest && e.target.closest('[data-playbook-slide]');
     if (t) { e.preventDefault(); openPlaybookSlide(t.getAttribute('data-playbook-slide'), t.getAttribute('data-playbook-label')); }
   });
+
+  // Generic HTML-slide overlay: an admin-provided HTML slide (pasted link or uploaded
+  // file) is shown full-screen over the app; closing (✕ / Esc) returns to the page.
+  function openHtmlSlide(url, label) {
+    if (!url) return;
+    const existing = document.getElementById('html-slide-overlay');
+    if (existing) existing.remove();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const safeUrl = encodeURI(url);
+    const overlay = document.createElement('div');
+    overlay.id = 'html-slide-overlay';
+    overlay.className = 'slide-overlay';
+    overlay.innerHTML =
+      '<div class="slide-overlay-bar">' +
+        '<span class="slide-overlay-title">\u{1F5A5}️ ' + esc(label || 'Slide') + '</span>' +
+        '<div class="slide-overlay-actions">' +
+          '<a href="' + safeUrl + '" target="_blank" rel="noopener" class="slide-overlay-open">Open in new tab ↗</a>' +
+          '<button type="button" class="slide-overlay-x" aria-label="Close">✕ Close</button>' +
+        '</div>' +
+      '</div>' +
+      '<iframe class="slide-overlay-frame" src="' + safeUrl + '" title="' + esc(label || 'Slide') + '"></iframe>';
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    overlay.querySelector('.slide-overlay-x').addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+  }
+  window.openHtmlSlide = openHtmlSlide;
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest && e.target.closest('[data-html-slide]');
+    if (t) { e.preventDefault(); openHtmlSlide(t.getAttribute('data-html-slide'), t.getAttribute('data-html-slide-label')); }
+  });
 })();
 
 // Access Control redirection check
@@ -1291,6 +1323,47 @@ document.addEventListener('DOMContentLoaded', () => {
       }).catch(() => {});
     }
 
+    // Inject a "Slides" sidebar group of admin-authored HTML-slide launchers scoped to
+    // this page. Clicking a launcher opens that slide as a full-screen overlay.
+    function renderSlideLaunchers() {
+      const sb = document.getElementById('demo-sidebar');
+      if (!sb) return;
+      const nav = sb.querySelector('.sidebar-nav');
+      if (!nav || nav.querySelector('.sidebar-group[data-group="slides"]')) return;
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      fetch('/api/slides').then(r => r.json()).then(slides => {
+        const here = window.location.pathname;
+        const forHere = (slides || []).filter(s => {
+          const pg = (s.pages || 'all').trim();
+          if (!pg || pg === 'all' || pg === '*') return true;
+          return pg.split(',').map(x => x.trim()).filter(Boolean).some(p => p === here || here.endsWith(p));
+        });
+        if (!forHere.length) return;
+        const group = document.createElement('div');
+        group.className = 'sidebar-group open';
+        group.setAttribute('data-group', 'slides');
+        group.innerHTML =
+          '<button type="button" class="sidebar-group-btn" title="Slides">' +
+            '<span class="sidebar-link-icon">\u{1F5A5}️</span>' +
+            '<span class="sidebar-link-label">Slides</span>' +
+            '<svg class="sidebar-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
+          '</button>' +
+          '<div class="sidebar-group-items"></div>';
+        const items = group.querySelector('.sidebar-group-items');
+        forHere.forEach(s => {
+          const a = document.createElement('a');
+          a.href = 'javascript:void(0)';
+          a.className = 'sidebar-link';
+          a.title = s.label || 'Slide';
+          a.innerHTML = '<span class="sidebar-link-icon">' + esc(s.icon || '\u{1F5A5}️') + '</span><span class="sidebar-link-label">' + esc(s.label || 'Slide') + '</span>';
+          a.addEventListener('click', () => window.openHtmlSlide(s.url, s.label));
+          items.appendChild(a);
+        });
+        group.querySelector('.sidebar-group-btn').addEventListener('click', () => group.classList.toggle('open'));
+        nav.appendChild(group);
+      }).catch(() => {});
+    }
+
     // Demo Role Visibility: hide portal links & switcher roles disabled from the Admin console
     fetch('/api/settings')
       .then(res => res.json())
@@ -1318,6 +1391,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         // Layer admin-authored menu overrides on top of the role-filtered sidebar
         applyMenuOverrides();
+        // Inject admin-authored HTML-slide launchers for this page
+        renderSlideLaunchers();
         // If the persisted demo role is hidden (and no page URL pins a role), fall back to the first visible role
         const isRolePage = /(admin|pmo|dashboard|supporting|employee)\.html/.test(window.location.pathname);
         const persistedRole = localStorage.getItem('active_demo_role') || 'admin';

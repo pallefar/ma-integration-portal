@@ -5165,6 +5165,15 @@
             "phase": "Phase 2",
             "notes": "De-duplicate and enrich before the Order-to-Cash cut-over."
           }
+        ],
+        "slides": [
+          {
+            "id": "slide_welcome",
+            "icon": "🖥️",
+            "label": "Welcome Deck",
+            "url": "/slides/welcome-slide.html",
+            "pages": "all"
+          }
         ]
       }
     }
@@ -5456,6 +5465,15 @@
       "risk": "Medium",
       "phase": "Phase 2",
       "notes": "De-duplicate and enrich before the Order-to-Cash cut-over."
+    }
+  ],
+  "slides": [
+    {
+      "id": "slide_welcome",
+      "icon": "🖥️",
+      "label": "Welcome Deck",
+      "url": "/slides/welcome-slide.html",
+      "pages": "all"
     }
   ]
 }

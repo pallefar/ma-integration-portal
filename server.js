@@ -126,6 +126,8 @@ function readDb() {
     // Per-project process catalog (Sending org → Receiving org). Lives in the cms
     // bundle so it swaps on project switch, exactly like `departments`.
     parsed.processCatalog = parsed.processCatalog || [];
+    // Admin-authored HTML slide launchers (project-scoped via the cms bundle).
+    parsed.slides = parsed.slides || [];
     _dbCache = parsed;
     _dbMtime = mtime;
     return parsed;
@@ -596,7 +598,8 @@ function snapshotCms(db) {
     menus: clone(db.menus || { sidebar: [], groups: [], landingCards: [] }),
     banners: clone(db.banners || []),
     departments: clone(db.departments || []),
-    processCatalog: clone(db.processCatalog || [])
+    processCatalog: clone(db.processCatalog || []),
+    slides: clone(db.slides || [])
   };
 }
 function applyCmsToTopLevel(db, cms) {
@@ -607,6 +610,7 @@ function applyCmsToTopLevel(db, cms) {
   db.banners = cms.banners || [];
   db.departments = cms.departments || [];
   db.processCatalog = cms.processCatalog || [];
+  db.slides = cms.slides || [];
 }
 // Save the live CMS back to whichever project is active (demo included) before switching.
 function stashActiveProjectCms(db) {
@@ -772,6 +776,59 @@ app.delete('/api/processes/:id', (req, res) => {
   db.processCatalog = (db.processCatalog || []).filter(x => x.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
+});
+
+// =====================================================================
+// HTML Slides — admin-authored full-screen slide decks (pasted link OR an
+// uploaded HTML file), launched from a per-page sidebar icon and shown as a
+// full overlay. Project-scoped via the cms bundle, like departments/processes.
+// =====================================================================
+app.get('/api/slides', (req, res) => {
+  res.json(readDb().slides || []);
+});
+
+app.post('/api/slides', (req, res) => {
+  const db = readDb();
+  db.slides = db.slides || [];
+  const s = req.body || {};
+  if (!s.url || !String(s.url).trim()) return res.status(400).json({ error: 'A slide link (url) is required.' });
+  let stored;
+  if (s.id) {
+    const i = db.slides.findIndex(x => x.id === s.id);
+    if (i > -1) { db.slides[i] = { ...db.slides[i], ...s }; stored = db.slides[i]; }
+    else { db.slides.push(s); stored = s; }
+  } else {
+    stored = { icon: '🖥️', label: 'Slide', pages: 'all', ...s, id: 'slide_' + Date.now() };
+    db.slides.push(stored);
+  }
+  writeDb(db);
+  res.json({ success: true, slide: stored });
+});
+
+app.delete('/api/slides/:id', (req, res) => {
+  const db = readDb();
+  db.slides = (db.slides || []).filter(x => x.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// Upload an HTML slide file (raw HTML string) -> saved under public/uploads/slides/
+// and returned as a servable URL. Behind the same admin-write gate as other writes.
+app.post('/api/slides/upload', (req, res) => {
+  const b = req.body || {};
+  const content = typeof b.content === 'string' ? b.content : '';
+  if (!content.trim()) return res.status(400).json({ error: 'No slide file content received.' });
+  const base = String(b.filename || 'slide.html').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '');
+  const safe = /\.html?$/i.test(base) ? base : base + '.html';
+  const dir = path.join(__dirname, 'public', 'uploads', 'slides');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const fname = Date.now() + '_' + safe;
+    fs.writeFileSync(path.join(dir, fname), content, 'utf8');
+    res.json({ success: true, url: '/uploads/slides/' + fname });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save slide file.' });
+  }
 });
 
 // =====================================================================
