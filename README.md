@@ -2,14 +2,17 @@
 
 A self-contained demo of a Post-Merger Integration (PMI) portal covering the first 100 days of an acquisition.
 
-## Run it (turnkey)
+## Run it
 
-**Prerequisite:** [Node.js](https://nodejs.org/) (LTS). Everything else — all dependencies (`node_modules`) and the client-side AI library — is already bundled, so there is **no `npm install` step**.
+Grab the latest [release](https://github.com/pallefar/ma-integration-portal/releases) — two options:
 
-- **Windows:** double-click **`start.bat`**.
-- **macOS / Linux:** double-click **`start.command`** (or run `node server.js` in this folder).
+**A. Zero-install (recommended).** The `…-windows.zip` and `…-macos.zip` bundles ship a portable Node runtime, so there is **nothing to install at all**:
+- **Windows:** unzip, then double-click **`start.bat`**.
+- **macOS:** unzip, then double-click **`start.command`**.
 
-The server starts on **http://localhost:3000** and your browser opens automatically. Keep the launcher window open; close it to stop the server.
+**B. Any OS (needs Node).** The plain `…zip` bundle needs [Node.js](https://nodejs.org/) (LTS) installed. All app dependencies (`node_modules`) are still bundled, so there is no `npm install` step — just run `start.bat` / `start.command`, or `node server.js`.
+
+Either way the server starts on **http://localhost:3000** and your browser opens automatically. Keep the launcher window open; close it to stop the server. (The launchers use a bundled `./node` runtime if present, otherwise system Node.)
 
 ## What's inside
 
