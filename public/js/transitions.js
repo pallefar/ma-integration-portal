@@ -1282,6 +1282,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!items.length) return;
         const built = {};
         sb.querySelectorAll('a.sidebar-link').forEach(a => {
+          // The pinned Admin Console link is a fixed sidebar affordance, not a
+          // role-scoped menu item — exclude it so menu overrides never remove it.
+          if (a.classList.contains('sidebar-admin-link')) return;
           const t = tokenOf(a.getAttribute('href'), a);
           if (t && !(t in built)) built[t] = a;
         });
