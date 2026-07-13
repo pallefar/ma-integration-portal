@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Integration Dashboard</title>
   <meta name="description" content="Review organizational assessment metrics, custom AI post-merger integration plans, and Integration Leader coaching resources.">
-  <link rel="stylesheet" href="/css/style.css?v=1784100006">
-  <script src="/js/transitions.js?v=1784100006"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1784100009">
+  <script src="/js/transitions.js?v=1784100009"></script>
 </head>
 <body>
 
@@ -269,14 +269,9 @@
 
             <!-- Tab 3: Integration Leader Coaching Corner -->
             <div id="tab-coaching-track" class="card card-glass tab-content tab-content-panel" data-widget="coach" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
-              <!-- Reorder Buttons -->
-              
               <div class="card-header">
                 <h2 data-i18n="dashboard.coaching_heading">Integration Leader Coaching Desk</h2>
               </div>
-              <p data-i18n="dashboard.coaching_intro" style="color: var(--text-secondary); margin-bottom: 2rem;">
-                As the Integration Leader, leading the interpersonal integration is your core objective. Use these actionable guidelines to handle pushback.
-              </p>
 
               <!-- Animated Duck Coach TEodor -->
               <div class="duck-coach-container">
@@ -306,22 +301,11 @@
                 </div>
               </div>
 
-              <!-- TEodor Local AI model background download progress indicator -->
-              <div id="teodor-download-progress-bar-container" style="display: none; margin-top: 1rem; padding: 1rem; background-color: var(--bg-light); border-radius: var(--radius-md); border: 1px dashed var(--te-orange);">
-                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 700; color: var(--te-dark-teal); margin-bottom: 0.5rem;">
-                  <span id="teodor-download-status-label">📥 Loading AI Brain...</span>
-                  <span id="teodor-download-percent">0%</span>
-                </div>
-                <div style="height: 10px; background-color: var(--border-color); border-radius: 5px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);">
-                  <div id="teodor-download-progress-fill" style="height: 100%; background-color: var(--te-orange); width: 0%; transition: width 0.3s ease; background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent); background-size: 1rem 1rem; animation: progress-bar-stripes 1s linear infinite;"></div>
-                </div>
-              </div>
-
               <div id="coaching-container">
                 <!-- Loaded dynamically -->
               </div>
 
-              <!-- Option A: Interactive FAQs desk (for Static Mode) -->
+              <!-- Ask TEodor: grounded FAQ coaching desk -->
               <div id="teodor-static-faq-container" class="card" style="margin-top: 1.5rem; margin-bottom: 0;">
                 <h4 data-i18n="dashboard.coaching_faq_heading" style="color: var(--te-dark-teal); margin-bottom: 1rem;">Ask TEodor an Integration Question:</h4>
                 <div class="faq-buttons-grid" style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -337,44 +321,6 @@
                   <button data-i18n="dashboard.faq_systems" class="btn btn-secondary faq-btn" data-faq="systems" style="text-align: left; justify-content: flex-start; padding: 0.75rem 1rem; width: 100%; font-size: 0.9rem; margin:0;">
                     💬 What is the best way to speed up systems onboarding (IT/Cybersecurity)?
                   </button>
-                </div>
-              </div>
-
-              <!-- Option B: Premium AI Chat Console (for Local LLM Mode) -->
-              <div class="card" id="teodor-chat-panel" style="margin-top: 1.5rem; margin-bottom: 0; display: none;">
-                <h4 style="color: var(--te-dark-teal); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                  <span style="display:inline-block; width:8px; height:8px; background-color:#10B981; border-radius:50%; animation: pulse-dot 1.5s infinite;"></span>
-                  TEodor AI AI Insight Console
-                </h4>
-                
-                <!-- Chat History -->
-                <div id="teodor-chat-history" style="max-height: 250px; overflow-y: auto; padding: 1rem; background-color: var(--bg-light); border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                  <div class="chat-bubble assistant" style="align-self: flex-start; background-color: var(--te-orange-light); border: 1px solid rgba(233, 131, 0, 0.2); padding: 0.75rem 1rem; border-radius: 12px 12px 12px 0; max-width: 85%; font-size: 0.9rem; color: var(--te-dark-teal);">
-                    Quack! My local AI Brain is fully downloaded and online! I am now operating as a fully autonomous **Hugging Face AI Insight**. Ask me a question below or choose a suggestion to observe my step-by-step reasoning logs!
-                  </div>
-                </div>
-
-                <!-- Live Reasoning Logs scrolling drawer -->
-                <div id="teodor-reasoning-logs" style="display: none; background-color: #1E293B; border-radius: var(--radius-md); padding: 0.75rem 1rem; font-family: monospace; font-size: 0.8rem; color: #38BDF8; margin-bottom: 1rem; border-left: 3px solid var(--te-orange); max-height: 150px; overflow-y: auto; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);">
-                  <div style="color: #94A3B8; margin-bottom: 0.5rem; border-bottom: 1px solid #334155; padding-bottom: 0.25rem; font-weight: 700; display:flex; justify-content:space-between; align-items:center;">
-                    <span>⚙️ AI INSIGHT REASONING LOGS:</span>
-                    <span style="color: var(--te-orange); font-size: 0.7rem; animation: pulse-dot 1s infinite;">● RUNNING TOOL</span>
-                  </div>
-                  <div id="teodor-log-content" style="white-space: pre-wrap; line-height: 1.4;"></div>
-                </div>
-
-                <!-- Input form -->
-                <form id="teodor-chat-form" style="display: flex; gap: 0.5rem; margin: 0;">
-                  <input data-i18n-ph="dashboard.chat_input_ph" type="text" id="teodor-chat-input" class="form-control" placeholder="Ask TEodor anything about the integration..." style="flex-grow: 1; font-size: 0.9rem; padding: 0.6rem 1rem; margin: 0;" required autocomplete="off">
-                  <button data-i18n="dashboard.chat_send_btn" type="submit" class="btn btn-primary" style="margin: 0; padding: 0.6rem 1.2rem; background-color: var(--te-dark-teal); border-color: var(--te-dark-teal); font-weight: 700;">Send</button>
-                </form>
-
-                <!-- Quick-ask suggest tags -->
-                <div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
-                  <span data-i18n="dashboard.chat_quick_topics_label" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700;">Quick Topics:</span>
-                  <button data-i18n="dashboard.chat_quick_process" type="button" class="btn btn-secondary quick-chat-btn" data-query="How do we handle middle management anxiety about process changes?" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; margin:0;">💬 Process Anxiety</button>
-                  <button data-i18n="dashboard.chat_quick_retention" type="button" class="btn btn-secondary quick-chat-btn" data-query="What should we do if key R&D engineers are reluctant to transition?" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; margin:0;">💬 Engineer Retention</button>
-                  <button data-i18n="dashboard.chat_quick_academy" type="button" class="btn btn-secondary quick-chat-btn" data-query="How are acquired company employees progressing in the academy?" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; margin:0;">💬 Academy Progress</button>
                 </div>
               </div>
             </div>
@@ -1077,6 +1023,6 @@
     </div>
   </div>
 
-  <script src="/js/dashboard.js?v=1784100006"></script>
+  <script src="/js/dashboard.js?v=1784100009"></script>
 </body>
 </html>

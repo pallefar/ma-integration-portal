@@ -173,7 +173,85 @@ document.addEventListener('DOMContentLoaded', () => {
       milestone_doom_desc: "Unlock the custom retro corporate ladder 2D platformer game TEd.",
       badge_promotion_title: "Badge Promotion!",
       badge_promotion_subtitle: "You have achieved the rank of",
-      btn_awesome: "Awesome!"
+      btn_awesome: "Awesome!",
+
+      // Static hero / calendar / sidebar headers (previously untranslated)
+      hero_badge_label: "👋 Personal Onboarding Space",
+      hero_description: "Your personalized integration hub for your first 100 days. Complete your training curriculum, view target roadmap milestones, submit pulse checks, and connect directly with local Integration Leader support.",
+      stat_training_status: "Training Status",
+      stat_onboarding_health: "Pulse Health",
+      events_hub_title: "TE Integration Events & Activity Hub",
+      next_upcoming_event_label: "Next Upcoming Event:",
+      expand_calendar: "Expand Calendar",
+      selected_day_event: "SELECTED DAY'S EVENT",
+      no_event_selected: "Click a calendar day to see integration events, town halls, or system training courses scheduled.",
+      upcoming_integration_events: "UPCOMING EVENTS TIMELINE",
+      notification_title: "Urgent Integration Steering Alerts",
+      did_you_know_title: "Did You Know?",
+      next_tip: "Next Fact",
+
+      // Hero stat values & footer
+      hero_stat_training_value: "Active &bull; Module 1",
+      hero_stat_pulse_value: "Synced ✅",
+      footer_copyright: "&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Post-Merger Integration IMO System.",
+
+      // Culture tab values
+      culture_values_body: "TE Connectivity operates under four core values: <strong>Integrity</strong>, <strong>Accountability</strong>, <strong>Teamwork</strong>, and <strong>Innovation</strong>. We are committed to establishing a collaborative environment during this integration.",
+      culture_collab_note: "<strong>💡 Collaborative Strategy:</strong> Participate in local town halls and team syncs to connect with your new peers and learn about TE global business channels.",
+
+      // Roles tab
+      roles_profile_heading: "👤 Employee Integration Profile",
+      roles_full_name: "Full Name",
+      roles_assigned_title: "Assigned Title / Role",
+      roles_track_dept: "Integration Track Department",
+      roles_system_email: "System User Email",
+      roles_buddy_heading: "🤝 Assigned Integration Buddy",
+      roles_buddy_help: "Your integration buddy is here to help you get settled, gain access to software resources, and navigate internal channels.",
+      roles_buddy_contact: "💬 Contact Buddy through Slack/Teams",
+
+      // Communication tab (static fallback cards)
+      comm_archive_title: "📣 Digital Broadcast Archive",
+      comm_archive_intro: "Official notifications, policy announcements, and integration guides dispatched to your email matching your profile track.",
+      comm_card1_title: "Welcome to the TE Network",
+      comm_day_1: "Day 1",
+      comm_card1_body: "Your TE credentials and network access instructions have been fully provisioned. Please review the attached guide to connect your devices to the global intranet.",
+      comm_view_attachment: "View Attachment (PDF)",
+      comm_card2_title: "Action Required: Compliance Training",
+      comm_day_15: "Day 15",
+      comm_card2_body: "As part of the integration, all acquired staff must complete the TE Ethics & Compliance certification. Log into the academy portal to begin.",
+      comm_go_academy: "Go to Academy",
+      comm_card3_title: "Global Townhall Invitation",
+      comm_day_30: "Day 30",
+      comm_card3_body: "Join the executive leadership team for our quarterly global townhall, where we will welcome our newly integrated teams.",
+
+      // Video modal source options
+      video_opt_local: "Local Video File (MP4, WebM)",
+      video_opt_youtube: "YouTube Video Embedded URL or Link",
+
+      // Notifications toggle
+      notif_collapse: "Collapse",
+      notif_expand: "Expand",
+
+      // Calendar & events
+      calendar_month: "May 2026",
+      event_type_news: "NEWS",
+      event_type_meeting: "MEETING",
+      event_type_training: "TRAINING",
+      all_day: "All Day",
+      cal_no_event: "No integration events scheduled for {date}. Click another highlighted day!",
+      cal_no_upcoming: "No upcoming events in the timeline.",
+      cal_e1_title: "Day 1 Kickoff & Welcome Breakfast",
+      cal_e1_desc: "Welcome breakfast in the lobby, site leader address, and distribution of physical Welcome Kits!",
+      cal_e2_title: "IT Accounts SSO Registration",
+      cal_e2_desc: "Deadline to complete SSO registration and activate your new TE corporate email inbox.",
+      cal_e3_title: "Q&A Session with IMO Integration Lead",
+      cal_e3_desc: "Drop-in virtual session to ask questions about system conversions and payroll transitions.",
+      cal_e4_title: "Cultural Integration Welcome Town Hall",
+      cal_e4_desc: "Join TE corporate executives and local leads for a combined welcome session and open Q&A. May 25, 10:00 CET.",
+      cal_e5_title: "Post-Merger Integration Review Meeting",
+      cal_e5_desc: "Join the Integration Management Office for the bi-weekly Post-Merger calibration sync on MS Teams. May 26, 14:00 CET.",
+      cal_e6_title: "TE Cybersecurity Systems Compliance Course",
+      cal_e6_desc: "All newly acquired employees must complete the basic cybersecurity and compliance training within their first 30 days."
     },
     de: {
       welcome_title: "Willkommen in der TE Connectivity Familie!",
@@ -319,7 +397,85 @@ document.addEventListener('DOMContentLoaded', () => {
       milestone_doom_desc: "Schalte das benutzerdefinierte Retro-2D-Plattformspiel TEd zur Integration frei.",
       badge_promotion_title: "Abzeichen-Beförderung!",
       badge_promotion_subtitle: "Sie haben den folgenden Rang erreicht:",
-      btn_awesome: "Großartig!"
+      btn_awesome: "Großartig!",
+
+      // Static hero / calendar / sidebar headers (previously untranslated)
+      hero_badge_label: "👋 Persönlicher Onboarding-Bereich",
+      hero_description: "Ihr persönlicher Integrations-Hub für Ihre ersten 100 Tage. Absolvieren Sie Ihren Schulungsplan, sehen Sie Roadmap-Meilensteine ein, senden Sie Pulse-Checks und wenden Sie sich direkt an die lokale Integration-Leader-Unterstützung.",
+      stat_training_status: "Schulungsstatus",
+      stat_onboarding_health: "Pulse-Status",
+      events_hub_title: "TE Integrations-Events & Aktivitäts-Hub",
+      next_upcoming_event_label: "Nächste anstehende Veranstaltung:",
+      expand_calendar: "Kalender ausklappen",
+      selected_day_event: "VERANSTALTUNG DES AUSGEWÄHLTEN TAGES",
+      no_event_selected: "Klicken Sie auf einen Kalendertag, um geplante Integrationsveranstaltungen, Town Halls oder System-Schulungen anzuzeigen.",
+      upcoming_integration_events: "ZEITLEISTE ANSTEHENDER VERANSTALTUNGEN",
+      notification_title: "Dringende Integrations-Steuerungshinweise",
+      did_you_know_title: "Wussten Sie schon?",
+      next_tip: "Nächster Fakt",
+
+      // Hero stat values & footer
+      hero_stat_training_value: "Aktiv &bull; Modul 1",
+      hero_stat_pulse_value: "Synchronisiert ✅",
+      footer_copyright: "&copy; 2026 <strong>TE Connectivity</strong>. Alle Rechte vorbehalten. Post-Merger-Integrations-IMO-System.",
+
+      // Culture tab values
+      culture_values_body: "TE Connectivity handelt nach vier Grundwerten: <strong>Integrität</strong>, <strong>Verantwortung</strong>, <strong>Teamarbeit</strong> und <strong>Innovation</strong>. Wir setzen uns dafür ein, während dieser Integration ein kooperatives Umfeld zu schaffen.",
+      culture_collab_note: "<strong>💡 Kooperationsstrategie:</strong> Nehmen Sie an lokalen Town Halls und Team-Syncs teil, um Ihre neuen Kollegen kennenzulernen und die globalen Geschäftsbereiche von TE zu entdecken.",
+
+      // Roles tab
+      roles_profile_heading: "👤 Mitarbeiter-Integrationsprofil",
+      roles_full_name: "Vollständiger Name",
+      roles_assigned_title: "Zugewiesener Titel / Rolle",
+      roles_track_dept: "Integrationspfad-Abteilung",
+      roles_system_email: "System-Benutzer-E-Mail",
+      roles_buddy_heading: "🤝 Zugewiesener Integrations-Buddy",
+      roles_buddy_help: "Ihr Integrations-Buddy hilft Ihnen, sich einzuleben, Zugang zu Software-Ressourcen zu erhalten und interne Kanäle zu navigieren.",
+      roles_buddy_contact: "💬 Buddy über Slack/Teams kontaktieren",
+
+      // Communication tab (static fallback cards)
+      comm_archive_title: "📣 Digitales Broadcast-Archiv",
+      comm_archive_intro: "Offizielle Benachrichtigungen, Richtlinienankündigungen und Integrationsleitfäden, die an Ihre E-Mail passend zu Ihrem Profilpfad gesendet werden.",
+      comm_card1_title: "Willkommen im TE-Netzwerk",
+      comm_day_1: "Tag 1",
+      comm_card1_body: "Ihre TE-Zugangsdaten und Anweisungen für den Netzwerkzugang wurden vollständig bereitgestellt. Bitte lesen Sie den beigefügten Leitfaden, um Ihre Geräte mit dem globalen Intranet zu verbinden.",
+      comm_view_attachment: "Anhang ansehen (PDF)",
+      comm_card2_title: "Aktion erforderlich: Compliance-Schulung",
+      comm_day_15: "Tag 15",
+      comm_card2_body: "Im Rahmen der Integration müssen alle übernommenen Mitarbeiter die TE-Ethik- und Compliance-Zertifizierung abschließen. Melden Sie sich im Akademie-Portal an, um zu beginnen.",
+      comm_go_academy: "Zur Akademie",
+      comm_card3_title: "Einladung zur globalen Town Hall",
+      comm_day_30: "Tag 30",
+      comm_card3_body: "Nehmen Sie mit dem Führungsteam an unserer vierteljährlichen globalen Town Hall teil, bei der wir unsere neu integrierten Teams willkommen heißen.",
+
+      // Video modal source options
+      video_opt_local: "Lokale Videodatei (MP4, WebM)",
+      video_opt_youtube: "Eingebettete YouTube-Video-URL oder Link",
+
+      // Notifications toggle
+      notif_collapse: "Einklappen",
+      notif_expand: "Ausklappen",
+
+      // Calendar & events
+      calendar_month: "Mai 2026",
+      event_type_news: "NEWS",
+      event_type_meeting: "MEETING",
+      event_type_training: "SCHULUNG",
+      all_day: "Ganztägig",
+      cal_no_event: "Keine Integrationsveranstaltungen für {date} geplant. Klicken Sie auf einen anderen markierten Tag!",
+      cal_no_upcoming: "Keine bevorstehenden Veranstaltungen in der Zeitleiste.",
+      cal_e1_title: "Tag 1: Kickoff & Willkommensfrühstück",
+      cal_e1_desc: "Willkommensfrühstück in der Lobby, Ansprache der Standortleitung und Verteilung der physischen Willkommenspakete!",
+      cal_e2_title: "SSO-Registrierung für IT-Konten",
+      cal_e2_desc: "Frist für den Abschluss der SSO-Registrierung und die Aktivierung Ihres neuen TE-Firmen-E-Mail-Postfachs.",
+      cal_e3_title: "Q&A-Sitzung mit dem IMO Integration Lead",
+      cal_e3_desc: "Offene virtuelle Sitzung für Fragen zu Systemumstellungen und Gehaltsübergängen.",
+      cal_e4_title: "Willkommens-Town-Hall zur kulturellen Integration",
+      cal_e4_desc: "Nehmen Sie an einer gemeinsamen Willkommens-Session mit TE-Führungskräften und lokalen Leitern sowie einer offenen Fragerunde teil. 25. Mai, 10:00 Uhr MEZ.",
+      cal_e5_title: "Post-Merger-Integrations-Review-Meeting",
+      cal_e5_desc: "Nehmen Sie am zweiwöchentlichen Post-Merger-Kalibrierungs-Sync des Integration Management Office auf MS Teams teil. 26. Mai, 14:00 Uhr MEZ.",
+      cal_e6_title: "TE Cybersecurity-System-Compliance-Kurs",
+      cal_e6_desc: "Alle neu übernommenen Mitarbeiter müssen in den ersten 30 Tagen die grundlegende Cybersicherheits- und Compliance-Schulung absolvieren."
     },
     zh: {
       welcome_title: "欢迎加入 TE Connectivity 大家庭！",
@@ -465,7 +621,85 @@ document.addEventListener('DOMContentLoaded', () => {
       milestone_doom_desc: "解锁自定义复古新员工晋升 2D 横版闯关游戏 TEd。",
       badge_promotion_title: "徽章晋升！",
       badge_promotion_subtitle: "您已获得以下军衔：",
-      btn_awesome: "太棒了！"
+      btn_awesome: "太棒了！",
+
+      // Static hero / calendar / sidebar headers (previously untranslated)
+      hero_badge_label: "👋 个人入职空间",
+      hero_description: "您头 100 天的个性化整合中心。完成您的培训课程、查看目标路线图里程碑、提交脉搏调查，并直接联系本地整合负责人 (Integration Leader) 的支持。",
+      stat_training_status: "培训状态",
+      stat_onboarding_health: "脉搏健康度",
+      events_hub_title: "TE 整合活动中心",
+      next_upcoming_event_label: "下一个即将举行的活动：",
+      expand_calendar: "展开日历",
+      selected_day_event: "所选日期的活动",
+      no_event_selected: "点击日历中的某一天，查看已安排的整合活动、全员大会或系统培训课程。",
+      upcoming_integration_events: "即将举行的活动时间线",
+      notification_title: "紧急整合指导提醒",
+      did_you_know_title: "您知道吗？",
+      next_tip: "下一条",
+
+      // Hero stat values & footer
+      hero_stat_training_value: "进行中 &bull; 模块 1",
+      hero_stat_pulse_value: "已同步 ✅",
+      footer_copyright: "&copy; 2026 <strong>TE Connectivity</strong>。保留所有权利。并购后整合 IMO 系统。",
+
+      // Culture tab values
+      culture_values_body: "TE Connectivity 秉持四大核心价值观：<strong>诚信</strong>、<strong>担当</strong>、<strong>合作</strong>与<strong>创新</strong>。我们致力于在本次整合期间营造协作的环境。",
+      culture_collab_note: "<strong>💡 协作策略：</strong>参加本地全员大会和团队同步会，结识新同事并了解 TE 的全球业务渠道。",
+
+      // Roles tab
+      roles_profile_heading: "👤 员工整合档案",
+      roles_full_name: "全名",
+      roles_assigned_title: "分配的职衔 / 角色",
+      roles_track_dept: "整合轨道部门",
+      roles_system_email: "系统用户电子邮箱",
+      roles_buddy_heading: "🤝 指定的整合伙伴",
+      roles_buddy_help: "您的整合伙伴将帮助您安顿下来、获取软件资源并熟悉内部沟通渠道。",
+      roles_buddy_contact: "💬 通过 Slack/Teams 联系伙伴",
+
+      // Communication tab (static fallback cards)
+      comm_archive_title: "📣 数字广播存档",
+      comm_archive_intro: "根据您的档案轨道，发送到您电子邮箱的官方通知、政策公告和整合指南。",
+      comm_card1_title: "欢迎加入 TE 网络",
+      comm_day_1: "第 1 天",
+      comm_card1_body: "您的 TE 凭据和网络访问说明已完全配置。请查阅随附指南，将您的设备连接到全球内联网。",
+      comm_view_attachment: "查看附件 (PDF)",
+      comm_card2_title: "需采取行动：合规培训",
+      comm_day_15: "第 15 天",
+      comm_card2_body: "作为整合的一部分，所有被收购员工必须完成 TE 道德与合规认证。请登录学院门户以开始。",
+      comm_go_academy: "前往学院",
+      comm_card3_title: "全球全员大会邀请",
+      comm_day_30: "第 30 天",
+      comm_card3_body: "加入高管领导团队参加我们的季度全球全员大会，我们将在会上欢迎新整合的团队。",
+
+      // Video modal source options
+      video_opt_local: "本地视频文件 (MP4、WebM)",
+      video_opt_youtube: "YouTube 视频嵌入网址或链接",
+
+      // Notifications toggle
+      notif_collapse: "折叠",
+      notif_expand: "展开",
+
+      // Calendar & events
+      calendar_month: "2026 年 5 月",
+      event_type_news: "新闻",
+      event_type_meeting: "会议",
+      event_type_training: "培训",
+      all_day: "全天",
+      cal_no_event: "{date} 没有安排整合活动。请点击另一个高亮的日期！",
+      cal_no_upcoming: "时间线上没有即将举行的活动。",
+      cal_e1_title: "第 1 天启动与欢迎早餐",
+      cal_e1_desc: "在大堂举行欢迎早餐、站点负责人致辞，并发放实体欢迎礼包！",
+      cal_e2_title: "IT 账户 SSO 注册",
+      cal_e2_desc: "完成 SSO 注册并激活您新的 TE 企业电子邮箱的截止日期。",
+      cal_e3_title: "与 IMO 整合负责人的问答环节",
+      cal_e3_desc: "随时参加的线上环节，就系统转换和薪资过渡提出问题。",
+      cal_e4_title: "文化整合欢迎全员大会",
+      cal_e4_desc: "加入 TE 企业高管和本地负责人的联合欢迎会及公开问答环节。5 月 25 日，欧洲中部时间 10:00。",
+      cal_e5_title: "并购后整合审查会议",
+      cal_e5_desc: "加入整合管理办公室，在 MS Teams 上进行每两周一次的并购后校准同步。5 月 26 日，欧洲中部时间 14:00。",
+      cal_e6_title: "TE 网络安全系统合规课程",
+      cal_e6_desc: "所有新加入的员工必须在入职前 30 天内完成基础网络安全与合规培训。"
     },
     cs: {
       welcome_title: "Vítejte v rodině TE Connectivity!",
@@ -611,7 +845,85 @@ document.addEventListener('DOMContentLoaded', () => {
       milestone_doom_desc: "Odemkněte vlastní retro 2D plošinovku TEd o integraci a povýšení.",
       badge_promotion_title: "Povýšení odznaku!",
       badge_promotion_subtitle: "Dosáhli jste hodnosti:",
-      btn_awesome: "Skvělé!"
+      btn_awesome: "Skvělé!",
+
+      // Static hero / calendar / sidebar headers (previously untranslated)
+      hero_badge_label: "👋 Osobní prostor pro onboarding",
+      hero_description: "Vaše personalizované integrační centrum pro prvních 100 dní. Dokončete svůj vzdělávací plán, prohlédněte si milníky plánu, odešlete pulse checky a spojte se přímo s podporou místního Integration Leadera.",
+      stat_training_status: "Stav školení",
+      stat_onboarding_health: "Stav spokojenosti",
+      events_hub_title: "Centrum integračních akcí a aktivit TE",
+      next_upcoming_event_label: "Nadcházející akce:",
+      expand_calendar: "Rozbalit kalendář",
+      selected_day_event: "AKCE VYBRANÉHO DNE",
+      no_event_selected: "Kliknutím na den v kalendáři zobrazíte naplánované integrační akce, town hally nebo systémová školení.",
+      upcoming_integration_events: "ČASOVÁ OSA NADCHÁZEJÍCÍCH AKCÍ",
+      notification_title: "Naléhavá integrační řídicí upozornění",
+      did_you_know_title: "Věděli jste?",
+      next_tip: "Další fakt",
+
+      // Hero stat values & footer
+      hero_stat_training_value: "Aktivní &bull; Modul 1",
+      hero_stat_pulse_value: "Synchronizováno ✅",
+      footer_copyright: "&copy; 2026 <strong>TE Connectivity</strong>. Všechna práva vyhrazena. Integrační systém IMO po fúzi.",
+
+      // Culture tab values
+      culture_values_body: "TE Connectivity se řídí čtyřmi základními hodnotami: <strong>Integrita</strong>, <strong>Odpovědnost</strong>, <strong>Týmová práce</strong> a <strong>Inovace</strong>. Zavazujeme se během této integrace vytvářet prostředí založené na spolupráci.",
+      culture_collab_note: "<strong>💡 Strategie spolupráce:</strong> Zúčastněte se místních town hallů a týmových synchronizací, abyste se spojili se svými novými kolegy a poznali globální obchodní kanály TE.",
+
+      // Roles tab
+      roles_profile_heading: "👤 Integrační profil zaměstnance",
+      roles_full_name: "Celé jméno",
+      roles_assigned_title: "Přidělený titul / role",
+      roles_track_dept: "Oddělení integrační sekce",
+      roles_system_email: "Systémový e-mail uživatele",
+      roles_buddy_heading: "🤝 Přidělený integrační buddy",
+      roles_buddy_help: "Váš integrační buddy vám pomůže se zabydlet, získat přístup k softwarovým zdrojům a zorientovat se v interních kanálech.",
+      roles_buddy_contact: "💬 Kontaktujte buddyho přes Slack/Teams",
+
+      // Communication tab (static fallback cards)
+      comm_archive_title: "📣 Archiv digitálních oznámení",
+      comm_archive_intro: "Oficiální oznámení, ohlášení zásad a integrační příručky odeslané na váš e-mail podle vaší profilové sekce.",
+      comm_card1_title: "Vítejte v síti TE",
+      comm_day_1: "Den 1",
+      comm_card1_body: "Vaše přihlašovací údaje TE a pokyny pro přístup k síti byly plně nastaveny. Prostudujte si prosím přiloženou příručku pro připojení vašich zařízení ke globálnímu intranetu.",
+      comm_view_attachment: "Zobrazit přílohu (PDF)",
+      comm_card2_title: "Vyžadována akce: Školení o shodě",
+      comm_day_15: "Den 15",
+      comm_card2_body: "V rámci integrace musí všichni získaní zaměstnanci dokončit certifikaci TE Etika a shoda. Přihlaste se do portálu akademie a začněte.",
+      comm_go_academy: "Přejít do akademie",
+      comm_card3_title: "Pozvánka na globální town hall",
+      comm_day_30: "Den 30",
+      comm_card3_body: "Připojte se k výkonnému vedení na našem čtvrtletním globálním town hallu, kde přivítáme naše nově integrované týmy.",
+
+      // Video modal source options
+      video_opt_local: "Lokální videosoubor (MP4, WebM)",
+      video_opt_youtube: "Vložená adresa URL nebo odkaz na video YouTube",
+
+      // Notifications toggle
+      notif_collapse: "Sbalit",
+      notif_expand: "Rozbalit",
+
+      // Calendar & events
+      calendar_month: "Květen 2026",
+      event_type_news: "NOVINKY",
+      event_type_meeting: "SCHŮZKA",
+      event_type_training: "ŠKOLENÍ",
+      all_day: "Celý den",
+      cal_no_event: "Pro {date} nejsou naplánovány žádné integrační akce. Klikněte na jiný zvýrazněný den!",
+      cal_no_upcoming: "Na časové ose nejsou žádné nadcházející akce.",
+      cal_e1_title: "1. den: Zahájení a uvítací snídaně",
+      cal_e1_desc: "Uvítací snídaně v lobby, projev vedoucího pobočky a rozdání fyzických uvítacích balíčků!",
+      cal_e2_title: "Registrace SSO pro IT účty",
+      cal_e2_desc: "Termín pro dokončení registrace SSO a aktivaci nové firemní e-mailové schránky TE.",
+      cal_e3_title: "Q&A setkání s vedoucím integrace IMO",
+      cal_e3_desc: "Otevřené virtuální setkání pro dotazy k převodům systémů a přechodům mezd.",
+      cal_e4_title: "Uvítací Town Hall ke kulturní integraci",
+      cal_e4_desc: "Připojte se k vedení společnosti TE a místním vedoucím na společné uvítací setkání a otevřené otázky a odpovědi. 25. května, 10:00 SEČ.",
+      cal_e5_title: "Integrační schůzka po fúzi",
+      cal_e5_desc: "Připojte se k úřadu pro řízení integrace na dvoutýdenní kalibrační synchronizaci po fúzi v aplikaci MS Teams. 26. května, 14:00 SEČ.",
+      cal_e6_title: "Kurz dodržování kybernetické bezpečnosti systémů TE",
+      cal_e6_desc: "Všichni nově získaní zaměstnanci musí dokončit základní školení o kybernetické bezpečnosti a dodržování předpisů během prvních 30 dnů."
     }
   };
 
@@ -1139,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (dict[key]) {
-        if (key === 'video_alert_tip' || key === 'academy_m1_subtitle' || key === 'academy_m2_subtitle' || key === 'academy_m3_subtitle' || key === 'video_duration' || key === 'video_alert_body') {
+        if (key === 'video_alert_tip' || key === 'academy_m1_subtitle' || key === 'academy_m2_subtitle' || key === 'academy_m3_subtitle' || key === 'video_duration' || key === 'video_alert_body' || key === 'hero_stat_training_value' || key === 'footer_copyright' || key === 'culture_values_body' || key === 'culture_collab_note') {
           el.innerHTML = dict[key];
         } else {
           el.textContent = dict[key];
@@ -1236,28 +1548,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof renderAcademyFromApi === 'function') renderAcademyFromApi();
 
     // 5. Sidebar HR elements translations
-    const sidebarTracksTitle = document.querySelector('.dashboard-sidebar h4');
-    if (sidebarTracksTitle) sidebarTracksTitle.textContent = dict.sidebar_tracks_title;
-    
-    // Sidebar locked tracks cards
-    const salesCardTitle = document.querySelector('.placeholder-card:nth-child(2) h4'); // Adjusted selector sequence
-    if (salesCardTitle) salesCardTitle.textContent = dict.sidebar_sales_title;
-    const salesCardDesc = document.querySelector('.placeholder-card:nth-child(2) p');
-    if (salesCardDesc) salesCardDesc.textContent = dict.sidebar_sales_desc;
-    
-    const prodCardTitle = document.querySelector('.placeholder-card:nth-child(3) h4');
-    if (prodCardTitle) prodCardTitle.textContent = dict.sidebar_product_title;
-    const prodCardDesc = document.querySelector('.placeholder-card:nth-child(3) p');
-    if (prodCardDesc) prodCardDesc.textContent = dict.sidebar_product_desc;
-
-    const finCardTitle = document.querySelector('.placeholder-card:nth-child(4) h4');
-    if (finCardTitle) finCardTitle.textContent = dict.sidebar_finance_title;
-    const finCardDesc = document.querySelector('.placeholder-card:nth-child(4) p');
-    if (finCardDesc) finCardDesc.textContent = dict.sidebar_finance_desc;
-
-    document.querySelectorAll('.placeholder-badge').forEach(badge => {
-      badge.textContent = dict.status_pre_onboarding;
-    });
+    // (The "Integration Tracks" heading is tagged with data-i18n="sidebar_tracks_title"
+    //  and the department cards are rendered/localized by renderEmployeeDeptTracks(),
+    //  so the old .placeholder-card / .placeholder-badge selectors were removed.)
 
     // HR helpdesk dropdown options
     const hrSubjectSelect = document.getElementById('hr-inquiry-subject');
@@ -1324,6 +1617,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 7. Dynamic reload of localized alerts
     loadEmployeeAlerts();
+
+    // 8. Re-localize the events calendar (month title, weekday headers, event copy)
+    if (typeof renderEventsCalendar === 'function') renderEventsCalendar();
+
+    // 9. Re-render the rotating "Did You Know?" fact in the new language
+    if (window.__renderDidYouKnowFact) window.__renderDidYouKnowFact();
+
+    // 10. Notifications collapse/expand toggle label follows current state
+    const notifToggleText = document.getElementById('notifications-toggle-text');
+    const notifList = document.getElementById('employee-notifications-list');
+    if (notifToggleText) {
+      notifToggleText.textContent = (notifList && notifList.style.display === 'none')
+        ? dict.notif_expand : dict.notif_collapse;
+    }
   }
 
   // --- 5. WELCOME VIDEO SOURCE AND PLAYER IMPLEMENTATION ---
@@ -2636,13 +2943,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- 8. DYNAMIC EVENTS HUB CALENDAR SYSTEM ---
   const INTEGRATION_EVENTS = [
-    { day: 15, title: "Day 1 Kickoff & Welcome Breakfast", type: "news", time: "09:00 CET", desc: "Welcome breakfast in the lobby, site leader address, and distribution of physical Welcome Kits!" },
-    { day: 18, title: "IT Accounts SSO Registration", type: "training", time: "11:00 CET", desc: "Deadline to complete SSO registration and activate your new TE corporate email inbox." },
-    { day: 22, title: "Q&A Session with IMO Integration Lead", type: "meeting", time: "15:00 CET", desc: "Drop-in virtual session to ask questions about system conversions and payroll transitions." },
-    { day: 25, title: "Cultural Integration Welcome Town Hall", type: "news", time: "10:00 CET", desc: "Join TE corporate executives and local leads for a combined welcome session and open Q&A. May 25, 10:00 CET." },
-    { day: 26, title: "Post-Merger Integration Review Meeting", type: "meeting", time: "14:00 CET", desc: "Join the Integration Management Office for the bi-weekly Post-Merger calibration sync on MS Teams. May 26, 14:00 CET." },
-    { day: 28, title: "TE Cybersecurity Systems Compliance Course", type: "training", time: "All Day", desc: "All newly acquired employees must complete the basic cybersecurity and compliance training within their first 30 days." }
+    { day: 15, key: "cal_e1", title: "Day 1 Kickoff & Welcome Breakfast", type: "news", time: "09:00 CET", desc: "Welcome breakfast in the lobby, site leader address, and distribution of physical Welcome Kits!" },
+    { day: 18, key: "cal_e2", title: "IT Accounts SSO Registration", type: "training", time: "11:00 CET", desc: "Deadline to complete SSO registration and activate your new TE corporate email inbox." },
+    { day: 22, key: "cal_e3", title: "Q&A Session with IMO Integration Lead", type: "meeting", time: "15:00 CET", desc: "Drop-in virtual session to ask questions about system conversions and payroll transitions." },
+    { day: 25, key: "cal_e4", title: "Cultural Integration Welcome Town Hall", type: "news", time: "10:00 CET", desc: "Join TE corporate executives and local leads for a combined welcome session and open Q&A. May 25, 10:00 CET." },
+    { day: 26, key: "cal_e5", title: "Post-Merger Integration Review Meeting", type: "meeting", time: "14:00 CET", desc: "Join the Integration Management Office for the bi-weekly Post-Merger calibration sync on MS Teams. May 26, 14:00 CET." },
+    { day: 28, key: "cal_e6", title: "TE Cybersecurity Systems Compliance Course", type: "training", time: "All Day", desc: "All newly acquired employees must complete the basic cybersecurity and compliance training within their first 30 days." }
   ];
+
+  // Localized weekday abbreviations for the calendar header row
+  const CAL_WEEKDAYS = {
+    en: ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'],
+    de: ['SO', 'MO', 'DI', 'MI', 'DO', 'FR', 'SA'],
+    zh: ['日', '一', '二', '三', '四', '五', '六'],
+    cs: ['NE', 'PO', 'ÚT', 'ST', 'ČT', 'PÁ', 'SO']
+  };
+
+  function currentCalDict() {
+    const lang = localStorage.getItem('employeeLanguage') || 'en';
+    return TRANSLATIONS[lang] || TRANSLATIONS.en;
+  }
+
+  // Localized "May {day}" (optionally with year) respecting each locale's order
+  function localizedMayDate(day, withYear) {
+    const lang = localStorage.getItem('employeeLanguage') || 'en';
+    switch (lang) {
+      case 'de': return `${day}. Mai` + (withYear ? ' 2026' : '');
+      case 'zh': return (withYear ? '2026 年 ' : '') + `5 月 ${day} 日`;
+      case 'cs': return `${day}. května` + (withYear ? ' 2026' : '');
+      default: return `May ${day}` + (withYear ? ', 2026' : '');
+    }
+  }
+
+  // Localized fields for a raw INTEGRATION_EVENTS entry
+  function evTitle(e) { const d = currentCalDict(); return (e.key && d[e.key + '_title']) || e.title; }
+  function evDesc(e) { const d = currentCalDict(); return (e.key && d[e.key + '_desc']) || e.desc; }
+  function evType(e) { const d = currentCalDict(); return d['event_type_' + e.type] || e.type.toUpperCase(); }
+  function evTime(e) { const d = currentCalDict(); return (e.time === 'All Day') ? d.all_day : e.time; }
 
   function renderEventsCalendar() {
     const grid = document.getElementById('events-calendar-grid');
@@ -2658,14 +2995,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeTimelineDay = settings.timeTravelDay || 8;
         const currentCalendarDay = 14 + activeTimelineDay;
 
-        grid.innerHTML = '';
-        title.textContent = `May 2026`; // Locked to May 2026 as per timeline
+        const dict = currentCalDict();
+        const lang = localStorage.getItem('employeeLanguage') || 'en';
 
+        grid.innerHTML = '';
+        title.textContent = dict.calendar_month; // Locked to May 2026 as per timeline
+
+        // Localize weekday header row
+        const weekdaysRow = document.querySelector('.calendar-weekdays');
+        const wk = CAL_WEEKDAYS[lang] || CAL_WEEKDAYS.en;
+        if (weekdaysRow) {
+          weekdaysRow.querySelectorAll('div').forEach((cell, i) => { if (wk[i]) cell.textContent = wk[i]; });
+        }
+
+        // .onclick (not addEventListener) so repeated re-renders on language change don't stack handlers
         if (prevBtn) {
-          prevBtn.addEventListener('click', () => alert("Timeline calendar is locked to the active post-merger month of May 2026."));
+          prevBtn.onclick = () => alert("Timeline calendar is locked to the active post-merger month of May 2026.");
         }
         if (nextBtn) {
-          nextBtn.addEventListener('click', () => alert("Timeline calendar is locked to the active post-merger month of May 2026."));
+          nextBtn.onclick = () => alert("Timeline calendar is locked to the active post-merger month of May 2026.");
         }
 
         // May 2026 starts on Friday (5 empty cells)
@@ -2694,7 +3042,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const dayEvent = INTEGRATION_EVENTS.find(e => e.day === d);
           if (dayEvent) {
             cell.classList.add('has-event');
-            cell.setAttribute('title', dayEvent.title);
+            cell.setAttribute('title', evTitle(dayEvent));
           }
 
           cell.addEventListener('click', () => {
@@ -2720,7 +3068,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const nextEvent = INTEGRATION_EVENTS.find(e => e.day >= currentCalendarDay) || INTEGRATION_EVENTS[INTEGRATION_EVENTS.length - 1];
         const nextEventTextEl = document.getElementById('hidden-next-event-text');
         if (nextEventTextEl && nextEvent) {
-          nextEventTextEl.innerHTML = `<span style="color: var(--te-orange); font-weight: bold;">May ${nextEvent.day}:</span> ${nextEvent.title} (🕒 ${nextEvent.time})`;
+          nextEventTextEl.innerHTML = `<span style="color: var(--te-orange); font-weight: bold;">${localizedMayDate(nextEvent.day, false)}:</span> ${escapeHtml(evTitle(nextEvent))} (🕒 ${escapeHtml(evTime(nextEvent))})`;
         }
 
         const toggleBtn = document.getElementById('toggle-calendar-btn');
@@ -2769,9 +3117,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const banner = document.getElementById('selected-day-banner');
     if (!banner) return;
 
+    const dict = currentCalDict();
+
     if (!dayEvent) {
       banner.className = 'event-banner-card empty';
-      banner.innerHTML = `<p class="empty-event-text">No integration events scheduled for May ${dayNumber}, 2026. Click another highlighted day!</p>`;
+      banner.innerHTML = `<p class="empty-event-text">${escapeHtml(dict.cal_no_event.replace('{date}', localizedMayDate(dayNumber, true)))}</p>`;
       return;
     }
 
@@ -2782,13 +3132,13 @@ document.addEventListener('DOMContentLoaded', () => {
     banner.className = `event-banner-card active`;
     banner.innerHTML = `
       <div class="event-banner-header">
-        <span class="event-badge ${dayEvent.type}">${dayEvent.type.toUpperCase()}</span>
-        <span class="event-time">🕒 ${dayEvent.time}</span>
+        <span class="event-badge ${dayEvent.type}">${escapeHtml(evType(dayEvent))}</span>
+        <span class="event-time">🕒 ${escapeHtml(evTime(dayEvent))}</span>
       </div>
-      <h4 class="event-card-title">${typeIcon} ${dayEvent.title}</h4>
-      <p class="event-card-desc">${dayEvent.desc}</p>
+      <h4 class="event-card-title">${typeIcon} ${escapeHtml(evTitle(dayEvent))}</h4>
+      <p class="event-card-desc">${escapeHtml(evDesc(dayEvent))}</p>
       <div class="event-card-meta">
-        <span>📅 May ${dayNumber}, 2026</span>
+        <span>📅 ${escapeHtml(localizedMayDate(dayNumber, true))}</span>
       </div>
     `;
   }
@@ -2802,7 +3152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     deck.innerHTML = '';
 
     if (futureEvents.length === 0) {
-      deck.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-dim); text-align: center; padding: 1rem;">No upcoming events in the timeline.</p>`;
+      deck.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-dim); text-align: center; padding: 1rem;">${escapeHtml(currentCalDict().cal_no_upcoming)}</p>`;
       return;
     }
 
@@ -2816,8 +3166,8 @@ document.addEventListener('DOMContentLoaded', () => {
       item.innerHTML = `
         <div class="future-event-icon">${typeIcon}</div>
         <div class="future-event-info">
-          <div class="future-event-title">${e.title}</div>
-          <div class="future-event-date">May ${e.day}, 2026 @ ${e.time}</div>
+          <div class="future-event-title">${escapeHtml(evTitle(e))}</div>
+          <div class="future-event-date">${escapeHtml(localizedMayDate(e.day, true))} @ ${escapeHtml(evTime(e))}</div>
         </div>
       `;
 
@@ -2862,13 +3212,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnToggle) {
       btnToggle.onclick = (e) => {
         e.preventDefault();
+        const dict = TRANSLATIONS[localStorage.getItem('employeeLanguage') || 'en'] || TRANSLATIONS.en;
         if (notifyList.style.display === 'none') {
           notifyList.style.display = 'flex';
-          toggleText.textContent = 'Collapse';
+          if (toggleText) toggleText.textContent = dict.notif_collapse;
           btnToggle.querySelector('span:last-child').textContent = '▼';
         } else {
           notifyList.style.display = 'none';
-          toggleText.textContent = 'Expand';
+          if (toggleText) toggleText.textContent = dict.notif_expand;
           btnToggle.querySelector('span:last-child').textContent = '▲';
         }
       };
@@ -3170,39 +3521,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Rotating Tips / Did You Know Widget ---
   function initializeDidYouKnowFacts() {
-    const didYouKnowFacts = [
-      "TE Connectivity has over 80,000 employees globally and operates in over 140 countries!",
-      "TE Connectivity manufactures over 220 billion products annually, connecting data, power, and signal.",
-      "Our integration process is structured into four pillars: Communication, Culture, Roles, and Onboarding to ensure synergy.",
-      "The name 'TE Connectivity' stands for Tyco Electronics, which became a separate public company in 2007.",
-      "TE Connectivity holds more than 15,000 global patents, driving innovation in automotive, aerospace, and medical fields."
-    ];
+    const DID_YOU_KNOW_FACTS = {
+      en: [
+        "TE Connectivity has over 80,000 employees globally and operates in over 140 countries!",
+        "TE Connectivity manufactures over 220 billion products annually, connecting data, power, and signal.",
+        "Our integration process is structured into four pillars: Communication, Culture, Roles, and Onboarding to ensure synergy.",
+        "The name 'TE Connectivity' stands for Tyco Electronics, which became a separate public company in 2007.",
+        "TE Connectivity holds more than 15,000 global patents, driving innovation in automotive, aerospace, and medical fields."
+      ],
+      de: [
+        "TE Connectivity hat weltweit über 80.000 Mitarbeiter und ist in mehr als 140 Ländern tätig!",
+        "TE Connectivity stellt jährlich über 220 Milliarden Produkte her und verbindet Daten, Strom und Signale.",
+        "Unser Integrationsprozess ist in vier Säulen gegliedert: Kommunikation, Kultur, Rollen und Onboarding, um Synergien zu sichern.",
+        "Der Name „TE Connectivity“ steht für Tyco Electronics, das 2007 zu einem eigenständigen börsennotierten Unternehmen wurde.",
+        "TE Connectivity hält weltweit mehr als 15.000 Patente und treibt Innovationen in den Bereichen Automobil, Luft- und Raumfahrt sowie Medizin voran."
+      ],
+      zh: [
+        "TE Connectivity 在全球拥有超过 80,000 名员工，业务遍及 140 多个国家！",
+        "TE Connectivity 每年生产超过 2,200 亿件产品，连接数据、电力和信号。",
+        "我们的整合流程分为四大支柱：沟通、文化、角色和入职培训，以确保协同效应。",
+        "“TE Connectivity”这个名字代表 Tyco Electronics，它于 2007 年成为一家独立的上市公司。",
+        "TE Connectivity 拥有超过 15,000 项全球专利，推动汽车、航空航天和医疗领域的创新。"
+      ],
+      cs: [
+        "TE Connectivity má celosvětově více než 80 000 zaměstnanců a působí ve více než 140 zemích!",
+        "TE Connectivity vyrábí ročně přes 220 miliard produktů, které propojují data, energii a signál.",
+        "Náš integrační proces je rozdělen do čtyř pilířů: Komunikace, Kultura, Role a Onboarding pro zajištění synergie.",
+        "Název „TE Connectivity“ znamená Tyco Electronics, která se v roce 2007 stala samostatnou veřejně obchodovanou společností.",
+        "TE Connectivity vlastní více než 15 000 globálních patentů a podporuje inovace v automobilovém, leteckém a zdravotnickém odvětví."
+      ]
+    };
+
+    function factsForLang() {
+      const lang = localStorage.getItem('employeeLanguage') || 'en';
+      return DID_YOU_KNOW_FACTS[lang] || DID_YOU_KNOW_FACTS.en;
+    }
 
     let currentFactIndex = 0;
-    const factTextElement = document.getElementById('did-you-know-text');
     const factNextBtn = document.getElementById('did-you-know-next-btn');
 
+    function renderCurrentFact() {
+      const el = document.getElementById('did-you-know-text');
+      if (!el) return;
+      const facts = factsForLang();
+      el.textContent = facts[currentFactIndex % facts.length];
+    }
+
     function rotateFact() {
-      if (!factTextElement) return;
-      factTextElement.style.opacity = '0';
+      const el = document.getElementById('did-you-know-text');
+      if (!el) return;
+      el.style.opacity = '0';
       setTimeout(() => {
-        currentFactIndex = (currentFactIndex + 1) % didYouKnowFacts.length;
-        factTextElement.textContent = didYouKnowFacts[currentFactIndex];
-        factTextElement.style.opacity = '1';
+        const facts = factsForLang();
+        currentFactIndex = (currentFactIndex + 1) % facts.length;
+        el.textContent = facts[currentFactIndex];
+        el.style.opacity = '1';
       }, 200);
     }
 
     if (factNextBtn) {
       factNextBtn.addEventListener('click', rotateFact);
     }
-    
+
     // Set initial fact
-    if (factTextElement) {
-      factTextElement.textContent = didYouKnowFacts[0];
-    }
+    renderCurrentFact();
 
     // Auto rotate every 15 seconds
     setInterval(rotateFact, 15000);
+
+    // Expose so the language switcher can re-render the current fact in the new language
+    window.__renderDidYouKnowFact = renderCurrentFact;
   }
 
   // Bind audio controller and render streak badge on startup

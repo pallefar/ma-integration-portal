@@ -477,15 +477,34 @@ document.addEventListener('DOMContentLoaded', () => {
   // 5. Render Coaching Corners & Scripts
   function renderCoachingCorner(scores) {
     coachingContainer.innerHTML = '';
+    // Ground the scenarios in the real deal (acquired company + synergy objective)
+    // rather than hardcoded sensor copy. Settings is small & already cached server-side.
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(settings => paintCoachingCorner(scores, settings || {}))
+      .catch(() => paintCoachingCorner(scores, {}));
+  }
+
+  function paintCoachingCorner(scores, settings) {
+    const targetCompany = (settings && settings.targetCompany) ? settings.targetCompany : 'the acquired company';
+    const synergyObjective = (settings && settings.synergyObjective) ? settings.synergyObjective : 'the deal thesis';
+
+    // Single dynamic status line — mirrors the exact culture score the gauge shows.
+    const c = typeof scores.culture === 'number' ? scores.culture : 0;
+    let band, bandClass;
+    if (c < 3.0) { band = 'low'; bandClass = 'alert-box-warning'; }
+    else if (c < 4.2) { band = 'moderate'; bandClass = 'alert-box-info'; }
+    else { band = 'strong'; bandClass = 'alert-box-success'; }
+    const cta = c < 4.2 ? 'prioritise the scenarios below' : 'keep reinforcing the scenarios below';
 
     let coachingHtml = `
-      <div class="alert-box alert-box-info" style="margin-top:0;">
-        <span class="alert-title">Integration Leader Coach Desk</span>
+      <div class="alert-box ${bandClass}" style="margin-top:0;">
+        <span class="alert-title">Integration Leader Coaching Desk</span>
         <span class="alert-content">
-          Your role is central to integration success. Below are specific roleplay coaching guidelines modeled for the ${scores.culture < 3.0 ? 'low cultural alignment' : 'normal onboarding'} score observed in the diagnostics.
+          Cultural alignment is currently ${band} (${c.toFixed(1)}/5) for the ${escapeHtml(targetCompany)} integration — ${cta} to close the interpersonal gap.
         </span>
       </div>
-      
+
       <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-top: 1.5rem;">
     `;
 
@@ -528,7 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </p>
           <div style="background-color: var(--bg-white); padding: 1rem; border-radius: var(--radius-md); font-size: 0.9rem; border-left: 3px solid var(--te-orange);">
             <strong>Coaching Dialogue Blueprint:</strong><br>
-            <span style="color: var(--text-secondary);">"Your engineering role here is critical to TE's sensor portfolio. We are launching key talent retention incentives, but more importantly: by joining TE, your career pathways expand into our global laboratories and design centers in the US, Europe, and Asia. Here is our retention blueprint."</span>
+            <span style="color: var(--text-secondary);">"Your engineering role here is critical to ${escapeHtml(synergyObjective)}. We are launching key talent retention incentives, but more importantly: by joining TE, your career pathways expand into our global laboratories and design centers in the US, Europe, and Asia. Here is our retention blueprint."</span>
           </div>
         </div>
       `;
@@ -541,32 +560,81 @@ document.addEventListener('DOMContentLoaded', () => {
           </p>
           <div style="background-color: var(--bg-white); padding: 1rem; border-radius: var(--radius-md); font-size: 0.9rem; border-left: 3px solid var(--te-dark-teal);">
             <strong>Coaching Dialogue Blueprint:</strong><br>
-            <span style="color: var(--text-secondary);">"We mapping our levels to reflect your skills accurately. This harmonization preserves your core benefits and clarifies long-term growth options. Let's schedule a 1-on-1 to review the translation details."</span>
+            <span style="color: var(--text-secondary);">"We are mapping our levels to reflect your skills accurately. This harmonization preserves your core benefits and clarifies long-term growth options. Let's schedule a 1-on-1 to review the translation details."</span>
           </div>
         </div>
       `;
     }
 
+    // Value & Synergies scenario — coaches the third diagnostic dimension too.
+    if (scores.value < 3.0) {
+      coachingHtml += `
+        <div class="card" style="margin: 0; background: var(--bg-light);">
+          <h4 style="margin-bottom: 0.5rem; color: var(--te-dark-teal);">Scenario: Synergy &amp; Value Skepticism</h4>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            <em>Friction:</em> Teams doubt the deal thesis and fear synergy targets will translate into cuts.
+          </p>
+          <div style="background-color: var(--bg-white); padding: 1rem; border-radius: var(--radius-md); font-size: 0.9rem; border-left: 3px solid var(--te-orange);">
+            <strong>Coaching Dialogue Blueprint:</strong><br>
+            <span style="color: var(--text-secondary);">"Our shared goal is ${escapeHtml(synergyObjective)}. Synergy here means reaching more customers together, not stripping teams — let's map the first joint win so you can see the upside in your own numbers."</span>
+          </div>
+        </div>
+      `;
+    } else {
+      coachingHtml += `
+        <div class="card" style="margin: 0; background: var(--bg-light);">
+          <h4 style="margin-bottom: 0.5rem; color: var(--te-dark-teal);">Scenario: Locking In Synergy Momentum</h4>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            <em>Friction:</em> Strong alignment on value, but early wins need visible owners to stay on track.
+          </p>
+          <div style="background-color: var(--bg-white); padding: 1rem; border-radius: var(--radius-md); font-size: 0.9rem; border-left: 3px solid var(--te-dark-teal);">
+            <strong>Coaching Dialogue Blueprint:</strong><br>
+            <span style="color: var(--text-secondary);">"We are aligned on ${escapeHtml(synergyObjective)}. Let's name an owner for each early synergy milestone and review it in the bi-weekly sync so the momentum you've built converts into results."</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Score-driven worklist: surface the actions that matter for the weakest
+    // dimensions, then a stable baseline. Checkbox state persists to localStorage
+    // so it behaves like a real, sticky to-do list across reloads.
+    const checklistItems = [];
+    if (scores.talent < 3.0) checklistItems.push({ id: 'talent-1on1', label: 'Complete retention 1-on-1s with the top 10% critical acquired employees.' });
+    if (scores.culture < 3.0) checklistItems.push({ id: 'culture-cadence', label: 'Set up a bi-weekly synergy calendar for acquired middle managers.' });
+    if (scores.value < 3.0) checklistItems.push({ id: 'value-milestone', label: `Confirm the first joint synergy milestone toward ${synergyObjective}.` });
+    checklistItems.push({ id: 'hr-systems', label: 'Establish clear transition pathways for local HR systems to TE ERP.' });
+    checklistItems.push({ id: 'levels-map', label: 'Publish the job-level translation map so employees see their TE level.' });
+
+    const savedChecks = readCoachingChecklist();
     coachingHtml += `
       </div>
-      
+
       <div class="card" style="margin-top: 1.5rem; border-left: 4px solid var(--te-orange);">
         <h4 style="margin-bottom: 0.75rem;">Interactive Integration Leader Checklist</h4>
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+          ${checklistItems.map(it => `
           <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
-            <input type="checkbox" style="accent-color: var(--te-orange);"> Complete initial 1-on-1s with top 10% critical acquired employees.
-          </label>
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
-            <input type="checkbox" style="accent-color: var(--te-orange);"> Set up bi-weekly synergy calendar for acquired middle managers.
-          </label>
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
-            <input type="checkbox" style="accent-color: var(--te-orange);"> Establish clear transition pathways for local HR systems to TE ERP.
-          </label>
+            <input type="checkbox" data-check-id="${it.id}" style="accent-color: var(--te-orange);" ${savedChecks[it.id] ? 'checked' : ''}> ${escapeHtml(it.label)}
+          </label>`).join('')}
         </div>
       </div>
     `;
 
     coachingContainer.innerHTML = coachingHtml;
+
+    // Persist checkbox state on change.
+    coachingContainer.querySelectorAll('input[data-check-id]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const state = readCoachingChecklist();
+        state[cb.getAttribute('data-check-id')] = cb.checked;
+        try { localStorage.setItem('coachingChecklist', JSON.stringify(state)); } catch (e) { /* storage disabled */ }
+      });
+    });
+  }
+
+  function readCoachingChecklist() {
+    try { return JSON.parse(localStorage.getItem('coachingChecklist') || '{}') || {}; }
+    catch (e) { return {}; }
   }
 
   // 6. TEodor Coach Interaction Engine & Dialogue Scripts
@@ -583,12 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (duckCoach && speechBubble) {
     duckCoach.addEventListener('click', () => {
       duckCoach.classList.add('quacking');
-      // If AI is downloaded, speech bubble changes to a dynamic message
-      if (document.getElementById('teodor-chat-panel').style.display === 'block') {
-        speechBubble.innerHTML = "Quack! I am operating as a fully autonomous **Hugging Face AI Insight**! Type any question in the console below to check my step-by-step reasoning!";
-      } else {
-        speechBubble.innerHTML = "Quack! I am <strong>TEodor</strong>, your M&A advisor. Select one of the integration questions below and I'll give you premium corporate coaching advice!";
-      }
+      speechBubble.innerHTML = "Quack! I am <strong>TEodor</strong>, your M&A integration coach. Pick one of the integration questions below and I'll give you grounded coaching advice!";
       setTimeout(() => {
         duckCoach.classList.remove('quacking');
       }, 500);
@@ -606,415 +669,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
-  }
-
-  // ==========================================
-  // NEW IN-BROWSER DUCK LOCAL LLM & SMOLAGENT
-  // ==========================================
-  
-  let teodorPipeline = null;
-  let activeAiInsight = null;
-
-  class AiInsight {
-    constructor(modelPipeline, loggerCallback) {
-      this.pipeline = modelPipeline;
-      this.logger = loggerCallback;
-      
-      // Client-Side Tools
-      this.tools = {
-        getDiagnosticsScore: async (dimension) => {
-          try {
-            const res = await fetch('/api/assessment/latest');
-            const data = await res.json();
-            if (data.success && data.assessment) {
-              const score = data.assessment.scores[dimension];
-              return `Diagnostics evaluation: ${dimension.toUpperCase()} score is ${score || 'unknown'}/5.0.`;
-            }
-            return `Diagnostics check: No assessment score found for ${dimension}.`;
-          } catch (e) {
-            return `Error verifying scores: ${e.message}`;
-          }
-        },
-        searchPlaybook: async (query) => {
-          try {
-            const res = await fetch(`/api/rag/search?q=${encodeURIComponent(query)}`);
-            const data = await res.json();
-            if (data.success && data.results && data.results.length > 0) {
-              const snippets = data.results.map((r, idx) => `[Rule #${idx+1}] [${r.chapter}] ${r.title}: "${r.text}"`).join('\n');
-              return `Retrieved ${data.results.length} relevant integration playbook guidelines from backend RAG index:\n${snippets}`;
-            }
-            return `RAG search check: No matching playbook guidelines found for query keyword "${query}".`;
-          } catch (e) {
-            return `Error querying backend RAG search index: ${e.message}`;
-          }
-        },
-        getPlaybookLink: async (dimension) => {
-          const links = {
-            culture: "/playbook.html#culture",
-            talent: "/playbook.html#talent",
-            value: "/playbook.html#value"
-          };
-          return `Target Playbook coordinates: Chapter link is ${links[dimension] || '/playbook.html'}.`;
-        },
-        getAcquisitionProgress: async () => {
-          try {
-            const res = await fetch('/api/employees');
-            const employees = await res.json();
-            if (employees && employees.length > 0) {
-              const totalXp = employees.reduce((sum, e) => sum + (e.points || 0), 0);
-              const avgLessons = employees.reduce((sum, e) => sum + (e.completedLessons ? e.completedLessons.length : 0), 0) / employees.length;
-              const certified = employees.filter(e => (e.points || 0) >= 100).length;
-              return `Acquisition Analytics: Roster lists ${employees.length} employees, total accrued XP is ${totalXp}, average lessons completed is ${avgLessons.toFixed(1)}/9, and ${certified} employee(s) have reached Certified status.`;
-            }
-            return `Acquisition Analytics: No employees found in the database.`;
-          } catch (e) {
-            return `Error loading workforce: ${e.message}`;
-          }
-        }
-      };
-    }
-
-    async run(userInput) {
-      const query = userInput.toLowerCase();
-      const actions = [];
-      
-      if (query.includes('culture') || query.includes('values') || query.includes('anxiety') || query.includes('resist')) {
-        actions.push({
-          thought: "User is asking about culture, values, or managerial anxiety. I need to run getDiagnosticsScore to check the current Culture score.",
-          tool: "getDiagnosticsScore",
-          arg: "culture",
-          nextThought: "Diagnostic culture score verified. Querying backend RAG search index to pull official Culture playbook guidelines."
-        });
-        actions.push({
-          tool: "searchPlaybook",
-          arg: "culture values communication resistance town hall",
-          nextThought: "RAG guidelines parsed. Let's also fetch the direct playbook URL coordinate link for the Integration Leader."
-        });
-        actions.push({
-          tool: "getPlaybookLink",
-          arg: "culture",
-          nextThought: "All diagnostic, RAG rules, and coordinate resources are loaded. Running neural network compiler to formulate final recommendation."
-        });
-      } else if (query.includes('talent') || query.includes('retention') || query.includes('engineer') || query.includes('sso') || query.includes('access') || query.includes('systems')) {
-        actions.push({
-          thought: "User is asking about talent retention, engineering incentives, or systems access onboarding. Checking current Talent & Systems score.",
-          tool: "getDiagnosticsScore",
-          arg: "talent",
-          nextThought: "Talent score is compiled. Querying backend RAG index for Comp & Benefits integration policies."
-        });
-        actions.push({
-          tool: "searchPlaybook",
-          arg: "talent retention R&D cyber security SSO credentials",
-          nextThought: "Talent policies retrieved via RAG. Fetching target playbook coordinates for the Integration Leader."
-        });
-        actions.push({
-          tool: "getPlaybookLink",
-          arg: "talent",
-          nextThought: "Playbook coordinates locked in. Loading deep learning model to finalize the quacking advice."
-        });
-      } else if (query.includes('value') || query.includes('synergy') || query.includes('sales') || query.includes('pricing') || query.includes('patent')) {
-        actions.push({
-          thought: "User is asking about synergy capture, sales networks, or patent technology transfer. Verifying the Value & Synergies score.",
-          tool: "getDiagnosticsScore",
-          arg: "value",
-          nextThought: "Value score retrieved. Running backend RAG search for sales network and IP protection guidelines."
-        });
-        actions.push({
-          tool: "searchPlaybook",
-          arg: "synergy pricing sales distribution technology transfer patent",
-          nextThought: "RAG compliance snippets acquired. Fetching CRM/pipeline integration coordinate link."
-        });
-        actions.push({
-          tool: "getPlaybookLink",
-          arg: "value",
-          nextThought: "Resources obtained. Loading Transformers inference parameters to generate response."
-        });
-      } else if (query.includes('progress') || query.includes('employee') || query.includes('xp') || query.includes('roster') || query.includes('certified') || query.includes('academy')) {
-        actions.push({
-          thought: "User wants a status report on Employee Academy progress and leaderboard metrics. Checking getAcquisitionProgress.",
-          tool: "getAcquisitionProgress",
-          arg: null,
-          nextThought: "Workforce analytics successfully pulled. Ready to formulate final progress report."
-        });
-      } else {
-        actions.push({
-          thought: `This is a general post-merger integration query. Let's run a backend RAG query to pull standard playbook guidelines matching: "${userInput}".`,
-          tool: "searchPlaybook",
-          arg: userInput,
-          nextThought: "Playbook insights retrieved. Let's also check workforce academy stats to provide complete organizational context."
-        });
-        actions.push({
-          tool: "getAcquisitionProgress",
-          arg: null,
-          nextThought: "Workforce progress loaded. Running local LLM inference to compile advice."
-        });
-      }
-
-      // Execute Action Steps
-      for (let act of actions) {
-        if (act.thought) {
-          this.logger({ type: 'thought', text: act.thought });
-          await new Promise(r => setTimeout(r, 900));
-        }
-        
-        this.logger({ type: 'action', text: `run ${act.tool}(${act.arg ? `'${act.arg}'` : ''})` });
-        await new Promise(r => setTimeout(r, 700));
-        
-        const observation = await this.tools[act.tool](act.arg);
-        this.logger({ type: 'observation', text: observation });
-        await new Promise(r => setTimeout(r, 1000));
-        
-        if (act.nextThought) {
-          this.logger({ type: 'thought', text: act.nextThought });
-          await new Promise(r => setTimeout(r, 800));
-        }
-      }
-
-      this.logger({ type: 'thought', text: "Synthesizing final advice with TEodor duck speech parameters..." });
-      await new Promise(r => setTimeout(r, 600));
-
-      let finalAnswer = "";
-      if (this.pipeline) {
-        try {
-          const finalPrompt = `Post-merger integration question: "${userInput}". Context: Culture score 3.67, Talent score 4.67, Value score 5.0. Answer in a helpful, coaching tone:`;
-          const result = await this.pipeline(finalPrompt, { max_new_tokens: 75 });
-          finalAnswer = result[0]?.generated_text || result[0]?.translation_text || "";
-          
-          if (!finalAnswer.toLowerCase().startsWith("quack")) {
-            finalAnswer = "Quack! " + finalAnswer;
-          }
-        } catch (err) {
-          console.error("Local LLM inference error, using high-fidelity fallback:", err);
-          finalAnswer = this.getFallbackAnswer(query);
-        }
-      } else {
-        finalAnswer = this.getFallbackAnswer(query);
-      }
-
-      this.logger({ type: 'final', text: finalAnswer });
-      return finalAnswer;
-    }
-
-    getFallbackAnswer(query) {
-      if (query.includes('culture') || query.includes('values') || query.includes('anxiety') || query.includes('resist')) {
-        return "Quack! Middle management anxiety is best handled via early values workshops and localized town halls. Since our diagnostics showed a Culture & Values score of 3.67 (Moderate Gap), prioritize communication cadences. Ensure you open our comprehensive [Culture and Values Playbook](/playbook.html#culture) to schedule the TE Values Synergy Workshops.";
-      }
-      if (query.includes('talent') || query.includes('retention') || query.includes('engineer') || query.includes('sso') || query.includes('access') || query.includes('systems')) {
-        return "Quack! Our Talent & Systems alignment is highly positive at 4.67. To safeguard this, make sure SSO logins are fully distributed and cyber training completed in the first 30 days. Read the [Talent Mapping & Retention Guide](/playbook.html#talent) for key retention incentive models.";
-      }
-      if (query.includes('value') || query.includes('synergy') || query.includes('sales') || query.includes('pricing') || query.includes('patent')) {
-        return "Quack! Commercial synergy capture is rated at 5.0 (Strong Alignment). Secure this target by catalog alignment and pipeline integration. Check out the [Value Synergy Playbook](/playbook.html#value) to coordinate direct supply-chain handoffs.";
-      }
-      if (query.includes('progress') || query.includes('employee') || query.includes('xp') || query.includes('roster') || query.includes('certified') || query.includes('academy')) {
-        return "Quack! Our Academy Roster currently tracks 3 pre-seeded integration leads. Emma Watson is leading with 160 XP (Synergy Scout badge tier), followed by Sarah Jenkins at 110 XP (Systems Scholar badge tier). Keep awarding Merit Points (+50 XP) to integration champions to unlock milestone bonuses!";
-      }
-      return "Quack! I am TEodor, your post-merger integration coach! Ask me about culture gaps, engineer retention incentives, product synergies, or the employee training progress dashboard!";
-    }
-  }
-
-  // Initialize TEodor chatbot and background model compilation
-  function initTeodorLocalAI() {
-    const progressContainer = document.getElementById('teodor-download-progress-bar-container');
-    const progressFill = document.getElementById('teodor-download-progress-fill');
-    const percentEl = document.getElementById('teodor-download-percent');
-    const statusLabelEl = document.getElementById('teodor-download-status-label');
-    
-    const staticFaqContainer = document.getElementById('teodor-static-faq-container');
-    const chatPanel = document.getElementById('teodor-chat-panel');
-    const chatHistory = document.getElementById('teodor-chat-history');
-    const reasoningLogs = document.getElementById('teodor-reasoning-logs');
-    const logContent = document.getElementById('teodor-log-content');
-    const chatForm = document.getElementById('teodor-chat-form');
-    const chatInput = document.getElementById('teodor-chat-input');
-
-    if (!progressContainer || !chatPanel) return;
-
-    fetch('/api/settings')
-      .then(res => res.json())
-      .then(async (settings) => {
-        const browserModel = settings.browserModel || 'none';
-        
-        if (browserModel === 'none') {
-          // Normal static FAQ mode
-          if (staticFaqContainer) staticFaqContainer.style.display = 'block';
-          chatPanel.style.display = 'none';
-          progressContainer.style.display = 'none';
-          return;
-        }
-
-        // AI Mode Selected - Show Downloader & Hide static FAQs
-        if (staticFaqContainer) staticFaqContainer.style.display = 'none';
-        progressContainer.style.display = 'block';
-        chatPanel.style.display = 'none';
-
-        if (speechBubble) {
-          speechBubble.innerHTML = `📥 Quack! Downloading my AI Brain (model: <strong>${browserModel}</strong>) directly in your browser. Once loaded, my full chat console activates!`;
-        }
-
-        if (browserModel === 'simulated-duck') {
-          // Run high-fidelity simulated download over 5 seconds
-          let currentPct = 0;
-          const totalSizeMB = 120.4;
-          
-          const interval = setInterval(() => {
-            currentPct += Math.floor(Math.random() * 15) + 5;
-            if (currentPct >= 100) {
-              currentPct = 100;
-              clearInterval(interval);
-              
-              progressFill.style.width = '100%';
-              percentEl.textContent = '100%';
-              statusLabelEl.textContent = `Completed! Fully Compiled ${totalSizeMB} MB`;
-              
-              setTimeout(() => {
-                activateChatPanel(null);
-              }, 400);
-            } else {
-              const loadedMB = ((currentPct / 100) * totalSizeMB).toFixed(1);
-              progressFill.style.width = `${currentPct}%`;
-              percentEl.textContent = `${currentPct}%`;
-              statusLabelEl.textContent = `Downloading AI Brain... ${loadedMB} MB / ${totalSizeMB} MB`;
-            }
-          }, 500);
-          
-        } else {
-          // Real Transformers.js CDN loading
-          try {
-            const modelName = browserModel === 'lamini-78m' ? 'Xenova/LaMini-Flan-T5-78M' : 'Xenova/Qwen1.5-0.5B-Chat';
-            statusLabelEl.textContent = `Loading Transformers.js (local)...`;
-
-            // Dynamic import of the locally-vendored Transformers.js (no external CDN).
-            const transformers = await import('/vendor/transformers/transformers.min.js');
-
-            // Library + ONNX WASM runtime are served locally; the model weights still
-            // stream from the Hugging Face Hub on first use (then cached in the browser).
-            transformers.env.allowLocalModels = false;
-            transformers.env.backends.onnx.wasm.wasmPaths = '/vendor/transformers/';
-            
-            statusLabelEl.textContent = `Connecting to Hugging Face Hub...`;
-            
-            // Instantiate pipeline with progress callback
-            const pipelineInstance = await transformers.pipeline('text2text-generation', modelName, {
-              progress_callback: (data) => {
-                if (data.status === 'progress') {
-                  const pct = Math.floor(data.progress || 0);
-                  progressFill.style.width = `${pct}%`;
-                  percentEl.textContent = `${pct}%`;
-                  statusLabelEl.textContent = `Downloading ${data.file || 'model files'}... (${pct}%)`;
-                } else if (data.status === 'ready') {
-                  statusLabelEl.textContent = `Compiling model parameters...`;
-                }
-              }
-            });
-
-            progressFill.style.width = '100%';
-            percentEl.textContent = '100%';
-            statusLabelEl.textContent = `Ready! Model parameters loaded.`;
-            
-            setTimeout(() => {
-              activateChatPanel(pipelineInstance);
-            }, 500);
-            
-          } catch (error) {
-            console.error("Transformers.js download failed, falling back to simulated engine:", error);
-            statusLabelEl.textContent = `⚠️ Network Error. Fallback to Local Neural Simulation...`;
-            
-            // Automatic fallback to simulated duck
-            let currentPct = 0;
-            const interval = setInterval(() => {
-              currentPct += 20;
-              if (currentPct >= 100) {
-                currentPct = 100;
-                clearInterval(interval);
-                activateChatPanel(null);
-              } else {
-                progressFill.style.width = `${currentPct}%`;
-                percentEl.textContent = `${currentPct}%`;
-              }
-            }, 300);
-          }
-        }
-      })
-      .catch(err => console.error("Error checking browser AI settings:", err));
-
-    function activateChatPanel(pipelineInstance) {
-      progressContainer.style.display = 'none';
-      chatPanel.style.display = 'block';
-      chatPanel.style.animation = 'slideIn 0.5s ease-in-out';
-      
-      if (speechBubble) {
-        const inlineDuck = typeof window.getTeodorDuckSvg === 'function' ? window.getTeodorDuckSvg('24px', 'teodor-duck-inline teodor-duck-coach-animated') : '🦆';
-        speechBubble.innerHTML = `${inlineDuck} Quack! My AI Brain is fully operational! Use the console below to ask me anything. Watch my **AI Insight tool calls** execute live!`;
-      }
-
-      teodorPipeline = pipelineInstance;
-      activeAiInsight = new AiInsight(teodorPipeline, (logStep) => {
-        if (logStep.type === 'thought') {
-          logContent.innerHTML += `<div style="color: #38BDF8; margin-bottom: 0.5rem; font-family: monospace;">💭 <strong>[THOUGHT]:</strong> ${escapeHtml(logStep.text)}</div>`;
-        } else if (logStep.type === 'action') {
-          logContent.innerHTML += `<div style="color: #FBBF24; margin-bottom: 0.5rem; font-family: monospace;">⚡ <strong>[CALL TOOL]:</strong> ${escapeHtml(logStep.text)}</div>`;
-        } else if (logStep.type === 'observation') {
-          logContent.innerHTML += `<div style="color: #10B981; margin-bottom: 0.5rem; font-family: monospace;">🔍 <strong>[OBSERVATION]:</strong> ${escapeHtml(logStep.text)}</div>`;
-        } else if (logStep.type === 'final') {
-          const logDuck = typeof window.getTeodorDuckSvg === 'function' ? window.getTeodorDuckSvg('18px', 'teodor-duck-inline teodor-duck-coach-animated') : '🦆';
-          logContent.innerHTML += `<div style="color: #E98300; margin-bottom: 0.5rem; font-family: monospace; border-top: 1px dashed #334155; padding-top: 0.5rem; display: flex; align-items: center; gap: 0.35rem;">${logDuck} <strong>[FINAL ANSWER]:</strong> ${escapeHtml(logStep.text)}</div>`;
-        }
-        logContent.scrollTop = logContent.scrollHeight;
-      });
-
-      // Bind Chat Submits
-      chatForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const userInput = chatInput.value.trim();
-        if (!userInput) return;
-
-        chatInput.value = '';
-        appendUserMessage(userInput);
-
-        // Open and Clear logs panel
-        reasoningLogs.style.display = 'block';
-        logContent.innerHTML = '';
-
-        // Animate quack
-        if (duckCoach) duckCoach.classList.add('quacking');
-
-        const answer = await activeAiInsight.run(userInput);
-        
-        if (duckCoach) duckCoach.classList.remove('quacking');
-        appendAssistantMessage(formatMarkdownLinks(answer));
-      });
-
-      // Bind Suggestion Tags
-      document.querySelectorAll('.quick-chat-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const query = btn.getAttribute('data-query');
-          chatInput.value = query;
-          chatForm.dispatchEvent(new Event('submit'));
-        });
-      });
-    }
-
-    function appendUserMessage(text) {
-      chatHistory.innerHTML += `
-        <div class="chat-bubble user" style="align-self: flex-end; background-color: var(--te-dark-teal); color: var(--text-light); padding: 0.75rem 1rem; border-radius: 12px 12px 0 12px; max-width: 85%; font-size: 0.9rem; box-shadow: var(--shadow-sm); line-height: 1.4;">
-          ${escapeHtml(text)}
-        </div>
-      `;
-      chatHistory.scrollTop = chatHistory.scrollHeight;
-    }
-
-    function appendAssistantMessage(htmlContent) {
-      chatHistory.innerHTML += `
-        <div class="chat-bubble assistant" style="align-self: flex-start; background-color: var(--te-orange-light); border: 1px solid rgba(233, 131, 0, 0.2); padding: 0.75rem 1rem; border-radius: 12px 12px 12px 0; max-width: 85%; font-size: 0.9rem; color: var(--te-dark-teal); box-shadow: var(--shadow-sm); line-height: 1.4;">
-          ${htmlContent}
-        </div>
-      `;
-      chatHistory.scrollTop = chatHistory.scrollHeight;
-    }
-
-    function formatMarkdownLinks(text) {
-      return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="btn-link" style="color: var(--te-orange); font-weight: 700; text-decoration: underline;">$1</a>');
-    }
   }
 
   // ==========================================
@@ -2676,7 +2330,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadAlerts();
   loadOnboardingSuccess();
   loadAcademyTracking();
-  initTeodorLocalAI();
   loadChangeCurve();
   initWelcomeKitCustomizer();
   loadHrbpCommunications();

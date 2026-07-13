@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Employee Welcome Portal</title>
   <meta name="description" content="Welcome to the TE Connectivity family. Review your personalized onboarding roadmap, systems guidelines, and HR resources.">
-  <link rel="stylesheet" href="/css/style.css?v=1784100006">
-  <script src="/js/transitions.js?v=1784100006"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1784100009">
+  <script src="/js/transitions.js?v=1784100009"></script>
 </head>
 <body>
 
@@ -66,14 +66,14 @@
             <span class="stat-icon">🎓</span>
             <div class="stat-info">
               <span class="stat-label" data-i18n="stat_training_status">Training Status</span>
-              <span class="stat-value" id="hero-stat-training-completed">Active &bull; Module 1</span>
+              <span class="stat-value" id="hero-stat-training-completed" data-i18n="hero_stat_training_value">Active &bull; Module 1</span>
             </div>
           </div>
           <div class="hero-stat-card">
             <span class="stat-icon">📈</span>
             <div class="stat-info">
               <span class="stat-label" data-i18n="stat_onboarding_health">Pulse Health</span>
-              <span class="stat-value" id="hero-stat-pulse-status" style="color: #10B981;">Synced ✅</span>
+              <span class="stat-value" id="hero-stat-pulse-status" style="color: #10B981;" data-i18n="hero_stat_pulse_value">Synced ✅</span>
             </div>
           </div>
         </div>
@@ -291,7 +291,7 @@
               <!-- Retention Milestones -->
               <div class="card" style="padding: 1.5rem;">
                 <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
-                  <h3 style="margin: 0; color: var(--te-dark-teal); font-size: 1.15rem;">🔒 Milestone Retention Rewards</h3>
+                  <h3 style="margin: 0; color: var(--te-dark-teal); font-size: 1.15rem;" data-i18n="milestones_header">🔒 Milestone Retention Rewards</h3>
                 </div>
                 <!-- Horizontal Stepper Progress Stepper -->
                 <div style="padding: 0.25rem 0;" id="academy-milestones-scroller">
@@ -392,10 +392,10 @@
               <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
                 <h3 data-i18n="culture_section_heading">🎭 Your TE Alignment &amp; Values</h3>
               </div>
-              <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+              <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;" data-i18n="culture_values_body">
                 TE Connectivity operates under four core values: <strong>Integrity</strong>, <strong>Accountability</strong>, <strong>Teamwork</strong>, and <strong>Innovation</strong>. We are committed to establishing a collaborative environment during this integration.
               </p>
-              <div style="background: rgba(36, 76, 90, 0.03); border-radius: 6px; padding: 1rem; border-left: 4px solid var(--te-orange); font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary);">
+              <div style="background: rgba(36, 76, 90, 0.03); border-radius: 6px; padding: 1rem; border-left: 4px solid var(--te-orange); font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary);" data-i18n="culture_collab_note">
                 <strong>💡 Collaborative Strategy:</strong> Participate in local town halls and team syncs to connect with your new peers and learn about TE global business channels.
               </div>
             </div>
@@ -408,23 +408,23 @@
               <!-- Profile Details -->
               <div class="card" style="margin-top: 0; padding: 1.5rem;">
                 <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
-                  <h3>👤 Employee Integration Profile</h3>
+                  <h3 data-i18n="roles_profile_heading">👤 Employee Integration Profile</h3>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.88rem;">
                   <div>
-                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">Full Name</span>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;" data-i18n="roles_full_name">Full Name</span>
                     <strong id="role-profile-name" style="color: var(--te-dark-teal); font-size: 1.1rem;">Alex</strong>
                   </div>
                   <div>
-                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">Assigned Title / Role</span>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;" data-i18n="roles_assigned_title">Assigned Title / Role</span>
                     <span id="role-profile-title">R&amp;D Specialist</span>
                   </div>
                   <div>
-                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">Integration Track Department</span>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;" data-i18n="roles_track_dept">Integration Track Department</span>
                     <span id="role-profile-dept">R&amp;D</span>
                   </div>
                   <div>
-                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">System User Email</span>
+                    <span style="color: var(--text-dim); display: block; font-size: 0.75rem;" data-i18n="roles_system_email">System User Email</span>
                     <span id="role-profile-email">alex@te-legacy.com</span>
                   </div>
                 </div>
@@ -433,7 +433,7 @@
               <!-- Integration Buddy Card -->
               <div class="card" style="margin-top: 0; padding: 1.5rem; border-top: 4px solid var(--te-orange);">
                 <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
-                  <h3>🤝 Assigned Integration Buddy</h3>
+                  <h3 data-i18n="roles_buddy_heading">🤝 Assigned Integration Buddy</h3>
                 </div>
                 <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
                   <div style="width: 50px; height: 50px; background: var(--te-orange-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
@@ -444,10 +444,10 @@
                     <span id="buddy-profile-email" style="display: block; font-size: 0.76rem; color: var(--text-dim);">sconnor@te.com</span>
                   </div>
                 </div>
-                <p style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.75rem;">
+                <p style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.75rem;" data-i18n="roles_buddy_help">
                   Your integration buddy is here to help you get settled, gain access to software resources, and navigate internal channels.
                 </p>
-                <div style="background: rgba(233,131,0,0.05); padding: 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: bold; color: var(--te-orange); text-align: center;">
+                <div style="background: rgba(233,131,0,0.05); padding: 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: bold; color: var(--te-orange); text-align: center;" data-i18n="roles_buddy_contact">
                   💬 Contact Buddy through Slack/Teams
                 </div>
               </div>
@@ -459,36 +459,36 @@
           <div id="portal-tab-content-communication" class="portal-tab-content" style="display: none;">
             <div class="card" style="margin-top: 0;">
               <div class="card-header">
-                <h2>📣 Digital Broadcast Archive</h2>
+                <h2 data-i18n="comm_archive_title">📣 Digital Broadcast Archive</h2>
               </div>
-              <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
+              <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;" data-i18n="comm_archive_intro">
                 Official notifications, policy announcements, and integration guides dispatched to your email matching your profile track.
               </p>
               <div id="employee-communications-inbox" style="display: flex; flex-direction: column; gap: 1rem;">
                 <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; border-left: 4px solid var(--te-orange);">
                   <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-                    <strong style="color: var(--te-dark-teal); font-size: 1rem;">Welcome to the TE Network</strong>
-                    <span style="font-size: 0.75rem; color: var(--text-dim);">Day 1</span>
+                    <strong style="color: var(--te-dark-teal); font-size: 1rem;" data-i18n="comm_card1_title">Welcome to the TE Network</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-dim);" data-i18n="comm_day_1">Day 1</span>
                   </div>
-                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;">Your TE credentials and network access instructions have been fully provisioned. Please review the attached guide to connect your devices to the global intranet.</p>
-                  <a href="#" style="font-size: 0.75rem; color: var(--te-orange); font-weight: bold; text-decoration: none;">View Attachment (PDF)</a>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;" data-i18n="comm_card1_body">Your TE credentials and network access instructions have been fully provisioned. Please review the attached guide to connect your devices to the global intranet.</p>
+                  <a href="#" style="font-size: 0.75rem; color: var(--te-orange); font-weight: bold; text-decoration: none;" data-i18n="comm_view_attachment">View Attachment (PDF)</a>
                 </div>
-                
+
                 <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; border-left: 4px solid #8B5CF6;">
                   <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-                    <strong style="color: var(--te-dark-teal); font-size: 1rem;">Action Required: Compliance Training</strong>
-                    <span style="font-size: 0.75rem; color: var(--text-dim);">Day 15</span>
+                    <strong style="color: var(--te-dark-teal); font-size: 1rem;" data-i18n="comm_card2_title">Action Required: Compliance Training</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-dim);" data-i18n="comm_day_15">Day 15</span>
                   </div>
-                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;">As part of the integration, all acquired staff must complete the TE Ethics & Compliance certification. Log into the academy portal to begin.</p>
-                  <button class="btn btn-primary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: #8B5CF6; border-color: #8B5CF6;">Go to Academy</button>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;" data-i18n="comm_card2_body">As part of the integration, all acquired staff must complete the TE Ethics & Compliance certification. Log into the academy portal to begin.</p>
+                  <button class="btn btn-primary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: #8B5CF6; border-color: #8B5CF6;" data-i18n="comm_go_academy">Go to Academy</button>
                 </div>
 
                 <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; border-left: 4px solid var(--te-dark-teal);">
                   <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-                    <strong style="color: var(--te-dark-teal); font-size: 1rem;">Global Townhall Invitation</strong>
-                    <span style="font-size: 0.75rem; color: var(--text-dim);">Day 30</span>
+                    <strong style="color: var(--te-dark-teal); font-size: 1rem;" data-i18n="comm_card3_title">Global Townhall Invitation</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-dim);" data-i18n="comm_day_30">Day 30</span>
                   </div>
-                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">Join the executive leadership team for our quarterly global townhall, where we will welcome our newly integrated teams.</p>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;" data-i18n="comm_card3_body">Join the executive leadership team for our quarterly global townhall, where we will welcome our newly integrated teams.</p>
                 </div>
               </div>
             </div>
@@ -570,7 +570,7 @@
 
     <!-- Footer -->
     <footer class="main-footer">
-      <p>&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Post-Merger Integration IMO System.</p>
+      <p data-i18n="footer_copyright">&copy; 2026 <strong>TE Connectivity</strong>. All rights reserved. Post-Merger Integration IMO System.</p>
     </footer>
   </div>
 
@@ -585,8 +585,8 @@
         <div class="form-group" style="margin-bottom: 1.25rem;">
           <label class="form-label" for="video-modal-type" style="font-weight: 600; display: block; margin-bottom: 0.5rem;" data-i18n="video_modal_type">Video Source Type</label>
           <select class="form-control form-select" id="video-modal-type" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.2); color: white;">
-            <option value="local">Local Video File (MP4, WebM)</option>
-            <option value="youtube">YouTube Video Embedded URL or Link</option>
+            <option value="local" data-i18n="video_opt_local">Local Video File (MP4, WebM)</option>
+            <option value="youtube" data-i18n="video_opt_youtube">YouTube Video Embedded URL or Link</option>
           </select>
         </div>
         <div class="form-group" style="margin-bottom: 1.25rem;">
@@ -604,8 +604,8 @@
     </div>
   </div>
 
-  <script src="/js/ted-launcher.js?v=1784100006"></script>
-  <script src="/js/employee.js?v=1784100006"></script>
+  <script src="/js/ted-launcher.js?v=1784100009"></script>
+  <script src="/js/employee.js?v=1784100009"></script>
 </body>
 </html>
 
