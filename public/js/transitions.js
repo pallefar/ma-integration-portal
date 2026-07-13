@@ -848,6 +848,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ${renderSideGroup('portals', '\u{1F9ED}', 'Portals', portalItems)}
         ${renderSideGroup('resources', '\u{1F4DA}', 'Resources', resourceItems)}
       </nav>
+      <a href="/admin.html" class="sidebar-link sidebar-admin-link${path.includes('admin.html') ? ' active' : ''}" title="Admin Console">
+        <span class="sidebar-link-icon">\u{2699}️</span>
+        <span class="sidebar-link-label">Admin Console</span>
+      </a>
       <div class="sidebar-footer">TE M&A Integration Demo</div>
     `;
     document.body.appendChild(sidebar);
@@ -1393,6 +1397,20 @@ document.addEventListener('DOMContentLoaded', () => {
         applyMenuOverrides();
         // Inject admin-authored HTML-slide launchers for this page
         renderSlideLaunchers();
+        // Guarantee the Admin Console link sits at the bottom of the sidebar (it is a
+        // top-level pinned link, not a role-scoped sub-link, so it always shows).
+        if (!document.querySelector('#demo-sidebar .sidebar-admin-link')) {
+          const sbEl = document.getElementById('demo-sidebar');
+          const footEl = sbEl && sbEl.querySelector('.sidebar-footer');
+          if (sbEl && footEl) {
+            const al = document.createElement('a');
+            al.href = '/admin.html';
+            al.className = 'sidebar-link sidebar-admin-link' + (window.location.pathname.includes('admin.html') ? ' active' : '');
+            al.title = 'Admin Console';
+            al.innerHTML = '<span class="sidebar-link-icon">⚙️</span><span class="sidebar-link-label">Admin Console</span>';
+            sbEl.insertBefore(al, footEl);
+          }
+        }
         // If the persisted demo role is hidden (and no page URL pins a role), fall back to the first visible role
         const isRolePage = /(admin|pmo|dashboard|supporting|employee)\.html/.test(window.location.pathname);
         const persistedRole = localStorage.getItem('active_demo_role') || 'admin';

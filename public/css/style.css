@@ -7004,6 +7004,30 @@ body.preview-mobile .app-container {
   .slide-overlay-title { font-size: 0.85rem; }
 }
 
+/* Admin Console link pinned at the bottom of the sidebar (above the footer). */
+.sidebar-admin-link {
+  flex-shrink: 0;
+  margin: 0.35rem 0.6rem 0.2rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Header squeeze fix: when the sidebar is expanded, .app-container shifts right by
+   250px so the header has ~250px less width — but its wrap breakpoints key off the
+   VIEWPORT, not the effective width. Wrap the header ~250px earlier while the sidebar
+   is open, and let the tools cluster degrade instead of crushing together. */
+.header-tools-container { flex-wrap: wrap; }
+@media (max-width: 1280px) {
+  body.has-demo-sidebar:not(.sidebar-collapsed) .header-top-row {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+  body.has-demo-sidebar:not(.sidebar-collapsed) .header-tools-container {
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+}
+
 .device-preview-controls {
   display: flex;
   gap: 0.5rem;
