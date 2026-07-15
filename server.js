@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const compression = require('compression');
 const aiService = require('./aiService');
 const ragService = require('./ragService');
@@ -13,8 +14,56 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}
 const DB_FILE = path.join(__dirname, 'db.json');
 
 app.use(compression());
+
+// --- Security response headers -----------------------------------------------
+// Behaviour-preserving hardening: no dependency, applied to every response
+// (static assets + API). The CSP keeps 'unsafe-inline'/'unsafe-eval' because the
+// app relies on inline scripts/styles and the vendored Transformers.js WASM
+// runtime; it still blocks external script injection, arbitrary data exfil
+// (connect-src), object/embed, base-tag hijack, framing and form hijack.
+app.disable('x-powered-by');
+const CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://www.youtube.com https://youtube.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co",
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com",
+  "media-src 'self' blob: data: https://*.youtube.com",
+  "worker-src 'self' blob:"
+].join('; ');
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', CSP);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // HSTS is only meaningful behind TLS (terminated by the reverse proxy in the
+  // internal deployment); enable it explicitly so the plain-HTTP local demo is
+  // unaffected.
+  if (process.env.ENABLE_HSTS === '1') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// The app now starts on the M&A HR Integration Enablement overview (the executive
+// slide deck embedded as an app page). The role-based showcase stays at /index.html,
+// one click away via the overview's "Enter the Portal" CTA. Registered BEFORE the
+// static middleware so it wins for exactly "/" (static's default would serve index.html).
+app.get('/', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'overview.html'));
+});
+
 // Long-cache versioned static assets (JS/CSS/images already carry ?v= busting);
 // always revalidate HTML so users never get a stale page pointing at old assets.
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -43,13 +92,23 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 if (!ADMIN_TOKEN) {
   console.warn('[security] ADMIN_TOKEN not set — write/admin API endpoints are OPEN. Set ADMIN_TOKEN in production to require authentication.');
 }
+// Constant-time string comparison (hash to equal length first so timingSafeEqual
+// never throws on mismatched lengths and the compare itself leaks no timing info).
+function timingSafeEqualStr(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
 app.use('/api', (req, res, next) => {
   const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
   const isAdminPath = req.path.startsWith('/admin'); // /api/admin/* (download-zip, migrate-db)
   if (!isWrite && !isAdminPath) return next();        // public read-only GETs stay open (visitor demo)
   if (!ADMIN_TOKEN) return next();                    // dev/demo: no token configured -> open
-  const supplied = req.get('X-Admin-Token') || (req.query && req.query.admin_token) || '';
-  if (supplied && supplied === ADMIN_TOKEN) return next();
+  // Header only — never accept the secret via query string (it would leak into
+  // access logs, proxies and browser history). Constant-time compare over fixed
+  // -length SHA-256 digests so the token can't be guessed via a timing side channel.
+  const supplied = req.get('X-Admin-Token') || '';
+  if (supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return next();
   return res.status(401).json({ error: 'Admin authentication required. Provide a valid X-Admin-Token.' });
 });
 
@@ -151,6 +210,14 @@ function readDb() {
 }
 
 function writeDb(data) {
+  // Best-effort rolling backup of the last good file before we overwrite it, so a
+  // bad/truncated write or an accidental destructive call can be recovered from
+  // db.json.bak. (For production, pair this with a scheduled off-box snapshot.)
+  try {
+    if (fs.existsSync(DB_FILE) && fs.statSync(DB_FILE).size > 0) {
+      fs.copyFileSync(DB_FILE, DB_FILE + '.bak');
+    }
+  } catch (e) { console.warn('db backup skipped:', e && e.message); }
   try {
     // Atomic write: serialize to a temp file, then rename over the real file.
     // rename() is atomic on the same filesystem, so a crash mid-write can never
@@ -163,8 +230,18 @@ function writeDb(data) {
     return true;
   } catch (error) {
     console.error('Error writing to database file:', error);
-    return false;
+    // Surface the failure so Express returns a 500 via the error middleware,
+    // instead of silently returning a falsy value that nearly every caller
+    // ignores and then answers HTTP 200 on data that was never persisted.
+    throw new Error('Failed to persist database');
   }
+}
+
+// Collision-resistant id: time-sortable base36 timestamp + random suffix. Two
+// creates in the same millisecond used to mint identical `prefix_<Date.now()>`
+// ids, which then corrupted each other on find/delete-by-id.
+function newId(prefix) {
+  return prefix + '_' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
 }
 
 // Strip server-only secrets from any settings object before returning it to a
@@ -192,7 +269,7 @@ app.get('/api/admin/download-zip', (req, res) => {
     // or secrets (db.json = API key + all records; .env; sent_emails). The downloaded
     // package boots with a fresh database. The temp file is deleted after sending.
     const zipPath = path.join(os.tmpdir(), `ma-app-${Date.now()}.zip`);
-    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
+    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" "db.json.bak" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
 
     res.download(zipPath, 'te-ma-integration-portal.zip', (err) => {
       if (err) console.error('Error sending zip file to browser:', err);
@@ -255,7 +332,7 @@ app.post('/api/rag/upload', async (req, res) => {
     // Persist finding blocks to db.json
     db.ragUploads = db.ragUploads || [];
     const newUpload = {
-      id: `upload_${Date.now()}`,
+      id: newId('upload'),
       fileName: fileName,
       summary: review.summary || '',
       dimension: review.dimension || 'General Compliance',
@@ -275,7 +352,7 @@ app.post('/api/rag/upload', async (req, res) => {
     });
   } catch (error) {
     console.error('Error handling RAG PDF upload:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to process and train RAG model.' });
+    res.status(500).json({ success: false, error: 'Failed to process and train RAG model.' });
   }
 });
 
@@ -303,17 +380,17 @@ function scaleEmployeesForDay(employees, day, lessonIds) {
       cloned.points = 0;
       cloned.badge = "New Recruit";
     } else if (day === 30) {
-      const n = Math.min((cloned.name.charCodeAt(0) % 2) + 1, total);
+      const n = Math.min(((cloned.name || '?').charCodeAt(0) % 2) + 1, total);
       cloned.completedLessons = pool.slice(0, n);
       cloned.points = cloned.completedLessons.length * 20 + Math.min(cloned.bonusPoints, 10);
       cloned.badge = calculateBadge(cloned.completedLessons.length);
     } else if (day === 60) {
-      const n = Math.min((cloned.name.charCodeAt(0) % 3) + 3, total);
+      const n = Math.min(((cloned.name || '?').charCodeAt(0) % 3) + 3, total);
       cloned.completedLessons = pool.slice(0, n);
       cloned.points = cloned.completedLessons.length * 20 + Math.min(cloned.bonusPoints, 20);
       cloned.badge = calculateBadge(cloned.completedLessons.length);
     } else if (day === 90) {
-      const n = Math.min((cloned.name.charCodeAt(0) % 3) + 6, total);
+      const n = Math.min(((cloned.name || '?').charCodeAt(0) % 3) + 6, total);
       cloned.completedLessons = pool.slice(0, n);
       cloned.points = cloned.completedLessons.length * 20 + Math.min(cloned.bonusPoints, 30);
       cloned.badge = calculateBadge(cloned.completedLessons.length);
@@ -640,7 +717,7 @@ app.post('/api/projects', (req, res) => {
   const name = String(b.name || b.targetCompany || '').trim();
   if (!name) return res.status(400).json({ error: 'Project name / target company is required.' });
   const project = {
-    id: 'proj_' + Date.now(), isDemo: false, name,
+    id: newId('proj'), isDemo: false, name,
     targetCompany: String(b.targetCompany || name).trim(),
     sector: b.sector || '', size: b.size || '', hq: b.hq || '',
     acquisitionDate: b.acquisitionDate || '', synergyObjective: b.synergyObjective || '',
@@ -723,7 +800,7 @@ app.post('/api/departments', (req, res) => {
     }
   } else {
     if (!nameOk) return res.status(400).json({ error: 'Department name is required.' });
-    stored = { locked: true, systems: [], trainings: [], ...d, id: 'dept_' + Date.now() };
+    stored = { locked: true, systems: [], trainings: [], ...d, id: newId('dept') };
     db.departments.push(stored);
   }
   writeDb(db);
@@ -764,7 +841,7 @@ app.post('/api/processes', (req, res) => {
     }
   } else {
     if (!nameOk) return res.status(400).json({ error: 'Process name is required.' });
-    stored = { domain: '', approach: 'Harmonize', status: 'not-started', risk: 'Medium', phase: '', notes: '', sending: {}, receiving: {}, ...p, id: 'proc_' + Date.now() };
+    stored = { domain: '', approach: 'Harmonize', status: 'not-started', risk: 'Medium', phase: '', notes: '', sending: {}, receiving: {}, ...p, id: newId('proc') };
     db.processCatalog.push(stored);
   }
   writeDb(db);
@@ -798,7 +875,7 @@ app.post('/api/slides', (req, res) => {
     if (i > -1) { db.slides[i] = { ...db.slides[i], ...s }; stored = db.slides[i]; }
     else { db.slides.push(s); stored = s; }
   } else {
-    stored = { icon: '🖥️', label: 'Slide', pages: 'all', ...s, id: 'slide_' + Date.now() };
+    stored = { icon: '🖥️', label: 'Slide', pages: 'all', ...s, id: newId('slide') };
     db.slides.push(stored);
   }
   writeDb(db);
@@ -823,7 +900,7 @@ app.post('/api/slides/upload', (req, res) => {
   const dir = path.join(__dirname, 'public', 'uploads', 'slides');
   try {
     fs.mkdirSync(dir, { recursive: true });
-    const fname = Date.now() + '_' + safe;
+    const fname = Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '_' + safe;
     fs.writeFileSync(path.join(dir, fname), content, 'utf8');
     res.json({ success: true, url: '/uploads/slides/' + fname });
   } catch (err) {
@@ -856,7 +933,7 @@ app.post('/api/courses', (req, res) => {
     }
   } else {
     if (!course.title) return res.status(400).json({ error: 'Course title is required.' });
-    course.id = 'course_' + Date.now();
+    course.id = newId('course');
     course.modules = course.modules || [];
     db.courses.push(course);
     stored = course;
@@ -888,7 +965,7 @@ app.post('/api/courses/:courseId/lessons', (req, res) => {
     if (idx >= 0) { mod.lessons[idx] = { ...mod.lessons[idx], ...lesson }; stored = mod.lessons[idx]; }
     else { mod.lessons.push(lesson); stored = lesson; }
   } else {
-    lesson.id = 'lesson_' + Date.now();
+    lesson.id = newId('lesson');
     lesson.order = mod.lessons.length + 1;
     mod.lessons.push(lesson);
     stored = lesson;
@@ -980,7 +1057,7 @@ app.post('/api/pages', (req, res) => {
     if (idx >= 0) db.pages[idx] = { ...db.pages[idx], ...page };
     else db.pages.push(page);
   } else {
-    page.id = 'page_' + Date.now();
+    page.id = newId('page');
     db.pages.push(page);
   }
   writeDb(db);
@@ -1024,7 +1101,7 @@ app.post('/api/banners', (req, res) => {
     if (idx >= 0) db.banners[idx] = { ...db.banners[idx], ...b, updatedAt: nowIso };
     else db.banners.push({ ...b, updatedAt: nowIso });
   } else {
-    b.id = 'banner_' + Date.now();
+    b.id = newId('banner');
     b.createdAt = nowIso;
     b.updatedAt = nowIso;
     if (b.rev == null) b.rev = 1;
@@ -1060,7 +1137,7 @@ app.post('/api/media', (req, res) => {
     const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
     const stored = `${Date.now()}_${safeName}`;
     fs.writeFileSync(path.join(uploadDir, stored), Buffer.from(b64, 'base64'));
-    const item = { id: 'media_' + Date.now(), fileName: safeName, kind: kind || (m ? m[1] : 'application/octet-stream'), url: `/uploads/${stored}`, timestamp: new Date().toISOString() };
+    const item = { id: newId('media'), fileName: safeName, kind: kind || (m ? m[1] : 'application/octet-stream'), url: `/uploads/${stored}`, timestamp: new Date().toISOString() };
     db.media.push(item);
     writeDb(db);
     res.json({ success: true, media: item });
@@ -1349,7 +1426,7 @@ app.post('/api/questions', (req, res) => {
   
   const db = readDb();
   const newQuestion = {
-    id: 'q_' + Date.now(),
+    id: newId('q'),
     dimension,
     text,
     weight: parseFloat(weight) || 1.0
@@ -1424,7 +1501,7 @@ app.post('/api/assessment', async (req, res) => {
     value: counts.value > 0 ? parseFloat((sums.value / counts.value).toFixed(2)) : 3.0
   };
   
-  const assessmentId = 'assess_' + Date.now();
+  const assessmentId = newId('assess');
   const timestamp = new Date().toISOString();
   
   // Generate the AI 100-Day Integration Plan
@@ -1458,8 +1535,12 @@ app.post('/api/assessment', async (req, res) => {
     db.assessments = db.assessments || [];
     db.assessments.push(assessmentRecord);
   }
-  writeDb(db);
-  
+  try {
+    writeDb(db);
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to save assessment.' });
+  }
+
   res.status(201).json({ success: true, assessment: assessmentRecord });
 });
 
@@ -1553,7 +1634,7 @@ app.post('/api/modules', (req, res) => {
 
   // Create new
   const newModule = {
-    id: 'mod_' + Date.now(),
+    id: newId('mod'),
     title,
     dimension,
     urgency,
@@ -1621,7 +1702,7 @@ app.post('/api/employees', (req, res) => {
     employee.buddyEmail = buddyEmail || '';
   } else {
     employee = {
-      id: id || 'emp_' + Date.now(),
+      id: id || newId('emp'),
       name,
       role,
       department,
@@ -1685,7 +1766,7 @@ app.get('/api/employees/get-or-create', (req, res) => {
     found = employeesList.find(e => e.id === empId);
   }
   if (!found && name) {
-    found = employeesList.find(e => e.name.toLowerCase() === name.toLowerCase());
+    found = employeesList.find(e => e.name && e.name.toLowerCase() === name.toLowerCase());
   }
 
   if (found) {
@@ -1706,7 +1787,7 @@ app.get('/api/employees/get-or-create', (req, res) => {
 
   // Create new profile dynamically
   const newEmployee = {
-    id: empId || 'emp_' + Date.now(),
+    id: empId || newId('emp'),
     name: name || "Valued Team Member",
     role: role || "Specialist",
     department: department || "Operations",
@@ -1849,7 +1930,7 @@ app.post('/api/hrbps', (req, res) => {
     hrbp.role = role || 'hrbp';
   } else {
     hrbp = {
-      id: id || 'hrbp_' + Date.now(),
+      id: id || newId('hrbp'),
       name,
       email,
       assignedTracks: Array.isArray(assignedTracks) ? assignedTracks : [],
@@ -1914,7 +1995,7 @@ app.post('/api/alerts', (req, res) => {
     alertObj.type = type;
   } else {
     alertObj = {
-      id: id || 'alert_' + Date.now(),
+      id: id || newId('alert'),
       title,
       message,
       type
@@ -1968,7 +2049,7 @@ app.post('/api/pulses', (req, res) => {
   db.pulses = db.pulses || [];
 
   const newPulse = {
-    id: 'pulse_' + Date.now(),
+    id: newId('pulse'),
     employeeName,
     rating: parseInt(rating) || 3,
     comment: comment || '',
@@ -2004,7 +2085,7 @@ app.post('/api/communications/send', (req, res) => {
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
 
-  const commId = 'comm_' + Date.now();
+  const commId = newId('comm');
   const htmlFileName = `${commId}.html`;
   
   // Create dynamic directory if it doesn't exist
@@ -2086,6 +2167,16 @@ app.delete('/api/communications/:id', (req, res) => {
 
 // HTML Email Compiler Helper Function
 function compileHtmlEmail({ sender, senderRole, recipientName, recipientEmail, subject, template, body }) {
+  // Escape every caller-supplied field before it is interpolated into this HTML
+  // document — the result is written to public/sent_emails/<id>.html and served
+  // statically, so unescaped values are a stored-XSS vector. (\n -> <br> in the
+  // body still works because escaping leaves newlines intact.)
+  const escEmail = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  sender = escEmail(sender);
+  senderRole = escEmail(senderRole);
+  recipientName = escEmail(recipientName);
+  subject = escEmail(subject);
+  body = escEmail(body);
   let primaryColor = "#244C5A"; // Dark Teal
   let accentColor = "#E98300"; // TE Orange
   let typeLabel = "Welcome Announcement";
@@ -2293,10 +2384,31 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Keep the single process alive on unexpected errors rather than crashing silently
+// Keep the single process alive on unexpected errors rather than crashing silently.
+// NOTE: for a supervised production deploy, switch uncaughtException to log-then-exit
+// and let the supervisor (systemd/PM2/container) restart — resuming after an uncaught
+// exception leaves the process in an undefined state. Left as log-only here so the
+// unsupervised local/demo launcher doesn't die on a transient error.
 process.on('uncaughtException', (err) => console.error('uncaughtException:', err));
 process.on('unhandledRejection', (err) => console.error('unhandledRejection:', err));
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`TE Connectivity M&A Portal server running on port ${PORT} (${PUBLIC_BASE_URL})`);
 });
+
+// Bound how long a single request may hold a socket — mitigates slow-request /
+// slowloris resource exhaustion. headersTimeout must exceed requestTimeout.
+server.requestTimeout = 60000;   // 60s to receive the full request body
+server.headersTimeout = 65000;   // 65s to receive the request headers
+server.keepAliveTimeout = 61000;
+
+// Graceful shutdown: stop accepting new connections and let in-flight requests
+// finish before exiting (so a deploy/restart doesn't drop live requests), with a
+// hard fallback so a stuck connection can't block shutdown forever.
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down gracefully...`);
+  server.close(() => { console.log('HTTP server closed.'); process.exit(0); });
+  setTimeout(() => { console.error('Forced shutdown after timeout.'); process.exit(1); }, 10000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

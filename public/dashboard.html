@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Integration Dashboard</title>
   <meta name="description" content="Review organizational assessment metrics, custom AI post-merger integration plans, and Integration Leader coaching resources.">
-  <link rel="stylesheet" href="/css/style.css?v=1784100010">
-  <script src="/js/transitions.js?v=1784100010"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1784200000">
+  <script src="/js/transitions.js?v=1784200000"></script>
 </head>
 <body>
 
@@ -117,6 +117,18 @@
                 <button class="dashboard-nav-btn" data-tab="coaching-track">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.62 48.62 0 0112 20.904a48.62 48.62 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A5.905 5.905 0 018 3.007a5.905 5.905 0 01.329 6.326m-4.26 0a50.574 50.574 0 012.658-.813M17.5 2.25v2.25m0 0v2.25m0-2.25h2.25m-2.25 0h-2.25" /></svg>
                   <span data-i18n="dashboard.tab_coach">Integration Leader Coach Desk</span>
+                </button>
+                <button class="dashboard-nav-btn" data-tab="culture-ways">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z" /></svg>
+                  <span data-i18n="dashboard.tab_culture_ways">Culture &amp; Ways of Working</span>
+                </button>
+
+                <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem; margin-top: 1.25rem;">
+                  <span>🎓</span> <span data-i18n="dashboard.sidebar_group_academy">ACADEMY</span>
+                </div>
+                <button class="dashboard-nav-btn" data-tab="il-academy">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-4-3v3m8-3v3" /></svg>
+                  <span data-i18n="dashboard.tab_il_academy">Integration Leader Academy</span>
                 </button>
 
                 <div class="sidebar-group-header" style="font-family: var(--font-family-display); font-size: 0.72rem; font-weight: 800; color: var(--te-orange); letter-spacing: 0.5px; margin: 0.75rem 0.5rem 0.35rem; padding-bottom: 0.15rem; border-bottom: 1px dashed rgba(233,131,0,0.15); display: flex; align-items: center; gap: 0.25rem; margin-top: 1.25rem;">
@@ -958,6 +970,231 @@
               </div>
             </div>
 
+            <!-- Tab: Culture & Ways of Working -->
+            <div id="tab-culture-ways" class="card card-glass tab-content tab-content-panel" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <div class="card-header"><h2 data-i18n="dashboard.cwow_heading">Culture &amp; Ways of Working</h2></div>
+              <p style="color: var(--text-dim); max-width: 860px; margin: -0.25rem 0 1.4rem; line-height: 1.55;">
+                Culture integration is an <strong>employee-experience journey</strong>. People join a culture by finding answers to the questions that matter — guide them through each stage, then hand them the <strong>Ways-of-Working scenario cards</strong> to navigate real situations at TE.
+              </p>
+
+              <!-- The four-question culture journey -->
+              <div class="cwow-stages">
+                <div class="cwow-stage" style="--c:#167987;">
+                  <h4><span class="qn">1</span> What's Happening?</h4>
+                  <ul><li>What happened, and why were we acquired?</li><li>Why now — and what will change?</li><li>What stays the same?</li></ul>
+                  <div class="enab">Enablers: CEO &amp; Business narrative</div>
+                </div>
+                <div class="cwow-stage" style="--c:#890979;">
+                  <h4><span class="qn">2</span> How Does This Work?</h4>
+                  <ul><li>Why so many stakeholders?</li><li>Why are decisions made differently?</li><li>Why does work feel more complex — and who decides?</li></ul>
+                  <div class="enab">Enablers: Ways-of-Working &amp; Culture Translation cards</div>
+                </div>
+                <div class="cwow-stage" style="--c:#E98300;">
+                  <h4><span class="qn">3</span> Do I Belong?</h4>
+                  <ul><li>Do I fit here, and will my voice be heard?</li><li>Does my experience still matter?</li><li>Who can help me navigate?</li></ul>
+                  <div class="enab">Enablers: Buddy / Ambassador / ERG · 1:1 check-ins</div>
+                </div>
+                <div class="cwow-stage" style="--c:#5C9654;">
+                  <h4><span class="qn">4</span> How Can I Contribute?</h4>
+                  <ul><li>How can I create value and make an impact?</li><li>How do we win together?</li><li>What can TE learn from us?</li></ul>
+                  <div class="enab">Enablers: Quick wins · Recognition · Growth &amp; development</div>
+                </div>
+              </div>
+              <div class="cwow-outcome">Employee journey: <b>Understand Why</b> → <b>Understand How</b> → <b>Feel I Belong</b> → <b>Stay, Own &amp; Contribute</b></div>
+
+              <!-- Ways of Working scenario card -->
+              <div class="cwow-scenario">
+                <div class="cwow-sc-head">
+                  <div class="eyebrow">WAYS OF WORKING · SCENARIO CARD</div>
+                  <h3>Working in a Matrix Organization</h3>
+                  <p>Balancing project and functional priorities</p>
+                </div>
+                <div class="cwow-sc-body">
+                  <div class="cwow-box" style="border-left:4px solid var(--te-orange);">
+                    <h5>Scenario</h5>
+                    <p style="margin:0; line-height:1.55; font-size:.9rem;">You lead a product launch that needs three engineers from Operations. Their functional manager has just moved two of them onto a factory upgrade with a hard deadline. Your sponsor still expects launch on the original date. Both leaders are right from their own side — and you have no direct authority over the engineers. Everyone is now looking to you to solve it.</p>
+                  </div>
+                  <div class="cwow-grid2">
+                    <div class="cwow-box">
+                      <h5>Reflect</h5>
+                      <ul class="cwow-list"><li>Who really owns this decision?</li><li>What trade-offs can I accept?</li><li>How do I raise this early, not late?</li><li>Who needs to be in the room?</li></ul>
+                    </div>
+                    <div class="cwow-box">
+                      <h5>What may feel different</h5>
+                      <ul class="cwow-list"><li>You may answer to more than one leader.</li><li>Priorities shift fast and can compete.</li><li>You influence people you don't manage.</li><li>"Who decides?" isn't always clear.</li></ul>
+                    </div>
+                  </div>
+                  <div class="cwow-box" style="border-left:4px solid var(--te-teal,#167987);">
+                    <h5>How TE works</h5>
+                    <ul class="cwow-list cwow-check"><li>Align early on goals &amp; trade-offs.</li><li>Escalate with a proposed solution.</li><li>Communicate openly across functions.</li><li>Decide together, then commit as one.</li></ul>
+                  </div>
+                  <div class="cwow-grid2">
+                    <div class="cwow-box cwow-do"><h5>Do</h5><ul class="cwow-list"><li>Clarify roles &amp; decision rights</li><li>Bring options and data</li><li>Flag conflicts early</li><li>Keep stakeholders informed</li></ul></div>
+                    <div class="cwow-box cwow-dont"><h5>Don't</h5><ul class="cwow-list"><li>Wait and hope it resolves</li><li>Work around or go silent</li><li>Escalate with no fix proposed</li><li>Blame the other function</li></ul></div>
+                  </div>
+                  <div class="cwow-box">
+                    <h5>Who to ask</h5>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:.4rem .9rem; font-size:.85rem;">
+                      <div><strong>Project / Business Leader</strong> — scope &amp; priorities</div>
+                      <div><strong>Functional Manager</strong> — resources &amp; capacity</div>
+                      <div><strong>Key Stakeholders</strong> — impact &amp; dependencies</div>
+                      <div><strong>Manager / Coach</strong> — approach &amp; guidance</div>
+                      <div><strong>HRBP</strong> — role &amp; tension support</div>
+                    </div>
+                  </div>
+                  <div class="cwow-remember">Remember — <b>in a matrix, influence beats authority.</b> Align early, escalate smart, and decide as one team.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab: Integration Leader Academy (training course) -->
+            <div id="tab-il-academy" class="card card-glass tab-content tab-content-panel" style="animation: slideIn var(--transition-normal); display: none; position: relative;">
+              <div class="card-header"><h2 data-i18n="dashboard.ilac_heading">Integration Leader Academy</h2></div>
+              <p style="color: var(--text-dim); max-width: 860px; margin: -0.25rem 0 1rem; line-height: 1.55;">
+                A guided course for Integration Leaders — the three integration layers, how to train the new organization, and how to grow into a strong Integration Leader. Work through each module and mark it complete to track your progress.
+              </p>
+              <div class="ilac-progress">
+                <div class="ilac-progress-bar"><span id="ilac-progress-fill" style="width:0%"></span></div>
+                <div class="ilac-progress-label"><span id="ilac-progress-count">0</span> of 5 modules complete</div>
+              </div>
+
+              <div class="ilac-modules">
+                <div class="ilac-mod" data-mod="m1" style="--c:#167987;">
+                  <div class="ilac-mod-head"><span class="ilac-num">1</span><span class="ilac-mod-title">Communication Layer — how information flows</span><span class="ilac-badge">Layer</span><span class="ilac-chev">▾</span></div>
+                  <div class="ilac-mod-body">
+                    <p>Every decision lands — and every site is heard. The playbook already pushes decisions down; the gap is the line back <em>up</em>. Add one trusted source, the "why" behind each call, and a real return path.</p>
+                    <p class="ilac-sub">Four moves that close the comms control gap:</p>
+                    <ol class="ilac-list"><li><strong>Own one source of truth</strong> — one owner, one place for every decision and answer, so no site runs on rumor.</li><li><strong>Explain every decision</strong> — what was decided, why, and what's next, on a set cadence.</li><li><strong>Open the line back up</strong> — sites send questions, concerns and local strengths up early, so they shape decisions.</li><li><strong>Close every loop</strong> — answer every question and show how input shaped the call.</li></ol>
+                    <p class="ilac-track">Track it: Adoption → Time-to-Answer → Loops Closed → Retention.</p>
+                    <button type="button" class="btn btn-secondary ilac-complete">Mark module complete ✓</button>
+                  </div>
+                </div>
+                <div class="ilac-mod" data-mod="m2" style="--c:#890979;">
+                  <div class="ilac-mod-head"><span class="ilac-num">2</span><span class="ilac-mod-title">Culture Layer — how employees experience TE</span><span class="ilac-badge">Layer</span><span class="ilac-chev">▾</span></div>
+                  <div class="ilac-mod-body">
+                    <p>Culture integration is an employee-experience journey. Employees join a culture by finding answers to the questions that matter, in order:</p>
+                    <ol class="ilac-list"><li><strong>What's Happening?</strong> — what changed and why.</li><li><strong>How Does This Work?</strong> — stakeholders, decisions, the operating model.</li><li><strong>Do I Belong?</strong> — fit, voice, and who helps me navigate.</li><li><strong>How Can I Contribute?</strong> — value, impact, and what TE can learn from them.</li></ol>
+                    <p class="ilac-track">Enablers: CEO/business narrative · Ways-of-Working &amp; Culture Translation cards · Buddy/Ambassador/ERG · recognition &amp; growth. <em>See the Culture &amp; Ways of Working tab for the full toolkit.</em></p>
+                    <button type="button" class="btn btn-secondary ilac-complete">Mark module complete ✓</button>
+                  </div>
+                </div>
+                <div class="ilac-mod" data-mod="m3" style="--c:#E98300;">
+                  <div class="ilac-mod-head"><span class="ilac-num">3</span><span class="ilac-mod-title">Onboarding &amp; Capability — how people and HR succeed</span><span class="ilac-badge">Layer</span><span class="ilac-chev">▾</span></div>
+                  <div class="ilac-mod-body">
+                    <p>Enable successful people integration across the first 100 days and beyond in four stages:</p>
+                    <ol class="ilac-list"><li><strong>Assess</strong> — capability assessment, leadership review, skills mapping, critical-talent identification.</li><li><strong>Onboard</strong> — integration roadmap, HR &amp; manager onboarding packs, role clarity, 30/60/90-day guidance.</li><li><strong>Connect</strong> — mentor pairing, site visits, meet-the-team, functional champions.</li><li><strong>Develop</strong> — development plans, TE ways of working, learning resources; for TE HR: capability building, AI guidance, manager coaching, lessons learned.</li></ol>
+                    <button type="button" class="btn btn-secondary ilac-complete">Mark module complete ✓</button>
+                  </div>
+                </div>
+                <div class="ilac-mod" data-mod="m4" style="--c:#C77700;">
+                  <div class="ilac-mod-head"><span class="ilac-num">4</span><span class="ilac-mod-title">How to Train the New Organization</span><span class="ilac-badge ilac-badge-do">Practice</span><span class="ilac-chev">▾</span></div>
+                  <div class="ilac-mod-body">
+                    <p>Turn the playbook into practice for the acquired organization:</p>
+                    <ul class="ilac-list"><li>Run <strong>Ways-of-Working scenario cards</strong> in team settings — start with the Matrix Organization card.</li><li>Stand up the <strong>Buddy Plant Network</strong> for two-sided learning between the acquired site and TE.</li><li>Give every new hire a <strong>30/60/90-day plan</strong> with explicit role clarity.</li><li>Use <strong>manager onboarding packs</strong> so leaders cascade a consistent message.</li><li><strong>Localize, don't impose</strong> — lead with local HR leaders and translate TE norms into the site's context.</li><li>Measure adoption and <strong>close every loop</strong>.</li></ul>
+                    <button type="button" class="btn btn-secondary ilac-complete">Mark module complete ✓</button>
+                  </div>
+                </div>
+                <div class="ilac-mod" data-mod="m5" style="--c:#C2410C;">
+                  <div class="ilac-mod-head"><span class="ilac-num">5</span><span class="ilac-mod-title">Becoming a Strong Integration Leader</span><span class="ilac-badge ilac-badge-do">Grow</span><span class="ilac-chev">▾</span></div>
+                  <div class="ilac-mod-body">
+                    <p>You lead across a matrix where you have <strong>influence, not authority</strong>. Strong Integration Leaders:</p>
+                    <ul class="ilac-list"><li><strong>Align early</strong> on goals and trade-offs, before positions harden.</li><li><strong>Escalate smart</strong> — bring a proposed solution, options and data; flag conflicts early.</li><li><strong>Communicate openly across functions</strong> — decide together, then commit as one team.</li><li><strong>Coach the acquired org</strong> through the culture journey; make every employee feel heard.</li><li><strong>Close every loop</strong> and show how input shaped decisions — that is how trust compounds.</li></ul>
+                    <div class="cwow-remember" style="margin-top:.75rem;">Remember — <b>in a matrix, influence beats authority.</b> Align early, escalate smart, and decide as one team.</div>
+                    <button type="button" class="btn btn-secondary ilac-complete" style="margin-top:1rem;">Mark module complete ✓</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <style>
+              /* Culture & Ways of Working + Academy — scoped presentation */
+              .cwow-stages{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
+              .cwow-stage{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-top:4px solid var(--c); border-radius:10px; padding:1rem 1.1rem; }
+              .cwow-stage h4{ color:var(--c); font-size:1rem; margin:0 0 .5rem; }
+              .cwow-stage h4 .qn{ font-weight:800; margin-right:.35rem; }
+              .cwow-stage ul{ margin:.25rem 0 .6rem; padding-left:1.05rem; }
+              .cwow-stage li{ font-size:.82rem; color:var(--text-dim); line-height:1.5; }
+              .cwow-stage .enab{ font-size:.72rem; color:var(--c); font-weight:700; border-top:1px dashed var(--border-color); padding-top:.45rem; }
+              .cwow-outcome{ background:var(--te-dark-teal); color:#fff; border-radius:10px; padding:.85rem 1.1rem; text-align:center; font-weight:600; margin:1.4rem 0 1.75rem; font-size:.92rem; }
+              .cwow-outcome b{ color:var(--te-orange); }
+              .cwow-scenario{ border:1px solid var(--border-color); border-radius:12px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,.05); }
+              .cwow-sc-head{ background:var(--te-dark-teal); color:#fff; padding:1rem 1.25rem; }
+              .cwow-sc-head .eyebrow{ color:var(--te-orange); font-size:.68rem; font-weight:800; letter-spacing:.09em; }
+              .cwow-sc-head h3{ margin:.25rem 0 0; font-size:1.2rem; }
+              .cwow-sc-head p{ margin:.15rem 0 0; opacity:.85; font-size:.85rem; }
+              .cwow-sc-body{ padding:1.1rem 1.25rem; display:grid; gap:1rem; background:var(--card-bg,#fff); }
+              .cwow-box{ background:var(--bg-subtle,#f7f9f9); border:1px solid var(--border-color); border-radius:8px; padding:.85rem 1rem; }
+              .cwow-box h5{ margin:0 0 .5rem; color:var(--te-dark-teal); font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; }
+              .cwow-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+              .cwow-list{ margin:0; padding-left:1.05rem; } .cwow-list li{ font-size:.85rem; color:var(--text-primary); line-height:1.5; margin-bottom:.15rem; }
+              .cwow-check{ list-style:none; padding-left:0; } .cwow-check li{ padding-left:1.3rem; position:relative; } .cwow-check li::before{ content:"✓"; position:absolute; left:0; color:var(--te-teal,#167987); font-weight:800; }
+              .cwow-do{ border-top:3px solid #5C9654; } .cwow-dont{ border-top:3px solid #C2410C; }
+              .cwow-do h5{ color:#3f7a37; } .cwow-dont h5{ color:#C2410C; }
+              .cwow-remember{ background:var(--te-dark-teal); color:#fff; border-radius:8px; padding:.85rem 1.1rem; font-weight:600; text-align:center; }
+              .cwow-remember b{ color:var(--te-orange); }
+              @media (max-width:640px){ .cwow-grid2{ grid-template-columns:1fr; } }
+              /* Academy */
+              .ilac-progress{ display:flex; align-items:center; gap:1rem; margin-bottom:1.25rem; }
+              .ilac-progress-bar{ flex:1; height:10px; background:var(--bg-subtle,#e9eef0); border-radius:6px; overflow:hidden; }
+              .ilac-progress-bar span{ display:block; height:100%; background:linear-gradient(90deg,#167987,#E98300); border-radius:6px; transition:width .4s ease; }
+              .ilac-progress-label{ font-size:.82rem; color:var(--text-dim); font-weight:700; white-space:nowrap; }
+              .ilac-mod{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-left:5px solid var(--c); border-radius:10px; margin-bottom:.85rem; overflow:hidden; }
+              .ilac-mod-head{ display:flex; align-items:center; gap:.75rem; padding:.9rem 1.1rem; cursor:pointer; user-select:none; }
+              .ilac-mod-head:hover{ background:var(--bg-subtle,#f7f9f9); }
+              .ilac-num{ flex:none; width:28px; height:28px; border-radius:50%; background:var(--c); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:.9rem; }
+              .ilac-mod-title{ flex:1; font-weight:700; color:var(--text-primary); font-size:.95rem; }
+              .ilac-badge{ flex:none; font-size:.62rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--c); border:1px solid currentColor; border-radius:20px; padding:.12rem .5rem; opacity:.85; }
+              .ilac-chev{ flex:none; color:var(--text-dim); transition:transform .2s; }
+              .ilac-mod.open .ilac-chev{ transform:rotate(180deg); }
+              .ilac-mod-body{ display:none; padding:0 1.1rem 1.1rem 1.1rem; }
+              .ilac-mod.open .ilac-mod-body{ display:block; }
+              .ilac-mod-body p{ color:var(--text-primary); line-height:1.55; font-size:.9rem; margin:.5rem 0; }
+              .ilac-mod-body .ilac-sub{ font-weight:700; color:var(--te-dark-teal); margin-top:.75rem; }
+              .ilac-list{ margin:.4rem 0 .6rem; padding-left:1.2rem; } .ilac-list li{ font-size:.88rem; color:var(--text-primary); line-height:1.55; margin-bottom:.3rem; }
+              .ilac-track{ font-size:.82rem; color:var(--text-dim); font-style:italic; }
+              .ilac-mod.done .ilac-num{ background:#5C9654; }
+              .ilac-mod.done .ilac-mod-head{ background:rgba(92,150,84,.08); }
+              .ilac-complete.done{ background:#5C9654; color:#fff; border-color:#5C9654; }
+            </style>
+            <script>
+              (function(){
+                var root = document.getElementById('tab-il-academy'); if(!root) return;
+                var KEY = 'il_academy_progress_v1';
+                var done = {};
+                try { done = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch(e){ done = {}; }
+                var mods = root.querySelectorAll('.ilac-mod');
+                function refresh(){
+                  var n = 0;
+                  mods.forEach(function(m){
+                    var id = m.getAttribute('data-mod');
+                    var isDone = !!done[id];
+                    m.classList.toggle('done', isDone);
+                    var btn = m.querySelector('.ilac-complete');
+                    if (btn){ btn.classList.toggle('done', isDone); btn.textContent = isDone ? 'Completed ✓' : 'Mark module complete ✓'; }
+                    if (isDone) n++;
+                  });
+                  var fill = document.getElementById('ilac-progress-fill');
+                  var count = document.getElementById('ilac-progress-count');
+                  if (fill) fill.style.width = Math.round(n / mods.length * 100) + '%';
+                  if (count) count.textContent = n;
+                }
+                mods.forEach(function(m){
+                  var head = m.querySelector('.ilac-mod-head');
+                  if (head) head.addEventListener('click', function(){ m.classList.toggle('open'); });
+                  var btn = m.querySelector('.ilac-complete');
+                  if (btn) btn.addEventListener('click', function(e){
+                    e.stopPropagation();
+                    var id = m.getAttribute('data-mod');
+                    done[id] = !done[id];
+                    try { localStorage.setItem(KEY, JSON.stringify(done)); } catch(err){}
+                    refresh();
+                  });
+                });
+                if (mods[0]) mods[0].classList.add('open');
+                refresh();
+              })();
+            </script>
+
           </section>
         </div>
 
@@ -1023,6 +1260,6 @@
     </div>
   </div>
 
-  <script src="/js/dashboard.js?v=1784100010"></script>
+  <script src="/js/dashboard.js?v=1784200000"></script>
 </body>
 </html>

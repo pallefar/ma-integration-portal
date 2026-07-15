@@ -56,6 +56,7 @@ Ensure you format everything cleanly with bullet points, bold text, callout quot
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
+      signal: AbortSignal.timeout(15000), // fail fast into the local fallback if Gemini hangs
       headers: {
         'Content-Type': 'application/json'
       },
@@ -355,6 +356,7 @@ Return your response STRICTLY as a valid JSON object matching the following stru
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
+      signal: AbortSignal.timeout(15000), // fail fast into the local fallback if Gemini hangs
       headers: {
         'Content-Type': 'application/json'
       },
@@ -504,6 +506,7 @@ Return your response strictly as a plain text string without quotes or markdown 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
+      signal: AbortSignal.timeout(15000), // fail fast into the local fallback if Gemini hangs
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],

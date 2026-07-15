@@ -77,7 +77,13 @@
     const existing = document.getElementById('html-slide-overlay');
     if (existing) existing.remove();
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    const safeUrl = encodeURI(url);
+    // Only allow http(s) / same-origin URLs — encodeURI does NOT neutralise a
+    // 'javascript:' (or data:/vbscript:) scheme, so validate the protocol instead.
+    let safeUrl = '#';
+    try {
+      const u = new URL(url, window.location.origin);
+      if (u.protocol === 'http:' || u.protocol === 'https:') safeUrl = u.href;
+    } catch (_) { safeUrl = '#'; }
     const overlay = document.createElement('div');
     overlay.id = 'html-slide-overlay';
     overlay.className = 'slide-overlay';
@@ -836,9 +842,13 @@ document.addEventListener('DOMContentLoaded', () => {
         </button>
       </div>
       <nav class="sidebar-nav">
-        <a href="/" class="sidebar-link ${path === '/' || path === '' || path.includes('index.html') ? 'active' : ''}" title="Demo Home">
+        <a href="/" class="sidebar-link ${path === '/' || path === '' ? 'active' : ''}" title="Overview — M&A HR Integration Enablement">
           <span class="sidebar-link-icon">\u{1F3E0}</span>
-          <span class="sidebar-link-label">Demo Home</span>
+          <span class="sidebar-link-label">Overview</span>
+        </a>
+        <a href="/index.html" class="sidebar-link ${path.includes('index.html') ? 'active' : ''}" title="Role Showcase — enter the portal by role">
+          <span class="sidebar-link-icon">\u{1F6AA}</span>
+          <span class="sidebar-link-label">Role Showcase</span>
         </a>
         ${(activeRole === 'admin' || activeRole === 'pmo' || activeRole === 'hrbp') ? `
         <a href="javascript:void(0)" class="sidebar-link" id="sidebar-survey-link" title="Survey Scorecard">
@@ -1338,36 +1348,41 @@ document.addEventListener('DOMContentLoaded', () => {
       const nav = sb.querySelector('.sidebar-nav');
       if (!nav || nav.querySelector('.sidebar-group[data-group="slides"]')) return;
       const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      // Build the "Slides" group up-front so the two fixed leadership Asks always
+      // appear even before (or if) the admin-authored slides load.
+      const group = document.createElement('div');
+      group.className = 'sidebar-group open';
+      group.setAttribute('data-group', 'slides');
+      group.innerHTML =
+        '<button type="button" class="sidebar-group-btn" title="Slides">' +
+          '<span class="sidebar-link-icon">\u{1F5A5}️</span>' +
+          '<span class="sidebar-link-label">Slides</span>' +
+          '<svg class="sidebar-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
+        '</button>' +
+        '<div class="sidebar-group-items"></div>';
+      const items = group.querySelector('.sidebar-group-items');
+      const addSlide = (icon, label, title, url) => {
+        const a = document.createElement('a');
+        a.href = 'javascript:void(0)';
+        a.className = 'sidebar-link';
+        a.title = title || label;
+        a.innerHTML = '<span class="sidebar-link-icon">' + esc(icon || '\u{1F5A5}️') + '</span><span class="sidebar-link-label">' + esc(label || 'Slide') + '</span>';
+        a.addEventListener('click', () => window.openHtmlSlide(url, title || label));
+        items.appendChild(a);
+      };
+      // Fixed app slides — the two leadership "Our Ask" decks, shown full-screen.
+      addSlide('\u{1F64B}', 'Ask 1', 'Ask 1 — SR HRLT & CHRO Approval', '/overview-deck/slide5.html');
+      addSlide('\u{1F64B}', 'Ask 2', 'Ask 2 — Prove It on the Next Integration', '/overview-deck/slide6.html');
+      group.querySelector('.sidebar-group-btn').addEventListener('click', () => group.classList.toggle('open'));
+      nav.appendChild(group);
+      // Append any admin-authored HTML slides scoped to this page, after the Asks.
       fetch('/api/slides').then(r => r.json()).then(slides => {
         const here = window.location.pathname;
-        const forHere = (slides || []).filter(s => {
+        (slides || []).filter(s => {
           const pg = (s.pages || 'all').trim();
           if (!pg || pg === 'all' || pg === '*') return true;
           return pg.split(',').map(x => x.trim()).filter(Boolean).some(p => p === here || here.endsWith(p));
-        });
-        if (!forHere.length) return;
-        const group = document.createElement('div');
-        group.className = 'sidebar-group open';
-        group.setAttribute('data-group', 'slides');
-        group.innerHTML =
-          '<button type="button" class="sidebar-group-btn" title="Slides">' +
-            '<span class="sidebar-link-icon">\u{1F5A5}️</span>' +
-            '<span class="sidebar-link-label">Slides</span>' +
-            '<svg class="sidebar-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
-          '</button>' +
-          '<div class="sidebar-group-items"></div>';
-        const items = group.querySelector('.sidebar-group-items');
-        forHere.forEach(s => {
-          const a = document.createElement('a');
-          a.href = 'javascript:void(0)';
-          a.className = 'sidebar-link';
-          a.title = s.label || 'Slide';
-          a.innerHTML = '<span class="sidebar-link-icon">' + esc(s.icon || '\u{1F5A5}️') + '</span><span class="sidebar-link-label">' + esc(s.label || 'Slide') + '</span>';
-          a.addEventListener('click', () => window.openHtmlSlide(s.url, s.label));
-          items.appendChild(a);
-        });
-        group.querySelector('.sidebar-group-btn').addEventListener('click', () => group.classList.toggle('open'));
-        nav.appendChild(group);
+        }).forEach(s => addSlide(s.icon, s.label || 'Slide', s.label || 'Slide', s.url));
       }).catch(() => {});
     }
 
@@ -3147,6 +3162,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // [data-i18n-html] we keep the intentional markup and only bold on top.
     const escHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const mdBold = (s) => s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // [data-i18n-html] values legitimately contain rich markup (<span>/<strong>/
+    // <input>…), so we can't blanket-escape them. Instead strip the dangerous bits
+    // before innerHTML: script/iframe/object/embed tags, inline on*= handlers, and
+    // javascript:/vbscript: URL schemes. (Defence-in-depth alongside the CSP.)
+    const stripDangerousHtml = (s) => String(s == null ? '' : s)
+      .replace(/<\/?(?:script|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '')
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+      .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+      .replace(/(=\s*["']?\s*)(?:javascript|vbscript)\s*:/gi, '$1');
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const v = t(el.getAttribute('data-i18n'), lang);
       if (v == null) return;
@@ -3159,7 +3184,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.querySelectorAll('[data-i18n-html]').forEach(el => {
       const v = t(el.getAttribute('data-i18n-html'), lang);
-      if (v != null) el.innerHTML = mdBold(v);
+      if (v != null) el.innerHTML = mdBold(stripDangerousHtml(v));
     });
     document.documentElement.setAttribute('lang', lang);
   };

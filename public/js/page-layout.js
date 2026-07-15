@@ -7,6 +7,16 @@
  */
 (function () {
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Strip dangerous bits from admin-authored rich HTML (richtext block + legacy
+  // body) before innerHTML: script/iframe/object/embed tags, inline on*= handlers,
+  // and javascript:/vbscript: schemes. Benign rich markup is preserved. Defence-in-
+  // depth alongside the CSP; DOMPurify is the recommended robust upgrade.
+  const sanitize = (s) => String(s == null ? '' : s)
+    .replace(/<\/?(?:script|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/(=\s*["']?\s*)(?:javascript|vbscript)\s*:/gi, '$1');
   // L() resolves an i18n {en,de,..} value (or plain string) for the active language.
   const makeL = (lang) => (v) => (v && typeof v === 'object') ? (v[lang] || v.en || Object.values(v).find(Boolean) || '') : (v || '');
 
@@ -16,7 +26,7 @@
     richtext: {
       label: 'Rich text', icon: '📝',
       fields: [{ key: 'html', kind: 'wysiwyg', label: 'Content' }],
-      render: (d, L) => `<div class="pl-richtext">${L(d.html) || ''}</div>`
+      render: (d, L) => `<div class="pl-richtext">${sanitize(L(d.html))}</div>`
     },
     hero: {
       label: 'Hero', icon: '⭐',
@@ -88,7 +98,7 @@
         // 2) Legacy single-body CMS content
         const body = page.body && (page.body[lang] || page.body.en);
         if (body && body.trim()) {
-          region.innerHTML = '<div class="cms-authored" style="max-width:820px;margin:0 auto;">' + BADGE + body + '</div>';
+          region.innerHTML = '<div class="cms-authored" style="max-width:820px;margin:0 auto;">' + BADGE + sanitize(body) + '</div>';
         }
         // 3) else keep the original static markup
       })

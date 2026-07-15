@@ -11,12 +11,21 @@ looxmaxing/
 npm-debug.log*
 .DS_Store
 
+# Database runtime artifacts (atomic-write temp + rolling backup)
+db.json.tmp
+db.json.bak
+
 # Uploaded media (runtime-generated)
 public/uploads/
 
 # Local dev / verification artifacts
 .playwright-mcp/
 /*.png
+/*.jpeg
+/*.jpg
 
 # Source deck (converted to public/playbook/*.pdf which IS served/committed)
 HR M&A Guidebook_03.2026.pptx
+
+# Source slide deck (served copies committed under public/overview-deck/)
+slidedeck interaction/

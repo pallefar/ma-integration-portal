@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Employee Welcome Portal</title>
   <meta name="description" content="Welcome to the TE Connectivity family. Review your personalized onboarding roadmap, systems guidelines, and HR resources.">
-  <link rel="stylesheet" href="/css/style.css?v=1784100010">
-  <script src="/js/transitions.js?v=1784100010"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1784200000">
+  <script src="/js/transitions.js?v=1784200000"></script>
 </head>
 <body>
 
@@ -222,23 +222,20 @@
           <!-- Sub-Tabs Navigation inside Left Column -->
           <div class="portal-tabs-wrapper" style="margin-bottom: 1.5rem;">
             <div class="portal-tabs" style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem;">
-              <button class="portal-tab-btn active" data-portal-tab="onboarding" data-i18n="tab_onboarding" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--te-dark-teal); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid var(--te-orange); margin-bottom: -0.65rem; transition: all 0.2s;">
-                🚀 Onboarding
+              <button class="portal-tab-btn active" data-portal-tab="journey" data-i18n="tab_journey" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--te-dark-teal); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid var(--te-orange); margin-bottom: -0.65rem; transition: all 0.2s;">
+                🚀 My Journey
               </button>
-              <button class="portal-tab-btn" data-portal-tab="culture" data-i18n="tab_culture" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
-                🎭 Your TE
+              <button class="portal-tab-btn" data-portal-tab="learn" data-i18n="tab_learn" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
+                🎓 Learn
               </button>
-              <button class="portal-tab-btn" data-portal-tab="roles" data-i18n="tab_roles" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
-                👤 Roles
-              </button>
-              <button class="portal-tab-btn" data-portal-tab="communication" data-i18n="tab_communication" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
-                📣 Communication
+              <button class="portal-tab-btn" data-portal-tab="connect" data-i18n="tab_connect" style="background: none; border: none; font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--text-dim); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -0.65rem; transition: all 0.2s;">
+                🤝 Connect
               </button>
             </div>
           </div>
 
           <!-- Onboarding Tab Content Pane -->
-          <div id="portal-tab-content-onboarding" class="portal-tab-content active">
+          <div id="portal-tab-content-journey" class="portal-tab-content active">
             
             <!-- Dynamic Progress & Gamification Header Card -->
             <div class="card academy-progress-card" style="margin-bottom: 2rem; position: relative; overflow: hidden;">
@@ -278,11 +275,6 @@
                   <span>9 lessons total</span>
                 </div>
               </div>
-            </div>
-
-            <!-- Academy Curriculum Grid (3 Modules) -->
-            <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 2rem;" id="academy-modules-container">
-              <p style="text-align:center; color: var(--text-dim); padding: 2rem;">Loading your curriculum…</p>
             </div>
 
             <!-- Milestones and Leaderboard Deck (2 Columns) -->
@@ -335,8 +327,14 @@
 
           </div>
 
-          <!-- Culture Tab Content Pane -->
-          <div id="portal-tab-content-culture" class="portal-tab-content" style="display: none;">
+          <!-- Learn Tab Content Pane -->
+          <div id="portal-tab-content-learn" class="portal-tab-content" style="display: none;">
+
+            <!-- Academy Curriculum (lessons) — moved here so all learning lives under Learn -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 2rem;" id="academy-modules-container">
+              <p style="text-align:center; color: var(--text-dim); padding: 2rem;">Loading your curriculum…</p>
+            </div>
+
             <!-- Onboarding 30-Day Pulse Feedback Card -->
             <div class="pulse-onboarding-card" id="pulse-survey-card" style="margin-top: 0;">
               <h3 data-i18n="pulse_title">Your Onboarding Health Check: 30-Day Pulse Survey</h3>
@@ -399,10 +397,43 @@
                 <strong>💡 Collaborative Strategy:</strong> Participate in local town halls and team syncs to connect with your new peers and learn about TE global business channels.
               </div>
             </div>
+
+            <!-- TE Ways of Working — the culture journey (employee view) -->
+            <div class="card" style="margin-top: 1.5rem; padding: 1.5rem;">
+              <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                <h3 data-i18n="cways_heading">🧭 TE Ways of Working</h3>
+              </div>
+              <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55; margin-bottom: 1rem;" data-i18n="cways_intro">
+                Joining TE is a journey. In your first 100 days you'll find answers to four questions — each one helps you settle in and start contributing.
+              </p>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.85rem;">
+                <div class="cway-q" style="--c:#167987;"><h4>1 · What's Happening?</h4><p>What changed, why TE, and what stays the same.</p></div>
+                <div class="cway-q" style="--c:#890979;"><h4>2 · How Does This Work?</h4><p>Who the stakeholders are and how decisions get made.</p></div>
+                <div class="cway-q" style="--c:#E98300;"><h4>3 · Do I Belong?</h4><p>Your voice matters — and who can help you navigate.</p></div>
+                <div class="cway-q" style="--c:#5C9654;"><h4>4 · How Can I Contribute?</h4><p>Create value, make an impact, and teach TE what you know.</p></div>
+              </div>
+              <div style="margin-top:1.25rem; background: var(--te-dark-teal); color:#fff; border-radius:8px; padding:1rem 1.15rem;">
+                <div style="font-size:0.66rem; font-weight:800; letter-spacing:.08em; color:var(--te-orange);">WAYS OF WORKING · SCENARIO</div>
+                <strong style="display:block; margin:.2rem 0 .4rem;">Working in a matrix organization</strong>
+                <p style="margin:0; font-size:0.85rem; opacity:.92; line-height:1.5;">You may answer to more than one leader and influence people you don't manage. Align early on goals &amp; trade-offs, raise issues with a proposed solution, and decide as one team. <b style="color:var(--te-orange);">Influence beats authority.</b></p>
+              </div>
+              <style>
+                #portal-tab-content-learn .cway-q{ background:var(--bg-subtle,#f7f9f9); border:1px solid var(--border-color); border-top:3px solid var(--c); border-radius:8px; padding:.75rem .85rem; }
+                #portal-tab-content-learn .cway-q h4{ color:var(--c); font-size:.85rem; margin:0 0 .3rem; }
+                #portal-tab-content-learn .cway-q p{ margin:0; font-size:.78rem; color:var(--text-secondary); line-height:1.45; }
+              </style>
+            </div>
+
+            <!-- Playbook link -->
+            <a href="/playbook.html" class="card" style="margin-top: 1.5rem; padding: 1.15rem 1.5rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; text-decoration:none; border-left:4px solid var(--te-orange);">
+              <span style="display:flex; align-items:center; gap:0.75rem;"><span style="font-size:1.5rem;">📘</span><span><strong style="color:var(--te-dark-teal); display:block;">M&amp;A Integration Playbook</strong><span style="font-size:0.82rem; color:var(--text-secondary);">The full 8-phase guide to your integration journey.</span></span></span>
+              <span style="color:var(--te-orange); font-weight:800; white-space:nowrap;">Open →</span>
+            </a>
+
           </div>
 
-          <!-- Roles Tab Content Pane -->
-          <div id="portal-tab-content-roles" class="portal-tab-content" style="display: none;">
+          <!-- Connect Tab Content Pane -->
+          <div id="portal-tab-content-connect" class="portal-tab-content" style="display: none;">
             <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem;">
               
               <!-- Profile Details -->
@@ -453,11 +484,9 @@
               </div>
 
             </div>
-          </div>
 
-          <!-- Communication Tab Content Pane -->
-          <div id="portal-tab-content-communication" class="portal-tab-content" style="display: none;">
-            <div class="card" style="margin-top: 0;">
+            <!-- Broadcast archive (merged into Connect) -->
+            <div class="card" style="margin-top: 1.5rem;">
               <div class="card-header">
                 <h2 data-i18n="comm_archive_title">📣 Digital Broadcast Archive</h2>
               </div>
@@ -604,8 +633,8 @@
     </div>
   </div>
 
-  <script src="/js/ted-launcher.js?v=1784100010"></script>
-  <script src="/js/employee.js?v=1784100010"></script>
+  <script src="/js/ted-launcher.js?v=1784200000"></script>
+  <script src="/js/employee.js?v=1784200000"></script>
 </body>
 </html>
 
