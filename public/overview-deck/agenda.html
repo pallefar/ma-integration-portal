@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Today's Discussion</title>
+<style>
+:root{--navy:#2E4957;--navy2:#274954;--orange:#F28D00;--teal:#167987;--ink:#2A2A2A;--gray2:#5A5B60;--paper:#fff;--rowbg:#F2F1F1;--line:#E0E4E5;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif;background:#0e1a20;color:var(--ink);overflow:hidden;}
+.stage{position:absolute;inset:0;overflow:hidden;}
+.slide{position:absolute;top:50%;left:50%;width:1280px;height:720px;background:var(--paper);transform:translate(-50%,-50%);transform-origin:center center;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.5);}
+.hd{background:var(--navy);color:#fff;position:relative;flex:none;height:96px;display:flex;align-items:center;}
+.hd .logo{position:absolute;top:16px;right:34px;width:96px;height:auto;}
+.hd .htitle{font-size:31px;font-weight:700;padding:0 150px 0 40px;line-height:1.1;}
+.body{flex:1;display:flex;flex-direction:column;padding:22px 40px 8px;overflow:hidden;}
+.kicker{font-size:13px;font-weight:700;color:var(--orange);letter-spacing:1.2px;text-transform:uppercase;}
+.subttl2{font-size:23px;font-weight:700;color:var(--navy2);margin:9px 0 20px;}
+.agenda{display:flex;flex-direction:column;gap:18px;margin-top:2px;}
+.arow{background:var(--rowbg);border-radius:4px;display:flex;align-items:center;gap:22px;padding:0 26px;min-height:92px;}
+.anum{width:54px;height:54px;flex:none;border-radius:50%;background:var(--orange);color:#fff;font-size:25px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.atext{min-width:0;}
+.atitle{font-size:20px;font-weight:700;color:var(--navy);line-height:1.15;margin-bottom:4px;}
+.adesc{font-size:15.5px;color:var(--gray2);line-height:1.35;}
+.foot{flex:none;display:flex;align-items:center;gap:12px;padding:6px 40px 9px;font-size:10px;color:#8a8f92;}
+.foot .pg{font-size:11px;color:#9aa0a3;}
+.foot .rule{width:1px;height:12px;background:#c9cdcf;}
+</style>
+</head>
+<body>
+<div class="stage"><div class="slide">
+  <div class="hd">
+    <img class="logo" src="te-logo.png" alt="TE Connectivity">
+    <div class="htitle">Today&rsquo;s Discussion</div>
+  </div>
+  <div class="body">
+    <div class="kicker">M&amp;A HR Integration Enablement &middot; For Decision</div>
+    <div class="subttl2">The path from evidence to executive decision.</div>
+    <div class="agenda">
+      <div class="arow">
+        <div class="anum">1</div>
+        <div class="atext">
+          <div class="atitle">Project objective &amp; approach</div>
+          <div class="adesc">Enhancing HR support during the first ~100 days of integration, building on the existing HR Integration Playbook.</div>
+        </div>
+      </div>
+      <div class="arow">
+        <div class="anum">2</div>
+        <div class="atext">
+          <div class="atitle">What we learned</div>
+          <div class="adesc">Key people integration gaps, their root causes, and the resulting opportunity areas.</div>
+        </div>
+      </div>
+      <div class="arow">
+        <div class="anum">3</div>
+        <div class="atext">
+          <div class="atitle">Our proposed solution</div>
+          <div class="adesc">An AI-enabled HR Integration Portal spanning communication, culture, onboarding and capability — a repeatable people-integration capability.</div>
+        </div>
+      </div>
+      <div class="arow">
+        <div class="anum">4</div>
+        <div class="atext">
+          <div class="atitle">Decision &amp; next steps</div>
+          <div class="adesc">Pilot during the next acquisition, validate and refine, then scale across TE.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span class="pg">2</span><span class="rule"></span><span>© 2025 TE Connectivity. Confidential &amp; Proprietary. Do not reproduce or distribute externally including non-authorized representatives and distributors. Create a sustainable future by limiting print copies and recycling paper.</span></div>
+</div></div>
+<script>
+function fit(){var s=document.querySelector('.slide');var st=s.closest('.stage');var w=st.clientWidth,h=st.clientHeight;if(!w||!h)return;var sc=Math.min(w/1280,h/720);s.style.transform='translate(-50%,-50%) scale('+sc+')';}
+window.addEventListener('resize',fit);window.addEventListener('load',fit);fit();
+</script>
+</body>
+</html>

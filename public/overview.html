@@ -76,6 +76,9 @@
       var d = e && e.data;
       if (d && d.type === 'deck-overlay') {
         document.body.classList.toggle('deck-fullscreen', !!d.open);
+      } else if (d && d.type === 'open-slide' && d.url && window.openHtmlSlide) {
+        // The deck's "Agenda" button asks us to open a standalone slide full-screen.
+        window.openHtmlSlide(d.url, d.label || 'Slide');
       }
     });
   </script>

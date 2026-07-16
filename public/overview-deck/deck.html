@@ -164,22 +164,16 @@ body{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; background:#0e1a20
 <!-- ======================= HOME / SLIDE 1 ======================= -->
 <div id="home"><div class="stage"><div class="slide" id="slide1">
   <div class="hd">
-    <svg class="logo" viewBox="0 0 120 96" xmlns="http://www.w3.org/2000/svg" aria-label="TE connectivity">
-      <rect x="0" y="0" width="120" height="96" rx="4" fill="#F28D00"/>
-      <g fill="#fff">
-        <rect x="17" y="30" width="17" height="5" rx="1.5"/>
-        <rect x="17" y="40" width="17" height="5" rx="1.5"/>
-        <rect x="17" y="50" width="17" height="5" rx="1.5"/>
-        <text x="42" y="60" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="42" font-style="italic">TE</text>
-      </g>
-      <text x="60" y="83" fill="#fff" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="12" letter-spacing="1.2">connectivity</text>
-    </svg>
+    <img class="logo" src="te-logo.png" alt="TE Connectivity">
     <div class="hd2-title">M&amp;A HR Integration Enablement | First ~100-Day HR Fine-Tune</div>
     <div class="hd2-strap"><b>The strategy is bought;</b> the people experience isn't — and the first ~100-day window is where deal value is kept or lost.</div>
   </div>
 
   <div class="body">
-    <div class="s1-evidence"><b>Evidence base:</b> collected feedback + scorecard (directional). &nbsp;&nbsp; <b>Resources reviewed:</b> HR M&amp;A Playbook + Talent &amp; Culture Assessment Playbook — already in place.</div>
+    <div class="s1-evidence" style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+      <span><b>Evidence base:</b> collected feedback + scorecard (directional). &nbsp;&nbsp; <b>Resources reviewed:</b> HR M&amp;A Playbook + Talent &amp; Culture Assessment Playbook — already in place.</span>
+      <button type="button" id="deck-agenda-btn" title="Open today's agenda" style="flex:none; display:inline-flex; align-items:center; gap:6px; background:var(--navy); color:#fff; border:1px solid var(--orange); border-radius:20px; padding:5px 14px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap;">📋 Agenda</button>
+    </div>
 
     <div class="s1-main">
       <div class="s1-col-l">
@@ -252,7 +246,7 @@ body{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; background:#0e1a20
   <button class="ov-close" aria-label="Close">×</button>
   <div class="stage"><div class="slide">
     <div class="hd">
-      <svg class="logo" viewBox="0 0 120 96"><rect width="120" height="96" rx="4" fill="#F28D00"/><g fill="#fff"><rect x="17" y="30" width="17" height="5" rx="1.5"/><rect x="17" y="40" width="17" height="5" rx="1.5"/><rect x="17" y="50" width="17" height="5" rx="1.5"/><text x="42" y="60" font-family="Arial" font-weight="700" font-size="42" font-style="italic">TE</text></g><text x="60" y="83" fill="#fff" text-anchor="middle" font-family="Arial" font-size="12" letter-spacing="1.2">connectivity</text></svg>
+      <img class="logo" src="te-logo.png" alt="TE Connectivity">
       <div class="hd-title">Communication Layer – <em>How information flows</em></div>
       <div class="hd-orangeline"></div>
       <div class="hd-sub">HR FINE-TUNE · FOR AWARENESS</div>
@@ -293,7 +287,7 @@ body{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; background:#0e1a20
   <button class="ov-close" aria-label="Close">×</button>
   <div class="stage"><div class="slide">
     <div class="hd">
-      <svg class="logo" viewBox="0 0 120 96"><rect width="120" height="96" rx="4" fill="#F28D00"/><g fill="#fff"><rect x="17" y="30" width="17" height="5" rx="1.5"/><rect x="17" y="40" width="17" height="5" rx="1.5"/><rect x="17" y="50" width="17" height="5" rx="1.5"/><text x="42" y="60" font-family="Arial" font-weight="700" font-size="42" font-style="italic">TE</text></g><text x="60" y="83" fill="#fff" text-anchor="middle" font-family="Arial" font-size="12" letter-spacing="1.2">connectivity</text></svg>
+      <img class="logo" src="te-logo.png" alt="TE Connectivity">
       <div class="hd-title">Culture Layer – <em>How employees experience TE</em></div>
       <div class="hd-orangeline"></div>
       <div class="hd-sub">HR FINE-TUNE · FOR AWARENESS</div>
@@ -365,7 +359,7 @@ body{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; background:#0e1a20
   <button class="ov-close" aria-label="Close">×</button>
   <div class="stage"><div class="slide">
     <div class="hd">
-      <svg class="logo" viewBox="0 0 120 96"><rect width="120" height="96" rx="4" fill="#F28D00"/><g fill="#fff"><rect x="17" y="30" width="17" height="5" rx="1.5"/><rect x="17" y="40" width="17" height="5" rx="1.5"/><rect x="17" y="50" width="17" height="5" rx="1.5"/><text x="42" y="60" font-family="Arial" font-weight="700" font-size="42" font-style="italic">TE</text></g><text x="60" y="83" fill="#fff" text-anchor="middle" font-family="Arial" font-size="12" letter-spacing="1.2">connectivity</text></svg>
+      <img class="logo" src="te-logo.png" alt="TE Connectivity">
       <div class="hd-title">Onboarding &amp; Capability Layer – <em>How employees and HR become successful</em></div>
       <div class="hd-orangeline"></div>
       <div class="hd-sub">HR FINE-TUNE · FOR AWARENESS</div>
@@ -478,6 +472,16 @@ fitAll();
   function ping(){ try{ parent.postMessage({type:'deck-overlay', open:anyOpen()}, '*'); }catch(e){} }
   var mo=new MutationObserver(ping);
   overlays.forEach(function(o){ mo.observe(o,{attributes:true, attributeFilter:['class']}); });
+})();
+// Agenda button on the home slide: when framed, ask the parent to open the agenda
+// slide as a full-screen popover (like the Ask slides); standalone, just navigate.
+(function(){
+  var agBtn=document.getElementById('deck-agenda-btn');
+  if(!agBtn) return;
+  agBtn.addEventListener('click', function(){
+    if(window.self!==window.top){ try{ parent.postMessage({type:'open-slide', url:'/overview-deck/agenda.html', label:'Agenda'}, '*'); }catch(e){} }
+    else { window.location.href='agenda.html'; }
+  });
 })();
 </script>
 </body>
