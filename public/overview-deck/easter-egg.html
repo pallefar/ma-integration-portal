@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simply The Best</title>
+<style>
+  :root{ --orange:#F28D00; --teal:#167987; --pink:#e0338c; --gold:#ffd34d; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{ font-family:'Outfit','Inter',Arial,sans-serif; background:radial-gradient(ellipse at 50% 20%, #2a1140 0%, #10071c 60%, #05030b 100%); color:#fff; overflow:hidden; height:100%; }
+  .stage{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  /* spotlights */
+  .spot{ position:absolute; top:-10%; width:40vmin; height:130vmin; background:linear-gradient(to bottom, rgba(255,211,77,.28), transparent 70%); filter:blur(6px); transform-origin:top center; mix-blend-mode:screen; pointer-events:none; }
+  .spot.l{ left:8%; animation:sweepL 3.2s ease-in-out infinite alternate; }
+  .spot.r{ right:8%; background:linear-gradient(to bottom, rgba(224,51,140,.28), transparent 70%); animation:sweepR 3.6s ease-in-out infinite alternate; }
+  @keyframes sweepL{ from{ transform:rotate(-16deg); } to{ transform:rotate(10deg); } }
+  @keyframes sweepR{ from{ transform:rotate(14deg); } to{ transform:rotate(-10deg); } }
+  /* performer */
+  .star{ position:relative; width:min(46vmin,340px); animation:sway 1.6s ease-in-out infinite alternate; }
+  @keyframes sway{ from{ transform:translateY(0) rotate(-2deg); } to{ transform:translateY(-14px) rotate(2deg); } }
+  .hair{ transform-origin:50% 30%; animation:bob 0.5s ease-in-out infinite alternate; }
+  @keyframes bob{ from{ transform:translateY(0); } to{ transform:translateY(4px); } }
+  .mouth{ transform-origin:center; animation:sing .34s ease-in-out infinite alternate; }
+  @keyframes sing{ from{ transform:scaleY(.35); } to{ transform:scaleY(1); } }
+  .arm{ transform-origin:78% 40%; animation:wave .7s ease-in-out infinite alternate; }
+  @keyframes wave{ from{ transform:rotate(-8deg); } to{ transform:rotate(18deg); } }
+  .glint{ animation:glint 1.1s ease-in-out infinite; }
+  @keyframes glint{ 0%,100%{ opacity:.2; } 50%{ opacity:1; } }
+  /* title */
+  .title{ margin-top:2vmin; font-size:min(9vmin,68px); font-weight:800; line-height:1; letter-spacing:-.02em;
+    background:linear-gradient(90deg,#ffd34d,#F28D00,#e0338c,#ffd34d); background-size:300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:shine 3s linear infinite, pop 1.6s ease-in-out infinite alternate; text-shadow:0 0 30px rgba(255,180,60,.25); }
+  @keyframes shine{ to{ background-position:300% 0; } }
+  @keyframes pop{ from{ transform:scale(1); } to{ transform:scale(1.05); } }
+  .sub{ margin-top:1.4vmin; font-size:min(3.4vmin,20px); font-weight:600; color:#ffd9a8; opacity:.9; }
+  .credit{ position:absolute; bottom:14px; font-size:11px; color:rgba(255,255,255,.4); }
+  /* start button */
+  .start{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem; background:rgba(5,3,11,.55); z-index:20; cursor:pointer; }
+  .start h2{ font-size:min(7vmin,44px); font-weight:800; background:linear-gradient(90deg,#ffd34d,#F28D00,#e0338c); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .start .go{ background:linear-gradient(90deg,#F28D00,#e0338c); color:#fff; font-weight:800; font-size:1.1rem; border:none; padding:.9rem 2.2rem; border-radius:40px; cursor:pointer; box-shadow:0 10px 30px rgba(224,51,140,.5); animation:pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.07); } }
+  .start p{ color:rgba(255,255,255,.6); font-size:.9rem; }
+  /* confetti */
+  .confetti{ position:absolute; top:-20px; width:10px; height:14px; opacity:.9; border-radius:2px; animation:fall linear infinite; }
+  @keyframes fall{ to{ transform:translateY(112vh) rotate(720deg); } }
+  .karaoke{ margin-top:1.6vmin; font-size:min(5.2vmin,34px); font-weight:800; min-height:1.3em; letter-spacing:.01em; }
+  .karaoke .w{ opacity:.26; color:#fff; transition:all .12s ease; padding:0 .1em; display:inline-block; }
+  .karaoke .w.on{ opacity:1; color:#ffd34d; transform:translateY(-7px) scale(1.2); text-shadow:0 0 18px rgba(255,211,77,.75); }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="spot l"></div>
+    <div class="spot r"></div>
+
+    <!-- Stylized glam rockstar (original cartoon character) -->
+    <svg class="star" viewBox="0 0 300 380" xmlns="http://www.w3.org/2000/svg" aria-label="Rockstar singing">
+      <!-- big hair -->
+      <g class="hair">
+        <path d="M150 20 C 70 20 40 90 55 150 C 20 130 30 210 70 220 C 60 250 100 250 100 250 L200 250 C200 250 240 250 230 220 C 270 210 280 130 245 150 C 260 90 230 20 150 20 Z" fill="#3a1d12"/>
+        <path d="M150 30 C 95 30 70 80 80 130 C 100 90 130 80 150 80 C 170 80 200 90 220 130 C 230 80 205 30 150 30 Z" fill="#4d2717"/>
+      </g>
+      <!-- face -->
+      <ellipse cx="150" cy="150" rx="62" ry="70" fill="#c68642"/>
+      <!-- eyes -->
+      <ellipse cx="126" cy="140" rx="9" ry="11" fill="#fff"/><circle cx="126" cy="142" r="5" fill="#1b1b1b"/>
+      <ellipse cx="174" cy="140" rx="9" ry="11" fill="#fff"/><circle cx="174" cy="142" r="5" fill="#1b1b1b"/>
+      <!-- lashes/brows -->
+      <path d="M112 126 q14 -10 28 -2" stroke="#2a160c" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M160 124 q14 -8 28 2" stroke="#2a160c" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <!-- singing mouth -->
+      <ellipse class="mouth" cx="150" cy="185" rx="16" ry="16" fill="#7a1533"/>
+      <ellipse cx="150" cy="192" rx="9" ry="6" fill="#e0338c"/>
+      <!-- body / sparkly dress -->
+      <path d="M108 214 C120 240 180 240 192 214 L214 340 C214 360 86 360 86 340 Z" fill="url(#dress)"/>
+      <!-- sparkles on dress -->
+      <g class="glint" fill="#fff">
+        <circle cx="120" cy="270" r="3"/><circle cx="150" cy="300" r="3"/><circle cx="180" cy="272" r="3"/>
+        <circle cx="135" cy="325" r="2.5"/><circle cx="168" cy="322" r="2.5"/><circle cx="150" cy="250" r="2.5"/>
+      </g>
+      <!-- arm + microphone -->
+      <g class="arm">
+        <path d="M196 226 C 232 232 236 176 224 150" stroke="#c68642" stroke-width="16" fill="none" stroke-linecap="round"/>
+        <circle cx="222" cy="140" r="16" fill="#2b2b2b"/>
+        <circle cx="222" cy="140" r="10" fill="#8a8a8a"/>
+        <rect x="218" y="150" width="8" height="34" rx="4" fill="#444"/>
+      </g>
+      <defs>
+        <linearGradient id="dress" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#F28D00"/><stop offset=".5" stop-color="#e0338c"/><stop offset="1" stop-color="#7a1533"/>
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <div class="title">You're Simply&nbsp;The&nbsp;Best! 🎤</div>
+    <div class="karaoke" id="kar"></div>
+    <div class="sub" id="sub">Better than all the rest — go integrate, superstar ✨</div>
+    <div class="credit">🎶 Original tune &amp; animation · a little thank-you to the integration team</div>
+  </div>
+
+  <div class="start" id="start">
+    <h2>🎤 Encore!</h2>
+    <button class="go" id="go">▶ Start the show</button>
+    <p>Turn your sound on 🔊</p>
+  </div>
+
+<script>
+(function(){
+  var startEl=document.getElementById('start');
+  var subs=["Better than all the rest — go integrate, superstar ✨","You take my heart... and my synergy targets 💛","Day 1 to Day 100 — simply the best! 🏆","Keep shining, integration hero 🌟"];
+  var actx=null, playing=false, loopTimer=null, subTimer=null, confTimer=null, si=0, karTimers=[];
+  // Original celebratory riff (NOT the copyrighted song) — a bright major-key loop.
+  // [freq, seconds, karaoke word] — a bright ORIGINAL major-key riff the star "sings".
+  var MELODY=[ [523.25,.34,"You're"],[659.25,.26,"sim-"],[783.99,.26,"ply"],[1046.5,.30,"the"],[880,.55,"best!"],[0,.18,"♪"],
+               [698.46,.34,"Bet-"],[880,.26,"ter"],[1046.5,.26,"than"],[1174.7,.26,"all"],[1046.5,.26,"the"],[880,.65,"rest!"] ];
+  var BASS=[130.81,130.81,174.61,174.61,196.0,196.0,174.61,174.61];
+  function note(freq,t,dur,type,vol){
+    if(!freq) return;
+    var o=actx.createOscillator(), g=actx.createGain();
+    o.type=type||'triangle'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol||.22,t+.02);
+    g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+dur+.02);
+  }
+  function vocal(freq,t,dur){ // voice-like sine with vibrato — the "singing" line
+    if(!freq) return;
+    var o=actx.createOscillator(), g=actx.createGain(), lfo=actx.createOscillator(), lg=actx.createGain();
+    o.type='sine'; o.frequency.value=freq;
+    lfo.type='sine'; lfo.frequency.value=5.5; lg.gain.value=freq*0.014; lfo.connect(lg); lg.connect(o.frequency);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.17,t+.05);
+    g.gain.setValueAtTime(.17,t+dur*.7); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    o.connect(g); g.connect(actx.destination); o.start(t); lfo.start(t); o.stop(t+dur+.02); lfo.stop(t+dur+.02);
+  }
+  var kar=document.getElementById('kar');
+  function renderKar(idx){ kar.innerHTML=MELODY.map(function(m,i){ return '<span class="w'+(i===idx?' on':'')+'">'+m[2]+'</span>'; }).join(' '); }
+  renderKar(-1);
+  function playLoop(){
+    karTimers.forEach(clearTimeout); karTimers=[];
+    var t=actx.currentTime+.1, off=0, beat=0;
+    for(var i=0;i<MELODY.length;i++){
+      var f=MELODY[i][0], d=MELODY[i][1];
+      note(f,t,d,'triangle',.15); vocal(f,t,d);
+      if(BASS[beat%BASS.length]) note(BASS[beat%BASS.length],t,.3,'sawtooth',.08);
+      (function(idx,delay){ karTimers.push(setTimeout(function(){ renderKar(idx); }, delay*1000)); })(i, off);
+      t+=d; off+=d; beat++;
+    }
+    loopTimer=setTimeout(playLoop, off*1000);
+  }
+  function confetti(){
+    var c=document.createElement('div'); c.className='confetti';
+    var cols=['#ffd34d','#F28D00','#e0338c','#167987','#fff'];
+    c.style.left=(Math.floor(performance.now()*13)%100)+'vw';
+    c.style.background=cols[Math.floor(performance.now())%cols.length];
+    c.style.animationDuration=(2.5+ (performance.now()%1500)/1000)+'s';
+    document.body.appendChild(c); setTimeout(function(){ c.remove(); }, 5000);
+  }
+  function start(){
+    if(playing) return; playing=true;
+    startEl.classList.add('hidden');
+    try{ actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); playLoop(); }catch(e){}
+    confTimer=setInterval(confetti,140);
+    subTimer=setInterval(function(){ si=(si+1)%subs.length; document.getElementById('sub').textContent=subs[si]; }, 3200);
+  }
+  document.getElementById('go').addEventListener('click', start);
+  startEl.addEventListener('click', start);
+  // Stop audio when the popover/iframe is torn down
+  window.addEventListener('pagehide', function(){ try{ clearTimeout(loopTimer); clearInterval(confTimer); clearInterval(subTimer); karTimers.forEach(clearTimeout); if(actx) actx.close(); }catch(e){} });
+})();
+</script>
+</body>
+</html>

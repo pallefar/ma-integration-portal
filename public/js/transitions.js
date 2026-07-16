@@ -862,6 +862,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="sidebar-link-icon">\u{2699}️</span>
         <span class="sidebar-link-label">Admin Console</span>
       </a>
+      <a href="javascript:void(0)" class="sidebar-link sidebar-egg" data-html-slide="/overview-deck/easter-egg.html" data-html-slide-label="Simply The Best" title="You're simply the best ✨" style="opacity:.55;">
+        <span class="sidebar-link-icon">⭐</span>
+        <span class="sidebar-link-label">The Best</span>
+      </a>
       <div class="sidebar-footer">TE M&A Integration Demo</div>
     `;
     document.body.appendChild(sidebar);
