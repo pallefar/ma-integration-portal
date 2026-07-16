@@ -673,11 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
       brandWrapper.innerHTML = `
         <a href="/" class="brand-logo-link" style="text-decoration: none; display: flex; align-items: center; gap: 1.25rem; transition: transform 0.2s;">
           <div class="brand-logo-container">
-            <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
-              <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
-              <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
-            </svg>
+            <img class="brand-logo-svg" src="/te-logo.png" alt="TE Connectivity" style="height:36px;width:auto;display:block;">
           </div>
           <div class="brand-divider"></div>
           <div class="brand-title">
@@ -849,6 +845,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <a href="/index.html" class="sidebar-link ${path.includes('index.html') ? 'active' : ''}" title="Role Showcase — enter the portal by role">
           <span class="sidebar-link-icon">\u{1F6AA}</span>
           <span class="sidebar-link-label">Role Showcase</span>
+        </a>
+        <a href="/insights.html" class="sidebar-link ${path.includes('insights.html') ? 'active' : ''}" title="M&A Insights — current target + acquisition radar">
+          <span class="sidebar-link-icon">\u{1F4C8}</span>
+          <span class="sidebar-link-label">M&A Insights</span>
         </a>
         ${(activeRole === 'admin' || activeRole === 'pmo' || activeRole === 'hrbp') ? `
         <a href="javascript:void(0)" class="sidebar-link" id="sidebar-survey-link" title="Survey Scorecard">

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Integration Dashboard</title>
   <meta name="description" content="Review organizational assessment metrics, custom AI post-merger integration plans, and Integration Leader coaching resources.">
-  <link rel="stylesheet" href="/css/style.css?v=1784200000">
-  <script src="/js/transitions.js?v=1784200000"></script>
+  <link rel="stylesheet" href="/css/style.css?v=1784300010">
+  <script src="/js/transitions.js?v=1784300010"></script>
 </head>
 <body>
 
@@ -15,11 +15,7 @@
     <header class="main-header">
       <div class="brand-wrapper">
         <div class="brand-logo-container">
-          <svg class="brand-logo-svg" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg">
-            <rect x="0" y="0" width="40" height="40" rx="4" fill="#E98300" />
-            <text x="20" y="27" text-anchor="middle" font-family="'Outfit', -apple-system, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF">TE</text>
-            <text x="48" y="26" font-family="'Inter', -apple-system, sans-serif" font-weight="700" font-size="15" fill="#244C5A" letter-spacing="-0.03em">connectivity</text>
-          </svg>
+          <img class="brand-logo-svg" src="/te-logo.png" alt="TE Connectivity" style="height:36px;width:auto;display:block;">
         </div>
         <div class="brand-divider"></div>
         <div class="brand-title">
@@ -883,6 +879,77 @@
                 As an Integration Leader, you can broadcast notifications and integration emails to the acquired legacy employees within your division. Review dispatched alerts and simulated HTML email files in real-time.
               </p>
 
+              <!-- Employee Feedback — reflects the 30-day pulse survey submitted from the employee portal -->
+              <div class="card" id="employee-feedback-card" style="margin-bottom:1.5rem; padding:1.5rem; border-left:4px solid var(--te-orange);">
+                <div class="card-header" style="border-bottom:1px solid var(--border-color); padding-bottom:.5rem; margin-bottom:.75rem;">
+                  <h3 data-i18n="dashboard.ef_heading">💬 Employee Feedback — Onboarding Pulse</h3>
+                </div>
+                <p style="font-size:.85rem; color:var(--text-secondary); margin-bottom:1rem;">Live feedback submitted by acquired employees from their portal's 30-day pulse survey — with sentiment insights and their comments.</p>
+                <div class="ef-insights">
+                  <div class="ef-stat"><span class="ef-stat-val" id="ef-avg">–</span><span class="ef-stat-lbl">Avg satisfaction</span></div>
+                  <div class="ef-stat"><span class="ef-stat-val" id="ef-count">–</span><span class="ef-stat-lbl">Responses</span></div>
+                  <div class="ef-stat"><span class="ef-stat-val" id="ef-positive">–</span><span class="ef-stat-lbl">Positive (4–5)</span></div>
+                  <div class="ef-stat"><span class="ef-stat-val" id="ef-attention">–</span><span class="ef-stat-lbl">Needs follow-up (≤2)</span></div>
+                </div>
+                <div class="ef-callout" id="ef-callout" style="display:none;"></div>
+                <div id="ef-comments" style="margin-top:1rem; display:flex; flex-direction:column; gap:.65rem;">
+                  <p style="text-align:center; color:var(--text-dim); font-size:.85rem; padding:1rem;">Loading feedback…</p>
+                </div>
+              </div>
+              <style>
+                #employee-feedback-card .ef-insights{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:.75rem; }
+                #employee-feedback-card .ef-stat{ background:var(--bg-subtle,#f7f9f9); border:1px solid var(--border-color); border-radius:8px; padding:.75rem 1rem; text-align:center; }
+                #employee-feedback-card .ef-stat-val{ display:block; font-size:1.5rem; font-weight:800; color:var(--te-dark-teal); line-height:1.1; }
+                #employee-feedback-card .ef-stat-lbl{ display:block; font-size:.72rem; color:var(--text-dim); margin-top:.15rem; }
+                #employee-feedback-card .ef-callout{ margin-top:1rem; background:rgba(233,131,0,.08); border:1px solid rgba(233,131,0,.25); border-radius:8px; padding:.75rem 1rem; font-size:.85rem; color:var(--te-dark-teal); font-weight:600; }
+                #employee-feedback-card .ef-comment{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:8px; padding:.7rem .9rem; }
+                #employee-feedback-card .ef-comment-head{ display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-bottom:.25rem; }
+                #employee-feedback-card .ef-comment-head strong{ color:var(--te-dark-teal); font-size:.9rem; }
+                #employee-feedback-card .ef-stars{ font-size:.85rem; font-weight:700; white-space:nowrap; }
+                #employee-feedback-card .ef-comment-body{ font-size:.85rem; color:var(--text-secondary); line-height:1.45; }
+              </style>
+              <script>
+                (function(){
+                  var card=document.getElementById('employee-feedback-card'); if(!card) return;
+                  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+                  function setText(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+                  fetch('/api/pulses').then(function(r){return r.json();}).then(function(pulses){
+                    var items=(Array.isArray(pulses)?pulses:[]).map(function(p){
+                      return { name:p.employeeName||p.name||'Anonymous', rating:Number(p.rating)||0, comment:p.comment||'', ts:p.timestamp||'' };
+                    }).filter(function(p){ return p.rating>0; });
+                    var n=items.length;
+                    var avg=n? items.reduce(function(s,p){return s+p.rating;},0)/n : 0;
+                    var pos=items.filter(function(p){return p.rating>=4;}).length;
+                    var att=items.filter(function(p){return p.rating<=2;}).length;
+                    setText('ef-avg', n? avg.toFixed(1)+' / 5':'–');
+                    setText('ef-count', n||'0');
+                    setText('ef-positive', n? Math.round(pos/n*100)+'%':'–');
+                    setText('ef-attention', att);
+                    var co=document.getElementById('ef-callout');
+                    if(n){
+                      var msg = att>0 ? ('⚠️ '+att+' employee'+(att>1?'s':'')+' rated onboarding ≤2 — reach out directly to unblock them.')
+                        : (avg>=4 ? ('✅ Sentiment is strong ('+avg.toFixed(1)+'/5). Keep the cadence and reinforce what’s working.')
+                        : ('Sentiment is mixed ('+avg.toFixed(1)+'/5). Review the comments below for common themes.'));
+                      co.textContent=msg; co.style.display='block';
+                    }
+                    var list=document.getElementById('ef-comments');
+                    if(!n){ list.innerHTML='<p style="text-align:center;color:var(--text-dim);font-size:.85rem;padding:1rem;">No employee feedback submitted yet.</p>'; return; }
+                    var shown=items.filter(function(p){return p.comment && p.comment.trim();});
+                    if(!shown.length) shown=items;
+                    shown.sort(function(a,b){ return a.rating-b.rating; });
+                    list.innerHTML=shown.slice(0,12).map(function(p){
+                      var r=Math.max(0,Math.min(5,p.rating));
+                      var stars=Array(r+1).join('★')+Array(6-r).join('☆');
+                      var tone=p.rating<=2?'#C2410C':(p.rating>=4?'#5C9654':'#C77700');
+                      return '<div class="ef-comment" style="border-left:3px solid '+tone+';">'
+                        +'<div class="ef-comment-head"><strong>'+esc(p.name)+'</strong><span class="ef-stars" style="color:'+tone+'">'+stars+' '+p.rating+'/5</span></div>'
+                        +(p.comment?'<div class="ef-comment-body">'+esc(p.comment)+'</div>':'')
+                        +'</div>';
+                    }).join('');
+                  }).catch(function(){ var l=document.getElementById('ef-comments'); if(l) l.innerHTML='<p style="color:var(--text-dim);font-size:.85rem;">Feedback unavailable.</p>'; });
+                })();
+              </script>
+
               <!-- Megaphone Guided Alert -->
               <div class="megaphone-alert-card">
                 <div class="megaphone-alert-icon">📣</div>
@@ -1045,6 +1112,32 @@
                   <div class="cwow-remember">Remember — <b>in a matrix, influence beats authority.</b> Align early, escalate smart, and decide as one team.</div>
                 </div>
               </div>
+
+              <!-- Working in a Matrix — the 7 scenario cards (open each full-screen) -->
+              <div class="card" style="margin-top:1.5rem; padding:1.5rem;">
+                <div class="card-header" style="border-bottom:1px solid var(--border-color); padding-bottom:.5rem; margin-bottom:.35rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+                  <h3 data-i18n="dashboard.wim_heading">🧩 Working in a Matrix — 7 scenario cards</h3>
+                  <a href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html" data-html-slide-label="Working in a Matrix — all scenarios" style="font-size:.8rem; font-weight:800; color:var(--te-orange); text-decoration:none; white-space:nowrap;">Open all →</a>
+                </div>
+                <p style="font-size:.85rem; color:var(--text-secondary); margin-bottom:1rem;">Seven situations, one way of working — <strong>alignment, not authority</strong>. Click any scenario to open its full card.</p>
+                <div class="wim-grid">
+                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-0" data-html-slide-label="Working in a Matrix Organization"><span class="wim-num">★ Start here</span><span class="wim-title">Working in a Matrix Organization</span><span class="wim-sit">The mindset for getting cross-functional work done — when no one hands you the authority.</span></a>
+                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-1" data-html-slide-label="Ownership without Authority"><span class="wim-num">Scenario 01</span><span class="wim-title">Ownership without Authority</span><span class="wim-sit">You're driving work through people who don't report to you.</span></a>
+                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-2" data-html-slide-label="Stakeholder Alignment"><span class="wim-num">Scenario 02</span><span class="wim-title">Stakeholder Alignment</span><span class="wim-sit">Many stakeholders, many priorities — and you need them rowing together.</span></a>
+                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-3" data-html-slide-label="Making Decisions in a Matrix"><span class="wim-num">Scenario 03</span><span class="wim-title">Making Decisions in a Matrix</span><span class="wim-sit">A call has to be made, but no single owner holds full authority to make it.</span></a>
+                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-4" data-html-slide-label="Managing Conflict Across Functions"><span class="wim-num">Scenario 04</span><span class="wim-title">Managing Conflict Across Functions</span><span class="wim-sit">Tension with a partner function is starting to cost trust and progress.</span></a>
+                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-5" data-html-slide-label="Escalation in a Matrix"><span class="wim-num">Scenario 05</span><span class="wim-title">Escalation in a Matrix</span><span class="wim-sit">You've tried to align, but progress is blocked and the risk keeps growing.</span></a>
+                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-6" data-html-slide-label="Moving with Pace"><span class="wim-num">Scenario 06</span><span class="wim-title">Moving with Pace</span><span class="wim-sit">Everything feels urgent — how do you move fast without cutting corners?</span></a>
+                </div>
+              </div>
+              <style>
+                #tab-culture-ways .wim-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.85rem; }
+                #tab-culture-ways .wim-card{ display:flex; flex-direction:column; gap:.25rem; text-decoration:none; background:var(--bg-subtle,#f7f9f9); border:1px solid var(--border-color); border-left:4px solid var(--te-orange); border-radius:8px; padding:.85rem 1rem; transition:transform .15s ease, box-shadow .15s ease; }
+                #tab-culture-ways .wim-card:hover{ transform:translateY(-3px); box-shadow:0 10px 22px rgba(0,0,0,.12); }
+                #tab-culture-ways .wim-num{ font-size:.64rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--te-orange); }
+                #tab-culture-ways .wim-title{ font-weight:700; color:var(--te-dark-teal); font-size:.95rem; line-height:1.2; }
+                #tab-culture-ways .wim-sit{ font-size:.8rem; color:var(--text-secondary); line-height:1.4; }
+              </style>
             </div>
 
             <!-- Tab: Integration Leader Academy (training course) -->
@@ -1260,6 +1353,6 @@
     </div>
   </div>
 
-  <script src="/js/dashboard.js?v=1784200000"></script>
+  <script src="/js/dashboard.js?v=1784300010"></script>
 </body>
 </html>

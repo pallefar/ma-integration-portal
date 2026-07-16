@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - M&A Insights</title>
+  <meta name="description" content="M&A Insights — strategic view of the current acquisition target and a radar of companies that would strengthen TE Connectivity.">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/css/style.css?v=1784300010">
+  <script src="/js/transitions.js?v=1784300010"></script>
+  <style>
+    .ins-wrap{ max-width:1100px; margin:0 auto; }
+    .ins-hero{ margin-bottom:1.25rem; }
+    .ins-hero h1{ font-size:1.9rem; color:var(--te-dark-teal); margin:0 0 .35rem; }
+    .ins-hero p{ color:var(--text-secondary); max-width:760px; line-height:1.55; margin:0; }
+    .ins-tabs{ display:flex; gap:.5rem; border-bottom:2px solid var(--border-color); margin-bottom:1.5rem; }
+    .ins-tab{ background:none; border:none; font-family:var(--font-family-display); font-size:1rem; font-weight:700; color:var(--text-dim); padding:.6rem 1.1rem; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; }
+    .ins-tab.active{ color:var(--te-dark-teal); border-bottom-color:var(--te-orange); }
+    .ins-pane{ animation:slideIn var(--transition-normal); }
+    /* insight detail */
+    .ins-detail{ }
+    .ins-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:1.5rem; flex-wrap:wrap; border-bottom:1px solid var(--border-color); padding-bottom:1rem; margin-bottom:1.25rem; }
+    .ins-name{ font-size:1.5rem; color:var(--te-dark-teal); margin:0; line-height:1.15; }
+    .ins-tags{ display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.45rem; }
+    .ins-chip{ font-size:.72rem; font-weight:700; padding:.2rem .6rem; border-radius:20px; background:var(--bg-subtle,#eef2f2); color:var(--te-dark-teal); border:1px solid var(--border-color); }
+    .ins-chip.tick{ background:rgba(36,76,90,.06); }
+    .ins-score{ flex:none; text-align:center; }
+    .ins-score-ring{ width:76px; height:76px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem; font-weight:800; color:#fff; }
+    .ins-score-lbl{ font-size:.68rem; color:var(--text-dim); margin-top:.3rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+    .ins-meta{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.75rem; margin-bottom:1.25rem; }
+    .ins-meta .m{ background:var(--bg-subtle,#f7f9f9); border:1px solid var(--border-color); border-radius:8px; padding:.6rem .85rem; }
+    .ins-meta .m .k{ font-size:.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; }
+    .ins-meta .m .v{ font-size:.95rem; font-weight:700; color:var(--te-dark-teal); margin-top:.1rem; }
+    .ins-sec{ margin-bottom:1.1rem; }
+    .ins-sec h4{ font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; color:var(--te-orange); margin:0 0 .5rem; }
+    .ins-sec p{ font-size:.9rem; color:var(--text-primary); line-height:1.6; margin:0; }
+    .ins-cols{ display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; }
+    .ins-list{ list-style:none; margin:0; padding:0; }
+    .ins-list li{ font-size:.85rem; color:var(--text-primary); line-height:1.5; padding-left:1.4rem; position:relative; margin-bottom:.35rem; }
+    .ins-list.syn li::before{ content:"✓"; position:absolute; left:0; color:#5C9654; font-weight:800; }
+    .ins-list.risk li::before{ content:"⚠"; position:absolute; left:0; }
+    .ins-prods{ display:flex; flex-wrap:wrap; gap:.4rem; }
+    .ins-prod{ font-size:.78rem; background:rgba(233,131,0,.08); border:1px solid rgba(233,131,0,.25); color:var(--te-dark-teal); border-radius:6px; padding:.25rem .6rem; }
+    /* radar grid */
+    .ins-radar-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1.1rem; }
+    .ins-co-card{ text-align:left; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-top:4px solid var(--te-orange); border-radius:12px; padding:1.1rem 1.25rem; cursor:pointer; transition:transform .15s ease, box-shadow .15s ease; font-family:inherit; }
+    .ins-co-card:hover{ transform:translateY(-4px); box-shadow:0 14px 30px rgba(0,0,0,.12); }
+    .ins-co-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
+    .ins-co-name{ font-size:1.1rem; font-weight:800; color:var(--te-dark-teal); line-height:1.15; }
+    .ins-co-sector{ font-size:.76rem; color:var(--text-dim); margin-top:.15rem; }
+    .ins-co-score{ flex:none; width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:.95rem; }
+    .ins-co-ov{ font-size:.84rem; color:var(--text-secondary); line-height:1.5; margin:.75rem 0; }
+    .ins-co-foot{ display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color:var(--text-dim); border-top:1px dashed var(--border-color); padding-top:.6rem; }
+    .ins-co-foot .open{ color:var(--te-orange); font-weight:800; }
+    /* view toggle + list mode */
+    .ins-radar-bar{ display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem; }
+    .ins-view-toggle{ display:inline-flex; border:1px solid var(--border-color); border-radius:8px; overflow:hidden; flex:none; }
+    .ins-vbtn{ background:var(--card-bg,#fff); border:none; color:var(--text-dim); font-family:inherit; font-size:.82rem; font-weight:700; padding:.4rem .85rem; cursor:pointer; transition:all .15s; }
+    .ins-vbtn+.ins-vbtn{ border-left:1px solid var(--border-color); }
+    .ins-vbtn.active{ background:var(--te-dark-teal); color:#fff; }
+    .ins-radar-grid.list{ grid-template-columns:1fr; gap:.6rem; }
+    .ins-radar-grid.list .ins-co-card{ display:grid; grid-template-columns:minmax(190px,1.2fr) 2fr auto; align-items:center; gap:1.5rem; border-top:1px solid var(--border-color); border-left:4px solid var(--sc,var(--te-orange)); padding:.8rem 1.25rem; }
+    .ins-radar-grid.list .ins-co-ov{ margin:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .ins-radar-grid.list .ins-co-foot{ border-top:none; padding-top:0; flex-direction:column; align-items:flex-end; gap:.15rem; white-space:nowrap; }
+    @media (max-width:720px){ .ins-radar-grid.list .ins-co-card{ grid-template-columns:1fr; gap:.5rem; } .ins-radar-grid.list .ins-co-foot{ flex-direction:row; align-items:center; } }
+    /* modal */
+    .ins-modal{ position:fixed; inset:0; z-index:4000; background:rgba(9,17,22,.55); display:flex; align-items:flex-start; justify-content:center; padding:3vh 1rem; overflow-y:auto; backdrop-filter:blur(3px); }
+    .ins-modal-card{ background:var(--card-bg,#fff); border-radius:14px; max-width:860px; width:100%; padding:1.75rem 1.9rem; box-shadow:0 30px 80px rgba(0,0,0,.4); position:relative; }
+    .ins-modal-close{ position:absolute; top:14px; right:16px; width:36px; height:36px; border-radius:50%; border:none; background:var(--bg-subtle,#eef2f2); color:var(--te-dark-teal); font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .ins-modal-close:hover{ background:rgba(233,131,0,.15); }
+    .ins-disclaimer{ font-size:.72rem; color:var(--text-dim); font-style:italic; margin-top:1.25rem; border-top:1px dashed var(--border-color); padding-top:.75rem; }
+    @media (max-width:640px){ .ins-cols{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <img class="brand-logo-svg" src="/te-logo.png" alt="TE Connectivity" style="height:36px;width:auto;display:block;">
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title"><span class="portal-badge">M&A Integration</span></div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">Overview</a>
+        <a href="/dashboard.html" class="nav-link">Integration Leader Portal</a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="ins-wrap">
+        <div class="ins-hero">
+          <h1>M&A Insights</h1>
+          <p>A strategic view of the acquisition we're integrating now, plus a radar of companies that would strengthen TE Connectivity's connectivity &amp; sensing franchise.</p>
+        </div>
+        <div class="ins-tabs">
+          <button class="ins-tab active" data-ins-tab="current">🎯 Current M&A Target</button>
+          <button class="ins-tab" data-ins-tab="radar">📡 Acquisition Radar</button>
+        </div>
+        <div id="ins-current" class="ins-pane"></div>
+        <div id="ins-radar" class="ins-pane" style="display:none;">
+          <div class="ins-radar-bar">
+            <p style="color:var(--text-secondary); margin:0; font-size:.9rem;">Companies our analysis flags as strong strategic fits for TE. Click any company for the full insight.</p>
+            <div class="ins-view-toggle" role="group" aria-label="View mode">
+              <button type="button" class="ins-vbtn active" data-view="grid" title="Grid view">▦ Grid</button>
+              <button type="button" class="ins-vbtn" data-view="list" title="List view">☰ List</button>
+            </div>
+          </div>
+          <div class="ins-radar-grid" id="ins-radar-grid"></div>
+          <p class="ins-disclaimer">Illustrative strategic analysis for demonstration purposes, compiled from public information. Figures marked “est.” are approximate. Not investment advice.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="ins-modal" class="ins-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Company insight">
+    <div class="ins-modal-card">
+      <button class="ins-modal-close" id="ins-modal-close" aria-label="Close">×</button>
+      <div id="ins-modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+    // --- Data -------------------------------------------------------------
+    var CURRENT = {
+      name:"NextGen Sensors Ltd.", ticker:"Private · Active target", sector:"MEMS & smart sensors",
+      hq:"Cambridge, United Kingdom", founded:"2011", employees:"~850", revenue:"$180M est.", fitScore:91,
+      status:"Acquisition in progress · Day 1–100 integration",
+      overview:"Designs and manufactures MEMS-based smart pressure, position and environmental sensors for automotive, industrial-automation and medical-device OEMs.",
+      strategicFit:"The acquisition TE is integrating now. NextGen's MEMS sensing IP and automotive design wins accelerate TE's Sensor Solutions roadmap and strengthen its position in EV and industrial automation. Integration is underway across the first 100 days — the focus of this portal.",
+      synergies:["Fold MEMS sensing IP into TE Sensor Solutions","Cross-sell into shared automotive & industrial OEMs","Combine sensing with TE interconnect into integrated modules","Scale NextGen products on TE's global manufacturing footprint"],
+      risks:["Retention of key R&D / sensing engineers","PLM & systems migration timeline","Culture integration across UK and TE sites"],
+      keyProducts:["MEMS pressure sensors","Position / speed sensors","Environmental & gas sensors","Sensor signal-conditioning ASICs"],
+      fitRationale:"Direct strategic fit — sensing IP and automotive design wins in TE's fastest-growing vector."
+    };
+    var TARGETS = [{"name":"Sensata Technologies","ticker":"NYSE: ST","sector":"Automotive & industrial sensors","hq":"Attleboro, Massachusetts, USA","founded":"1916","employees":"~19,000","revenue":"$3.9B (FY2024)","overview":"Global industrial-technology company making pressure, temperature, position and electrical-protection sensors for mission-critical automotive, heavy-vehicle and industrial systems, plus EV battery-management and high-voltage power distribution.","strategicFit":"Sensing is TE’s fastest-growing franchise; Sensata would roughly double TE’s sensor scale and deepen its EV electrification position (battery management, HV distribution). Heavy overlap with TE Transportation and Industrial segments makes it a natural, if large, bolt-on to TE Sensor Solutions.","synergies":["Fuse sensing + interconnect into integrated modules","Cross-sell across shared automotive/industrial OEMs","Scale EV battery-management and HV power content","Consolidate global manufacturing and procurement"],"risks":["Large deal (~$5-7B est.): financing and dilution","Sensor product overlap needing rationalization","Automotive-sensing antitrust scrutiny"],"keyProducts":["Pressure & temperature sensors","Position/speed sensors","EV battery-management systems","High-voltage distribution units"],"fitScore":88,"fitRationale":"Doubles down on sensing, TE’s top growth vector, with strong EV overlap, though large and pricey."},{"name":"Novanta Inc.","ticker":"NASDAQ: NOVT","sector":"Photonics & medical technology","hq":"Bedford, Massachusetts, USA","founded":"1968","employees":"~4,000 est.","revenue":"$949M (FY2024)","overview":"Supplier of photonics (lasers, optical scanning, beam delivery), precision-motion, and medical subsystems embedded inside medical and advanced-industrial equipment.","strategicFit":"Adds optical/photonics and medical-device subsystem content that TE’s Medical and Data & Devices units lack organically. Strengthens TE in minimally-invasive surgery, robotics and laser-based industrial systems while adding high-margin OEM revenue.","synergies":["Bundle photonic engines with TE medical interconnect","Push TE Medical into surgical robotics and lasers","Cross-sell precision motion to automation base","Add high-margin recurring OEM subsystem revenue"],"risks":["Premium high-multiple med-tech valuation","Subsystem vs component business-model gap","Little automotive/transportation overlap"],"keyProducts":["Medical lasers & photonics","Optical encoders / precision motion","Beam-steering & scanning","Medical insufflators/subsystems"],"fitScore":82,"fitRationale":"High-margin entry into photonics and medical subsystems that complement rather than overlap TE’s core."},{"name":"Methode Electronics","ticker":"NYSE: MEI","sector":"EV power distribution & user interface","hq":"Chicago, Illinois, USA","founded":"1946","employees":"~5,500 est.","revenue":"$1.1B (FY2024)","overview":"Custom-engineered mechatronics maker of power-distribution (busbars/BMS), user-interface, LED-lighting and sensor products for automotive, EV and industrial OEMs.","strategicFit":"Directly reinforces TE’s Automotive/EV franchise with high-voltage busbars and power-distribution content riding the same electrification wave as TE connectors. Adds user-interface and sensing adjacencies to TE Transportation Solutions.","synergies":["Pair busbars/power distribution with TE HV connectors","Leverage shared automotive/EV OEM relationships","Cross-sell sensing and user-interface content","Combine low-cost manufacturing footprints"],"risks":["EV program roll-offs and demand softness","Customer concentration in autos","Overlap in some connector/sensor lines"],"keyProducts":["EV busbars & power distribution","Sensors & switches","LED lighting systems","User-interface / mechatronics"],"fitScore":84,"fitRationale":"Clean EV-electrification adjacency to TE’s core auto connectors, though cyclical and auto-concentrated."},{"name":"TT Electronics plc","ticker":"LSE: TTG","sector":"Harsh-environment sensors & power","hq":"Woking, United Kingdom","founded":"1906","employees":"~5,000","revenue":"~$660M (FY2024)","overview":"UK-based designer and manufacturer of sensors, power-management and connectivity components plus value-added electronics for aerospace & defense, medical and industrial harsh-environment applications.","strategicFit":"Strengthens TE’s Aerospace, Defense & Marine and Industrial segments with radiation- and corrosion-tolerant sensors and power electronics. Adds a European A&D footprint and engineered-EMS capability adjacent to TE’s ruggedized interconnect.","synergies":["Bundle harsh-env sensors with TE ruggedized connectors","Expand A&D/medical content and EU footprint","Cross-sell power electronics into industrial base","Add value-added EMS and design services"],"risks":["Cross-border UK defense/regulatory review","Lower-margin EMS mix to rationalize","FX and integration complexity"],"keyProducts":["Precision resistors & sensors","Optoelectronics","Harsh-env power conversion/control","Engineered EMS assemblies"],"fitScore":79,"fitRationale":"Solid A&D/industrial harsh-environment fit and EU reach, tempered by EMS margins and cross-border review."},{"name":"ChargePoint Holdings","ticker":"NYSE: CHPT","sector":"EV charging infrastructure","hq":"Campbell, California, USA","founded":"2007","employees":"~1,500 est.","revenue":"$417M (FY2025)","overview":"Operator of one of the largest networked EV-charging platforms, combining AC/DC charging hardware, cloud subscription software and a network of 1.3M+ ports.","strategicFit":"Extends TE downstream from EV vehicle connectors into charging infrastructure, where TE already supplies inlets, cables and high-power connectors. Fits TE’s electrification and sustainability thesis and adds recurring software revenue.","synergies":["Supply TE HV connectors/inlets into ChargePoint hardware","Own the EV story from vehicle to charger","Add recurring charging-software revenue","Use TE manufacturing to cut charger cost"],"risks":["Unprofitable, cash-burning, volatile","Software/network model far from TE’s component core","EV-adoption and policy sensitivity"],"keyProducts":["AC/DC EV chargers","Charging-network software","Fleet/depot charging","Charging-management SaaS"],"fitScore":66,"fitRationale":"Compelling EV narrative and downstream pull for TE connectors, but off-core model and weak financials."},{"name":"Bel Fuse Inc.","ticker":"NASDAQ: BELFB","sector":"Interconnect, magnetics & power","hq":"West Windsor, New Jersey, USA","founded":"1949","employees":"~8,000 est.","revenue":"$535M (FY2024)","overview":"Global maker of products that power, protect and connect circuits, spanning expanded-beam fiber and RF/copper connectors (Cinch), magnetics, circuit protection and power conversion.","strategicFit":"Direct bolt-on to TE’s interconnect and Data & Devices businesses, adding high-reliability aerospace/defense connectors (Cinch), fiber-optic and RF interconnect, plus power conversion and circuit protection. Broadens TE’s data-center and A&D content.","synergies":["Fold Cinch A&D connectors into TE ruggedized portfolio","Add fiber/RF interconnect for data centers","Cross-sell magnetics and power modules","Consolidate distribution channels"],"risks":["Heavy product overlap with TE connectors","Interconnect antitrust review","Dual-class (BELFA/BELFB) ownership structure"],"keyProducts":["Cinch high-reliability connectors","Expanded-beam fiber & RF connectors","Magnetics / ICM modules","Power conversion & circuit protection"],"fitScore":74,"fitRationale":"Clean interconnect/power bolt-on with A&D and data-center content, but overlaps TE’s own connectors."}];
+
+    // --- Render -----------------------------------------------------------
+    function scoreColor(s){ return s>=85?'#3f7a37':(s>=75?'#167987':(s>=65?'#C77700':'#8a8f92')); }
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+    function list(arr,cls){ return '<ul class="ins-list '+cls+'">'+(arr||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'; }
+    function renderInsight(c){
+      var col=scoreColor(c.fitScore);
+      return ''
+        + '<div class="ins-detail">'
+        + '<div class="ins-top"><div><h2 class="ins-name">'+esc(c.name)+'</h2>'
+        +   '<div class="ins-tags"><span class="ins-chip tick">'+esc(c.ticker)+'</span><span class="ins-chip">'+esc(c.sector)+'</span>'
+        +   (c.status?'<span class="ins-chip" style="background:rgba(233,131,0,.1); color:#C77700; border-color:rgba(233,131,0,.3);">'+esc(c.status)+'</span>':'')+'</div></div>'
+        +   '<div class="ins-score"><div class="ins-score-ring" style="background:'+col+'">'+c.fitScore+'</div><div class="ins-score-lbl">Fit score</div></div></div>'
+        + '<div class="ins-meta">'
+        +   '<div class="m"><div class="k">HQ</div><div class="v">'+esc(c.hq)+'</div></div>'
+        +   '<div class="m"><div class="k">Founded</div><div class="v">'+esc(c.founded)+'</div></div>'
+        +   '<div class="m"><div class="k">Employees</div><div class="v">'+esc(c.employees)+'</div></div>'
+        +   '<div class="m"><div class="k">Revenue</div><div class="v">'+esc(c.revenue)+'</div></div>'
+        + '</div>'
+        + '<div class="ins-sec"><h4>Overview</h4><p>'+esc(c.overview)+'</p></div>'
+        + '<div class="ins-sec"><h4>Strategic fit for TE</h4><p>'+esc(c.strategicFit)+'</p></div>'
+        + '<div class="ins-cols"><div class="ins-sec"><h4>Synergies</h4>'+list(c.synergies,'syn')+'</div>'
+        +   '<div class="ins-sec"><h4>Risks &amp; considerations</h4>'+list(c.risks,'risk')+'</div></div>'
+        + '<div class="ins-sec"><h4>Key products &amp; tech</h4><div class="ins-prods">'+(c.keyProducts||[]).map(function(p){return '<span class="ins-prod">'+esc(p)+'</span>';}).join('')+'</div></div>'
+        + (c.fitRationale?'<div class="ins-sec" style="margin-bottom:0;"><h4>Why this score</h4><p><strong style="color:'+col+'">'+c.fitScore+'/100</strong> — '+esc(c.fitRationale)+'</p></div>':'')
+        + '</div>';
+    }
+
+    document.getElementById('ins-current').innerHTML = renderInsight(CURRENT);
+
+    var grid=document.getElementById('ins-radar-grid');
+    grid.innerHTML = TARGETS.map(function(c,i){
+      var col=scoreColor(c.fitScore);
+      return '<button class="ins-co-card" data-i="'+i+'" style="--sc:'+col+'; border-top-color:'+col+'">'
+        + '<div class="ins-co-head"><div><div class="ins-co-name">'+esc(c.name)+'</div><div class="ins-co-sector">'+esc(c.ticker)+' · '+esc(c.sector)+'</div></div>'
+        +   '<div class="ins-co-score" style="background:'+col+'">'+c.fitScore+'</div></div>'
+        + '<div class="ins-co-ov">'+esc(c.overview)+'</div>'
+        + '<div class="ins-co-foot"><span>'+esc(c.hq)+'</span><span class="open">View insight →</span></div>'
+        + '</button>';
+    }).join('');
+
+    // --- Interactions -----------------------------------------------------
+    var modal=document.getElementById('ins-modal'), modalBody=document.getElementById('ins-modal-body');
+    function openModal(c){ modalBody.innerHTML=renderInsight(c); modal.style.display='flex'; document.body.style.overflow='hidden'; }
+    function closeModal(){ modal.style.display='none'; document.body.style.overflow=''; }
+    grid.addEventListener('click', function(e){ var b=e.target.closest('.ins-co-card'); if(b) openModal(TARGETS[+b.getAttribute('data-i')]); });
+    document.getElementById('ins-modal-close').addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e){ if(e.target===modal) closeModal(); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && modal.style.display==='flex') closeModal(); });
+
+    document.querySelectorAll('.ins-tab').forEach(function(t){
+      t.addEventListener('click', function(){
+        document.querySelectorAll('.ins-tab').forEach(function(x){x.classList.remove('active');});
+        t.classList.add('active');
+        var which=t.getAttribute('data-ins-tab');
+        document.getElementById('ins-current').style.display = which==='current'?'block':'none';
+        document.getElementById('ins-radar').style.display = which==='radar'?'block':'none';
+      });
+    });
+
+    // Grid / list view toggle for the Acquisition Radar
+    (function(){
+      var grid=document.getElementById('ins-radar-grid'), saved=null;
+      try{ saved=localStorage.getItem('ins_radar_view'); }catch(e){}
+      function apply(v){
+        grid.classList.toggle('list', v==='list');
+        document.querySelectorAll('.ins-vbtn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-view')===v); });
+        try{ localStorage.setItem('ins_radar_view', v); }catch(e){}
+      }
+      document.querySelectorAll('.ins-vbtn').forEach(function(b){ b.addEventListener('click', function(){ apply(b.getAttribute('data-view')); }); });
+      if(saved==='list') apply('list');
+    })();
+  </script>
+</body>
+</html>
