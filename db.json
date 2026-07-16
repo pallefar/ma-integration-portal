@@ -33,10 +33,14 @@
       "admin": false
     },
     "floatingMenuEnabled": true,
-    "welcomeVideoType_en": "local",
-    "welcomeVideoUrl_en": "",
-    "welcomeVideoType_de": "local",
-    "welcomeVideoUrl_de": ""
+    "welcomeVideoType_en": "youtube",
+    "welcomeVideoUrl_en": "https://www.youtube.com/watch?v=g7Qa2ZBOCNM",
+    "welcomeVideoType_de": "youtube",
+    "welcomeVideoUrl_de": "https://www.youtube.com/watch?v=O-ZSD7CQ6C8",
+    "welcomeVideoUrl_cs": "https://www.youtube.com/watch?v=ShvK_kDHBtA",
+    "welcomeVideoType_cs": "youtube",
+    "welcomeVideoUrl_zh": "https://www.youtube.com/watch?v=iVk-XrukaXE",
+    "welcomeVideoType_zh": "youtube"
   },
   "customSettings": {
     "demoMode": false,
