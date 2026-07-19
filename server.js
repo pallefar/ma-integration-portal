@@ -197,6 +197,11 @@ function readDb() {
     parsed.checklistTemplates = parsed.checklistTemplates || [];
     parsed.integrationTasks = parsed.integrationTasks || [];
     parsed.customIntegrationTasks = parsed.customIntegrationTasks || [];
+    // Synergy tracker + RAID log — lane-split workspace data.
+    parsed.synergyInitiatives = parsed.synergyInitiatives || [];
+    parsed.customSynergyInitiatives = parsed.customSynergyInitiatives || [];
+    parsed.raidEntries = parsed.raidEntries || [];
+    parsed.customRaidEntries = parsed.customRaidEntries || [];
     _dbCache = parsed;
     _dbMtime = mtime;
     return parsed;
@@ -603,6 +608,8 @@ app.post('/api/settings/new-ma', (req, res) => {
   db.customCommunications = [];
   db.customAssessmentInstances = [];
   db.customIntegrationTasks = [];
+  db.customSynergyInitiatives = [];
+  db.customRaidEntries = [];
   
   // Wipe custom physical emails
   const emailDir = path.join(__dirname, 'public', 'sent_emails');
@@ -647,7 +654,9 @@ function saveCustomLaneToProject(db, project) {
     alerts: db.customAlerts || [],
     communications: db.customCommunications || [],
     assessmentInstances: db.customAssessmentInstances || [],
-    integrationTasks: db.customIntegrationTasks || []
+    integrationTasks: db.customIntegrationTasks || [],
+    synergyInitiatives: db.customSynergyInitiatives || [],
+    raidEntries: db.customRaidEntries || []
   };
 }
 
@@ -667,6 +676,8 @@ function loadProjectIntoCustomLane(db, project) {
   db.customCommunications = d.communications || [];
   db.customAssessmentInstances = d.assessmentInstances || [];
   db.customIntegrationTasks = d.integrationTasks || [];
+  db.customSynergyInitiatives = d.synergyInitiatives || [];
+  db.customRaidEntries = d.raidEntries || [];
 }
 
 // Persist whatever the live custom lane currently holds back to whichever custom
@@ -742,7 +753,7 @@ app.post('/api/projects', (req, res) => {
     sector: b.sector || '', size: b.size || '', hq: b.hq || '',
     acquisitionDate: b.acquisitionDate || '', synergyObjective: b.synergyObjective || '',
     intake: b.intake || {}, createdAt: new Date().toISOString(),
-    data: { settings: { demoMode: false }, employees: [], hrbps: [], assessments: [], alerts: [], communications: [], assessmentInstances: [], integrationTasks: [] }
+    data: { settings: { demoMode: false }, employees: [], hrbps: [], assessments: [], alerts: [], communications: [], assessmentInstances: [], integrationTasks: [], synergyInitiatives: [], raidEntries: [] }
   };
   db.projects = db.projects || [];
   // Preserve the currently-active project's work & CMS before switching to the new one.
@@ -2023,6 +2034,136 @@ app.post('/api/integration-tasks/from-remediation', (req, res) => {
 
 app.get('/api/checklist-templates', (req, res) => {
   res.json(readDb().checklistTemplates || []);
+});
+
+// =====================================================================
+// Synergy tracker — initiatives with $M targets vs realized, lifecycle
+// identified → validated → planned → executing → realized.
+// =====================================================================
+function synergyLane(db) {
+  const isCustom = db.settings && db.settings.demoMode === false;
+  if (isCustom) { db.customSynergyInitiatives = db.customSynergyInitiatives || []; return db.customSynergyInitiatives; }
+  db.synergyInitiatives = db.synergyInitiatives || [];
+  return db.synergyInitiatives;
+}
+const SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
+
+app.get('/api/synergies', (req, res) => {
+  res.json(synergyLane(readDb()));
+});
+
+app.post('/api/synergies', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const lane = synergyLane(db);
+  const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : Math.max(0, Math.round(n * 10) / 10); };
+  if (b.id) {
+    const item = lane.find(s => s.id === b.id);
+    if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+    ['title', 'owner', 'workstreamId', 'notes'].forEach(k => { if (b[k] !== undefined) item[k] = String(b[k] || '').slice(0, 300); });
+    if (b.category !== undefined) item.category = b.category === 'cost' ? 'cost' : 'revenue';
+    if (b.targetM !== undefined) item.targetM = num(b.targetM);
+    if (b.realizedM !== undefined) item.realizedM = num(b.realizedM);
+    if (b.status !== undefined) {
+      if (!SYN_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
+      item.status = b.status;
+    }
+    writeDb(db);
+    return res.json({ success: true, initiative: item });
+  }
+  const title = String(b.title || '').trim();
+  if (!title) return res.status(400).json({ error: 'Initiative title is required.' });
+  const item = {
+    id: newId('syn'),
+    title: title.slice(0, 300),
+    category: b.category === 'cost' ? 'cost' : 'revenue',
+    targetM: num(b.targetM),
+    realizedM: num(b.realizedM),
+    owner: String(b.owner || '').slice(0, 120),
+    workstreamId: String(b.workstreamId || 'ws_imo').slice(0, 60),
+    status: SYN_STATUSES.includes(b.status) ? b.status : 'identified',
+    notes: String(b.notes || '').slice(0, 600),
+    createdAt: new Date().toISOString()
+  };
+  lane.push(item);
+  writeDb(db);
+  res.status(201).json({ success: true, initiative: item });
+});
+
+app.delete('/api/synergies/:id', (req, res) => {
+  const db = readDb();
+  const lane = synergyLane(db);
+  const filtered = lane.filter(s => s.id !== req.params.id);
+  if (filtered.length === lane.length) return res.status(404).json({ error: 'Initiative not found.' });
+  if (db.settings && db.settings.demoMode === false) db.customSynergyInitiatives = filtered;
+  else db.synergyInitiatives = filtered;
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// =====================================================================
+// RAID log — risks / issues / decisions / dependencies.
+// =====================================================================
+function raidLane(db) {
+  const isCustom = db.settings && db.settings.demoMode === false;
+  if (isCustom) { db.customRaidEntries = db.customRaidEntries || []; return db.customRaidEntries; }
+  db.raidEntries = db.raidEntries || [];
+  return db.raidEntries;
+}
+const RAID_TYPES = ['risk', 'issue', 'decision', 'dependency'];
+const RAID_LEVELS = ['low', 'medium', 'high'];
+const RAID_STATUSES = ['open', 'mitigating', 'closed'];
+
+app.get('/api/raid', (req, res) => {
+  res.json(raidLane(readDb()));
+});
+
+app.post('/api/raid', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const lane = raidLane(db);
+  if (b.id) {
+    const item = lane.find(r => r.id === b.id);
+    if (!item) return res.status(404).json({ error: 'Entry not found.' });
+    ['title', 'owner', 'workstreamId', 'notes'].forEach(k => { if (b[k] !== undefined) item[k] = String(b[k] || '').slice(0, 300); });
+    if (b.type !== undefined && RAID_TYPES.includes(b.type)) item.type = b.type;
+    if (b.severity !== undefined && RAID_LEVELS.includes(b.severity)) item.severity = b.severity;
+    if (b.probability !== undefined && RAID_LEVELS.includes(b.probability)) item.probability = b.probability;
+    if (b.status !== undefined) {
+      if (!RAID_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
+      item.status = b.status;
+    }
+    writeDb(db);
+    return res.json({ success: true, entry: item });
+  }
+  const title = String(b.title || '').trim();
+  if (!title) return res.status(400).json({ error: 'Entry title is required.' });
+  const item = {
+    id: newId('raid'),
+    type: RAID_TYPES.includes(b.type) ? b.type : 'risk',
+    title: title.slice(0, 300),
+    severity: RAID_LEVELS.includes(b.severity) ? b.severity : 'medium',
+    ...(b.probability && RAID_LEVELS.includes(b.probability) ? { probability: b.probability } : {}),
+    owner: String(b.owner || '').slice(0, 120),
+    workstreamId: String(b.workstreamId || 'ws_imo').slice(0, 60),
+    status: RAID_STATUSES.includes(b.status) ? b.status : 'open',
+    notes: String(b.notes || '').slice(0, 600),
+    createdAt: new Date().toISOString()
+  };
+  lane.push(item);
+  writeDb(db);
+  res.status(201).json({ success: true, entry: item });
+});
+
+app.delete('/api/raid/:id', (req, res) => {
+  const db = readDb();
+  const lane = raidLane(db);
+  const filtered = lane.filter(r => r.id !== req.params.id);
+  if (filtered.length === lane.length) return res.status(404).json({ error: 'Entry not found.' });
+  if (db.settings && db.settings.demoMode === false) db.customRaidEntries = filtered;
+  else db.raidEntries = filtered;
+  writeDb(db);
+  res.json({ success: true });
 });
 
 // ==========================================
