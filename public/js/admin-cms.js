@@ -1238,7 +1238,13 @@
         <div class="form-group"><label class="form-label">Headquarters</label><input type="text" class="form-control" id="pw-hq" placeholder="e.g. Munich, DE"></div>
         <div class="form-group"><label class="form-label">Acquisition date</label><input type="date" class="form-control" id="pw-date"></div>
       </div>
-      <div class="form-group"><label class="form-label">Synergy objective</label><textarea class="form-control" id="pw-objective" rows="2" placeholder="Primary integration goal…"></textarea></div>`;
+      <div class="form-group"><label class="form-label">Synergy objective</label><textarea class="form-control" id="pw-objective" rows="2" placeholder="Primary integration goal…"></textarea></div>
+      <div class="form-group"><label class="form-label">Start from playbook</label>
+        <select class="form-control" id="pw-source">
+          ${projects.map(p => `<option value="${esc(p.id)}"${p.isDemo ? ' selected' : ''}>${p.isDemo ? '🎬' : '🏢'} ${esc(p.name)}${p.isDemo ? ' (default playbook)' : ''}</option>`).join('')}
+        </select>
+        <p style="font-size:0.72rem;color:var(--text-dim);margin:0.35rem 0 0;">The new deal starts from this project's full playbook — courses, assessment &amp; checklist templates, processes and menus — ready to tailor.</p>
+      </div>`;
     modal('New M&A Project', form, async () => {
       const name = form.querySelector('#pw-name').value.trim();
       if (!name) { toast('Company name is required.', true); throw new Error('name required'); }
@@ -1248,7 +1254,8 @@
         size: form.querySelector('#pw-size').value.trim(),
         hq: form.querySelector('#pw-hq').value.trim(),
         acquisitionDate: form.querySelector('#pw-date').value,
-        synergyObjective: form.querySelector('#pw-objective').value.trim()
+        synergyObjective: form.querySelector('#pw-objective').value.trim(),
+        sourceProjectId: form.querySelector('#pw-source').value
       };
       const res = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(r => r.json());
       if (res.error) { toast(res.error, true); throw new Error(res.error); }

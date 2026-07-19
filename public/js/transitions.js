@@ -929,6 +929,60 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    // --- In-app notifications: bell + panel, computed by /api/notifications ---
+    if (activeRole === 'admin' || activeRole === 'pmo' || activeRole === 'hrbp') {
+      fetch('/api/notifications').then(r => r.json()).then(n => {
+        if (!n || !n.success) return;
+        const items = n.items || [];
+        const top = sidebar.querySelector('.sidebar-top');
+        if (!top) return;
+        const bell = document.createElement('button');
+        bell.type = 'button';
+        bell.className = 'sidebar-toggle-btn sidebar-bell';
+        bell.title = 'Notifications';
+        bell.style.cssText = 'position:relative;margin-right:0.25rem;';
+        bell.innerHTML = '🔔' + (items.length
+          ? '<span style="position:absolute;top:-4px;right:-4px;background:#C0392B;color:#fff;border-radius:50%;min-width:16px;height:16px;font-size:0.62rem;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 3px;">' + items.length + '</span>'
+          : '');
+        top.insertBefore(bell, top.querySelector('#sidebar-toggle-btn'));
+
+        const escN = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const SEV_ICON = { high: '⚠️', medium: '⏰', low: 'ℹ️' };
+        const itemHtml = (it) => {
+          let label;
+          if (it.type === 'assessment_pending') {
+            label = '<span data-i18n="' + escN(it.titleKey) + '">' + escN(it.title) + '</span> — <span data-i18n="notif.assessment_pending">required assessment not completed</span>';
+          } else if (it.count != null) {
+            label = '<strong>' + it.count + '</strong> <span data-i18n="notif.' + escN(it.type) + '">' + escN(it.type) + '</span>';
+          } else {
+            label = '<span data-i18n="notif.' + escN(it.type) + '">' + escN(it.type) + '</span>';
+          }
+          return '<a href="' + escN(it.href) + '" style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.6rem 0.8rem;border-radius:8px;text-decoration:none;color:var(--text-primary,#1c2b33);font-size:0.82rem;line-height:1.45;" onmouseover="this.style.background=\'rgba(233,131,0,0.08)\'" onmouseout="this.style.background=\'none\'">'
+            + '<span style="flex:none;">' + (SEV_ICON[it.severity] || 'ℹ️') + '</span><span>' + label + '</span></a>';
+        };
+        const panel = document.createElement('div');
+        panel.className = 'sidebar-notif-panel';
+        panel.style.cssText = 'display:none;position:fixed;z-index:5000;width:320px;max-height:60vh;overflow-y:auto;background:var(--card-bg,#fff);border:1px solid var(--border-color,#dde3e6);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.25);padding:0.6rem;';
+        panel.innerHTML = '<div style="font-weight:800;color:var(--te-dark-teal,#244C5A);font-size:0.85rem;padding:0.4rem 0.8rem;" data-i18n="notif.title">Notifications</div>'
+          + (items.length ? items.map(itemHtml).join('') : '<div style="padding:0.6rem 0.8rem;font-size:0.82rem;color:var(--text-dim,#7a848a);" data-i18n="notif.none">All clear — nothing needs attention.</div>');
+        document.body.appendChild(panel);
+        bell.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const open = panel.style.display === 'none';
+          if (open) {
+            const rect = bell.getBoundingClientRect();
+            panel.style.top = Math.min(rect.bottom + 8, window.innerHeight - 200) + 'px';
+            panel.style.left = Math.min(rect.left, window.innerWidth - 336) + 'px';
+          }
+          panel.style.display = open ? 'block' : 'none';
+        });
+        document.addEventListener('click', (e) => {
+          if (panel.style.display !== 'none' && !panel.contains(e.target) && e.target !== bell) panel.style.display = 'none';
+        });
+        if (window.applyPortalI18n) window.applyPortalI18n();
+      }).catch(() => { /* notifications are best-effort */ });
+    }
+
     // Hamburger: toggles the sidebar (fully hidden <-> shown); overlay mode on small screens
     const hamburgerBtn = document.createElement('button');
     hamburgerBtn.type = 'button';

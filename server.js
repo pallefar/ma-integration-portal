@@ -759,7 +759,13 @@ app.post('/api/projects', (req, res) => {
   // Preserve the currently-active project's work & CMS before switching to the new one.
   stashActiveCustomProject(db);
   stashActiveProjectCms(db);
-  project.cms = defaultCms(db); // clone the default (demo) CMS structure to tailor
+  // Playbook reuse: clone the chosen source project's full CMS bundle (courses,
+  // assessment + checklist templates, processes, menus, …) so every finished
+  // deal doubles as the next deal's playbook. Falls back to the demo default.
+  const sourceProject = b.sourceProjectId ? findProject(db, b.sourceProjectId) : null;
+  project.cms = (sourceProject && sourceProject.cms)
+    ? JSON.parse(JSON.stringify(sourceProject.cms))
+    : defaultCms(db);
   db.projects.push(project);
   db.settings = db.settings || {};
   db.settings.demoMode = false;
@@ -2153,6 +2159,37 @@ app.post('/api/raid', (req, res) => {
   lane.push(item);
   writeDb(db);
   res.status(201).json({ success: true, entry: item });
+});
+
+// =====================================================================
+// In-app notifications — computed on demand from live data (no stored
+// notification records to drift out of sync).
+// =====================================================================
+app.get('/api/notifications', (req, res) => {
+  const db = readDb();
+  const items = [];
+  const visible = visibleAssessInstances(db);
+  (db.assessmentTemplates || []).filter(t => t.published !== false && t.required).forEach(t => {
+    if (!latestAssessInstanceFor(visible, t.id, 'self')) {
+      items.push({ id: 'assess_' + t.id, type: 'assessment_pending', titleKey: t.titleKey || '', title: t.title || '', href: '/assessments.html', severity: 'high' });
+    }
+  });
+  const ilTpl = (db.assessmentTemplates || []).find(t => t.subject === 'integration-leader' && t.published !== false);
+  if (ilTpl) {
+    const latest = latestAssessInstanceFor(visible, ilTpl.id, 'self');
+    if (latest && (Date.now() - Date.parse(latest.timestamp)) > 90 * 86400000) {
+      items.push({ id: 'reassess_il', type: 'reassess_il', href: '/assessments.html', severity: 'medium' });
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const tasks = taskLane(db);
+  const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
+  if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
+  const blocked = tasks.filter(t => t.status === 'blocked');
+  if (blocked.length) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blocked.length, href: '/execution.html', severity: 'medium' });
+  const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && r.severity === 'high');
+  if (raidHigh.length) items.push({ id: 'raid_high', type: 'raid_high', count: raidHigh.length, href: '/execution.html', severity: 'high' });
+  res.json({ success: true, items });
 });
 
 app.delete('/api/raid/:id', (req, res) => {

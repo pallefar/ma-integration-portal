@@ -44,13 +44,12 @@
   },
   "customSettings": {
     "demoMode": false,
-    "targetCompany": "GateTest Corp",
+    "targetCompany": "PlaybookTest",
     "sector": "",
     "size": "",
     "hq": "",
     "acquisitionDate": "",
-    "synergyObjective": "",
-    "timeTravelDay": 1
+    "synergyObjective": ""
   },
   "customEmployees": [],
   "customHrbps": [],
@@ -1816,7 +1815,14 @@
         "raid.st_closed": "Closed",
         "raid.add": "Add entry",
         "raid.title_ph": "Risk / issue / decision…",
-        "raid.all": "All"
+        "raid.all": "All",
+        "notif.title": "Notifications",
+        "notif.assessment_pending": "required assessment not completed",
+        "notif.reassess_il": "Integration Leader re-assessment due (~90 days since last)",
+        "notif.tasks_overdue": "overdue tasks in the Execution Hub",
+        "notif.tasks_blocked": "blocked tasks need attention",
+        "notif.raid_high": "open high-severity risks or issues",
+        "notif.none": "All clear — nothing needs attention."
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2808,7 +2814,14 @@
         "raid.st_closed": "Geschlossen",
         "raid.add": "Eintrag hinzufügen",
         "raid.title_ph": "Risiko / Problem / Entscheidung…",
-        "raid.all": "Alle"
+        "raid.all": "Alle",
+        "notif.title": "Benachrichtigungen",
+        "notif.assessment_pending": "erforderliches Assessment nicht abgeschlossen",
+        "notif.reassess_il": "Integration-Leader-Neubewertung fällig (~90 Tage seit der letzten)",
+        "notif.tasks_overdue": "überfällige Aufgaben im Execution Hub",
+        "notif.tasks_blocked": "blockierte Aufgaben benötigen Aufmerksamkeit",
+        "notif.raid_high": "offene Risiken/Probleme hoher Schwere",
+        "notif.none": "Alles klar — nichts erfordert Aufmerksamkeit."
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -3800,7 +3813,14 @@
         "raid.st_closed": "已关闭",
         "raid.add": "添加条目",
         "raid.title_ph": "风险 / 问题 / 决策…",
-        "raid.all": "全部"
+        "raid.all": "全部",
+        "notif.title": "通知",
+        "notif.assessment_pending": "必填评估尚未完成",
+        "notif.reassess_il": "整合负责人需重新评估（距上次约 90 天）",
+        "notif.tasks_overdue": "执行中心有逾期任务",
+        "notif.tasks_blocked": "受阻任务需要关注",
+        "notif.raid_high": "存在未解决的高严重度风险/问题",
+        "notif.none": "一切正常——无需处理。"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -4792,7 +4812,14 @@
         "raid.st_closed": "Uzavřené",
         "raid.add": "Přidat záznam",
         "raid.title_ph": "Riziko / problém / rozhodnutí…",
-        "raid.all": "Vše"
+        "raid.all": "Vše",
+        "notif.title": "Upozornění",
+        "notif.assessment_pending": "povinné hodnocení nedokončeno",
+        "notif.reassess_il": "Přehodnocení integračního leadera na řadě (~90 dní od posledního)",
+        "notif.tasks_overdue": "úkolů po termínu v Execution Hubu",
+        "notif.tasks_blocked": "blokované úkoly vyžadují pozornost",
+        "notif.raid_high": "otevřená rizika/problémy vysoké závažnosti",
+        "notif.none": "Vše v pořádku — nic nevyžaduje pozornost."
       }
     }
   },
