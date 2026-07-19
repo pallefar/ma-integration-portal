@@ -74,6 +74,21 @@
     .as-pair-tag{ font-size:.62rem; font-weight:800; color:var(--text-dim); width:64px; flex:none; text-transform:uppercase; letter-spacing:.04em; }
     .as-pair-line{ display:flex; align-items:center; gap:.5rem; }
     .as-pair-val{ font-size:.72rem; font-weight:800; width:26px; text-align:right; flex:none; }
+    /* leader: dumbbell gap + dev plan */
+    .as-db-row{ margin-bottom:.9rem; }
+    .as-db-track{ position:relative; height:10px; border-radius:5px; background:var(--bg-subtle,#eef2f2); }
+    .as-db-line{ position:absolute; top:50%; height:3px; transform:translateY(-50%); background:rgba(100,116,139,.35); border-radius:2px; }
+    .as-db-dot{ position:absolute; top:50%; width:14px; height:14px; border-radius:50%; transform:translate(-50%,-50%); border:2.5px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+    .as-exp-chip{ display:inline-flex; align-items:center; gap:.4rem; font-size:.74rem; font-weight:800; color:var(--te-dark-teal); background:rgba(36,76,90,.07); border:1px solid rgba(36,76,90,.2); border-radius:20px; padding:.28rem .75rem; margin-top:.55rem; margin-left:.5rem; }
+    .as-plan-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:1rem; }
+    .as-plan-col{ background:var(--bg-subtle,#f7f9f9); border:1px solid var(--border-color); border-radius:10px; padding:.9rem 1rem; }
+    .as-plan-col h4{ margin:0 0 .6rem; font-size:.76rem; text-transform:uppercase; letter-spacing:.05em; color:var(--te-orange); }
+    .as-plan-item{ font-size:.83rem; line-height:1.5; color:var(--text-primary); margin-bottom:.6rem; }
+    .as-plan-item .btn{ margin-top:.35rem; }
+    .as-cb{ display:flex; align-items:flex-start; gap:.6rem; width:100%; text-align:left; border:1.5px solid var(--border-color); background:var(--card-bg,#fff); border-radius:8px; padding:.6rem .85rem; cursor:pointer; font-size:.85rem; line-height:1.5; color:var(--text-primary); margin-bottom:.45rem; transition:all .15s; font-family:inherit; }
+    .as-cb .box{ flex:none; width:18px; height:18px; border-radius:4px; border:2px solid var(--border-color); display:flex; align-items:center; justify-content:center; font-size:.7rem; color:#fff; margin-top:.1rem; }
+    .as-cb.sel{ border-color:var(--te-dark-teal); }
+    .as-cb.sel .box{ background:var(--te-dark-teal); border-color:var(--te-dark-teal); }
     /* remediation */
     .as-remed{ border-left:4px solid var(--te-orange); background:var(--bg-subtle,#f7f9f9); border-radius:8px; padding:.8rem 1rem; margin-bottom:.7rem; }
     .as-remed .d{ font-size:.74rem; font-weight:800; color:#C77700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.25rem; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
@@ -128,16 +143,18 @@
           <button class="as-tab" data-as-tab="acquirer" data-i18n="assess.tab_acquirer">Acquirer Readiness</button>
           <button class="as-tab" data-as-tab="target" data-i18n="assess.tab_target">Target Readiness</button>
           <button class="as-tab" data-as-tab="compat" data-i18n="assess.tab_compat">Compatibility</button>
+          <button class="as-tab" data-as-tab="leader" data-i18n="assess.tab_leader">Integration Leader</button>
         </div>
         <div id="as-pane-overview" class="as-pane"></div>
         <div id="as-pane-acquirer" class="as-pane" style="display:none;"></div>
         <div id="as-pane-target" class="as-pane" style="display:none;"></div>
         <div id="as-pane-compat" class="as-pane" style="display:none;"></div>
+        <div id="as-pane-leader" class="as-pane" style="display:none;"></div>
       </div>
     </main>
   </div>
 
-  <script src="/js/assess-charts.js?v=1784500002"></script>
-  <script src="/js/assessments.js?v=1784500003"></script>
+  <script src="/js/assess-charts.js?v=1784500005"></script>
+  <script src="/js/assessments.js?v=1784500005"></script>
 </body>
 </html>

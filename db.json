@@ -49,7 +49,8 @@
     "size": "",
     "hq": "",
     "acquisitionDate": "",
-    "synergyObjective": ""
+    "synergyObjective": "",
+    "timeTravelDay": 1
   },
   "customEmployees": [],
   "customHrbps": [],
@@ -1632,7 +1633,69 @@
         "assess.kpi_acquirer": "Acquirer (TE)",
         "assess.kpi_target": "Target",
         "assess.kpi_alignment": "Alignment",
-        "assess.kpi_pending": "Not completed"
+        "assess.kpi_pending": "Not completed",
+        "assess.tpl_il_title": "Integration Leader Readiness",
+        "assess.dim_il_program": "Program & Governance",
+        "assess.dim_il_change": "Change Leadership",
+        "assess.dim_il_comm": "Communication",
+        "assess.dim_il_stakeholder": "Stakeholders & Credibility",
+        "assess.dim_il_ambiguity": "Decisiveness under Ambiguity",
+        "assess.dim_il_breadth": "Business & Financial Acumen",
+        "assess.dim_il_resilience": "Resilience & Energy",
+        "assess.dim_il_experience": "M&A Experience",
+        "assess.il_self": "Self-assessment",
+        "assess.il_manager": "Manager view",
+        "assess.il_invite": "Add manager rating",
+        "assess.il_gap": "Self vs. manager",
+        "assess.il_exp": "Experience index",
+        "assess.il_exp_hint": "Prior-deal experience — shown alongside, never blended into, the competency score.",
+        "assess.plan_title": "Development plan",
+        "assess.plan_sub": "Auto-generated from the lowest dimensions, following the 70-20-10 model.",
+        "assess.plan_70": "70% · Experiential",
+        "assess.plan_20": "20% · Social — coaching",
+        "assess.plan_10": "10% · Formal — academy",
+        "assess.plan_add": "Add to checklist",
+        "assess.plan_added": "Added ✓",
+        "assess.plan_open_coaching": "Open Coaching Desk",
+        "assess.plan_open_academy": "Open IL Academy",
+        "assess.plan_none": "All dimensions at Ready — no development plan needed. Re-assess in ~90 days.",
+        "assess.reassess_banner": "It has been about 90 days since the last assessment — retake it to track progression.",
+        "assess.manager_name_ph": "Manager name",
+        "assess.rater_self": "Self",
+        "assess.rater_manager": "Manager",
+        "assess.q_il_prog1": "Runs a stable operating cadence (IMO meetings, workstream reviews) that people can rely on.",
+        "assess.q_il_prog2": "Milestones, owners and open decisions are tracked and visible at any moment.",
+        "assess.q_il_chg1": "Spots resistance early and addresses its causes rather than pushing harder.",
+        "assess.q_il_chg2": "Equips managers with what they need to lead their own teams through the change.",
+        "assess.q_il_com1": "Adapts the message for executives, workstreams and shop-floor audiences.",
+        "assess.q_il_com2": "Communicates proactively across cultures and languages, not only when asked.",
+        "assess.q_il_stk1": "Escalations to senior sponsors are acted on quickly.",
+        "assess.q_il_stk2": "Influences leaders on both sides without formal authority.",
+        "assess.q_il_stk3": "Two workstream leads privately blame each other for a slipped milestone. What happens first?",
+        "assess.q_il_stk3_o1": "Both leads are brought together, one plan-of-record with owners is agreed, and the slip is reported transparently at the next IMO.",
+        "assess.q_il_stk3_o2": "The milestone is quietly reassigned to the stronger lead.",
+        "assess.q_il_stk3_o3": "Both get more time before anyone else is involved.",
+        "assess.q_il_amb1": "Makes timely calls with 70% of the information and corrects course fast.",
+        "assess.q_il_amb2": "On Day-3 you learn a key customer has heard nothing about the acquisition. What happens?",
+        "assess.q_il_amb2_o1": "The account owner is called today, the message agreed, and comms + IMO informed the same day.",
+        "assess.q_il_amb2_o2": "The topic goes on next week’s IMO agenda.",
+        "assess.q_il_amb2_o3": "Sales presumably handles it — no action.",
+        "assess.q_il_brd1": "Can read the integration P&L and challenge synergy numbers credibly.",
+        "assess.q_il_brd2": "Understands the operational realities of both companies’ core functions.",
+        "assess.q_il_res1": "Sustains energy over months of parallel workstreams without burning out the team.",
+        "assess.q_il_res2": "Setbacks sharpen focus rather than draining it.",
+        "assess.q_il_exp1": "Led an IMO or was the integration lead on a prior deal",
+        "assess.q_il_exp2": "Workstream member or lead in a prior integration",
+        "assess.q_il_exp3": "Holds an M&A/PMI certification or completed the IL Academy",
+        "assess.q_il_exp4": "Has worked in both companies’ functions or geographies",
+        "assess.q_il_exp5": "Cross-border deal experience",
+        "assess.remed_il_program": "Run the next two IMO cadence meetings end-to-end, including the decision log.",
+        "assess.remed_il_change": "Shadow the change workstream for two weeks and run one listening session per site.",
+        "assess.remed_il_comm": "Draft the next all-hands update in both languages and test it with a peer from the target.",
+        "assess.remed_il_stakeholder": "Map the top 10 stakeholders on both sides and agree sponsorship actions with your executive sponsor.",
+        "assess.remed_il_ambiguity": "Time-box three open decisions this week to 48 hours each and log the outcomes.",
+        "assess.remed_il_breadth": "Walk the synergy model with Finance and present it back at the next IMO.",
+        "assess.remed_il_resilience": "Block two deep-work half-days per week and delegate one recurring meeting."
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2449,7 +2512,69 @@
         "assess.kpi_acquirer": "Käufer (TE)",
         "assess.kpi_target": "Target",
         "assess.kpi_alignment": "Übereinstimmung",
-        "assess.kpi_pending": "Nicht abgeschlossen"
+        "assess.kpi_pending": "Nicht abgeschlossen",
+        "assess.tpl_il_title": "Integration-Leader-Readiness",
+        "assess.dim_il_program": "Programm & Governance",
+        "assess.dim_il_change": "Change-Führung",
+        "assess.dim_il_comm": "Kommunikation",
+        "assess.dim_il_stakeholder": "Stakeholder & Glaubwürdigkeit",
+        "assess.dim_il_ambiguity": "Entscheidungsstärke bei Unsicherheit",
+        "assess.dim_il_breadth": "Geschäfts- & Finanzverständnis",
+        "assess.dim_il_resilience": "Resilienz & Energie",
+        "assess.dim_il_experience": "M&A-Erfahrung",
+        "assess.il_self": "Selbsteinschätzung",
+        "assess.il_manager": "Manager-Sicht",
+        "assess.il_invite": "Manager-Bewertung hinzufügen",
+        "assess.il_gap": "Selbst- vs. Manager-Bild",
+        "assess.il_exp": "Erfahrungsindex",
+        "assess.il_exp_hint": "Erfahrung aus früheren Deals — wird neben dem Kompetenzwert gezeigt, nie eingerechnet.",
+        "assess.plan_title": "Entwicklungsplan",
+        "assess.plan_sub": "Automatisch aus den schwächsten Dimensionen erzeugt, nach dem 70-20-10-Modell.",
+        "assess.plan_70": "70 % · Erfahrungslernen",
+        "assess.plan_20": "20 % · Sozial — Coaching",
+        "assess.plan_10": "10 % · Formal — Academy",
+        "assess.plan_add": "Zur Checkliste hinzufügen",
+        "assess.plan_added": "Hinzugefügt ✓",
+        "assess.plan_open_coaching": "Coaching-Desk öffnen",
+        "assess.plan_open_academy": "IL Academy öffnen",
+        "assess.plan_none": "Alle Dimensionen auf „Bereit\" — kein Entwicklungsplan nötig. In ca. 90 Tagen erneut bewerten.",
+        "assess.reassess_banner": "Die letzte Bewertung liegt rund 90 Tage zurück — wiederholen Sie sie, um den Fortschritt zu verfolgen.",
+        "assess.manager_name_ph": "Name der Führungskraft",
+        "assess.rater_self": "Selbst",
+        "assess.rater_manager": "Manager",
+        "assess.q_il_prog1": "Führt eine stabile Betriebskadenz (IMO-Meetings, Workstream-Reviews), auf die sich alle verlassen können.",
+        "assess.q_il_prog2": "Meilensteine, Verantwortliche und offene Entscheidungen sind jederzeit nachvollziehbar.",
+        "assess.q_il_chg1": "Erkennt Widerstand früh und adressiert die Ursachen, statt stärker zu drücken.",
+        "assess.q_il_chg2": "Befähigt Führungskräfte, ihre Teams selbst durch den Wandel zu führen.",
+        "assess.q_il_com1": "Passt die Botschaft für Führungsebene, Workstreams und Shopfloor an.",
+        "assess.q_il_com2": "Kommuniziert proaktiv über Kulturen und Sprachen hinweg — nicht nur auf Nachfrage.",
+        "assess.q_il_stk1": "Eskalationen an Sponsoren werden schnell umgesetzt.",
+        "assess.q_il_stk2": "Beeinflusst Führungskräfte beider Seiten ohne formale Autorität.",
+        "assess.q_il_stk3": "Zwei Workstream-Leads geben sich hinter den Kulissen gegenseitig die Schuld an einem verpassten Meilenstein. Was passiert zuerst?",
+        "assess.q_il_stk3_o1": "Beide Leads werden zusammengebracht, ein gemeinsamer Plan mit Verantwortlichen vereinbart und die Verzögerung transparent im nächsten IMO berichtet.",
+        "assess.q_il_stk3_o2": "Der Meilenstein wird still dem stärkeren Lead übertragen.",
+        "assess.q_il_stk3_o3": "Beide bekommen mehr Zeit, bevor jemand anderes einbezogen wird.",
+        "assess.q_il_amb1": "Trifft Entscheidungen rechtzeitig mit 70 % der Informationen und korrigiert schnell.",
+        "assess.q_il_amb2": "An Tag 3 erfahren Sie, dass ein Schlüsselkunde nichts von der Übernahme gehört hat. Was passiert?",
+        "assess.q_il_amb2_o1": "Der Account-Verantwortliche wird noch heute angerufen, die Botschaft abgestimmt, Comms und IMO am selben Tag informiert.",
+        "assess.q_il_amb2_o2": "Das Thema kommt auf die IMO-Agenda nächste Woche.",
+        "assess.q_il_amb2_o3": "Der Vertrieb kümmert sich vermutlich darum — keine Aktion.",
+        "assess.q_il_brd1": "Kann die Integrations-GuV lesen und Synergiezahlen glaubwürdig hinterfragen.",
+        "assess.q_il_brd2": "Versteht die operativen Realitäten der Kernfunktionen beider Unternehmen.",
+        "assess.q_il_res1": "Hält die Energie über Monate paralleler Workstreams, ohne das Team auszubrennen.",
+        "assess.q_il_res2": "Rückschläge schärfen den Fokus, statt Energie zu rauben.",
+        "assess.q_il_exp1": "Hat ein IMO geleitet oder war Integration Lead eines früheren Deals",
+        "assess.q_il_exp2": "Workstream-Mitglied oder -Lead in einer früheren Integration",
+        "assess.q_il_exp3": "M&A-/PMI-Zertifizierung oder abgeschlossene IL Academy",
+        "assess.q_il_exp4": "Hat in Funktionen oder Regionen beider Unternehmen gearbeitet",
+        "assess.q_il_exp5": "Erfahrung mit grenzüberschreitenden Deals",
+        "assess.remed_il_program": "Die nächsten zwei IMO-Kadenz-Meetings komplett selbst führen, inklusive Entscheidungslog.",
+        "assess.remed_il_change": "Zwei Wochen den Change-Workstream begleiten und je Standort eine Listening Session durchführen.",
+        "assess.remed_il_comm": "Das nächste All-Hands-Update in beiden Sprachen entwerfen und mit einem Kollegen des Targets testen.",
+        "assess.remed_il_stakeholder": "Die Top-10-Stakeholder beider Seiten kartieren und Sponsoring-Aktionen mit dem Executive Sponsor vereinbaren.",
+        "assess.remed_il_ambiguity": "Diese Woche drei offene Entscheidungen auf je 48 Stunden timeboxen und die Ergebnisse dokumentieren.",
+        "assess.remed_il_breadth": "Das Synergiemodell mit Finance durchgehen und im nächsten IMO vorstellen.",
+        "assess.remed_il_resilience": "Zwei Deep-Work-Halbtage pro Woche blocken und ein wiederkehrendes Meeting delegieren."
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -3266,7 +3391,69 @@
         "assess.kpi_acquirer": "收购方（TE）",
         "assess.kpi_target": "目标公司",
         "assess.kpi_alignment": "匹配度",
-        "assess.kpi_pending": "未完成"
+        "assess.kpi_pending": "未完成",
+        "assess.tpl_il_title": "整合负责人就绪度",
+        "assess.dim_il_program": "项目与治理",
+        "assess.dim_il_change": "变革领导力",
+        "assess.dim_il_comm": "沟通",
+        "assess.dim_il_stakeholder": "干系人与可信度",
+        "assess.dim_il_ambiguity": "不确定性下的决断力",
+        "assess.dim_il_breadth": "商业与财务素养",
+        "assess.dim_il_resilience": "韧性与精力",
+        "assess.dim_il_experience": "M&A 经验",
+        "assess.il_self": "自评",
+        "assess.il_manager": "上级视角",
+        "assess.il_invite": "添加上级评价",
+        "assess.il_gap": "自评 vs. 上级",
+        "assess.il_exp": "经验指数",
+        "assess.il_exp_hint": "既往交易经验——与能力得分并列展示，绝不混合计算。",
+        "assess.plan_title": "发展计划",
+        "assess.plan_sub": "依据得分最低的维度自动生成，遵循 70-20-10 模型。",
+        "assess.plan_70": "70% · 实践锻炼",
+        "assess.plan_20": "20% · 社交——辅导",
+        "assess.plan_10": "10% · 正式——学院",
+        "assess.plan_add": "加入清单",
+        "assess.plan_added": "已加入 ✓",
+        "assess.plan_open_coaching": "打开辅导台",
+        "assess.plan_open_academy": "打开 IL 学院",
+        "assess.plan_none": "所有维度均已达到\"就绪\"——无需发展计划。约 90 天后重新评估。",
+        "assess.reassess_banner": "距上次评估已约 90 天——请重新评估以跟踪进展。",
+        "assess.manager_name_ph": "上级姓名",
+        "assess.rater_self": "自评",
+        "assess.rater_manager": "上级",
+        "assess.q_il_prog1": "维持稳定的运营节奏（IMO 会议、工作流评审），让所有人可以信赖。",
+        "assess.q_il_prog2": "里程碑、负责人和待决事项随时清晰可见。",
+        "assess.q_il_chg1": "及早发现阻力并解决其根源，而不是一味加压。",
+        "assess.q_il_chg2": "为管理者提供带领各自团队走过变革所需的支持。",
+        "assess.q_il_com1": "能针对高管、工作流和一线员工调整信息表达。",
+        "assess.q_il_com2": "主动跨文化、跨语言沟通，而不是被动应答。",
+        "assess.q_il_stk1": "向高层发起的升级能迅速得到落实。",
+        "assess.q_il_stk2": "无需正式职权也能影响双方的领导者。",
+        "assess.q_il_stk3": "两位工作流负责人私下互相指责里程碑延误。首先会发生什么？",
+        "assess.q_il_stk3_o1": "把两位负责人叫到一起，商定唯一的执行计划和负责人，并在下次 IMO 上透明汇报延误。",
+        "assess.q_il_stk3_o2": "悄悄把里程碑改派给能力更强的负责人。",
+        "assess.q_il_stk3_o3": "再给双方一些时间，暂不让其他人介入。",
+        "assess.q_il_amb1": "在掌握七成信息时及时拍板，并快速纠偏。",
+        "assess.q_il_amb2": "整合第 3 天，你得知一个重点客户对收购一无所知。接下来会发生什么？",
+        "assess.q_il_amb2_o1": "当天联系客户负责人，统一口径，并当日通知公关和 IMO。",
+        "assess.q_il_amb2_o2": "把此事列入下周 IMO 议程。",
+        "assess.q_il_amb2_o3": "想必销售会处理——不采取行动。",
+        "assess.q_il_brd1": "能读懂整合损益表，并有理有据地质询协同数字。",
+        "assess.q_il_brd2": "了解两家公司核心职能的实际运作。",
+        "assess.q_il_res1": "在数月并行工作流中保持精力，不让团队过度消耗。",
+        "assess.q_il_res2": "挫折让专注更敏锐，而不是消耗士气。",
+        "assess.q_il_exp1": "曾领导 IMO 或担任过既往交易的整合负责人",
+        "assess.q_il_exp2": "曾是既往整合的工作流成员或负责人",
+        "assess.q_il_exp3": "持有 M&A/PMI 认证或已完成 IL 学院课程",
+        "assess.q_il_exp4": "曾在两家公司的职能或地区工作过",
+        "assess.q_il_exp5": "具备跨境交易经验",
+        "assess.remed_il_program": "亲自主持接下来两次 IMO 例会的全流程，包括决策日志。",
+        "assess.remed_il_change": "跟随变革工作流两周，并在每个site组织一次倾听会。",
+        "assess.remed_il_comm": "用两种语言起草下一次全员更新，并请目标公司同事试读。",
+        "assess.remed_il_stakeholder": "梳理双方前 10 位干系人，并与高管发起人商定支持行动。",
+        "assess.remed_il_ambiguity": "本周将三个待决事项各限时 48 小时并记录结果。",
+        "assess.remed_il_breadth": "与财务一起走查协同模型，并在下次 IMO 上汇报。",
+        "assess.remed_il_resilience": "每周预留两个深度工作半天，并授权他人主持一个例会。"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -4083,7 +4270,69 @@
         "assess.kpi_acquirer": "Kupující (TE)",
         "assess.kpi_target": "Target",
         "assess.kpi_alignment": "Sladění",
-        "assess.kpi_pending": "Nedokončeno"
+        "assess.kpi_pending": "Nedokončeno",
+        "assess.tpl_il_title": "Připravenost integračního leadera",
+        "assess.dim_il_program": "Program a governance",
+        "assess.dim_il_change": "Vedení změny",
+        "assess.dim_il_comm": "Komunikace",
+        "assess.dim_il_stakeholder": "Stakeholdeři a důvěryhodnost",
+        "assess.dim_il_ambiguity": "Rozhodnost v nejistotě",
+        "assess.dim_il_breadth": "Byznysový a finanční rozhled",
+        "assess.dim_il_resilience": "Odolnost a energie",
+        "assess.dim_il_experience": "Zkušenosti s M&A",
+        "assess.il_self": "Sebehodnocení",
+        "assess.il_manager": "Pohled nadřízeného",
+        "assess.il_invite": "Přidat hodnocení nadřízeného",
+        "assess.il_gap": "Sebehodnocení vs. nadřízený",
+        "assess.il_exp": "Index zkušeností",
+        "assess.il_exp_hint": "Zkušenosti z dřívějších transakcí — zobrazují se vedle kompetenčního skóre, nikdy se do něj nepočítají.",
+        "assess.plan_title": "Rozvojový plán",
+        "assess.plan_sub": "Automaticky vytvořen z nejslabších dimenzí podle modelu 70-20-10.",
+        "assess.plan_70": "70 % · Zkušenostní učení",
+        "assess.plan_20": "20 % · Sociální — koučink",
+        "assess.plan_10": "10 % · Formální — akademie",
+        "assess.plan_add": "Přidat do checklistu",
+        "assess.plan_added": "Přidáno ✓",
+        "assess.plan_open_coaching": "Otevřít koučovací desk",
+        "assess.plan_open_academy": "Otevřít IL Academy",
+        "assess.plan_none": "Všechny dimenze na úrovni „Připraveno\" — rozvojový plán není potřeba. Za ~90 dní hodnocení zopakujte.",
+        "assess.reassess_banner": "Od posledního hodnocení uplynulo přibližně 90 dní — zopakujte jej a sledujte posun.",
+        "assess.manager_name_ph": "Jméno nadřízeného",
+        "assess.rater_self": "Sebehodnocení",
+        "assess.rater_manager": "Nadřízený",
+        "assess.q_il_prog1": "Udržuje stabilní provozní kadenci (IMO porady, review workstreamů), na kterou se lze spolehnout.",
+        "assess.q_il_prog2": "Milníky, vlastníci a otevřená rozhodnutí jsou kdykoli dohledatelné.",
+        "assess.q_il_chg1": "Rozpozná odpor včas a řeší jeho příčiny, místo aby jen tlačil silněji.",
+        "assess.q_il_chg2": "Vybavuje manažery tím, co potřebují, aby své týmy změnou provedli sami.",
+        "assess.q_il_com1": "Přizpůsobuje sdělení vedení, workstreamům i provozu.",
+        "assess.q_il_com2": "Komunikuje proaktivně napříč kulturami a jazyky — ne jen na vyžádání.",
+        "assess.q_il_stk1": "Eskalace na sponzory se rychle promítají do akce.",
+        "assess.q_il_stk2": "Dokáže ovlivnit lídry obou stran i bez formální autority.",
+        "assess.q_il_stk3": "Dva vedoucí workstreamů se v soukromí navzájem obviňují ze zpožděného milníku. Co se stane jako první?",
+        "assess.q_il_stk3_o1": "Oba vedoucí se sejdou, dohodne se jediný závazný plán s vlastníky a zpoždění se transparentně reportuje na příštím IMO.",
+        "assess.q_il_stk3_o2": "Milník se potichu předá silnějšímu vedoucímu.",
+        "assess.q_il_stk3_o3": "Oba dostanou více času, než se zapojí kdokoli další.",
+        "assess.q_il_amb1": "Rozhoduje včas se 70 % informací a rychle koriguje kurz.",
+        "assess.q_il_amb2": "Třetí den zjistíte, že klíčový zákazník o akvizici nic neslyšel. Co se stane?",
+        "assess.q_il_amb2_o1": "Ještě dnes se zavolá account ownerovi, dohodne se sdělení a týž den se informuje komunikace i IMO.",
+        "assess.q_il_amb2_o2": "Téma se zařadí na program IMO příští týden.",
+        "assess.q_il_amb2_o3": "Obchod to nejspíš vyřeší — žádná akce.",
+        "assess.q_il_brd1": "Umí číst integrační výsledovku a věrohodně rozporovat synergická čísla.",
+        "assess.q_il_brd2": "Rozumí provozní realitě klíčových funkcí obou společností.",
+        "assess.q_il_res1": "Udrží energii během měsíců paralelních workstreamů, aniž by vyčerpal tým.",
+        "assess.q_il_res2": "Neúspěchy zaostřují soustředění, místo aby braly energii.",
+        "assess.q_il_exp1": "Vedl(a) IMO nebo byl(a) integračním leaderem dřívější transakce",
+        "assess.q_il_exp2": "Člen(ka) nebo vedoucí workstreamu v dřívější integraci",
+        "assess.q_il_exp3": "Certifikace M&A/PMI nebo dokončená IL Academy",
+        "assess.q_il_exp4": "Pracoval(a) ve funkcích či regionech obou společností",
+        "assess.q_il_exp5": "Zkušenost s přeshraničními transakcemi",
+        "assess.remed_il_program": "Osobně veďte příští dvě IMO porady od začátku do konce včetně logu rozhodnutí.",
+        "assess.remed_il_change": "Dva týdny stínujte change workstream a uspořádejte jednu listening session na lokalitu.",
+        "assess.remed_il_comm": "Připravte příští all-hands update v obou jazycích a otestujte jej s kolegou z targetu.",
+        "assess.remed_il_stakeholder": "Zmapujte top 10 stakeholderů obou stran a dohodněte sponzorské kroky s exekutivním sponzorem.",
+        "assess.remed_il_ambiguity": "Tři otevřená rozhodnutí tento týden omezte na 48 hodin a zaznamenejte výsledky.",
+        "assess.remed_il_breadth": "Projděte synergický model s finance a odprezentujte jej na příštím IMO.",
+        "assess.remed_il_resilience": "Blokujte si dva půldny hluboké práce týdně a delegujte jednu pravidelnou schůzku."
       }
     }
   },
@@ -6120,6 +6369,384 @@
             "published": true,
             "order": 2,
             "version": 1
+          },
+          {
+            "id": "atpl_il_readiness",
+            "slug": "integration-leader-readiness",
+            "titleKey": "assess.tpl_il_title",
+            "title": "Integration Leader Readiness",
+            "subject": "integration-leader",
+            "audienceRoles": [
+              "hrbp",
+              "admin"
+            ],
+            "raterModes": [
+              "self",
+              "manager"
+            ],
+            "required": true,
+            "gates": [],
+            "scale": {
+              "min": 1,
+              "max": 5,
+              "step": 1,
+              "type": "likert",
+              "anchorsKeyPrefix": "assess.scale5"
+            },
+            "banding": {
+              "bands": [
+                {
+                  "id": "ready",
+                  "min": 80,
+                  "labelKey": "assess.band_ready",
+                  "color": "green"
+                },
+                {
+                  "id": "support",
+                  "min": 60,
+                  "labelKey": "assess.band_support",
+                  "color": "amber"
+                },
+                {
+                  "id": "risk",
+                  "min": 0,
+                  "labelKey": "assess.band_risk",
+                  "color": "red"
+                }
+              ],
+              "redFlagBelow": 50
+            },
+            "dimensions": [
+              {
+                "id": "dim_il_program",
+                "mirrorId": "dim_il_program",
+                "weight": 1.25,
+                "labelKey": "assess.dim_il_program",
+                "label": "Program & Governance",
+                "iconEmoji": "📋",
+                "questions": [
+                  {
+                    "id": "q_il_prog1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_prog1",
+                    "text": "Runs a stable operating cadence (IMO meetings, workstream reviews) that people can rely on."
+                  },
+                  {
+                    "id": "q_il_prog2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_prog2",
+                    "text": "Milestones, owners and open decisions are tracked and visible at any moment."
+                  }
+                ]
+              },
+              {
+                "id": "dim_il_change",
+                "mirrorId": "dim_il_change",
+                "weight": 1,
+                "labelKey": "assess.dim_il_change",
+                "label": "Change Leadership",
+                "iconEmoji": "🔄",
+                "questions": [
+                  {
+                    "id": "q_il_chg1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_chg1",
+                    "text": "Spots resistance early and addresses its causes rather than pushing harder."
+                  },
+                  {
+                    "id": "q_il_chg2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_chg2",
+                    "text": "Equips managers with what they need to lead their own teams through the change."
+                  }
+                ]
+              },
+              {
+                "id": "dim_il_comm",
+                "mirrorId": "dim_il_comm",
+                "weight": 1,
+                "labelKey": "assess.dim_il_comm",
+                "label": "Communication",
+                "iconEmoji": "🗣️",
+                "questions": [
+                  {
+                    "id": "q_il_com1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_com1",
+                    "text": "Adapts the message for executives, workstreams and shop-floor audiences."
+                  },
+                  {
+                    "id": "q_il_com2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_com2",
+                    "text": "Communicates proactively across cultures and languages, not only when asked."
+                  }
+                ]
+              },
+              {
+                "id": "dim_il_stakeholder",
+                "mirrorId": "dim_il_stakeholder",
+                "weight": 1,
+                "labelKey": "assess.dim_il_stakeholder",
+                "label": "Stakeholders & Credibility",
+                "iconEmoji": "🤝",
+                "questions": [
+                  {
+                    "id": "q_il_stk1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_stk1",
+                    "text": "Escalations to senior sponsors are acted on quickly."
+                  },
+                  {
+                    "id": "q_il_stk2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_stk2",
+                    "text": "Influences leaders on both sides without formal authority."
+                  },
+                  {
+                    "id": "q_il_stk3",
+                    "type": "sjt",
+                    "weight": 1.5,
+                    "textKey": "assess.q_il_stk3",
+                    "text": "Two workstream leads privately blame each other for a slipped milestone. What happens first?",
+                    "options": [
+                      {
+                        "textKey": "assess.q_il_stk3_o1",
+                        "text": "Both leads are brought together, one plan-of-record with owners is agreed, and the slip is reported transparently at the next IMO.",
+                        "score": 5
+                      },
+                      {
+                        "textKey": "assess.q_il_stk3_o2",
+                        "text": "The milestone is quietly reassigned to the stronger lead.",
+                        "score": 2
+                      },
+                      {
+                        "textKey": "assess.q_il_stk3_o3",
+                        "text": "Both get more time before anyone else is involved.",
+                        "score": 1
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "dim_il_ambiguity",
+                "mirrorId": "dim_il_ambiguity",
+                "weight": 1,
+                "labelKey": "assess.dim_il_ambiguity",
+                "label": "Decisiveness under Ambiguity",
+                "iconEmoji": "⚡",
+                "questions": [
+                  {
+                    "id": "q_il_amb1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_amb1",
+                    "text": "Makes timely calls with 70% of the information and corrects course fast."
+                  },
+                  {
+                    "id": "q_il_amb2",
+                    "type": "sjt",
+                    "weight": 1.5,
+                    "textKey": "assess.q_il_amb2",
+                    "text": "On Day-3 you learn a key customer has heard nothing about the acquisition. What happens?",
+                    "options": [
+                      {
+                        "textKey": "assess.q_il_amb2_o1",
+                        "text": "The account owner is called today, the message agreed, and comms + IMO informed the same day.",
+                        "score": 5
+                      },
+                      {
+                        "textKey": "assess.q_il_amb2_o2",
+                        "text": "The topic goes on next week’s IMO agenda.",
+                        "score": 2
+                      },
+                      {
+                        "textKey": "assess.q_il_amb2_o3",
+                        "text": "Sales presumably handles it — no action.",
+                        "score": 1
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "dim_il_breadth",
+                "mirrorId": "dim_il_breadth",
+                "weight": 1,
+                "labelKey": "assess.dim_il_breadth",
+                "label": "Business & Financial Acumen",
+                "iconEmoji": "💼",
+                "questions": [
+                  {
+                    "id": "q_il_brd1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_brd1",
+                    "text": "Can read the integration P&L and challenge synergy numbers credibly."
+                  },
+                  {
+                    "id": "q_il_brd2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_brd2",
+                    "text": "Understands the operational realities of both companies’ core functions."
+                  }
+                ]
+              },
+              {
+                "id": "dim_il_resilience",
+                "mirrorId": "dim_il_resilience",
+                "weight": 0.75,
+                "labelKey": "assess.dim_il_resilience",
+                "label": "Resilience & Energy",
+                "iconEmoji": "🔋",
+                "questions": [
+                  {
+                    "id": "q_il_res1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_res1",
+                    "text": "Sustains energy over months of parallel workstreams without burning out the team."
+                  },
+                  {
+                    "id": "q_il_res2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_il_res2",
+                    "text": "Setbacks sharpen focus rather than draining it."
+                  }
+                ]
+              },
+              {
+                "id": "dim_il_experience",
+                "mirrorId": "dim_il_experience",
+                "weight": 0,
+                "labelKey": "assess.dim_il_experience",
+                "label": "M&A Experience",
+                "iconEmoji": "🎖️",
+                "questions": [
+                  {
+                    "id": "q_il_exp1",
+                    "type": "checkbox",
+                    "textKey": "assess.q_il_exp1",
+                    "text": "Led an IMO or was the integration lead on a prior deal",
+                    "score": 30
+                  },
+                  {
+                    "id": "q_il_exp2",
+                    "type": "checkbox",
+                    "textKey": "assess.q_il_exp2",
+                    "text": "Workstream member or lead in a prior integration",
+                    "score": 20
+                  },
+                  {
+                    "id": "q_il_exp3",
+                    "type": "checkbox",
+                    "textKey": "assess.q_il_exp3",
+                    "text": "Holds an M&A/PMI certification or completed the IL Academy",
+                    "score": 20
+                  },
+                  {
+                    "id": "q_il_exp4",
+                    "type": "checkbox",
+                    "textKey": "assess.q_il_exp4",
+                    "text": "Has worked in both companies’ functions or geographies",
+                    "score": 15
+                  },
+                  {
+                    "id": "q_il_exp5",
+                    "type": "checkbox",
+                    "textKey": "assess.q_il_exp5",
+                    "text": "Cross-border deal experience",
+                    "score": 15
+                  }
+                ]
+              }
+            ],
+            "remediation": [
+              {
+                "dimensionId": "dim_il_program",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m1"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_il_program",
+                "advice": "Run the next two IMO cadence meetings end-to-end, including the decision log."
+              },
+              {
+                "dimensionId": "dim_il_change",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m1"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_il_change",
+                "advice": "Shadow the change workstream for two weeks and run one listening session per site."
+              },
+              {
+                "dimensionId": "dim_il_comm",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m1"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_il_comm",
+                "advice": "Draft the next all-hands update in both languages and test it with a peer from the target."
+              },
+              {
+                "dimensionId": "dim_il_stakeholder",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m3"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_il_stakeholder",
+                "advice": "Map the top 10 stakeholders on both sides and agree sponsorship actions with your executive sponsor."
+              },
+              {
+                "dimensionId": "dim_il_ambiguity",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m3"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_il_ambiguity",
+                "advice": "Time-box three open decisions this week to 48 hours each and log the outcomes."
+              },
+              {
+                "dimensionId": "dim_il_breadth",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m3"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_il_breadth",
+                "advice": "Walk the synergy model with Finance and present it back at the next IMO."
+              },
+              {
+                "dimensionId": "dim_il_resilience",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m2"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_il_resilience",
+                "advice": "Block two deep-work half-days per week and delegate one recurring meeting."
+              }
+            ],
+            "published": true,
+            "order": 3,
+            "version": 1
           }
         ]
       }
@@ -6940,6 +7567,384 @@
       "published": true,
       "order": 2,
       "version": 1
+    },
+    {
+      "id": "atpl_il_readiness",
+      "slug": "integration-leader-readiness",
+      "titleKey": "assess.tpl_il_title",
+      "title": "Integration Leader Readiness",
+      "subject": "integration-leader",
+      "audienceRoles": [
+        "hrbp",
+        "admin"
+      ],
+      "raterModes": [
+        "self",
+        "manager"
+      ],
+      "required": true,
+      "gates": [],
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "type": "likert",
+        "anchorsKeyPrefix": "assess.scale5"
+      },
+      "banding": {
+        "bands": [
+          {
+            "id": "ready",
+            "min": 80,
+            "labelKey": "assess.band_ready",
+            "color": "green"
+          },
+          {
+            "id": "support",
+            "min": 60,
+            "labelKey": "assess.band_support",
+            "color": "amber"
+          },
+          {
+            "id": "risk",
+            "min": 0,
+            "labelKey": "assess.band_risk",
+            "color": "red"
+          }
+        ],
+        "redFlagBelow": 50
+      },
+      "dimensions": [
+        {
+          "id": "dim_il_program",
+          "mirrorId": "dim_il_program",
+          "weight": 1.25,
+          "labelKey": "assess.dim_il_program",
+          "label": "Program & Governance",
+          "iconEmoji": "📋",
+          "questions": [
+            {
+              "id": "q_il_prog1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_prog1",
+              "text": "Runs a stable operating cadence (IMO meetings, workstream reviews) that people can rely on."
+            },
+            {
+              "id": "q_il_prog2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_prog2",
+              "text": "Milestones, owners and open decisions are tracked and visible at any moment."
+            }
+          ]
+        },
+        {
+          "id": "dim_il_change",
+          "mirrorId": "dim_il_change",
+          "weight": 1,
+          "labelKey": "assess.dim_il_change",
+          "label": "Change Leadership",
+          "iconEmoji": "🔄",
+          "questions": [
+            {
+              "id": "q_il_chg1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_chg1",
+              "text": "Spots resistance early and addresses its causes rather than pushing harder."
+            },
+            {
+              "id": "q_il_chg2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_chg2",
+              "text": "Equips managers with what they need to lead their own teams through the change."
+            }
+          ]
+        },
+        {
+          "id": "dim_il_comm",
+          "mirrorId": "dim_il_comm",
+          "weight": 1,
+          "labelKey": "assess.dim_il_comm",
+          "label": "Communication",
+          "iconEmoji": "🗣️",
+          "questions": [
+            {
+              "id": "q_il_com1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_com1",
+              "text": "Adapts the message for executives, workstreams and shop-floor audiences."
+            },
+            {
+              "id": "q_il_com2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_com2",
+              "text": "Communicates proactively across cultures and languages, not only when asked."
+            }
+          ]
+        },
+        {
+          "id": "dim_il_stakeholder",
+          "mirrorId": "dim_il_stakeholder",
+          "weight": 1,
+          "labelKey": "assess.dim_il_stakeholder",
+          "label": "Stakeholders & Credibility",
+          "iconEmoji": "🤝",
+          "questions": [
+            {
+              "id": "q_il_stk1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_stk1",
+              "text": "Escalations to senior sponsors are acted on quickly."
+            },
+            {
+              "id": "q_il_stk2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_stk2",
+              "text": "Influences leaders on both sides without formal authority."
+            },
+            {
+              "id": "q_il_stk3",
+              "type": "sjt",
+              "weight": 1.5,
+              "textKey": "assess.q_il_stk3",
+              "text": "Two workstream leads privately blame each other for a slipped milestone. What happens first?",
+              "options": [
+                {
+                  "textKey": "assess.q_il_stk3_o1",
+                  "text": "Both leads are brought together, one plan-of-record with owners is agreed, and the slip is reported transparently at the next IMO.",
+                  "score": 5
+                },
+                {
+                  "textKey": "assess.q_il_stk3_o2",
+                  "text": "The milestone is quietly reassigned to the stronger lead.",
+                  "score": 2
+                },
+                {
+                  "textKey": "assess.q_il_stk3_o3",
+                  "text": "Both get more time before anyone else is involved.",
+                  "score": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dim_il_ambiguity",
+          "mirrorId": "dim_il_ambiguity",
+          "weight": 1,
+          "labelKey": "assess.dim_il_ambiguity",
+          "label": "Decisiveness under Ambiguity",
+          "iconEmoji": "⚡",
+          "questions": [
+            {
+              "id": "q_il_amb1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_amb1",
+              "text": "Makes timely calls with 70% of the information and corrects course fast."
+            },
+            {
+              "id": "q_il_amb2",
+              "type": "sjt",
+              "weight": 1.5,
+              "textKey": "assess.q_il_amb2",
+              "text": "On Day-3 you learn a key customer has heard nothing about the acquisition. What happens?",
+              "options": [
+                {
+                  "textKey": "assess.q_il_amb2_o1",
+                  "text": "The account owner is called today, the message agreed, and comms + IMO informed the same day.",
+                  "score": 5
+                },
+                {
+                  "textKey": "assess.q_il_amb2_o2",
+                  "text": "The topic goes on next week’s IMO agenda.",
+                  "score": 2
+                },
+                {
+                  "textKey": "assess.q_il_amb2_o3",
+                  "text": "Sales presumably handles it — no action.",
+                  "score": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dim_il_breadth",
+          "mirrorId": "dim_il_breadth",
+          "weight": 1,
+          "labelKey": "assess.dim_il_breadth",
+          "label": "Business & Financial Acumen",
+          "iconEmoji": "💼",
+          "questions": [
+            {
+              "id": "q_il_brd1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_brd1",
+              "text": "Can read the integration P&L and challenge synergy numbers credibly."
+            },
+            {
+              "id": "q_il_brd2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_brd2",
+              "text": "Understands the operational realities of both companies’ core functions."
+            }
+          ]
+        },
+        {
+          "id": "dim_il_resilience",
+          "mirrorId": "dim_il_resilience",
+          "weight": 0.75,
+          "labelKey": "assess.dim_il_resilience",
+          "label": "Resilience & Energy",
+          "iconEmoji": "🔋",
+          "questions": [
+            {
+              "id": "q_il_res1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_res1",
+              "text": "Sustains energy over months of parallel workstreams without burning out the team."
+            },
+            {
+              "id": "q_il_res2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_il_res2",
+              "text": "Setbacks sharpen focus rather than draining it."
+            }
+          ]
+        },
+        {
+          "id": "dim_il_experience",
+          "mirrorId": "dim_il_experience",
+          "weight": 0,
+          "labelKey": "assess.dim_il_experience",
+          "label": "M&A Experience",
+          "iconEmoji": "🎖️",
+          "questions": [
+            {
+              "id": "q_il_exp1",
+              "type": "checkbox",
+              "textKey": "assess.q_il_exp1",
+              "text": "Led an IMO or was the integration lead on a prior deal",
+              "score": 30
+            },
+            {
+              "id": "q_il_exp2",
+              "type": "checkbox",
+              "textKey": "assess.q_il_exp2",
+              "text": "Workstream member or lead in a prior integration",
+              "score": 20
+            },
+            {
+              "id": "q_il_exp3",
+              "type": "checkbox",
+              "textKey": "assess.q_il_exp3",
+              "text": "Holds an M&A/PMI certification or completed the IL Academy",
+              "score": 20
+            },
+            {
+              "id": "q_il_exp4",
+              "type": "checkbox",
+              "textKey": "assess.q_il_exp4",
+              "text": "Has worked in both companies’ functions or geographies",
+              "score": 15
+            },
+            {
+              "id": "q_il_exp5",
+              "type": "checkbox",
+              "textKey": "assess.q_il_exp5",
+              "text": "Cross-border deal experience",
+              "score": 15
+            }
+          ]
+        }
+      ],
+      "remediation": [
+        {
+          "dimensionId": "dim_il_program",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m1"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_il_program",
+          "advice": "Run the next two IMO cadence meetings end-to-end, including the decision log."
+        },
+        {
+          "dimensionId": "dim_il_change",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m1"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_il_change",
+          "advice": "Shadow the change workstream for two weeks and run one listening session per site."
+        },
+        {
+          "dimensionId": "dim_il_comm",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m1"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_il_comm",
+          "advice": "Draft the next all-hands update in both languages and test it with a peer from the target."
+        },
+        {
+          "dimensionId": "dim_il_stakeholder",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m3"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_il_stakeholder",
+          "advice": "Map the top 10 stakeholders on both sides and agree sponsorship actions with your executive sponsor."
+        },
+        {
+          "dimensionId": "dim_il_ambiguity",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m3"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_il_ambiguity",
+          "advice": "Time-box three open decisions this week to 48 hours each and log the outcomes."
+        },
+        {
+          "dimensionId": "dim_il_breadth",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m3"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_il_breadth",
+          "advice": "Walk the synergy model with Finance and present it back at the next IMO."
+        },
+        {
+          "dimensionId": "dim_il_resilience",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m2"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_il_resilience",
+          "advice": "Block two deep-work half-days per week and delegate one recurring meeting."
+        }
+      ],
+      "published": true,
+      "order": 3,
+      "version": 1
     }
   ],
   "assessmentInstances": [
@@ -7181,6 +8186,191 @@
       "status": "submitted",
       "timestamp": "2026-05-30T09:00:00.000Z",
       "retakeOf": "ainst_seed_ac1"
+    },
+    {
+      "id": "ainst_seed_il1",
+      "templateId": "atpl_il_readiness",
+      "templateVersion": 1,
+      "subject": "integration-leader",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 1,
+      "responses": {
+        "q_il_prog1": 4,
+        "q_il_prog2": 3,
+        "q_il_chg1": 3,
+        "q_il_chg2": 3,
+        "q_il_com1": 3,
+        "q_il_com2": 4,
+        "q_il_stk1": 3,
+        "q_il_stk2": 4,
+        "q_il_stk3": 0,
+        "q_il_amb1": 4,
+        "q_il_amb2": 0,
+        "q_il_brd1": 3,
+        "q_il_brd2": 3,
+        "q_il_res1": 4,
+        "q_il_res2": 4,
+        "q_il_exp1": false,
+        "q_il_exp2": true,
+        "q_il_exp3": false,
+        "q_il_exp4": true,
+        "q_il_exp5": false
+      },
+      "dimensionScores": {
+        "dim_il_program": 63,
+        "dim_il_change": 50,
+        "dim_il_comm": 63,
+        "dim_il_stakeholder": 79,
+        "dim_il_ambiguity": 90,
+        "dim_il_breadth": 50,
+        "dim_il_resilience": 75
+      },
+      "overallScore": 67,
+      "bandId": "support",
+      "redFlags": [],
+      "experienceIndex": 35,
+      "status": "submitted",
+      "timestamp": "2026-05-01T09:00:00.000Z"
+    },
+    {
+      "id": "ainst_seed_il30",
+      "templateId": "atpl_il_readiness",
+      "templateVersion": 1,
+      "subject": "integration-leader",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 30,
+      "responses": {
+        "q_il_prog1": 4,
+        "q_il_prog2": 4,
+        "q_il_chg1": 3,
+        "q_il_chg2": 4,
+        "q_il_com1": 4,
+        "q_il_com2": 4,
+        "q_il_stk1": 4,
+        "q_il_stk2": 4,
+        "q_il_stk3": 0,
+        "q_il_amb1": 4,
+        "q_il_amb2": 0,
+        "q_il_brd1": 3,
+        "q_il_brd2": 4,
+        "q_il_res1": 4,
+        "q_il_res2": 4,
+        "q_il_exp1": false,
+        "q_il_exp2": true,
+        "q_il_exp3": true,
+        "q_il_exp4": true,
+        "q_il_exp5": false
+      },
+      "dimensionScores": {
+        "dim_il_program": 75,
+        "dim_il_change": 63,
+        "dim_il_comm": 75,
+        "dim_il_stakeholder": 86,
+        "dim_il_ambiguity": 90,
+        "dim_il_breadth": 63,
+        "dim_il_resilience": 75
+      },
+      "overallScore": 75,
+      "bandId": "support",
+      "redFlags": [],
+      "experienceIndex": 55,
+      "status": "submitted",
+      "timestamp": "2026-05-30T09:00:00.000Z",
+      "retakeOf": "ainst_seed_il1"
+    },
+    {
+      "id": "ainst_seed_il90",
+      "templateId": "atpl_il_readiness",
+      "templateVersion": 1,
+      "subject": "integration-leader",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 90,
+      "responses": {
+        "q_il_prog1": 5,
+        "q_il_prog2": 4,
+        "q_il_chg1": 4,
+        "q_il_chg2": 4,
+        "q_il_com1": 4,
+        "q_il_com2": 5,
+        "q_il_stk1": 4,
+        "q_il_stk2": 5,
+        "q_il_stk3": 0,
+        "q_il_amb1": 4,
+        "q_il_amb2": 0,
+        "q_il_brd1": 4,
+        "q_il_brd2": 4,
+        "q_il_res1": 4,
+        "q_il_res2": 5,
+        "q_il_exp1": true,
+        "q_il_exp2": true,
+        "q_il_exp3": true,
+        "q_il_exp4": true,
+        "q_il_exp5": false
+      },
+      "dimensionScores": {
+        "dim_il_program": 88,
+        "dim_il_change": 75,
+        "dim_il_comm": 88,
+        "dim_il_stakeholder": 93,
+        "dim_il_ambiguity": 90,
+        "dim_il_breadth": 75,
+        "dim_il_resilience": 88
+      },
+      "overallScore": 85,
+      "bandId": "ready",
+      "redFlags": [],
+      "experienceIndex": 85,
+      "status": "submitted",
+      "timestamp": "2026-07-29T09:00:00.000Z",
+      "retakeOf": "ainst_seed_il30"
+    },
+    {
+      "id": "ainst_seed_ilmgr30",
+      "templateId": "atpl_il_readiness",
+      "templateVersion": 1,
+      "subject": "integration-leader",
+      "rater": "manager",
+      "respondentRole": "hrbp",
+      "respondentName": "David Miller",
+      "demoDay": 30,
+      "responses": {
+        "q_il_prog1": 4,
+        "q_il_prog2": 4,
+        "q_il_chg1": 4,
+        "q_il_chg2": 3,
+        "q_il_com1": 4,
+        "q_il_com2": 4,
+        "q_il_stk1": 4,
+        "q_il_stk2": 5,
+        "q_il_stk3": 0,
+        "q_il_amb1": 4,
+        "q_il_amb2": 0,
+        "q_il_brd1": 3,
+        "q_il_brd2": 3,
+        "q_il_res1": 5,
+        "q_il_res2": 4
+      },
+      "dimensionScores": {
+        "dim_il_program": 75,
+        "dim_il_change": 63,
+        "dim_il_comm": 75,
+        "dim_il_stakeholder": 93,
+        "dim_il_ambiguity": 90,
+        "dim_il_breadth": 50,
+        "dim_il_resilience": 88
+      },
+      "overallScore": 76,
+      "bandId": "support",
+      "redFlags": [],
+      "experienceIndex": 0,
+      "status": "submitted",
+      "timestamp": "2026-05-30T09:00:00.000Z"
     }
   ],
   "customAssessmentInstances": []

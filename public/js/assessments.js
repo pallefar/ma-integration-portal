@@ -17,7 +17,7 @@
     wizard: {}            // subject -> { tpl, step, answers }
   };
 
-  var SUBJECT_TABS = { 'acquirer-org': 'acquirer', 'target-org': 'target' };
+  var SUBJECT_TABS = { 'acquirer-org': 'acquirer', 'target-org': 'target', 'integration-leader': 'leader' };
 
   function t(key, fallback) {
     // read from the shared portal dictionary when loaded; fall back to inline EN
@@ -47,12 +47,15 @@
   function tplBySubject(subject) {
     return state.templates.find(function (x) { return x.subject === subject; }) || null;
   }
-  function latestFor(tplId) {
-    var list = state.instancesByTpl[tplId] || [];
+  function raterList(tplId, rater) {
+    return (state.instancesByTpl[tplId] || []).filter(function (i) { return (i.rater || 'self') === rater; });
+  }
+  function latestFor(tplId, rater) {
+    var list = raterList(tplId, rater || 'self');
     return list.length ? list[list.length - 1] : null;
   }
-  function previousFor(tplId) {
-    var list = state.instancesByTpl[tplId] || [];
+  function previousFor(tplId, rater) {
+    var list = raterList(tplId, rater || 'self');
     return list.length > 1 ? list[list.length - 2] : null;
   }
 
@@ -65,7 +68,7 @@
       state.templates = Array.isArray(res[0]) ? res[0] : [];
       state.status = res[1] || {};
       return Promise.all(state.templates.map(function (tpl) {
-        return fetch('/api/assessment-instances?templateId=' + encodeURIComponent(tpl.id) + '&rater=self')
+        return fetch('/api/assessment-instances?templateId=' + encodeURIComponent(tpl.id))
           .then(function (r) { return r.json(); })
           .catch(function () { return []; })
           .then(function (list) {
@@ -131,7 +134,8 @@
     if (!latest) { renderIntro(subject); return; }
     var prev = previousFor(tpl.id);
 
-    var axes = (tpl.dimensions || []).map(function (d) { return { id: d.id, label: d.label }; });
+    var scoredDims = (tpl.dimensions || []).filter(function (d) { return (latest.dimensionScores || {})[d.id] != null; });
+    var axes = scoredDims.map(function (d) { return { id: d.id, label: d.label }; });
     var series = [{ label: tpl.title, color: subject === 'acquirer-org' ? '#167987' : '#E98300', values: latest.dimensionScores || {} }];
     var bars = (tpl.dimensions || []).map(function (d) {
       var sc = (latest.dimensionScores || {})[d.id];
@@ -168,21 +172,108 @@
       + (trendHtml ? '<span>' + trendHtml + '</span>' : '')
       + '</div>'
       + (latest.bandId ? '<span class="as-band-badge" style="background:' + C.bandColor(latest.bandId) + '">' + bandLabelSpan(latest.bandId) + '</span>' : '')
+      + (subject === 'integration-leader' && latest.experienceIndex != null
+        ? '<span class="as-exp-chip" title="">🎖️ <span data-i18n="assess.il_exp">Experience index</span>: ' + latest.experienceIndex + '</span>'
+        : '')
       + '</div>'
-      + '<div class="as-actions"><button class="btn btn-secondary" id="as-retake-' + SUBJECT_TABS[subject] + '" style="font-size:.82rem;padding:.5rem 1rem;" data-i18n="assess.btn_retake">Retake assessment</button></div>'
+      + '<div class="as-actions"><button class="btn btn-secondary" id="as-retake-' + SUBJECT_TABS[subject] + '" style="font-size:.82rem;padding:.5rem 1rem;" data-i18n="assess.btn_retake">Retake assessment</button>'
+      + (subject === 'integration-leader' && (tpl.raterModes || []).indexOf('manager') > -1
+        ? '<button class="btn btn-secondary" id="as-invite-mgr" style="font-size:.82rem;padding:.5rem 1rem;" data-i18n="assess.il_invite">Add manager rating</button>'
+        : '')
+      + '</div>'
       + '</div>'
       + '<div class="as-sc-grid">'
       + '<div>' + C.radarSVG(axes, series) + '</div>'
       + '<div><h3 data-i18n="assess.dim_breakdown">Dimension breakdown</h3>' + bars + '</div>'
       + '</div>'
       + '</div>'
+      + (subject === 'integration-leader' ? ilExtrasHtml(tpl, latest) : '')
       + (remedCards ? '<div class="as-card"><h3 data-i18n="assess.remediation">Recommended actions</h3>' + remedCards + '</div>' : '')
       + (subject === 'target-org' ? '<p class="as-note" data-i18n="assess.disclaimer_preclose">Sensitive: answers may contain competitively sensitive information about the target. Before legal close, complete this only with clean-team-approved information and involve Legal if unsure.</p>' : '')
       + '<p class="as-note" data-i18n="assess.n1_note">Structured judgment by 1 rater — a facilitated read of readiness, not a statistical instrument.</p>';
 
     var retake = el.querySelector('#as-retake-' + SUBJECT_TABS[subject]);
     if (retake) retake.addEventListener('click', function () { startWizard(subject, latest.id); });
+    var invite = el.querySelector('#as-invite-mgr');
+    if (invite) invite.addEventListener('click', function () { startWizard(subject, null, 'manager'); });
+    el.querySelectorAll('.as-plan-add').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-task-id'), label = b.getAttribute('data-task-label');
+        var tasks = [];
+        try { tasks = JSON.parse(localStorage.getItem('ilStretchTasks') || '[]') || []; } catch (e) {}
+        if (!tasks.some(function (x) { return x.id === id; })) tasks.push({ id: id, label: label });
+        try { localStorage.setItem('ilStretchTasks', JSON.stringify(tasks)); } catch (e) {}
+        b.textContent = t('assess.plan_added', 'Added ✓');
+        b.disabled = true;
+      });
+    });
     applyI18n();
+  }
+
+  // Integration-Leader-only sections: self-vs-manager gap + 70-20-10 development plan
+  function ilExtrasHtml(tpl, latest) {
+    var html = '';
+    // ~90-day re-assessment nudge
+    var ageDays = (Date.now() - new Date(latest.timestamp).getTime()) / 86400000;
+    if (ageDays >= 90) {
+      html += '<div class="as-warn" data-i18n="assess.reassess_banner">It has been about 90 days since the last assessment — retake it to track progression.</div>';
+    }
+    // Self vs manager gap (dumbbell rows)
+    var SELF_COL = '#E98300', MGR_COL = '#167987';
+    var mgr = latestFor(tpl.id, 'manager');
+    if (mgr) {
+      var rows = (tpl.dimensions || []).map(function (d) {
+        var s = (latest.dimensionScores || {})[d.id];
+        var m = (mgr.dimensionScores || {})[d.id];
+        if (s == null || m == null) return '';
+        var lo = Math.min(s, m), hi = Math.max(s, m);
+        return '<div class="as-db-row"><div class="as-dim-head"><span class="as-dim-name">' + (d.iconEmoji || '')
+          + ' <span data-i18n="' + esc(d.labelKey || '') + '">' + esc(d.label) + '</span></span>'
+          + '<span style="font-size:.74rem;font-weight:800;"><span style="color:' + SELF_COL + '">' + s + '</span> / <span style="color:' + MGR_COL + '">' + m + '</span></span></div>'
+          + '<div class="as-db-track"><div class="as-db-line" style="left:' + lo + '%;width:' + Math.max(hi - lo, 0.5) + '%"></div>'
+          + '<div class="as-db-dot" style="left:' + s + '%;background:' + SELF_COL + '"></div>'
+          + '<div class="as-db-dot" style="left:' + m + '%;background:' + MGR_COL + '"></div></div></div>';
+      }).join('');
+      html += '<div class="as-card"><h3 data-i18n="assess.il_gap">Self vs. manager</h3>'
+        + '<div class="as-radar-legend" style="justify-content:flex-start;margin:0 0 .9rem;">'
+        + '<span class="as-radar-key"><span class="as-radar-swatch" style="background:' + SELF_COL + '"></span><span data-i18n="assess.rater_self">Self</span>' + (latest.respondentName ? ' · ' + esc(latest.respondentName) : '') + '</span>'
+        + '<span class="as-radar-key"><span class="as-radar-swatch" style="background:' + MGR_COL + '"></span><span data-i18n="assess.rater_manager">Manager</span>' + (mgr.respondentName ? ' · ' + esc(mgr.respondentName) : '') + '</span>'
+        + '</div>' + rows + '</div>';
+    }
+    // 70-20-10 development plan from the lowest sub-80 dimensions with remediation
+    var low = (tpl.dimensions || [])
+      .map(function (d) { return { d: d, score: (latest.dimensionScores || {})[d.id] }; })
+      .filter(function (x) { return typeof x.score === 'number' && x.score < 80; })
+      .sort(function (a, b) { return a.score - b.score; })
+      .slice(0, 3)
+      .map(function (x) {
+        x.remed = (tpl.remediation || []).find(function (r) { return r.dimensionId === x.d.id; });
+        return x;
+      })
+      .filter(function (x) { return !!x.remed; });
+    if (low.length) {
+      var expItems = low.map(function (x) {
+        var taskId = 'il_stretch_' + x.d.id;
+        return '<div class="as-plan-item">' + (x.d.iconEmoji || '') + ' <strong data-i18n="' + esc(x.d.labelKey || '') + '">' + esc(x.d.label) + '</strong> (' + x.score + ')<br>'
+          + '<span data-i18n="' + esc(x.remed.adviceKey || '') + '">' + esc(x.remed.advice || '') + '</span><br>'
+          + '<button class="btn btn-secondary as-plan-add" data-task-id="' + esc(taskId) + '" data-task-label="' + esc(x.remed.advice || '') + '" style="font-size:.72rem;padding:.3rem .7rem;" data-i18n="assess.plan_add">Add to checklist</button></div>';
+      }).join('');
+      html += '<div class="as-card"><h3 data-i18n="assess.plan_title">Development plan</h3>'
+        + '<p style="font-size:.82rem;color:var(--text-secondary);margin:0 0 .9rem;" data-i18n="assess.plan_sub">Auto-generated from the lowest dimensions, following the 70-20-10 model.</p>'
+        + '<div class="as-plan-grid">'
+        + '<div class="as-plan-col"><h4 data-i18n="assess.plan_70">70% · Experiential</h4>' + expItems + '</div>'
+        + '<div class="as-plan-col"><h4 data-i18n="assess.plan_20">20% · Social — coaching</h4>'
+        + '<p class="as-plan-item" style="color:var(--text-secondary);">' + low.map(function (x) { return (x.d.iconEmoji || ''); }).join(' ') + '</p>'
+        + '<a href="/dashboard.html#tab-coaching-track" class="btn btn-secondary" style="font-size:.78rem;padding:.4rem .85rem;" data-i18n="assess.plan_open_coaching">Open Coaching Desk</a></div>'
+        + '<div class="as-plan-col"><h4 data-i18n="assess.plan_10">10% · Formal — academy</h4>'
+        + '<p class="as-plan-item" style="color:var(--text-secondary);">' + low.map(function (x) { return ((x.remed.academyModuleIds || []).length ? '📚' : ''); }).join(' ') + '</p>'
+        + '<a href="/dashboard.html#tab-il-academy" class="btn btn-secondary" style="font-size:.78rem;padding:.4rem .85rem;" data-i18n="assess.plan_open_academy">Open IL Academy</a></div>'
+        + '</div></div>';
+    } else {
+      html += '<div class="as-card"><h3 data-i18n="assess.plan_title">Development plan</h3>'
+        + '<p style="font-size:.85rem;color:var(--text-secondary);margin:0;" data-i18n="assess.plan_none">All dimensions at Ready — no development plan needed. Re-assess in ~90 days.</p></div>';
+    }
+    return html;
   }
 
   function renderIntro(subject) {
@@ -201,23 +292,37 @@
   }
 
   // ---------------------------------------------------------------- wizard
-  function startWizard(subject, retakeOf) {
+  function startWizard(subject, retakeOf, rater) {
     var tpl = tplBySubject(subject);
     if (!tpl) return;
-    state.wizard[subject] = { tpl: tpl, step: 0, answers: {}, retakeOf: retakeOf || null };
+    state.wizard[subject] = { tpl: tpl, step: 0, answers: {}, retakeOf: retakeOf || null, rater: rater || 'self', name: '' };
     renderWizardStep(subject);
+  }
+
+  function wizardDims(wz) {
+    // Manager raters skip evidence-checkbox-only dimensions (experience inventory
+    // is self-reported); everyone else sees the full template.
+    return (wz.tpl.dimensions || []).filter(function (d) {
+      if (wz.rater !== 'manager') return true;
+      return (d.questions || []).some(function (q) { return q.type !== 'checkbox'; });
+    });
   }
 
   function renderWizardStep(subject) {
     var wz = state.wizard[subject];
     var tpl = wz.tpl;
     var el = document.getElementById('as-pane-' + SUBJECT_TABS[subject]);
-    var dims = tpl.dimensions || [];
+    var dims = wizardDims(wz);
     var dim = dims[wz.step];
     var pct = Math.round(((wz.step) / dims.length) * 100);
 
     var qHtml = (dim.questions || []).map(function (q) {
       var chosen = wz.answers[q.id];
+      if (q.type === 'checkbox') {
+        return '<button type="button" class="as-cb' + (chosen === true ? ' sel' : '') + '" data-q="' + esc(q.id) + '" data-cb="1">'
+          + '<span class="box">' + (chosen === true ? '✓' : '') + '</span>'
+          + '<span data-i18n="' + esc(q.textKey || '') + '">' + esc(q.text) + '</span></button>';
+      }
       if (q.type === 'sjt') {
         return '<div class="as-q" data-q="' + esc(q.id) + '"><div class="as-q-text" data-i18n="' + esc(q.textKey || '') + '">' + esc(q.text) + '</div>'
           + '<div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.4rem;" data-i18n="assess.select_option">Select the closest answer</div>'
@@ -241,12 +346,18 @@
         + '</div>';
     }).join('');
 
+    var managerHead = wz.rater === 'manager'
+      ? '<div style="margin-bottom:1.1rem;"><span class="as-chip as-chip-amber" data-i18n="assess.il_manager">Manager view</span>'
+        + '<input type="text" id="as-wz-name" value="' + esc(wz.name) + '" data-i18n-ph="assess.manager_name_ph" placeholder="Manager name" style="margin-left:.6rem;padding:.4rem .7rem;border:1.5px solid var(--border-color);border-radius:8px;font-family:inherit;font-size:.85rem;"></div>'
+      : '';
+
     el.innerHTML = '<div class="as-card as-wizard">'
       + '<div class="as-wz-head">'
       + '<h2 class="as-sc-title" style="font-size:1.15rem;" data-i18n="' + esc(tpl.titleKey || '') + '">' + esc(tpl.title) + '</h2>'
       + '<span class="as-wz-step"><span data-i18n="assess.section">Section</span> ' + (wz.step + 1) + '/' + dims.length + ' · ' + (dim.iconEmoji || '') + ' <span data-i18n="' + esc(dim.labelKey || '') + '">' + esc(dim.label) + '</span></span>'
       + '</div>'
       + '<div class="as-wz-bar"><div class="as-wz-fill" style="width:' + pct + '%"></div></div>'
+      + managerHead
       + qHtml
       + '<div class="as-err" id="as-wz-err" data-i18n="assess.answer_all">Please answer every question in this section to continue.</div>'
       + '<div class="as-wz-nav">'
@@ -264,11 +375,22 @@
         document.getElementById('as-wz-err').style.display = 'none';
       });
     });
+    el.querySelectorAll('.as-cb').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var q = b.getAttribute('data-q');
+        wz.answers[q] = wz.answers[q] !== true;
+        b.classList.toggle('sel', wz.answers[q]);
+        b.querySelector('.box').textContent = wz.answers[q] ? '✓' : '';
+      });
+    });
+    var nameInput = el.querySelector('#as-wz-name');
+    if (nameInput) nameInput.addEventListener('input', function () { wz.name = nameInput.value; });
     el.querySelector('#as-wz-back').addEventListener('click', function () {
       if (wz.step > 0) { wz.step--; renderWizardStep(subject); }
     });
     el.querySelector('#as-wz-next').addEventListener('click', function () {
-      var missing = (dim.questions || []).some(function (q) { return wz.answers[q.id] === undefined; });
+      // Evidence checkboxes are optional; every rated question must be answered.
+      var missing = (dim.questions || []).some(function (q) { return q.type !== 'checkbox' && wz.answers[q.id] === undefined; });
       if (missing) { document.getElementById('as-wz-err').style.display = 'block'; return; }
       if (wz.step < dims.length - 1) { wz.step++; renderWizardStep(subject); }
       else submitWizard(subject);
@@ -286,7 +408,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         templateId: wz.tpl.id,
-        rater: 'self',
+        rater: wz.rater || 'self',
+        respondentName: wz.name || undefined,
         respondentRole: localStorage.getItem('active_demo_role') || '',
         responses: wz.answers,
         retakeOf: wz.retakeOf || undefined
@@ -358,7 +481,7 @@
     document.querySelectorAll('.as-tab').forEach(function (x) {
       x.classList.toggle('active', x.getAttribute('data-as-tab') === tab);
     });
-    ['overview', 'acquirer', 'target', 'compat'].forEach(function (p) {
+    ['overview', 'acquirer', 'target', 'compat', 'leader'].forEach(function (p) {
       var el = document.getElementById('as-pane-' + p);
       if (el) el.style.display = p === tab ? 'block' : 'none';
     });
@@ -369,6 +492,7 @@
     renderScorecard('acquirer-org');
     renderScorecard('target-org');
     renderCompatibility();
+    renderScorecard('integration-leader');
   }
 
   document.querySelectorAll('.as-tab').forEach(function (b) {

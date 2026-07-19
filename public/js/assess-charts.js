@@ -60,6 +60,18 @@
       if (anchor === 'start') lx = Math.min(lx, size - labelPad - 22);
       var lines = String(a.label || '').split(' & ');
       if (lines.length > 1) lines = lines.map(function (ln, li) { return li < lines.length - 1 ? ln + ' &' : ln; });
+      // Wrap any remaining long line at the space nearest its midpoint so labels
+      // stay inside the viewBox on every axis.
+      lines = lines.reduce(function (acc, ln) {
+        if (ln.length <= 16 || ln.indexOf(' ') === -1) { acc.push(ln); return acc; }
+        var mid = Math.floor(ln.length / 2), best = -1;
+        for (var ci = 0; ci < ln.length; ci++) {
+          if (ln[ci] === ' ' && (best === -1 || Math.abs(ci - mid) < Math.abs(best - mid))) best = ci;
+        }
+        if (best === -1) { acc.push(ln); return acc; }
+        acc.push(ln.slice(0, best)); acc.push(ln.slice(best + 1));
+        return acc;
+      }, []);
       var tspans = lines.map(function (ln, li) {
         return '<tspan x="' + lx.toFixed(1) + '" dy="' + (li === 0 ? 0 : 11) + '">' + esc(ln) + '</tspan>';
       }).join('');

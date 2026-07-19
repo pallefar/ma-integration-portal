@@ -604,6 +604,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (scores.value < 3.0) checklistItems.push({ id: 'value-milestone', label: `Confirm the first joint synergy milestone toward ${synergyObjective}.` });
     checklistItems.push({ id: 'hr-systems', label: 'Establish clear transition pathways for local HR systems to TE ERP.' });
     checklistItems.push({ id: 'levels-map', label: 'Publish the job-level translation map so employees see their TE level.' });
+    // Stretch tasks pushed here from the IL readiness development plan (assessments.html)
+    try {
+      (JSON.parse(localStorage.getItem('ilStretchTasks') || '[]') || []).forEach(t => {
+        if (t && t.id && t.label) checklistItems.push({ id: t.id, label: '🎯 ' + t.label });
+      });
+    } catch (e) { /* malformed storage — ignore */ }
 
     const savedChecks = readCoachingChecklist();
     coachingHtml += `
