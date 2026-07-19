@@ -33,10 +33,13 @@
 
   function applyI18n() { if (window.applyPortalI18n) window.applyPortalI18n(); }
 
-  // Anonymous workforce sentiment from pulses: mean rating (1–5 → 0–100) with an
-  // n≥5 anonymity floor — shown alongside, never blended into, assessed scores.
+  // Anonymous change-readiness sentiment: ONLY type:'change-readiness' pulses
+  // count — other pulse types (scripted demo, 30-day onboarding) must neither
+  // move the score nor satisfy the n≥5 anonymity floor.
   function sentimentStats() {
-    var pulses = (state.pulses || []).filter(function (p) { return typeof p.rating === 'number' && p.rating > 0; });
+    var pulses = (state.pulses || []).filter(function (p) {
+      return p.type === 'change-readiness' && typeof p.rating === 'number' && p.rating > 0;
+    });
     if (!pulses.length) return { n: 0, score: null };
     var mean = pulses.reduce(function (a, p) { return a + p.rating; }, 0) / pulses.length;
     return { n: pulses.length, score: Math.round(((mean - 1) / 4) * 100) };
@@ -230,7 +233,17 @@
       + '</div>'
       + '</div>';
     document.body.appendChild(div);
+    document.body.classList.add('as-printing');
     applyI18n();
+    // Remove the readout after printing so a later plain Cmd+P prints the live
+    // page, never a stale snapshot.
+    var cleanup = function () {
+      document.body.classList.remove('as-printing');
+      var n = document.getElementById('as-readout');
+      if (n) n.remove();
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
     setTimeout(function () { window.print(); }, 120);
   }
 
@@ -244,7 +257,8 @@
     var prev = previousFor(tpl.id);
 
     var scoredDims = (tpl.dimensions || []).filter(function (d) { return (latest.dimensionScores || {})[d.id] != null; });
-    var axes = scoredDims.map(function (d) { return { id: d.id, label: d.label }; });
+    // Radar text is raw SVG (no data-i18n) — pass already-translated labels.
+    var axes = scoredDims.map(function (d) { return { id: d.id, label: t(d.labelKey, d.label) }; });
     var series = [{ label: tpl.title, color: subject === 'acquirer-org' ? '#167987' : '#E98300', values: latest.dimensionScores || {} }];
     var bars = (tpl.dimensions || []).map(function (d) {
       var sc = (latest.dimensionScores || {})[d.id];
@@ -479,9 +493,12 @@
         + '</div>';
     }).join('');
 
+    // IDs are suffixed per pane — two wizards can coexist in hidden panes, and
+    // unsuffixed duplicates would make lookups hit the wrong (hidden) one.
+    var tab = SUBJECT_TABS[subject];
     var managerHead = wz.rater === 'manager'
       ? '<div style="margin-bottom:1.1rem;"><span class="as-chip as-chip-amber" data-i18n="assess.il_manager">Manager view</span>'
-        + '<input type="text" id="as-wz-name" value="' + esc(wz.name) + '" data-i18n-ph="assess.manager_name_ph" placeholder="Manager name" style="margin-left:.6rem;padding:.4rem .7rem;border:1.5px solid var(--border-color);border-radius:8px;font-family:inherit;font-size:.85rem;"></div>'
+        + '<input type="text" id="as-wz-name-' + tab + '" class="as-wz-name" value="' + esc(wz.name) + '" data-i18n-ph="assess.manager_name_ph" placeholder="Manager name" style="margin-left:.6rem;padding:.4rem .7rem;border:1.5px solid var(--border-color);border-radius:8px;font-family:inherit;font-size:.85rem;"></div>'
       : '';
 
     el.innerHTML = '<div class="as-card as-wizard">'
@@ -492,10 +509,10 @@
       + '<div class="as-wz-bar"><div class="as-wz-fill" style="width:' + pct + '%"></div></div>'
       + managerHead
       + qHtml
-      + '<div class="as-err" id="as-wz-err" data-i18n="assess.answer_all">Please answer every question in this section to continue.</div>'
+      + '<div class="as-err as-wz-err" id="as-wz-err-' + tab + '" data-i18n="assess.answer_all">Please answer every question in this section to continue.</div>'
       + '<div class="as-wz-nav">'
-      + '<button class="btn btn-secondary" id="as-wz-back"' + (wz.step === 0 ? ' disabled' : '') + ' data-i18n="assess.btn_back">Back</button>'
-      + '<button class="btn btn-primary" id="as-wz-next" data-i18n="' + (wz.step === dims.length - 1 ? 'assess.btn_submit' : 'assess.btn_next') + '">' + (wz.step === dims.length - 1 ? 'Submit & score' : 'Next') + '</button>'
+      + '<button class="btn btn-secondary as-wz-back" id="as-wz-back-' + tab + '"' + (wz.step === 0 ? ' disabled' : '') + ' data-i18n="assess.btn_back">Back</button>'
+      + '<button class="btn btn-primary as-wz-next" id="as-wz-next-' + tab + '" data-i18n="' + (wz.step === dims.length - 1 ? 'assess.btn_submit' : 'assess.btn_next') + '">' + (wz.step === dims.length - 1 ? 'Submit & score' : 'Next') + '</button>'
       + '</div></div>';
 
     el.querySelectorAll('.as-lk, .as-opt').forEach(function (b) {
@@ -505,7 +522,7 @@
         var container = el.querySelector('.as-q[data-q="' + q + '"]');
         container.querySelectorAll('.as-lk, .as-opt').forEach(function (x) { x.classList.remove('sel'); });
         b.classList.add('sel');
-        document.getElementById('as-wz-err').style.display = 'none';
+        el.querySelector('.as-wz-err').style.display = 'none';
       });
     });
     el.querySelectorAll('.as-cb').forEach(function (b) {
@@ -516,15 +533,15 @@
         b.querySelector('.box').textContent = wz.answers[q] ? '✓' : '';
       });
     });
-    var nameInput = el.querySelector('#as-wz-name');
+    var nameInput = el.querySelector('.as-wz-name');
     if (nameInput) nameInput.addEventListener('input', function () { wz.name = nameInput.value; });
-    el.querySelector('#as-wz-back').addEventListener('click', function () {
+    el.querySelector('.as-wz-back').addEventListener('click', function () {
       if (wz.step > 0) { wz.step--; renderWizardStep(subject); }
     });
-    el.querySelector('#as-wz-next').addEventListener('click', function () {
+    el.querySelector('.as-wz-next').addEventListener('click', function () {
       // Evidence checkboxes are optional; every rated question must be answered.
       var missing = (dim.questions || []).some(function (q) { return q.type !== 'checkbox' && wz.answers[q.id] === undefined; });
-      if (missing) { document.getElementById('as-wz-err').style.display = 'block'; return; }
+      if (missing) { el.querySelector('.as-wz-err').style.display = 'block'; return; }
       if (wz.step < dims.length - 1) { wz.step++; renderWizardStep(subject); }
       else submitWizard(subject);
     });
@@ -534,7 +551,10 @@
 
   function submitWizard(subject) {
     var wz = state.wizard[subject];
-    var btn = document.getElementById('as-wz-next');
+    if (!wz || wz.submitting) return; // guard against double-click double-POST
+    wz.submitting = true;
+    var pane = document.getElementById('as-pane-' + SUBJECT_TABS[subject]);
+    var btn = pane ? pane.querySelector('.as-wz-next') : null;
     if (btn) btn.disabled = true;
     fetch('/api/assessment-instances', {
       method: 'POST',
@@ -556,6 +576,7 @@
       renderOverview();
     }).catch(function (e) {
       console.error('Assessment submit failed:', e);
+      if (state.wizard[subject]) state.wizard[subject].submitting = false;
       if (btn) btn.disabled = false;
     });
   }
@@ -572,7 +593,7 @@
       return;
     }
     var ACQ_COL = '#167987', TGT_COL = '#E98300';
-    var axes = compat.dims.map(function (d) { return { id: d.mirrorId, label: d.label }; });
+    var axes = compat.dims.map(function (d) { return { id: d.mirrorId, label: t(d.labelKey, d.label) }; });
     var acqVals = {}, tgtVals = {};
     compat.dims.forEach(function (d) { acqVals[d.mirrorId] = d.acquirer; tgtVals[d.mirrorId] = d.target; });
     var acqLbl = t('assess.kpi_acquirer', 'Acquirer (TE)');
@@ -622,10 +643,13 @@
 
   function renderAll() {
     renderOverview();
-    renderScorecard('acquirer-org');
-    renderScorecard('target-org');
+    // An in-progress wizard survives re-renders (e.g. language switch) — its
+    // answers live in state.wizard, so re-draw the current step, not the card.
+    ['acquirer-org', 'target-org', 'integration-leader'].forEach(function (s) {
+      if (state.wizard[s]) renderWizardStep(s);
+      else renderScorecard(s);
+    });
     renderCompatibility();
-    renderScorecard('integration-leader');
   }
 
   document.querySelectorAll('.as-tab').forEach(function (b) {

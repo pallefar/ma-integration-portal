@@ -132,22 +132,33 @@ function hashPassword(password, saltHex) {
   return crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 32).toString('hex');
 }
 
+// Write/admin gate. Three postures:
+// - Demo (no PORTAL_AUTH, no ADMIN_TOKEN): everything open.
+// - Token-only (ADMIN_TOKEN set): writes + /api/admin/* need the X-Admin-Token.
+// - Login (PORTAL_AUTH=1): /api/admin/* needs an ADMIN-role session (or the
+//   token); ordinary writes need any authenticated session. Login/logout are
+//   always reachable — a session cannot exist before login succeeds.
 app.use('/api', (req, res, next) => {
   const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
   const isAdminPath = req.path.startsWith('/admin'); // /api/admin/* (download-zip, migrate-db)
-  if (!isWrite && !isAdminPath) return next();        // public read-only GETs stay open (visitor demo)
-  if (!ADMIN_TOKEN) return next();                    // dev/demo: no token configured -> open
-  // With real login enabled, an authenticated admin session authorizes writes
-  // without re-supplying the shared token.
-  if (PORTAL_AUTH) {
-    const sess = readSession(req);
-    if (sess && sess.role === 'admin') return next();
-  }
+  if (!isWrite && !isAdminPath) return next();        // public read-only GETs handled per-endpoint
+  if (req.path === '/auth/login' || req.path === '/auth/logout') return next();
   // Header only — never accept the secret via query string (it would leak into
   // access logs, proxies and browser history). Constant-time compare over fixed
   // -length SHA-256 digests so the token can't be guessed via a timing side channel.
   const supplied = req.get('X-Admin-Token') || '';
-  if (supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return next();
+  const tokenOk = !!(ADMIN_TOKEN && supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN));
+  if (PORTAL_AUTH) {
+    const sess = readSession(req);
+    if (isAdminPath) {
+      if (tokenOk || (sess && sess.role === 'admin')) return next();
+      return res.status(403).json({ error: 'Administrator access required.' });
+    }
+    if (sess || tokenOk) return next();
+    return res.status(401).json({ error: 'Login required.', authRequired: true });
+  }
+  if (!ADMIN_TOKEN) return next();                    // dev/demo: no token configured -> open
+  if (tokenOk) return next();
   return res.status(401).json({ error: 'Admin authentication required. Provide a valid X-Admin-Token.' });
 });
 
@@ -162,14 +173,44 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// True when the deployment is locked down at all (token or login mode) — used
+// by read endpoints that must not hand sensitive records to non-admins.
+function lockedDown() { return !!ADMIN_TOKEN || PORTAL_AUTH; }
+function isAdminRequest(req) {
+  const supplied = req.get('X-Admin-Token') || '';
+  if (ADMIN_TOKEN && supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return true;
+  if (PORTAL_AUTH) {
+    const sess = readSession(req);
+    if (sess && sess.role === 'admin') return true;
+  }
+  return false;
+}
+
+// Tiny in-memory login throttle: scrypt is deliberately expensive, so cap
+// attempts per source before doing any hashing work.
+const _loginAttempts = new Map();
+function loginThrottled(ip) {
+  const now = Date.now();
+  const slot = _loginAttempts.get(ip);
+  if (!slot || now > slot.reset) { _loginAttempts.set(ip, { count: 1, reset: now + 60000 }); return false; }
+  slot.count++;
+  return slot.count > 8;
+}
+const DUMMY_SALT = crypto.randomBytes(16).toString('hex');
+
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body || {};
   if (!PORTAL_AUTH) return res.status(400).json({ error: 'Login is disabled (PORTAL_AUTH is not set).' });
+  if (loginThrottled(req.ip || req.socket.remoteAddress || '?')) {
+    return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
+  }
   const db = readDb();
   const user = (db.users || []).find(u => u.username === String(username || '').trim().toLowerCase());
-  const ok = user && user.salt && user.hash && timingSafeEqualStr(hashPassword(password || '', user.salt), user.hash);
+  // Always run scrypt (dummy salt for unknown users) so response time never
+  // reveals whether the username exists.
+  const computed = hashPassword(password || '', user && user.salt ? user.salt : DUMMY_SALT);
+  const ok = !!(user && user.hash && timingSafeEqualStr(computed, user.hash));
   if (!ok) {
-    // flat 400ms on failure blunts both timing probes and brute force
     return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
   }
   const cookie = ['ma_session=' + makeSessionToken(user), 'Path=/', 'HttpOnly', 'SameSite=Lax',
@@ -1859,14 +1900,11 @@ app.post('/api/assessment-instances', (req, res) => {
 });
 
 // GET instances (lane-aware, time-travel-aware, answers stripped).
-// When ADMIN_TOKEN is configured (production posture) this list is token-only:
-// assessment records are the most sensitive data in the app.
+// In any locked-down posture (ADMIN_TOKEN or PORTAL_AUTH) this list is
+// admin-only: assessment records are the most sensitive data in the app.
 app.get('/api/assessment-instances', (req, res) => {
-  if (ADMIN_TOKEN) {
-    const supplied = req.get('X-Admin-Token') || '';
-    if (!(supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN))) {
-      return res.status(401).json({ error: 'Admin authentication required to list assessment records.' });
-    }
+  if (lockedDown() && !isAdminRequest(req)) {
+    return res.status(401).json({ error: 'Admin authentication required to list assessment records.' });
   }
   const db = readDb();
   let list = visibleAssessInstances(db);
@@ -1906,11 +1944,13 @@ app.get('/api/assessment-status', (req, res) => {
   const required = [];
   const gatesSummary = {};
   const bySubject = {};
-  // With ADMIN_TOKEN set, the open status rollup carries scores/bands only —
-  // no respondent names (leader ratings are personal data).
+  // In any locked-down posture the status rollup carries scores/bands only —
+  // no respondent names (leader ratings are personal data) — unless the
+  // requester is an admin.
+  const stripNames = lockedDown() && !isAdminRequest(req);
   const statusInstance = (inst) => {
     const pub = publicAssessInstance(inst);
-    if (pub && ADMIN_TOKEN) delete pub.respondentName;
+    if (pub && stripNames) delete pub.respondentName;
     return pub;
   };
   templates.forEach(t => {
@@ -2008,14 +2048,24 @@ app.post('/api/integration-tasks', (req, res) => {
   if (b.id) {
     const task = lane.find(t => t.id === b.id);
     if (!task) return res.status(404).json({ error: 'Task not found.' });
+    // Validate EVERYTHING before touching the object — readDb() hands back the
+    // shared cache, so a mutation followed by a 400 would silently stick.
+    if (b.status !== undefined && !TASK_STATUSES.includes(b.status)) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
+    if (b.phase !== undefined && !TASK_PHASES.includes(b.phase)) {
+      return res.status(400).json({ error: 'Invalid phase.' });
+    }
+    if (b.title !== undefined && !String(b.title).trim()) {
+      return res.status(400).json({ error: 'Task title cannot be empty.' });
+    }
     ['title', 'titleKey', 'workstreamId', 'phase', 'owner', 'due'].forEach(k => {
       if (b[k] !== undefined) task[k] = String(b[k] || '').slice(0, 300);
     });
     if (b.status !== undefined) {
-      if (!TASK_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
       task.status = b.status;
-      task.completedAt = b.status === 'done' ? (task.completedAt || new Date().toISOString()) : undefined;
-      if (task.completedAt === undefined) delete task.completedAt;
+      if (b.status === 'done') task.completedAt = task.completedAt || new Date().toISOString();
+      else delete task.completedAt;
     }
     writeDb(db);
     return res.json({ success: true, task });
@@ -2149,14 +2199,18 @@ app.post('/api/synergies', (req, res) => {
   if (b.id) {
     const item = lane.find(s => s.id === b.id);
     if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+    // Validate before mutating the shared readDb() cache (see task update).
+    if (b.status !== undefined && !SYN_STATUSES.includes(b.status)) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
+    if (b.title !== undefined && !String(b.title).trim()) {
+      return res.status(400).json({ error: 'Initiative title cannot be empty.' });
+    }
     ['title', 'owner', 'workstreamId', 'notes'].forEach(k => { if (b[k] !== undefined) item[k] = String(b[k] || '').slice(0, 300); });
     if (b.category !== undefined) item.category = b.category === 'cost' ? 'cost' : 'revenue';
     if (b.targetM !== undefined) item.targetM = num(b.targetM);
     if (b.realizedM !== undefined) item.realizedM = num(b.realizedM);
-    if (b.status !== undefined) {
-      if (!SYN_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
-      item.status = b.status;
-    }
+    if (b.status !== undefined) item.status = b.status;
     writeDb(db);
     return res.json({ success: true, initiative: item });
   }
@@ -2214,14 +2268,18 @@ app.post('/api/raid', (req, res) => {
   if (b.id) {
     const item = lane.find(r => r.id === b.id);
     if (!item) return res.status(404).json({ error: 'Entry not found.' });
+    // Validate before mutating the shared readDb() cache (see task update).
+    if (b.status !== undefined && !RAID_STATUSES.includes(b.status)) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
+    if (b.title !== undefined && !String(b.title).trim()) {
+      return res.status(400).json({ error: 'Entry title cannot be empty.' });
+    }
     ['title', 'owner', 'workstreamId', 'notes'].forEach(k => { if (b[k] !== undefined) item[k] = String(b[k] || '').slice(0, 300); });
     if (b.type !== undefined && RAID_TYPES.includes(b.type)) item.type = b.type;
     if (b.severity !== undefined && RAID_LEVELS.includes(b.severity)) item.severity = b.severity;
     if (b.probability !== undefined && RAID_LEVELS.includes(b.probability)) item.probability = b.probability;
-    if (b.status !== undefined) {
-      if (!RAID_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
-      item.status = b.status;
-    }
+    if (b.status !== undefined) item.status = b.status;
     writeDb(db);
     return res.json({ success: true, entry: item });
   }
@@ -2248,6 +2306,17 @@ app.post('/api/raid', (req, res) => {
 // In-app notifications — computed on demand from live data (no stored
 // notification records to drift out of sync).
 // =====================================================================
+// The demo runs on its own clock: "now" is day N of the seeded 100-day arc,
+// not the wall clock — otherwise seeded due dates go permanently overdue and
+// ignore time travel. Custom projects use the real date.
+const DEMO_ARC_START_MS = Date.parse('2026-05-01T09:00:00.000Z');
+function portalNowMs(db) {
+  const isCustom = db.settings && db.settings.demoMode === false;
+  if (isCustom) return Date.now();
+  const day = (db.settings && db.settings.timeTravelDay) || 30;
+  return DEMO_ARC_START_MS + (day - 1) * 86400000;
+}
+
 app.get('/api/notifications', (req, res) => {
   const db = readDb();
   const items = [];
@@ -2257,14 +2326,15 @@ app.get('/api/notifications', (req, res) => {
       items.push({ id: 'assess_' + t.id, type: 'assessment_pending', titleKey: t.titleKey || '', title: t.title || '', href: '/assessments.html', severity: 'high' });
     }
   });
+  const nowMs = portalNowMs(db);
   const ilTpl = (db.assessmentTemplates || []).find(t => t.subject === 'integration-leader' && t.published !== false);
   if (ilTpl) {
     const latest = latestAssessInstanceFor(visible, ilTpl.id, 'self');
-    if (latest && (Date.now() - Date.parse(latest.timestamp)) > 90 * 86400000) {
+    if (latest && (nowMs - Date.parse(latest.timestamp)) > 90 * 86400000) {
       items.push({ id: 'reassess_il', type: 'reassess_il', href: '/assessments.html', severity: 'medium' });
     }
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date(nowMs).toISOString().slice(0, 10);
   const tasks = taskLane(db);
   const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
   if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });

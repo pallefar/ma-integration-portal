@@ -406,6 +406,46 @@
       "comment": "",
       "timestamp": "2026-07-19T19:27:48.252Z",
       "type": "change-readiness"
+    },
+    {
+      "id": "pulse_seed_cr1",
+      "employeeName": "Anonymous",
+      "rating": 4,
+      "comment": "",
+      "timestamp": "2026-05-25T10:00:00.000Z",
+      "type": "change-readiness"
+    },
+    {
+      "id": "pulse_seed_cr2",
+      "employeeName": "Anonymous",
+      "rating": 3,
+      "comment": "",
+      "timestamp": "2026-05-26T10:00:00.000Z",
+      "type": "change-readiness"
+    },
+    {
+      "id": "pulse_seed_cr3",
+      "employeeName": "Anonymous",
+      "rating": 4,
+      "comment": "",
+      "timestamp": "2026-05-27T10:00:00.000Z",
+      "type": "change-readiness"
+    },
+    {
+      "id": "pulse_seed_cr4",
+      "employeeName": "Anonymous",
+      "rating": 5,
+      "comment": "",
+      "timestamp": "2026-05-28T10:00:00.000Z",
+      "type": "change-readiness"
+    },
+    {
+      "id": "pulse_seed_cr5",
+      "employeeName": "Anonymous",
+      "rating": 3,
+      "comment": "",
+      "timestamp": "2026-05-29T10:00:00.000Z",
+      "type": "change-readiness"
     }
   ],
   "communications": [

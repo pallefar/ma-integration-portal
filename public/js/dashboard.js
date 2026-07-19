@@ -1000,6 +1000,9 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('/api/pulses')
       .then(res => res.json())
       .then(pulses => {
+        // Anonymous change-readiness pulses feed the Assessment Center only —
+        // they'd otherwise pollute this onboarding feed with blank entries.
+        pulses = (pulses || []).filter(p => p.type !== 'change-readiness');
         commentsFeed.innerHTML = '';
         if (!pulses || pulses.length === 0) {
           commentsFeed.innerHTML = '<p style="text-align: center; color: var(--text-dim); padding: 2rem;">No employee feedback pulse surveys recorded yet.</p>';
@@ -1263,7 +1266,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ])
     .then(([settings, pulses]) => {
       const day = settings.timeTravelDay || 8;
-      
+
+      // Change-readiness pulses belong to the Assessment Center aggregate only.
+      pulses = (pulses || []).filter(p => p.type !== 'change-readiness');
       let avgSentiment = 3.8;
       if (pulses && pulses.length > 0) {
         const sum = pulses.reduce((s, p) => s + p.rating, 0);
