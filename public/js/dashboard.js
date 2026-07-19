@@ -2335,3 +2335,59 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHrbpCommunications();
 });
 
+
+// ===== Readiness Assessment strip + phase gate (Assessment Suite v2) =====
+// Reads the single /api/assessment-status rollup: renders a readiness strip on
+// the KPI tab and locks the 100-Day Roadmap tab while required assessments for
+// gate `dashboard.phase.plan` are missing. All logic stays in this block.
+document.addEventListener('DOMContentLoaded', () => {
+  const bandCol = (s) => s >= 80 ? '#3f7a37' : s >= 60 ? '#C77700' : '#C0392B';
+  fetch('/api/assessment-status').then(r => r.json()).then(st => {
+    if (!st || !st.success) return;
+    const by = st.bySubject || {};
+    const compat = (st.compatibility || [])[0];
+
+    const kpiTab = document.getElementById('tab-integration-gauges');
+    if (kpiTab) {
+      const mk = (labelKey, labelEn, entry) => {
+        const done = entry && entry.satisfied && entry.latestInstance;
+        const score = done ? entry.latestInstance.overallScore : null;
+        return `<div style="display:flex;align-items:center;gap:.6rem;">
+          <div style="width:46px;height:46px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;color:#fff;background:${done ? bandCol(score) : '#9aa4ab'};">${done ? score : '🔒'}</div>
+          <div><div style="font-size:.78rem;font-weight:800;color:var(--te-dark-teal);" data-i18n="${labelKey}">${labelEn}</div>
+          <div style="font-size:.68rem;color:var(--text-dim);"${done ? '' : ' data-i18n="assess.kpi_pending"'}>${done ? '' : 'Not completed'}</div></div></div>`;
+      };
+      const compatCell = compat && compat.complete
+        ? `<div style="display:flex;align-items:center;gap:.6rem;">
+            <div style="width:46px;height:46px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;color:#fff;background:${bandCol(compat.alignment)};box-shadow:0 0 0 4px rgba(233,131,0,.14);">${compat.alignment}</div>
+            <div><div style="font-size:.78rem;font-weight:800;color:var(--te-dark-teal);" data-i18n="assess.kpi_alignment">Alignment</div>
+            <div style="font-size:.68rem;color:var(--text-dim);"></div></div></div>`
+        : '';
+      const strip = document.createElement('div');
+      strip.className = 'card';
+      strip.style.cssText = 'grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1.25rem;flex-wrap:wrap;padding:0.9rem 1.25rem;';
+      strip.innerHTML = `<div style="display:flex;align-items:center;gap:1.75rem;flex-wrap:wrap;">
+          <span style="font-weight:800;color:var(--te-dark-teal);font-size:.9rem;" data-i18n="assess.kpi_title">Readiness assessments</span>
+          ${mk('assess.kpi_acquirer', 'Acquirer (TE)', by['acquirer-org'])}
+          ${mk('assess.kpi_target', 'Target', by['target-org'])}
+          ${compatCell}
+        </div>
+        <a href="/assessments.html" class="btn btn-secondary" style="font-size:.78rem;padding:.45rem .9rem;flex:none;" data-i18n="assess.gate_cta">Open Assessment Center</a>`;
+      kpiTab.insertBefore(strip, kpiTab.children[1] || null);
+    }
+
+    const gate = (st.gatesSummary || {})['dashboard.phase.plan'];
+    const roadmap = document.getElementById('tab-ai-plan');
+    if (roadmap && gate && !gate.satisfied) {
+      const ov = document.createElement('div');
+      ov.className = 'assess-gate-overlay';
+      ov.style.cssText = 'position:absolute;inset:0;z-index:20;background:rgba(255,255,255,.72);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:4rem 1.5rem 0;gap:.8rem;border-radius:inherit;text-align:center;';
+      ov.innerHTML = `<div style="font-size:2.2rem;">🔒</div>
+        <div style="font-weight:800;color:var(--te-dark-teal);max-width:440px;line-height:1.5;" data-i18n="assess.gate_locked">Locked — complete the required readiness assessments first.</div>
+        <a href="/assessments.html" class="btn btn-primary" style="font-size:.85rem;" data-i18n="assess.gate_cta">Open Assessment Center</a>`;
+      roadmap.appendChild(ov);
+    }
+
+    if (window.applyPortalI18n) window.applyPortalI18n();
+  }).catch(e => console.error('Assessment readiness strip failed:', e));
+});

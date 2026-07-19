@@ -61,6 +61,19 @@
     .as-radar-legend{ display:flex; justify-content:center; gap:1.25rem; margin-top:.4rem; flex-wrap:wrap; }
     .as-radar-key{ font-size:.78rem; font-weight:700; color:var(--text-secondary); display:flex; align-items:center; gap:.4rem; }
     .as-radar-swatch{ width:12px; height:12px; border-radius:3px; display:inline-block; }
+    /* compatibility */
+    .as-compat-rings{ display:flex; align-items:center; justify-content:center; gap:2.25rem; flex-wrap:wrap; margin-bottom:.4rem; }
+    .as-compat-mid .as-score-ring{ box-shadow:0 0 0 5px rgba(233,131,0,.15); }
+    .as-pair-row{ margin-bottom:1rem; }
+    .as-pair-head{ display:flex; justify-content:space-between; align-items:center; gap:.75rem; margin-bottom:.35rem; }
+    .as-pair-name{ font-size:.85rem; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:.45rem; }
+    .as-pair-gap{ font-size:.72rem; font-weight:800; }
+    .as-pair-bars{ display:flex; flex-direction:column; gap:.28rem; }
+    .as-pair-track{ height:8px; border-radius:4px; background:var(--bg-subtle,#eef2f2); overflow:hidden; position:relative; }
+    .as-pair-fill{ height:100%; border-radius:4px; }
+    .as-pair-tag{ font-size:.62rem; font-weight:800; color:var(--text-dim); width:64px; flex:none; text-transform:uppercase; letter-spacing:.04em; }
+    .as-pair-line{ display:flex; align-items:center; gap:.5rem; }
+    .as-pair-val{ font-size:.72rem; font-weight:800; width:26px; text-align:right; flex:none; }
     /* remediation */
     .as-remed{ border-left:4px solid var(--te-orange); background:var(--bg-subtle,#f7f9f9); border-radius:8px; padding:.8rem 1rem; margin-bottom:.7rem; }
     .as-remed .d{ font-size:.74rem; font-weight:800; color:#C77700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.25rem; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
@@ -114,15 +127,17 @@
           <button class="as-tab active" data-as-tab="overview" data-i18n="assess.tab_overview">Overview</button>
           <button class="as-tab" data-as-tab="acquirer" data-i18n="assess.tab_acquirer">Acquirer Readiness</button>
           <button class="as-tab" data-as-tab="target" data-i18n="assess.tab_target">Target Readiness</button>
+          <button class="as-tab" data-as-tab="compat" data-i18n="assess.tab_compat">Compatibility</button>
         </div>
         <div id="as-pane-overview" class="as-pane"></div>
         <div id="as-pane-acquirer" class="as-pane" style="display:none;"></div>
         <div id="as-pane-target" class="as-pane" style="display:none;"></div>
+        <div id="as-pane-compat" class="as-pane" style="display:none;"></div>
       </div>
     </main>
   </div>
 
   <script src="/js/assess-charts.js?v=1784500002"></script>
-  <script src="/js/assessments.js?v=1784500002"></script>
+  <script src="/js/assessments.js?v=1784500003"></script>
 </body>
 </html>

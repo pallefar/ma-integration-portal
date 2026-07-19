@@ -67,11 +67,21 @@
       return Promise.all(state.templates.map(function (tpl) {
         return fetch('/api/assessment-instances?templateId=' + encodeURIComponent(tpl.id) + '&rater=self')
           .then(function (r) { return r.json(); })
+          .catch(function () { return []; })
           .then(function (list) {
+            if (!Array.isArray(list)) list = []; // e.g. 401 when ADMIN_TOKEN gates the record list
             list.sort(function (a, b) {
               var d = (a.demoDay || 0) - (b.demoDay || 0);
               return d !== 0 ? d : String(a.timestamp).localeCompare(String(b.timestamp));
             });
+            // Record list unavailable (locked-down deployment): fall back to the
+            // open status rollup so the scorecard still renders (no trend).
+            if (!list.length && state.status && state.status.bySubject) {
+              var entry = state.status.bySubject[tpl.subject];
+              if (entry && entry.latestInstance && entry.latestInstance.templateId === tpl.id) {
+                list = [entry.latestInstance];
+              }
+            }
             state.instancesByTpl[tpl.id] = list;
           });
       }));
@@ -294,12 +304,61 @@
     });
   }
 
+  // ---------------------------------------------------------------- compatibility
+  function renderCompatibility() {
+    var el = document.getElementById('as-pane-compat');
+    if (!el) return;
+    var compat = ((state.status || {}).compatibility || [])[0];
+    if (!compat) { el.innerHTML = ''; return; }
+    if (!compat.complete) {
+      el.innerHTML = '<div class="as-card" style="max-width:760px;"><p style="margin:0;color:var(--text-secondary);line-height:1.6;" data-i18n="assess.compat_incomplete">Complete both the Acquirer and Target readiness assessments to unlock the compatibility view.</p></div>';
+      applyI18n();
+      return;
+    }
+    var ACQ_COL = '#167987', TGT_COL = '#E98300';
+    var axes = compat.dims.map(function (d) { return { id: d.mirrorId, label: d.label }; });
+    var acqVals = {}, tgtVals = {};
+    compat.dims.forEach(function (d) { acqVals[d.mirrorId] = d.acquirer; tgtVals[d.mirrorId] = d.target; });
+    var acqLbl = t('assess.kpi_acquirer', 'Acquirer (TE)');
+    var tgtLbl = t('assess.kpi_target', 'Target');
+
+    var pairRows = compat.dims.map(function (d) {
+      var isTop = (compat.topGaps || []).indexOf(d.mirrorId) > -1;
+      return '<div class="as-pair-row"><div class="as-pair-head">'
+        + '<span class="as-pair-name">' + (d.icon || '') + ' <span data-i18n="' + esc(d.labelKey || '') + '">' + esc(d.label) + '</span></span>'
+        + '<span class="as-pair-gap" style="color:' + (isTop ? '#C77700' : 'var(--text-dim)') + '">Δ ' + d.gap
+        + (isTop ? ' · <span data-i18n="assess.focus_area">Focus area</span>' : '') + '</span></div>'
+        + '<div class="as-pair-bars">'
+        + '<div class="as-pair-line"><span class="as-pair-tag">TE</span><div class="as-pair-track" style="flex:1;"><div class="as-pair-fill" style="width:' + d.acquirer + '%;background:' + ACQ_COL + '"></div></div><span class="as-pair-val" style="color:' + ACQ_COL + '">' + d.acquirer + '</span></div>'
+        + '<div class="as-pair-line"><span class="as-pair-tag" data-i18n="assess.kpi_target">Target</span><div class="as-pair-track" style="flex:1;"><div class="as-pair-fill" style="width:' + d.target + '%;background:' + TGT_COL + '"></div></div><span class="as-pair-val" style="color:' + TGT_COL + '">' + d.target + '</span></div>'
+        + '</div></div>';
+    }).join('');
+
+    el.innerHTML = '<div class="as-card">'
+      + '<div class="as-compat-rings">'
+      + '<div class="as-score"><div class="as-score-ring" style="background:' + ACQ_COL + ';width:64px;height:64px;font-size:20px;">' + compat.acquirer.score + '</div><div class="as-score-lbl" data-i18n="assess.kpi_acquirer">Acquirer (TE)</div></div>'
+      + '<div class="as-score as-compat-mid"><div class="as-score-ring" style="background:' + C.bandColor(compat.fitBand) + ';width:92px;height:92px;font-size:29px;">' + compat.alignment + '</div><div class="as-score-lbl" data-i18n="assess.compat_alignment">Alignment</div>'
+      + '<span class="as-band-badge" style="background:' + C.bandColor(compat.fitBand) + ';font-size:.72rem;padding:.22rem .7rem;"><span data-i18n="assess.compat_fit">Integration fit</span>: ' + bandLabelSpan(compat.fitBand) + '</span></div>'
+      + '<div class="as-score"><div class="as-score-ring" style="background:' + TGT_COL + ';width:64px;height:64px;font-size:20px;">' + compat.target.score + '</div><div class="as-score-lbl" data-i18n="assess.kpi_target">Target</div></div>'
+      + '</div>'
+      + '<div class="as-sc-grid" style="margin-top:1.25rem;">'
+      + '<div>' + C.radarSVG(axes, [
+          { label: acqLbl, color: ACQ_COL, values: acqVals },
+          { label: tgtLbl, color: TGT_COL, values: tgtVals, fillOpacity: 0.10 }
+        ]) + '</div>'
+      + '<div><h3 data-i18n="assess.dim_breakdown">Dimension breakdown</h3>' + pairRows + '</div>'
+      + '</div>'
+      + '<p class="as-note" data-i18n="assess.compat_note">Alignment measures how closely the two readiness profiles match. The fit band is capped by the weaker company\'s readiness — high alignment between two unready organizations is not a strong fit.</p>'
+      + '</div>';
+    applyI18n();
+  }
+
   // ---------------------------------------------------------------- tabs
   function switchTab(tab) {
     document.querySelectorAll('.as-tab').forEach(function (x) {
       x.classList.toggle('active', x.getAttribute('data-as-tab') === tab);
     });
-    ['overview', 'acquirer', 'target'].forEach(function (p) {
+    ['overview', 'acquirer', 'target', 'compat'].forEach(function (p) {
       var el = document.getElementById('as-pane-' + p);
       if (el) el.style.display = p === tab ? 'block' : 'none';
     });
@@ -309,12 +368,18 @@
     renderOverview();
     renderScorecard('acquirer-org');
     renderScorecard('target-org');
+    renderCompatibility();
   }
 
   document.querySelectorAll('.as-tab').forEach(function (b) {
     b.addEventListener('click', function () { switchTab(b.getAttribute('data-as-tab')); });
   });
   document.addEventListener('portalLanguageChanged', function () { renderAll(); });
+
+  // Shared dictionary for strings rendered outside [data-i18n] (e.g. radar legend)
+  fetch('/api/i18n').then(function (r) { return r.json(); })
+    .then(function (d) { window.__assessDict = d; })
+    .catch(function () {});
 
   loadAll().then(renderAll).catch(function (e) { console.error('Assessment center load failed:', e); });
 })();

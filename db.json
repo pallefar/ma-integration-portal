@@ -44,13 +44,12 @@
   },
   "customSettings": {
     "demoMode": false,
-    "targetCompany": "Orion Robotics",
+    "targetCompany": "GateTest Corp",
     "sector": "",
     "size": "",
     "hq": "",
     "acquisitionDate": "",
-    "synergyObjective": "",
-    "timeTravelDay": 1
+    "synergyObjective": ""
   },
   "customEmployees": [],
   "customHrbps": [],
@@ -1622,7 +1621,18 @@
         "assess.q_ac_d12_o3": "Migration proceeds — consent can be collected afterwards.",
         "assess.remed_ac_governance": "Charter the IMO formally: named lead, executive sponsor, weekly cadence and a decision log.",
         "assess.remed_ac_culture": "Prepare managers to lead the change: talking points, listening sessions and visible sponsorship.",
-        "assess.remed_ac_systems": "Resource the Day-1 access plan and rehearse it end-to-end before Day-1."
+        "assess.remed_ac_systems": "Resource the Day-1 access plan and rehearse it end-to-end before Day-1.",
+        "assess.compat_alignment": "Alignment",
+        "assess.compat_fit": "Integration fit",
+        "assess.compat_incomplete": "Complete both the Acquirer and Target readiness assessments to unlock the compatibility view.",
+        "assess.compat_note": "Alignment measures how closely the two readiness profiles match. The fit band is capped by the weaker company's readiness — high alignment between two unready organizations is not a strong fit.",
+        "assess.gate_locked": "Locked — complete the required readiness assessments first.",
+        "assess.gate_cta": "Open Assessment Center",
+        "assess.kpi_title": "Readiness assessments",
+        "assess.kpi_acquirer": "Acquirer (TE)",
+        "assess.kpi_target": "Target",
+        "assess.kpi_alignment": "Alignment",
+        "assess.kpi_pending": "Not completed"
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2428,7 +2438,18 @@
         "assess.remed_tg_day1": "Das Day-1-Runbook durchgehen: Payroll-, Rechnungs- und Support-Kontinuität mit einer Go/No-Go-Probe bestätigen.",
         "assess.remed_ac_governance": "Das IMO formal aufsetzen: benannte Leitung, Executive Sponsor, wöchentliche Cadence und ein Entscheidungslog.",
         "assess.remed_ac_culture": "Führungskräfte auf den Wandel vorbereiten: Talking Points, Listening Sessions und sichtbares Sponsorship.",
-        "assess.remed_ac_systems": "Den Day-1-Zugriffsplan mit Ressourcen hinterlegen und vor Day-1 End-to-End proben."
+        "assess.remed_ac_systems": "Den Day-1-Zugriffsplan mit Ressourcen hinterlegen und vor Day-1 End-to-End proben.",
+        "assess.compat_alignment": "Übereinstimmung",
+        "assess.compat_fit": "Integrations-Fit",
+        "assess.compat_incomplete": "Schließen Sie sowohl das Käufer- als auch das Target-Readiness-Assessment ab, um die Kompatibilitätsansicht freizuschalten.",
+        "assess.compat_note": "Die Übereinstimmung misst, wie ähnlich die beiden Readiness-Profile sind. Das Fit-Band wird durch die Readiness des schwächeren Unternehmens begrenzt — hohe Übereinstimmung zweier nicht bereiter Organisationen ist kein guter Fit.",
+        "assess.gate_locked": "Gesperrt — schließen Sie zunächst die erforderlichen Readiness-Assessments ab.",
+        "assess.gate_cta": "Assessment-Center öffnen",
+        "assess.kpi_title": "Readiness-Assessments",
+        "assess.kpi_acquirer": "Käufer (TE)",
+        "assess.kpi_target": "Target",
+        "assess.kpi_alignment": "Übereinstimmung",
+        "assess.kpi_pending": "Nicht abgeschlossen"
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -3234,7 +3255,18 @@
         "assess.remed_tg_day1": "演练 Day-1 手册：通过 Go/No-Go 彩排确认薪资、开票和支持的连续性。",
         "assess.remed_ac_governance": "正式设立 IMO：指定负责人、高管发起人、每周例会和决策日志。",
         "assess.remed_ac_culture": "帮助管理者引领变革：沟通要点、倾听会和可见的高层支持。",
-        "assess.remed_ac_systems": "为 Day-1 访问方案配备资源，并在 Day-1 前端到端演练。"
+        "assess.remed_ac_systems": "为 Day-1 访问方案配备资源，并在 Day-1 前端到端演练。",
+        "assess.compat_alignment": "匹配度",
+        "assess.compat_fit": "整合契合度",
+        "assess.compat_incomplete": "完成收购方和目标公司两项就绪度评估后，即可解锁兼容性视图。",
+        "assess.compat_note": "匹配度衡量两个就绪度画像的接近程度。契合度等级以较弱一方的就绪度为上限——两个均未就绪的组织即使高度匹配，也不是好的契合。",
+        "assess.gate_locked": "已锁定——请先完成所需的就绪度评估。",
+        "assess.gate_cta": "打开评估中心",
+        "assess.kpi_title": "就绪度评估",
+        "assess.kpi_acquirer": "收购方（TE）",
+        "assess.kpi_target": "目标公司",
+        "assess.kpi_alignment": "匹配度",
+        "assess.kpi_pending": "未完成"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -4040,7 +4072,18 @@
         "assess.remed_tg_day1": "Projděte runbook pro Day-1: potvrďte kontinuitu mezd, fakturace a podpory zkouškou go/no-go.",
         "assess.remed_ac_governance": "Formálně ustavte IMO: jmenovaný vedoucí, exekutivní sponzor, týdenní kadence a log rozhodnutí.",
         "assess.remed_ac_culture": "Připravte manažery na vedení změny: talking points, listening sessions a viditelný sponzoring.",
-        "assess.remed_ac_systems": "Zajistěte zdroje pro plán přístupů na Day-1 a vyzkoušejte jej end-to-end před Day-1."
+        "assess.remed_ac_systems": "Zajistěte zdroje pro plán přístupů na Day-1 a vyzkoušejte jej end-to-end před Day-1.",
+        "assess.compat_alignment": "Sladění",
+        "assess.compat_fit": "Integrační fit",
+        "assess.compat_incomplete": "Pro odemčení pohledu kompatibility dokončete hodnocení připravenosti kupujícího i targetu.",
+        "assess.compat_note": "Sladění měří, jak blízko jsou si oba profily připravenosti. Pásmo fitu je omezeno připraveností slabší společnosti — vysoké sladění dvou nepřipravených organizací není dobrý fit.",
+        "assess.gate_locked": "Uzamčeno — nejprve dokončete požadovaná hodnocení připravenosti.",
+        "assess.gate_cta": "Otevřít centrum hodnocení",
+        "assess.kpi_title": "Hodnocení připravenosti",
+        "assess.kpi_acquirer": "Kupující (TE)",
+        "assess.kpi_target": "Target",
+        "assess.kpi_alignment": "Sladění",
+        "assess.kpi_pending": "Nedokončeno"
       }
     }
   },

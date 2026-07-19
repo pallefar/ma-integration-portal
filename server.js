@@ -1748,8 +1748,16 @@ app.post('/api/assessment-instances', (req, res) => {
   res.status(201).json({ success: true, instance: publicAssessInstance(instance) });
 });
 
-// GET instances (lane-aware, time-travel-aware, answers stripped)
+// GET instances (lane-aware, time-travel-aware, answers stripped).
+// When ADMIN_TOKEN is configured (production posture) this list is token-only:
+// assessment records are the most sensitive data in the app.
 app.get('/api/assessment-instances', (req, res) => {
+  if (ADMIN_TOKEN) {
+    const supplied = req.get('X-Admin-Token') || '';
+    if (!(supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN))) {
+      return res.status(401).json({ error: 'Admin authentication required to list assessment records.' });
+    }
+  }
   const db = readDb();
   let list = visibleAssessInstances(db);
   if (req.query.templateId) list = list.filter(i => i.templateId === req.query.templateId);
@@ -1788,13 +1796,20 @@ app.get('/api/assessment-status', (req, res) => {
   const required = [];
   const gatesSummary = {};
   const bySubject = {};
+  // With ADMIN_TOKEN set, the open status rollup carries scores/bands only —
+  // no respondent names (leader ratings are personal data).
+  const statusInstance = (inst) => {
+    const pub = publicAssessInstance(inst);
+    if (pub && ADMIN_TOKEN) delete pub.respondentName;
+    return pub;
+  };
   templates.forEach(t => {
     const latest = latestAssessInstanceFor(visible, t.id, 'self');
     const entry = {
       templateId: t.id, slug: t.slug, subject: t.subject,
       required: !!t.required, gates: t.gates || [],
       satisfied: !!latest,
-      latestInstance: publicAssessInstance(latest)
+      latestInstance: statusInstance(latest)
     };
     bySubject[t.subject] = entry;
     if (t.required) required.push(entry);
@@ -1803,7 +1818,51 @@ app.get('/api/assessment-status', (req, res) => {
       if (t.required && !latest) { gatesSummary[g].satisfied = false; gatesSummary[g].blockedBy.push(t.id); }
     });
   });
-  res.json({ success: true, required, bySubject, gatesSummary });
+
+  // Compatibility per template pair (acquirer-org × target-org, joined on mirrorId).
+  // Reported as two separate truths: per-company READINESS and profile ALIGNMENT
+  // (100 − weighted mean gap). The fit band is the WORST of the alignment band and
+  // both company bands — two equally weak companies must never read as a strong fit.
+  const bandOf = (score) => score >= 80 ? 'ready' : score >= 60 ? 'support' : 'risk';
+  const bandRank = { risk: 1, support: 2, ready: 3 };
+  const pairs = {};
+  templates.forEach(t => {
+    if (!t.pairId) return;
+    pairs[t.pairId] = pairs[t.pairId] || {};
+    pairs[t.pairId][t.subject] = t;
+  });
+  const compatibility = [];
+  Object.keys(pairs).forEach(pid => {
+    const acqT = pairs[pid]['acquirer-org'], tgtT = pairs[pid]['target-org'];
+    if (!acqT || !tgtT) return;
+    const acqI = latestAssessInstanceFor(visible, acqT.id, 'self');
+    const tgtI = latestAssessInstanceFor(visible, tgtT.id, 'self');
+    if (!acqI || !tgtI) { compatibility.push({ pairId: pid, complete: false }); return; }
+    const dims = [];
+    (acqT.dimensions || []).forEach(d => {
+      const mid = d.mirrorId || d.id;
+      const td = (tgtT.dimensions || []).find(x => (x.mirrorId || x.id) === mid);
+      if (!td) return;
+      const a = (acqI.dimensionScores || {})[d.id];
+      const tg = (tgtI.dimensionScores || {})[td.id];
+      if (typeof a !== 'number' || typeof tg !== 'number') return;
+      dims.push({ mirrorId: mid, label: d.label, labelKey: d.labelKey, icon: d.iconEmoji,
+        acquirer: a, target: tg, gap: Math.abs(a - tg), weight: d.weight || 1 });
+    });
+    const wsum = dims.reduce((s, d) => s + d.weight, 0) || 1;
+    const alignment = Math.round(100 - dims.reduce((s, d) => s + d.gap * d.weight, 0) / wsum);
+    const fitBand = [bandOf(alignment), acqI.bandId || bandOf(acqI.overallScore), tgtI.bandId || bandOf(tgtI.overallScore)]
+      .sort((a, b) => bandRank[a] - bandRank[b])[0];
+    const topGaps = dims.slice().sort((a, b) => b.gap - a.gap).slice(0, 2).map(d => d.mirrorId);
+    compatibility.push({
+      pairId: pid, complete: true, alignment, fitBand,
+      acquirer: { templateId: acqT.id, score: acqI.overallScore, bandId: acqI.bandId },
+      target: { templateId: tgtT.id, score: tgtI.overallScore, bandId: tgtI.bandId },
+      dims, topGaps
+    });
+  });
+
+  res.json({ success: true, required, bySubject, gatesSummary, compatibility });
 });
 
 // ==========================================
