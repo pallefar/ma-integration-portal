@@ -298,7 +298,14 @@
       + (subject === 'target-org' ? sentimentTileHtml() : '')
       + '</div>'
       + (subject === 'integration-leader' ? ilExtrasHtml(tpl, latest) : '')
-      + (remedCards ? '<div class="as-card"><h3 data-i18n="assess.remediation">Recommended actions</h3>' + remedCards + '</div>' : '')
+      + (remedCards
+        ? '<div class="as-card"><h3 data-i18n="assess.remediation">Recommended actions</h3>' + remedCards
+          + ((subject === 'acquirer-org' || subject === 'target-org')
+            ? '<button class="btn btn-primary" id="as-mktasks-' + SUBJECT_TABS[subject] + '" style="font-size:.82rem;padding:.5rem 1rem;margin-top:.4rem;" data-i18n="exec.create_tasks">Create tasks from recommended actions</button>'
+              + '<span id="as-mktasks-msg-' + SUBJECT_TABS[subject] + '" style="font-size:.78rem;color:var(--te-dark-teal);font-weight:700;margin-left:.6rem;"></span>'
+            : '')
+          + '</div>'
+        : '')
       + (subject === 'target-org' ? '<p class="as-note" data-i18n="assess.disclaimer_preclose">Sensitive: answers may contain competitively sensitive information about the target. Before legal close, complete this only with clean-team-approved information and involve Legal if unsure.</p>' : '')
       + '<p class="as-note" data-i18n="assess.n1_note">Structured judgment by 1 rater — a facilitated read of readiness, not a statistical instrument.</p>';
 
@@ -306,6 +313,22 @@
     if (retake) retake.addEventListener('click', function () { startWizard(subject, latest.id); });
     var invite = el.querySelector('#as-invite-mgr');
     if (invite) invite.addEventListener('click', function () { startWizard(subject, null, 'manager'); });
+    var mkTasks = el.querySelector('#as-mktasks-' + SUBJECT_TABS[subject]);
+    if (mkTasks) mkTasks.addEventListener('click', function () {
+      mkTasks.disabled = true;
+      fetch('/api/integration-tasks/from-remediation', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assessmentTemplateId: tpl.id })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        var msg = el.querySelector('#as-mktasks-msg-' + SUBJECT_TABS[subject]);
+        if (res && res.success) {
+          msg.innerHTML = res.created > 0
+            ? '✓ ' + res.created + ' <a href="/execution.html" style="color:inherit;"><span data-i18n="exec.tasks_created">tasks created — see the Execution Hub</span></a>'
+            : '<span data-i18n="exec.tasks_none_new">All recommended actions already have tasks.</span>';
+          applyI18n();
+        } else { mkTasks.disabled = false; }
+      }).catch(function (e) { console.error('create tasks failed', e); mkTasks.disabled = false; });
+    });
     el.querySelectorAll('.as-plan-add').forEach(function (b) {
       b.addEventListener('click', function () {
         var id = b.getAttribute('data-task-id'), label = b.getAttribute('data-task-label');

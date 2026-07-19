@@ -192,6 +192,11 @@ function readDb() {
     parsed.assessmentTemplates = parsed.assessmentTemplates || [];
     parsed.assessmentInstances = parsed.assessmentInstances || [];
     parsed.customAssessmentInstances = parsed.customAssessmentInstances || [];
+    // Execution engine: checklist templates ride the cms bundle; live tasks are
+    // lane-split workspace data like assessment instances.
+    parsed.checklistTemplates = parsed.checklistTemplates || [];
+    parsed.integrationTasks = parsed.integrationTasks || [];
+    parsed.customIntegrationTasks = parsed.customIntegrationTasks || [];
     _dbCache = parsed;
     _dbMtime = mtime;
     return parsed;
@@ -597,6 +602,7 @@ app.post('/api/settings/new-ma', (req, res) => {
   db.customAlerts = [];
   db.customCommunications = [];
   db.customAssessmentInstances = [];
+  db.customIntegrationTasks = [];
   
   // Wipe custom physical emails
   const emailDir = path.join(__dirname, 'public', 'sent_emails');
@@ -640,7 +646,8 @@ function saveCustomLaneToProject(db, project) {
     assessments: db.customAssessments || [],
     alerts: db.customAlerts || [],
     communications: db.customCommunications || [],
-    assessmentInstances: db.customAssessmentInstances || []
+    assessmentInstances: db.customAssessmentInstances || [],
+    integrationTasks: db.customIntegrationTasks || []
   };
 }
 
@@ -659,6 +666,7 @@ function loadProjectIntoCustomLane(db, project) {
   db.customAlerts = d.alerts || [];
   db.customCommunications = d.communications || [];
   db.customAssessmentInstances = d.assessmentInstances || [];
+  db.customIntegrationTasks = d.integrationTasks || [];
 }
 
 // Persist whatever the live custom lane currently holds back to whichever custom
@@ -685,7 +693,8 @@ function snapshotCms(db) {
     departments: clone(db.departments || []),
     processCatalog: clone(db.processCatalog || []),
     slides: clone(db.slides || []),
-    assessmentTemplates: clone(db.assessmentTemplates || [])
+    assessmentTemplates: clone(db.assessmentTemplates || []),
+    checklistTemplates: clone(db.checklistTemplates || [])
   };
 }
 function applyCmsToTopLevel(db, cms) {
@@ -698,6 +707,7 @@ function applyCmsToTopLevel(db, cms) {
   db.processCatalog = cms.processCatalog || [];
   db.slides = cms.slides || [];
   db.assessmentTemplates = cms.assessmentTemplates || [];
+  db.checklistTemplates = cms.checklistTemplates || [];
 }
 // Save the live CMS back to whichever project is active (demo included) before switching.
 function stashActiveProjectCms(db) {
@@ -732,7 +742,7 @@ app.post('/api/projects', (req, res) => {
     sector: b.sector || '', size: b.size || '', hq: b.hq || '',
     acquisitionDate: b.acquisitionDate || '', synergyObjective: b.synergyObjective || '',
     intake: b.intake || {}, createdAt: new Date().toISOString(),
-    data: { settings: { demoMode: false }, employees: [], hrbps: [], assessments: [], alerts: [], communications: [], assessmentInstances: [] }
+    data: { settings: { demoMode: false }, employees: [], hrbps: [], assessments: [], alerts: [], communications: [], assessmentInstances: [], integrationTasks: [] }
   };
   db.projects = db.projects || [];
   // Preserve the currently-active project's work & CMS before switching to the new one.
@@ -1867,6 +1877,152 @@ app.get('/api/assessment-status', (req, res) => {
     ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || '')
     : ((db.settings && db.settings.targetCompany) || '');
   res.json({ success: true, targetCompany, required, bySubject, gatesSummary, compatibility });
+});
+
+// =====================================================================
+// Execution engine — Day-1/100-day checklists + workstream tasks in one
+// task model. Checklist templates ride the cms bundle; live tasks are
+// lane-split. Assessment remediation can create tasks (assessment → plan).
+// =====================================================================
+
+function taskLane(db) {
+  const isCustom = db.settings && db.settings.demoMode === false;
+  if (isCustom) { db.customIntegrationTasks = db.customIntegrationTasks || []; return db.customIntegrationTasks; }
+  db.integrationTasks = db.integrationTasks || [];
+  return db.integrationTasks;
+}
+
+const TASK_STATUSES = ['todo', 'doing', 'blocked', 'done'];
+const TASK_PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
+
+app.get('/api/integration-tasks', (req, res) => {
+  const db = readDb();
+  res.json(taskLane(db));
+});
+
+// Create or update a task (upsert by id, like departments/processes)
+app.post('/api/integration-tasks', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const lane = taskLane(db);
+  if (b.id) {
+    const task = lane.find(t => t.id === b.id);
+    if (!task) return res.status(404).json({ error: 'Task not found.' });
+    ['title', 'titleKey', 'workstreamId', 'phase', 'owner', 'due'].forEach(k => {
+      if (b[k] !== undefined) task[k] = String(b[k] || '').slice(0, 300);
+    });
+    if (b.status !== undefined) {
+      if (!TASK_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
+      task.status = b.status;
+      task.completedAt = b.status === 'done' ? (task.completedAt || new Date().toISOString()) : undefined;
+      if (task.completedAt === undefined) delete task.completedAt;
+    }
+    writeDb(db);
+    return res.json({ success: true, task });
+  }
+  const title = String(b.title || '').trim();
+  if (!title) return res.status(400).json({ error: 'Task title is required.' });
+  const task = {
+    id: newId('task'),
+    title: title.slice(0, 300),
+    ...(b.titleKey ? { titleKey: String(b.titleKey).slice(0, 120) } : {}),
+    workstreamId: String(b.workstreamId || 'ws_imo').slice(0, 60),
+    phase: TASK_PHASES.includes(b.phase) ? b.phase : 'd30',
+    owner: String(b.owner || '').slice(0, 120),
+    due: String(b.due || '').slice(0, 20),
+    status: TASK_STATUSES.includes(b.status) ? b.status : 'todo',
+    source: String(b.source || 'manual').slice(0, 160),
+    createdAt: new Date().toISOString()
+  };
+  lane.push(task);
+  writeDb(db);
+  res.status(201).json({ success: true, task });
+});
+
+app.delete('/api/integration-tasks/:id', (req, res) => {
+  const db = readDb();
+  const lane = taskLane(db);
+  const filtered = lane.filter(t => t.id !== req.params.id);
+  if (filtered.length === lane.length) return res.status(404).json({ error: 'Task not found.' });
+  if (db.settings && db.settings.demoMode === false) db.customIntegrationTasks = filtered;
+  else db.integrationTasks = filtered;
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// Instantiate a checklist template: every item becomes a task once (source-deduped),
+// so re-running after adding template items only creates the new ones.
+app.post('/api/integration-tasks/instantiate', (req, res) => {
+  const { checklistTemplateId } = req.body || {};
+  const db = readDb();
+  const tpl = (db.checklistTemplates || []).find(t => t.id === checklistTemplateId);
+  if (!tpl) return res.status(404).json({ error: 'Checklist template not found.' });
+  const lane = taskLane(db);
+  const created = [];
+  (tpl.items || []).forEach(item => {
+    const source = 'template:' + tpl.id + ':' + item.id;
+    if (lane.some(t => t.source === source)) return;
+    const task = {
+      id: newId('task'),
+      title: item.text || item.id,
+      ...(item.textKey ? { titleKey: item.textKey } : {}),
+      workstreamId: item.workstreamId || 'ws_imo',
+      phase: TASK_PHASES.includes(item.phase) ? item.phase : 'd30',
+      owner: item.ownerHint || '',
+      due: '',
+      status: 'todo',
+      source,
+      createdAt: new Date().toISOString()
+    };
+    lane.push(task);
+    created.push(task);
+  });
+  if (created.length) writeDb(db);
+  res.json({ success: true, created: created.length });
+});
+
+// Assessment → plan: turn the latest instance's sub-80 remediation advice into
+// tasks (source-deduped). This is the closing of the loop: readiness gaps
+// become owned, trackable work.
+const REMEDIATION_WS = {
+  dim_governance: 'ws_imo', dim_people: 'ws_hr', dim_culture: 'ws_hr',
+  dim_systems: 'ws_it', dim_commercial: 'ws_sales', dim_day1: 'ws_imo'
+};
+app.post('/api/integration-tasks/from-remediation', (req, res) => {
+  const { assessmentTemplateId } = req.body || {};
+  const db = readDb();
+  const tpl = (db.assessmentTemplates || []).find(t => t.id === assessmentTemplateId);
+  if (!tpl) return res.status(404).json({ error: 'Assessment template not found.' });
+  const latest = latestAssessInstanceFor(visibleAssessInstances(db), tpl.id, 'self');
+  if (!latest) return res.status(400).json({ error: 'No submitted assessment to derive tasks from.' });
+  const lane = taskLane(db);
+  const created = [];
+  (tpl.remediation || []).forEach(r => {
+    const score = (latest.dimensionScores || {})[r.dimensionId];
+    if (typeof score !== 'number' || score >= 80) return;
+    const source = 'remediation:' + tpl.id + ':' + r.dimensionId;
+    if (lane.some(t => t.source === source)) return;
+    const task = {
+      id: newId('task'),
+      title: r.advice || r.dimensionId,
+      ...(r.adviceKey ? { titleKey: r.adviceKey } : {}),
+      workstreamId: REMEDIATION_WS[r.dimensionId] || 'ws_imo',
+      phase: 'd30',
+      owner: '',
+      due: '',
+      status: 'todo',
+      source,
+      createdAt: new Date().toISOString()
+    };
+    lane.push(task);
+    created.push(task);
+  });
+  if (created.length) writeDb(db);
+  res.json({ success: true, created: created.length });
+});
+
+app.get('/api/checklist-templates', (req, res) => {
+  res.json(readDb().checklistTemplates || []);
 });
 
 // ==========================================

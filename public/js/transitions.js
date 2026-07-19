@@ -132,6 +132,7 @@
     'employee.html': ['admin', 'pmo', 'employee'],
     'survey.html': ['admin', 'pmo', 'hrbp'],
     'assessments.html': ['admin', 'pmo', 'hrbp'],
+    'execution.html': ['admin', 'pmo', 'hrbp'],
     'playbook.html': ['admin', 'pmo', 'hrbp', 'supporting']
   };
 
@@ -855,6 +856,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <a href="/assessments.html" class="sidebar-link ${path.includes('assessments.html') ? 'active' : ''}" title="Readiness Assessments — company & Integration Leader readiness">
           <span class="sidebar-link-icon">\u{1F3AF}</span>
           <span class="sidebar-link-label">Assessments</span>
+        </a>
+        <a href="/execution.html" class="sidebar-link ${path.includes('execution.html') ? 'active' : ''}" title="Execution Hub — Day-1 checklist & workstream tasks">
+          <span class="sidebar-link-icon">\u{2705}</span>
+          <span class="sidebar-link-label">Execution Hub</span>
         </a>` : ''}
         ${(activeRole === 'admin' || activeRole === 'pmo' || activeRole === 'hrbp') ? `
         <a href="javascript:void(0)" class="sidebar-link" id="sidebar-survey-link" title="Survey Scorecard">

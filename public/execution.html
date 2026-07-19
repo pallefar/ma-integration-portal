@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Execution Hub</title>
+  <meta name="description" content="Execution Hub — the Day-1 & 100-day integration checklist and all workstream tasks, including tasks generated from readiness-assessment gaps.">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/css/style.css?v=1784300020">
+  <script src="/js/transitions.js?v=1784300020"></script>
+  <style>
+    .ex-wrap{ max-width:1100px; margin:0 auto; }
+    .ex-hero{ margin-bottom:1.25rem; }
+    .ex-hero h1{ font-size:1.9rem; color:var(--te-dark-teal); margin:0 0 .35rem; }
+    .ex-hero p{ color:var(--text-secondary); max-width:820px; line-height:1.55; margin:0; }
+    .ex-top{ display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.1rem; }
+    /* workstream rollup */
+    .ex-ws-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:.75rem; margin-bottom:1.5rem; }
+    .ex-ws{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.7rem .9rem; cursor:pointer; transition:all .15s; text-align:left; font-family:inherit; }
+    .ex-ws:hover{ border-color:var(--te-orange); }
+    .ex-ws.active{ border-color:var(--te-dark-teal); box-shadow:inset 0 0 0 1.5px var(--te-dark-teal); }
+    .ex-ws-head{ display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-bottom:.35rem; }
+    .ex-ws-name{ font-size:.8rem; font-weight:800; color:var(--te-dark-teal); }
+    .ex-ws-count{ font-size:.72rem; font-weight:800; color:var(--text-dim); }
+    .ex-ws-track{ height:7px; border-radius:4px; background:var(--bg-subtle,#eef2f2); overflow:hidden; }
+    .ex-ws-fill{ height:100%; border-radius:4px; transition:width .4s ease; }
+    .ex-ws-flag{ font-size:.66rem; font-weight:800; color:#C0392B; margin-top:.3rem; }
+    /* phase sections */
+    .ex-phase{ margin-bottom:1.5rem; }
+    .ex-phase-head{ display:flex; align-items:center; gap:.75rem; margin-bottom:.6rem; }
+    .ex-phase-title{ font-size:1rem; font-weight:800; color:var(--te-dark-teal); margin:0; }
+    .ex-phase-count{ font-size:.72rem; font-weight:800; color:var(--text-dim); }
+    .ex-task{ display:flex; align-items:center; gap:.75rem; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-bottom:.45rem; }
+    .ex-task.done .ex-task-title{ text-decoration:line-through; color:var(--text-dim); }
+    .ex-status{ flex:none; border:none; font-family:inherit; font-size:.68rem; font-weight:800; padding:.28rem .65rem; border-radius:20px; cursor:pointer; min-width:86px; text-align:center; color:#fff; }
+    .ex-task-main{ flex:1; min-width:0; }
+    .ex-task-title{ font-size:.86rem; font-weight:600; color:var(--text-primary); line-height:1.4; }
+    .ex-task-meta{ font-size:.7rem; color:var(--text-dim); display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.15rem; }
+    .ex-src{ font-size:.64rem; font-weight:800; color:#C77700; background:rgba(233,131,0,.09); border:1px solid rgba(233,131,0,.25); border-radius:12px; padding:.1rem .5rem; }
+    .ex-del{ flex:none; border:none; background:none; color:var(--text-dim); font-size:1rem; cursor:pointer; padding:.2rem .35rem; border-radius:6px; }
+    .ex-del:hover{ color:#C0392B; background:rgba(192,57,43,.08); }
+    .ex-empty{ font-size:.8rem; color:var(--text-dim); font-style:italic; padding:.4rem 0; }
+    /* add form */
+    .ex-add{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; background:var(--card-bg,#fff); border:1px dashed var(--border-color); border-radius:10px; padding:.7rem .9rem; margin-bottom:1.5rem; }
+    .ex-add input, .ex-add select{ padding:.45rem .7rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.82rem; }
+    .ex-add input[type="text"]{ flex:1; min-width:200px; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <img class="brand-logo-svg" src="/te-logo.png" alt="TE Connectivity" style="height:36px;width:auto;display:block;">
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title"><span class="portal-badge">M&A Integration</span></div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">Overview</a>
+        <a href="/assessments.html" class="nav-link" data-i18n="assess.nav">Assessments</a>
+        <a href="/dashboard.html" class="nav-link">Integration Leader Portal</a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="ex-wrap">
+        <div class="ex-hero">
+          <h1 data-i18n="exec.title">Execution Hub</h1>
+          <p data-i18n="exec.sub">The Day-1 & 100-day checklist and every workstream task in one place — including tasks created from readiness-assessment gaps.</p>
+        </div>
+        <div class="ex-top">
+          <div id="ex-overall" style="display:flex;align-items:center;gap:.75rem;"></div>
+          <button class="btn btn-secondary" id="ex-instantiate" style="display:none;font-size:.8rem;padding:.5rem 1rem;" data-i18n="exec.instantiate">Load the Day-1/100-day checklist</button>
+        </div>
+        <div class="ex-ws-grid" id="ex-ws-grid"></div>
+        <div class="ex-add" id="ex-add">
+          <input type="text" id="ex-new-title" data-i18n-ph="exec.task_title_ph" placeholder="Task title…">
+          <select id="ex-new-ws"></select>
+          <select id="ex-new-phase"></select>
+          <input type="text" id="ex-new-owner" data-i18n-ph="exec.owner_ph" placeholder="Owner" style="width:130px;">
+          <input type="date" id="ex-new-due">
+          <button class="btn btn-primary" id="ex-add-btn" style="font-size:.82rem;padding:.5rem 1rem;" data-i18n="exec.btn_add">Add</button>
+        </div>
+        <div id="ex-phases"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/execution.js?v=1784500007"></script>
+</body>
+</html>

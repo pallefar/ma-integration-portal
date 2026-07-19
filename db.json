@@ -1718,7 +1718,73 @@
         "assess.readout_generated": "Generated",
         "assess.readout_pair": "Company readiness — TE vs Target",
         "assess.readout_dim": "Dimension",
-        "assess.readout_gap": "Gap"
+        "assess.readout_gap": "Gap",
+        "exec.nav": "Execution Hub",
+        "exec.title": "Execution Hub",
+        "exec.sub": "The Day-1 & 100-day checklist and every workstream task in one place — including tasks created from readiness-assessment gaps.",
+        "exec.tpl_day1_title": "Day-1 & 100-Day Integration Checklist",
+        "exec.phase_pre": "Pre-close",
+        "exec.phase_day1": "Day 1",
+        "exec.phase_d30": "Day 30",
+        "exec.phase_d60": "Day 60",
+        "exec.phase_d100": "Day 100",
+        "exec.all_ws": "All workstreams",
+        "exec.progress": "Progress",
+        "exec.done": "done",
+        "exec.status_todo": "To do",
+        "exec.status_doing": "In progress",
+        "exec.status_blocked": "Blocked",
+        "exec.status_done": "Done",
+        "exec.add_task": "Add task",
+        "exec.task_title_ph": "Task title…",
+        "exec.owner_ph": "Owner",
+        "exec.btn_add": "Add",
+        "exec.instantiate": "Load the Day-1/100-day checklist",
+        "exec.instantiated": "Checklist loaded",
+        "exec.from_assessment": "From readiness assessment",
+        "exec.empty_phase": "No tasks in this phase.",
+        "exec.create_tasks": "Create tasks from recommended actions",
+        "exec.tasks_created": "tasks created — see the Execution Hub",
+        "exec.tasks_none_new": "All recommended actions already have tasks.",
+        "exec.delete_confirm": "Delete this task?",
+        "exec.ws_imo": "Governance & IMO",
+        "exec.ws_hr": "People & HR",
+        "exec.ws_it": "IT & Systems",
+        "exec.ws_finance": "Finance",
+        "exec.ws_legal": "Legal & Compliance",
+        "exec.ws_sales": "Sales & Customers",
+        "exec.ws_ops": "Operations",
+        "exec.ws_comms": "Communications",
+        "exec.item_i01": "Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.",
+        "exec.item_i02": "Confirm regulatory approvals and the closing checklist with external counsel.",
+        "exec.item_i03": "Freeze the key-talent list and approve retention packages.",
+        "exec.item_i04": "Complete the systems inventory and agree keep/migrate/retire for core systems.",
+        "exec.item_i05": "Prepare the Day-1 communications pack (employees, customers, press).",
+        "exec.item_i06": "Design the Day-1 financial-control framework (approvals, signatories, limits).",
+        "exec.item_i07": "Send Day-1 announcements to employees and customers.",
+        "exec.item_i08": "Payroll and benefits continuity confirmed — first payroll run verified.",
+        "exec.item_i09": "Day-1 access live: email, VPN, ERP and payroll accounts for every team.",
+        "exec.item_i10": "Legal entity change registered; contract novation plan started.",
+        "exec.item_i11": "Top-20 customers called by their named owner.",
+        "exec.item_i12": "Business continuity confirmed: orders, production and support running.",
+        "exec.item_i13": "Day-1 go/no-go review held and logged.",
+        "exec.item_i14": "Bank access, signatories and payment runs switched to TE control.",
+        "exec.item_i15": "Retention 1-on-1s completed with all key talent.",
+        "exec.item_i16": "Org design for the combined team announced to managers.",
+        "exec.item_i17": "Data migration wave 1 (CRM + finance) completed and validated.",
+        "exec.item_i18": "Cross-sell opportunity map agreed with account owners.",
+        "exec.item_i19": "First integration pulse survey sent and results reviewed.",
+        "exec.item_i20": "Synergy initiatives baselined with owners and targets.",
+        "exec.item_i21": "Quality and safety audits of target sites completed.",
+        "exec.item_i22": "Monthly close executed on the TE calendar and chart of accounts.",
+        "exec.item_i23": "Legacy system decommissioning plan approved.",
+        "exec.item_i24": "Manager enablement training delivered at every site.",
+        "exec.item_i25": "Joint pipeline reviewed; first cross-sell wins logged.",
+        "exec.item_i26": "60-day integration review with the steering committee.",
+        "exec.item_i27": "100-day review: synergy status, lessons learned, handover to the line.",
+        "exec.item_i28": "Culture pulse re-run; action plan for gaps agreed.",
+        "exec.item_i29": "Integration of operational processes complete or scheduled.",
+        "exec.item_i30": "Contract novations over 90% complete; open risks logged."
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2612,7 +2678,73 @@
         "assess.readout_generated": "Erstellt",
         "assess.readout_pair": "Unternehmens-Readiness — TE vs. Target",
         "assess.readout_dim": "Dimension",
-        "assess.readout_gap": "Lücke"
+        "assess.readout_gap": "Lücke",
+        "exec.nav": "Execution Hub",
+        "exec.title": "Execution Hub",
+        "exec.sub": "Die Day-1- & 100-Tage-Checkliste und alle Workstream-Aufgaben an einem Ort — inklusive Aufgaben aus Readiness-Assessment-Lücken.",
+        "exec.tpl_day1_title": "Day-1- & 100-Tage-Integrationscheckliste",
+        "exec.phase_pre": "Pre-Close",
+        "exec.phase_day1": "Tag 1",
+        "exec.phase_d30": "Tag 30",
+        "exec.phase_d60": "Tag 60",
+        "exec.phase_d100": "Tag 100",
+        "exec.all_ws": "Alle Workstreams",
+        "exec.progress": "Fortschritt",
+        "exec.done": "erledigt",
+        "exec.status_todo": "Offen",
+        "exec.status_doing": "In Arbeit",
+        "exec.status_blocked": "Blockiert",
+        "exec.status_done": "Erledigt",
+        "exec.add_task": "Aufgabe hinzufügen",
+        "exec.task_title_ph": "Aufgabentitel…",
+        "exec.owner_ph": "Verantwortlich",
+        "exec.btn_add": "Hinzufügen",
+        "exec.instantiate": "Day-1/100-Tage-Checkliste laden",
+        "exec.instantiated": "Checkliste geladen",
+        "exec.from_assessment": "Aus Readiness-Assessment",
+        "exec.empty_phase": "Keine Aufgaben in dieser Phase.",
+        "exec.create_tasks": "Aufgaben aus empfohlenen Maßnahmen erstellen",
+        "exec.tasks_created": "Aufgaben erstellt — siehe Execution Hub",
+        "exec.tasks_none_new": "Alle empfohlenen Maßnahmen haben bereits Aufgaben.",
+        "exec.delete_confirm": "Diese Aufgabe löschen?",
+        "exec.ws_imo": "Governance & IMO",
+        "exec.ws_hr": "People & HR",
+        "exec.ws_it": "IT & Systeme",
+        "exec.ws_finance": "Finanzen",
+        "exec.ws_legal": "Recht & Compliance",
+        "exec.ws_sales": "Vertrieb & Kunden",
+        "exec.ws_ops": "Operations",
+        "exec.ws_comms": "Kommunikation",
+        "exec.item_i01": "IMO aufsetzen: benannte Leitung, Executive Sponsor, wöchentliche Cadence, Entscheidungslog.",
+        "exec.item_i02": "Regulatorische Freigaben und Closing-Checkliste mit externer Kanzlei bestätigen.",
+        "exec.item_i03": "Key-Talent-Liste einfrieren und Retention-Pakete genehmigen.",
+        "exec.item_i04": "Systeminventar abschließen und Keep/Migrate/Retire für Kernsysteme vereinbaren.",
+        "exec.item_i05": "Day-1-Kommunikationspaket vorbereiten (Mitarbeitende, Kunden, Presse).",
+        "exec.item_i06": "Day-1-Finanzkontrollrahmen entwerfen (Freigaben, Zeichnungsberechtigte, Limits).",
+        "exec.item_i07": "Day-1-Ankündigungen an Mitarbeitende und Kunden versenden.",
+        "exec.item_i08": "Kontinuität von Payroll und Benefits bestätigt — erster Gehaltslauf geprüft.",
+        "exec.item_i09": "Day-1-Zugänge aktiv: E-Mail, VPN, ERP und Payroll-Konten für jedes Team.",
+        "exec.item_i10": "Rechtsträgerwechsel registriert; Vertragsübertragungsplan gestartet.",
+        "exec.item_i11": "Top-20-Kunden durch ihren benannten Owner angerufen.",
+        "exec.item_i12": "Geschäftskontinuität bestätigt: Aufträge, Produktion und Support laufen.",
+        "exec.item_i13": "Day-1-Go/No-Go-Review durchgeführt und dokumentiert.",
+        "exec.item_i14": "Bankzugänge, Zeichnungsberechtigte und Zahlläufe auf TE-Kontrolle umgestellt.",
+        "exec.item_i15": "Retention-Einzelgespräche mit allen Schlüsseltalenten abgeschlossen.",
+        "exec.item_i16": "Organisationsdesign des gemeinsamen Teams an Führungskräfte kommuniziert.",
+        "exec.item_i17": "Datenmigration Welle 1 (CRM + Finance) abgeschlossen und validiert.",
+        "exec.item_i18": "Cross-Sell-Chancenkarte mit Account-Ownern vereinbart.",
+        "exec.item_i19": "Erste Integrations-Pulsumfrage versendet und Ergebnisse ausgewertet.",
+        "exec.item_i20": "Synergie-Initiativen mit Ownern und Zielwerten baselined.",
+        "exec.item_i21": "Qualitäts- und Sicherheitsaudits der Target-Standorte abgeschlossen.",
+        "exec.item_i22": "Monatsabschluss nach TE-Kalender und -Kontenplan durchgeführt.",
+        "exec.item_i23": "Stilllegungsplan für Altsysteme genehmigt.",
+        "exec.item_i24": "Manager-Enablement-Training an allen Standorten durchgeführt.",
+        "exec.item_i25": "Gemeinsame Pipeline geprüft; erste Cross-Sell-Erfolge dokumentiert.",
+        "exec.item_i26": "60-Tage-Integrationsreview mit dem Lenkungsausschuss.",
+        "exec.item_i27": "100-Tage-Review: Synergiestatus, Lessons Learned, Übergabe an die Linie.",
+        "exec.item_i28": "Kultur-Puls wiederholt; Maßnahmenplan für Lücken vereinbart.",
+        "exec.item_i29": "Integration der operativen Prozesse abgeschlossen oder terminiert.",
+        "exec.item_i30": "Vertragsübertragungen zu über 90 % abgeschlossen; offene Risiken erfasst."
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -3506,7 +3638,73 @@
         "assess.readout_generated": "生成于",
         "assess.readout_pair": "公司就绪度——TE 对比目标公司",
         "assess.readout_dim": "维度",
-        "assess.readout_gap": "差距"
+        "assess.readout_gap": "差距",
+        "exec.nav": "执行中心",
+        "exec.title": "执行中心",
+        "exec.sub": "Day-1 与 100 天清单及所有工作流任务尽在一处——包括由就绪度评估差距生成的任务。",
+        "exec.tpl_day1_title": "Day-1 与 100 天整合清单",
+        "exec.phase_pre": "交割前",
+        "exec.phase_day1": "第 1 天",
+        "exec.phase_d30": "第 30 天",
+        "exec.phase_d60": "第 60 天",
+        "exec.phase_d100": "第 100 天",
+        "exec.all_ws": "全部工作流",
+        "exec.progress": "进度",
+        "exec.done": "已完成",
+        "exec.status_todo": "待办",
+        "exec.status_doing": "进行中",
+        "exec.status_blocked": "受阻",
+        "exec.status_done": "完成",
+        "exec.add_task": "添加任务",
+        "exec.task_title_ph": "任务标题…",
+        "exec.owner_ph": "负责人",
+        "exec.btn_add": "添加",
+        "exec.instantiate": "加载 Day-1/100 天清单",
+        "exec.instantiated": "清单已加载",
+        "exec.from_assessment": "来自就绪度评估",
+        "exec.empty_phase": "此阶段暂无任务。",
+        "exec.create_tasks": "根据建议行动创建任务",
+        "exec.tasks_created": "个任务已创建——请查看执行中心",
+        "exec.tasks_none_new": "所有建议行动均已有对应任务。",
+        "exec.delete_confirm": "删除此任务？",
+        "exec.ws_imo": "治理与 IMO",
+        "exec.ws_hr": "人力资源",
+        "exec.ws_it": "IT 与系统",
+        "exec.ws_finance": "财务",
+        "exec.ws_legal": "法务与合规",
+        "exec.ws_sales": "销售与客户",
+        "exec.ws_ops": "运营",
+        "exec.ws_comms": "沟通",
+        "exec.item_i01": "设立 IMO：指定负责人、高管发起人、每周例会、决策日志。",
+        "exec.item_i02": "与外部律所确认监管批准和交割清单。",
+        "exec.item_i03": "冻结关键人才名单并批准保留方案。",
+        "exec.item_i04": "完成系统清单，就核心系统的保留/迁移/退役达成一致。",
+        "exec.item_i05": "准备 Day-1 沟通包（员工、客户、媒体）。",
+        "exec.item_i06": "设计 Day-1 财务控制框架（审批、签署人、限额）。",
+        "exec.item_i07": "向员工和客户发送 Day-1 公告。",
+        "exec.item_i08": "薪资与福利连续性已确认——首次发薪已验证。",
+        "exec.item_i09": "Day-1 访问上线：每个团队的邮箱、VPN、ERP 和薪资账户。",
+        "exec.item_i10": "法律主体变更已登记；合同更替计划已启动。",
+        "exec.item_i11": "前 20 大客户由指定负责人逐一致电。",
+        "exec.item_i12": "业务连续性已确认：订单、生产和支持正常运转。",
+        "exec.item_i13": "Day-1 Go/No-Go 评审已举行并记录。",
+        "exec.item_i14": "银行权限、签署人和付款流程已切换至 TE 管控。",
+        "exec.item_i15": "与所有关键人才完成保留一对一面谈。",
+        "exec.item_i16": "合并团队的组织设计已向管理者宣布。",
+        "exec.item_i17": "第一波数据迁移（CRM+财务）已完成并验证。",
+        "exec.item_i18": "与客户负责人确认交叉销售机会图。",
+        "exec.item_i19": "第一次整合脉搏调查已发出并复盘结果。",
+        "exec.item_i20": "协同举措已确定基线、负责人和目标。",
+        "exec.item_i21": "目标公司site的质量与安全审计已完成。",
+        "exec.item_i22": "按 TE 日历和会计科目表完成月结。",
+        "exec.item_i23": "遗留系统退役计划已批准。",
+        "exec.item_i24": "每个site均已开展管理者赋能培训。",
+        "exec.item_i25": "联合销售管道已评审；首批交叉销售成果已记录。",
+        "exec.item_i26": "与指导委员会进行 60 天整合评审。",
+        "exec.item_i27": "100 天评审：协同进展、经验教训、移交业务线。",
+        "exec.item_i28": "重跑文化脉搏调查；就差距商定行动计划。",
+        "exec.item_i29": "运营流程整合已完成或已排期。",
+        "exec.item_i30": "合同更替完成率超 90%；未决风险已记录。"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -4400,7 +4598,73 @@
         "assess.readout_generated": "Vytvořeno",
         "assess.readout_pair": "Připravenost společností — TE vs. target",
         "assess.readout_dim": "Dimenze",
-        "assess.readout_gap": "Rozdíl"
+        "assess.readout_gap": "Rozdíl",
+        "exec.nav": "Execution Hub",
+        "exec.title": "Execution Hub",
+        "exec.sub": "Checklist pro Day-1 a 100 dní a všechny úkoly workstreamů na jednom místě — včetně úkolů vzniklých z mezer v hodnocení připravenosti.",
+        "exec.tpl_day1_title": "Integrační checklist Day-1 a 100 dní",
+        "exec.phase_pre": "Před uzavřením",
+        "exec.phase_day1": "Den 1",
+        "exec.phase_d30": "Den 30",
+        "exec.phase_d60": "Den 60",
+        "exec.phase_d100": "Den 100",
+        "exec.all_ws": "Všechny workstreamy",
+        "exec.progress": "Postup",
+        "exec.done": "hotovo",
+        "exec.status_todo": "K řešení",
+        "exec.status_doing": "Probíhá",
+        "exec.status_blocked": "Blokováno",
+        "exec.status_done": "Hotovo",
+        "exec.add_task": "Přidat úkol",
+        "exec.task_title_ph": "Název úkolu…",
+        "exec.owner_ph": "Vlastník",
+        "exec.btn_add": "Přidat",
+        "exec.instantiate": "Načíst checklist Day-1/100 dní",
+        "exec.instantiated": "Checklist načten",
+        "exec.from_assessment": "Z hodnocení připravenosti",
+        "exec.empty_phase": "V této fázi nejsou žádné úkoly.",
+        "exec.create_tasks": "Vytvořit úkoly z doporučených kroků",
+        "exec.tasks_created": "úkolů vytvořeno — viz Execution Hub",
+        "exec.tasks_none_new": "Všechny doporučené kroky už mají úkoly.",
+        "exec.delete_confirm": "Smazat tento úkol?",
+        "exec.ws_imo": "Governance a IMO",
+        "exec.ws_hr": "Lidé a HR",
+        "exec.ws_it": "IT a systémy",
+        "exec.ws_finance": "Finance",
+        "exec.ws_legal": "Právo a compliance",
+        "exec.ws_sales": "Obchod a zákazníci",
+        "exec.ws_ops": "Provoz",
+        "exec.ws_comms": "Komunikace",
+        "exec.item_i01": "Ustavit IMO: jmenovaný vedoucí, exekutivní sponzor, týdenní kadence, log rozhodnutí.",
+        "exec.item_i02": "Potvrdit regulatorní schválení a closing checklist s externí kanceláří.",
+        "exec.item_i03": "Zmrazit seznam klíčových talentů a schválit retenční balíčky.",
+        "exec.item_i04": "Dokončit inventář systémů a dohodnout keep/migrate/retire pro klíčové systémy.",
+        "exec.item_i05": "Připravit komunikační balíček pro Day-1 (zaměstnanci, zákazníci, tisk).",
+        "exec.item_i06": "Navrhnout rámec finančních kontrol pro Day-1 (schvalování, podpisová práva, limity).",
+        "exec.item_i07": "Rozeslat oznámení Day-1 zaměstnancům a zákazníkům.",
+        "exec.item_i08": "Potvrzena kontinuita mezd a benefitů — první výplata ověřena.",
+        "exec.item_i09": "Přístupy pro Day-1 aktivní: e-mail, VPN, ERP a mzdové účty pro každý tým.",
+        "exec.item_i10": "Změna právního subjektu registrována; plán novace smluv zahájen.",
+        "exec.item_i11": "Top 20 zákazníků obvoláno jmenovanými ownery.",
+        "exec.item_i12": "Potvrzena kontinuita provozu: objednávky, výroba a podpora běží.",
+        "exec.item_i13": "Go/no-go review pro Day-1 proveden a zaznamenán.",
+        "exec.item_i14": "Bankovní přístupy, podpisová práva a platby převedeny pod kontrolu TE.",
+        "exec.item_i15": "Retenční rozhovory 1:1 se všemi klíčovými talenty dokončeny.",
+        "exec.item_i16": "Organizační design společného týmu oznámen manažerům.",
+        "exec.item_i17": "První vlna migrace dat (CRM + finance) dokončena a ověřena.",
+        "exec.item_i18": "Mapa cross-sell příležitostí dohodnuta s account ownery.",
+        "exec.item_i19": "První integrační pulzní průzkum rozeslán a výsledky vyhodnoceny.",
+        "exec.item_i20": "Synergické iniciativy mají baseline, vlastníky a cíle.",
+        "exec.item_i21": "Audity kvality a bezpečnosti lokalit targetu dokončeny.",
+        "exec.item_i22": "Měsíční závěrka provedena podle kalendáře a účtové osnovy TE.",
+        "exec.item_i23": "Plán vyřazení starých systémů schválen.",
+        "exec.item_i24": "Školení manažerů proběhlo na všech lokalitách.",
+        "exec.item_i25": "Společná pipeline zrevidována; první cross-sell úspěchy zaznamenány.",
+        "exec.item_i26": "60denní integrační review s řídicím výborem.",
+        "exec.item_i27": "100denní review: stav synergií, poučení, předání do linie.",
+        "exec.item_i28": "Kulturní puls zopakován; akční plán pro mezery dohodnut.",
+        "exec.item_i29": "Integrace provozních procesů dokončena nebo naplánována.",
+        "exec.item_i30": "Novace smluv z více než 90 % hotové; otevřená rizika zaznamenána."
       }
     }
   },
@@ -6816,6 +7080,277 @@
             "order": 3,
             "version": 1
           }
+        ],
+        "checklistTemplates": [
+          {
+            "id": "ctpl_day1_100",
+            "slug": "day1-100-checklist",
+            "titleKey": "exec.tpl_day1_title",
+            "title": "Day-1 & 100-Day Integration Checklist",
+            "workstreams": [
+              {
+                "id": "ws_imo",
+                "labelKey": "exec.ws_imo",
+                "label": "Governance & IMO",
+                "icon": "🏛️"
+              },
+              {
+                "id": "ws_hr",
+                "labelKey": "exec.ws_hr",
+                "label": "People & HR",
+                "icon": "👥"
+              },
+              {
+                "id": "ws_it",
+                "labelKey": "exec.ws_it",
+                "label": "IT & Systems",
+                "icon": "💻"
+              },
+              {
+                "id": "ws_finance",
+                "labelKey": "exec.ws_finance",
+                "label": "Finance",
+                "icon": "💶"
+              },
+              {
+                "id": "ws_legal",
+                "labelKey": "exec.ws_legal",
+                "label": "Legal & Compliance",
+                "icon": "⚖️"
+              },
+              {
+                "id": "ws_sales",
+                "labelKey": "exec.ws_sales",
+                "label": "Sales & Customers",
+                "icon": "📈"
+              },
+              {
+                "id": "ws_ops",
+                "labelKey": "exec.ws_ops",
+                "label": "Operations",
+                "icon": "🏭"
+              },
+              {
+                "id": "ws_comms",
+                "labelKey": "exec.ws_comms",
+                "label": "Communications",
+                "icon": "📣"
+              }
+            ],
+            "items": [
+              {
+                "id": "i01",
+                "workstreamId": "ws_imo",
+                "phase": "pre",
+                "textKey": "exec.item_i01",
+                "text": "Charter the IMO: named lead, executive sponsor, weekly cadence, decision log."
+              },
+              {
+                "id": "i02",
+                "workstreamId": "ws_legal",
+                "phase": "pre",
+                "textKey": "exec.item_i02",
+                "text": "Confirm regulatory approvals and the closing checklist with external counsel."
+              },
+              {
+                "id": "i03",
+                "workstreamId": "ws_hr",
+                "phase": "pre",
+                "textKey": "exec.item_i03",
+                "text": "Freeze the key-talent list and approve retention packages."
+              },
+              {
+                "id": "i04",
+                "workstreamId": "ws_it",
+                "phase": "pre",
+                "textKey": "exec.item_i04",
+                "text": "Complete the systems inventory and agree keep/migrate/retire for core systems."
+              },
+              {
+                "id": "i05",
+                "workstreamId": "ws_comms",
+                "phase": "pre",
+                "textKey": "exec.item_i05",
+                "text": "Prepare the Day-1 communications pack (employees, customers, press)."
+              },
+              {
+                "id": "i06",
+                "workstreamId": "ws_finance",
+                "phase": "pre",
+                "textKey": "exec.item_i06",
+                "text": "Design the Day-1 financial-control framework (approvals, signatories, limits)."
+              },
+              {
+                "id": "i07",
+                "workstreamId": "ws_comms",
+                "phase": "day1",
+                "textKey": "exec.item_i07",
+                "text": "Send Day-1 announcements to employees and customers."
+              },
+              {
+                "id": "i08",
+                "workstreamId": "ws_hr",
+                "phase": "day1",
+                "textKey": "exec.item_i08",
+                "text": "Payroll and benefits continuity confirmed — first payroll run verified."
+              },
+              {
+                "id": "i09",
+                "workstreamId": "ws_it",
+                "phase": "day1",
+                "textKey": "exec.item_i09",
+                "text": "Day-1 access live: email, VPN, ERP and payroll accounts for every team."
+              },
+              {
+                "id": "i10",
+                "workstreamId": "ws_legal",
+                "phase": "day1",
+                "textKey": "exec.item_i10",
+                "text": "Legal entity change registered; contract novation plan started."
+              },
+              {
+                "id": "i11",
+                "workstreamId": "ws_sales",
+                "phase": "day1",
+                "textKey": "exec.item_i11",
+                "text": "Top-20 customers called by their named owner."
+              },
+              {
+                "id": "i12",
+                "workstreamId": "ws_ops",
+                "phase": "day1",
+                "textKey": "exec.item_i12",
+                "text": "Business continuity confirmed: orders, production and support running."
+              },
+              {
+                "id": "i13",
+                "workstreamId": "ws_imo",
+                "phase": "day1",
+                "textKey": "exec.item_i13",
+                "text": "Day-1 go/no-go review held and logged."
+              },
+              {
+                "id": "i14",
+                "workstreamId": "ws_finance",
+                "phase": "day1",
+                "textKey": "exec.item_i14",
+                "text": "Bank access, signatories and payment runs switched to TE control."
+              },
+              {
+                "id": "i15",
+                "workstreamId": "ws_hr",
+                "phase": "d30",
+                "textKey": "exec.item_i15",
+                "text": "Retention 1-on-1s completed with all key talent."
+              },
+              {
+                "id": "i16",
+                "workstreamId": "ws_hr",
+                "phase": "d30",
+                "textKey": "exec.item_i16",
+                "text": "Org design for the combined team announced to managers."
+              },
+              {
+                "id": "i17",
+                "workstreamId": "ws_it",
+                "phase": "d30",
+                "textKey": "exec.item_i17",
+                "text": "Data migration wave 1 (CRM + finance) completed and validated."
+              },
+              {
+                "id": "i18",
+                "workstreamId": "ws_sales",
+                "phase": "d30",
+                "textKey": "exec.item_i18",
+                "text": "Cross-sell opportunity map agreed with account owners."
+              },
+              {
+                "id": "i19",
+                "workstreamId": "ws_comms",
+                "phase": "d30",
+                "textKey": "exec.item_i19",
+                "text": "First integration pulse survey sent and results reviewed."
+              },
+              {
+                "id": "i20",
+                "workstreamId": "ws_imo",
+                "phase": "d30",
+                "textKey": "exec.item_i20",
+                "text": "Synergy initiatives baselined with owners and targets."
+              },
+              {
+                "id": "i21",
+                "workstreamId": "ws_ops",
+                "phase": "d30",
+                "textKey": "exec.item_i21",
+                "text": "Quality and safety audits of target sites completed."
+              },
+              {
+                "id": "i22",
+                "workstreamId": "ws_finance",
+                "phase": "d60",
+                "textKey": "exec.item_i22",
+                "text": "Monthly close executed on the TE calendar and chart of accounts."
+              },
+              {
+                "id": "i23",
+                "workstreamId": "ws_it",
+                "phase": "d60",
+                "textKey": "exec.item_i23",
+                "text": "Legacy system decommissioning plan approved."
+              },
+              {
+                "id": "i24",
+                "workstreamId": "ws_hr",
+                "phase": "d60",
+                "textKey": "exec.item_i24",
+                "text": "Manager enablement training delivered at every site."
+              },
+              {
+                "id": "i25",
+                "workstreamId": "ws_sales",
+                "phase": "d60",
+                "textKey": "exec.item_i25",
+                "text": "Joint pipeline reviewed; first cross-sell wins logged."
+              },
+              {
+                "id": "i26",
+                "workstreamId": "ws_imo",
+                "phase": "d60",
+                "textKey": "exec.item_i26",
+                "text": "60-day integration review with the steering committee."
+              },
+              {
+                "id": "i27",
+                "workstreamId": "ws_imo",
+                "phase": "d100",
+                "textKey": "exec.item_i27",
+                "text": "100-day review: synergy status, lessons learned, handover to the line."
+              },
+              {
+                "id": "i28",
+                "workstreamId": "ws_hr",
+                "phase": "d100",
+                "textKey": "exec.item_i28",
+                "text": "Culture pulse re-run; action plan for gaps agreed."
+              },
+              {
+                "id": "i29",
+                "workstreamId": "ws_ops",
+                "phase": "d100",
+                "textKey": "exec.item_i29",
+                "text": "Integration of operational processes complete or scheduled."
+              },
+              {
+                "id": "i30",
+                "workstreamId": "ws_legal",
+                "phase": "d100",
+                "textKey": "exec.item_i30",
+                "text": "Contract novations over 90% complete; open risks logged."
+              }
+            ],
+            "version": 1
+          }
         ]
       }
     }
@@ -8441,5 +8976,702 @@
       "timestamp": "2026-05-30T09:00:00.000Z"
     }
   ],
-  "customAssessmentInstances": []
+  "customAssessmentInstances": [],
+  "checklistTemplates": [
+    {
+      "id": "ctpl_day1_100",
+      "slug": "day1-100-checklist",
+      "titleKey": "exec.tpl_day1_title",
+      "title": "Day-1 & 100-Day Integration Checklist",
+      "workstreams": [
+        {
+          "id": "ws_imo",
+          "labelKey": "exec.ws_imo",
+          "label": "Governance & IMO",
+          "icon": "🏛️"
+        },
+        {
+          "id": "ws_hr",
+          "labelKey": "exec.ws_hr",
+          "label": "People & HR",
+          "icon": "👥"
+        },
+        {
+          "id": "ws_it",
+          "labelKey": "exec.ws_it",
+          "label": "IT & Systems",
+          "icon": "💻"
+        },
+        {
+          "id": "ws_finance",
+          "labelKey": "exec.ws_finance",
+          "label": "Finance",
+          "icon": "💶"
+        },
+        {
+          "id": "ws_legal",
+          "labelKey": "exec.ws_legal",
+          "label": "Legal & Compliance",
+          "icon": "⚖️"
+        },
+        {
+          "id": "ws_sales",
+          "labelKey": "exec.ws_sales",
+          "label": "Sales & Customers",
+          "icon": "📈"
+        },
+        {
+          "id": "ws_ops",
+          "labelKey": "exec.ws_ops",
+          "label": "Operations",
+          "icon": "🏭"
+        },
+        {
+          "id": "ws_comms",
+          "labelKey": "exec.ws_comms",
+          "label": "Communications",
+          "icon": "📣"
+        }
+      ],
+      "items": [
+        {
+          "id": "i01",
+          "workstreamId": "ws_imo",
+          "phase": "pre",
+          "textKey": "exec.item_i01",
+          "text": "Charter the IMO: named lead, executive sponsor, weekly cadence, decision log."
+        },
+        {
+          "id": "i02",
+          "workstreamId": "ws_legal",
+          "phase": "pre",
+          "textKey": "exec.item_i02",
+          "text": "Confirm regulatory approvals and the closing checklist with external counsel."
+        },
+        {
+          "id": "i03",
+          "workstreamId": "ws_hr",
+          "phase": "pre",
+          "textKey": "exec.item_i03",
+          "text": "Freeze the key-talent list and approve retention packages."
+        },
+        {
+          "id": "i04",
+          "workstreamId": "ws_it",
+          "phase": "pre",
+          "textKey": "exec.item_i04",
+          "text": "Complete the systems inventory and agree keep/migrate/retire for core systems."
+        },
+        {
+          "id": "i05",
+          "workstreamId": "ws_comms",
+          "phase": "pre",
+          "textKey": "exec.item_i05",
+          "text": "Prepare the Day-1 communications pack (employees, customers, press)."
+        },
+        {
+          "id": "i06",
+          "workstreamId": "ws_finance",
+          "phase": "pre",
+          "textKey": "exec.item_i06",
+          "text": "Design the Day-1 financial-control framework (approvals, signatories, limits)."
+        },
+        {
+          "id": "i07",
+          "workstreamId": "ws_comms",
+          "phase": "day1",
+          "textKey": "exec.item_i07",
+          "text": "Send Day-1 announcements to employees and customers."
+        },
+        {
+          "id": "i08",
+          "workstreamId": "ws_hr",
+          "phase": "day1",
+          "textKey": "exec.item_i08",
+          "text": "Payroll and benefits continuity confirmed — first payroll run verified."
+        },
+        {
+          "id": "i09",
+          "workstreamId": "ws_it",
+          "phase": "day1",
+          "textKey": "exec.item_i09",
+          "text": "Day-1 access live: email, VPN, ERP and payroll accounts for every team."
+        },
+        {
+          "id": "i10",
+          "workstreamId": "ws_legal",
+          "phase": "day1",
+          "textKey": "exec.item_i10",
+          "text": "Legal entity change registered; contract novation plan started."
+        },
+        {
+          "id": "i11",
+          "workstreamId": "ws_sales",
+          "phase": "day1",
+          "textKey": "exec.item_i11",
+          "text": "Top-20 customers called by their named owner."
+        },
+        {
+          "id": "i12",
+          "workstreamId": "ws_ops",
+          "phase": "day1",
+          "textKey": "exec.item_i12",
+          "text": "Business continuity confirmed: orders, production and support running."
+        },
+        {
+          "id": "i13",
+          "workstreamId": "ws_imo",
+          "phase": "day1",
+          "textKey": "exec.item_i13",
+          "text": "Day-1 go/no-go review held and logged."
+        },
+        {
+          "id": "i14",
+          "workstreamId": "ws_finance",
+          "phase": "day1",
+          "textKey": "exec.item_i14",
+          "text": "Bank access, signatories and payment runs switched to TE control."
+        },
+        {
+          "id": "i15",
+          "workstreamId": "ws_hr",
+          "phase": "d30",
+          "textKey": "exec.item_i15",
+          "text": "Retention 1-on-1s completed with all key talent."
+        },
+        {
+          "id": "i16",
+          "workstreamId": "ws_hr",
+          "phase": "d30",
+          "textKey": "exec.item_i16",
+          "text": "Org design for the combined team announced to managers."
+        },
+        {
+          "id": "i17",
+          "workstreamId": "ws_it",
+          "phase": "d30",
+          "textKey": "exec.item_i17",
+          "text": "Data migration wave 1 (CRM + finance) completed and validated."
+        },
+        {
+          "id": "i18",
+          "workstreamId": "ws_sales",
+          "phase": "d30",
+          "textKey": "exec.item_i18",
+          "text": "Cross-sell opportunity map agreed with account owners."
+        },
+        {
+          "id": "i19",
+          "workstreamId": "ws_comms",
+          "phase": "d30",
+          "textKey": "exec.item_i19",
+          "text": "First integration pulse survey sent and results reviewed."
+        },
+        {
+          "id": "i20",
+          "workstreamId": "ws_imo",
+          "phase": "d30",
+          "textKey": "exec.item_i20",
+          "text": "Synergy initiatives baselined with owners and targets."
+        },
+        {
+          "id": "i21",
+          "workstreamId": "ws_ops",
+          "phase": "d30",
+          "textKey": "exec.item_i21",
+          "text": "Quality and safety audits of target sites completed."
+        },
+        {
+          "id": "i22",
+          "workstreamId": "ws_finance",
+          "phase": "d60",
+          "textKey": "exec.item_i22",
+          "text": "Monthly close executed on the TE calendar and chart of accounts."
+        },
+        {
+          "id": "i23",
+          "workstreamId": "ws_it",
+          "phase": "d60",
+          "textKey": "exec.item_i23",
+          "text": "Legacy system decommissioning plan approved."
+        },
+        {
+          "id": "i24",
+          "workstreamId": "ws_hr",
+          "phase": "d60",
+          "textKey": "exec.item_i24",
+          "text": "Manager enablement training delivered at every site."
+        },
+        {
+          "id": "i25",
+          "workstreamId": "ws_sales",
+          "phase": "d60",
+          "textKey": "exec.item_i25",
+          "text": "Joint pipeline reviewed; first cross-sell wins logged."
+        },
+        {
+          "id": "i26",
+          "workstreamId": "ws_imo",
+          "phase": "d60",
+          "textKey": "exec.item_i26",
+          "text": "60-day integration review with the steering committee."
+        },
+        {
+          "id": "i27",
+          "workstreamId": "ws_imo",
+          "phase": "d100",
+          "textKey": "exec.item_i27",
+          "text": "100-day review: synergy status, lessons learned, handover to the line."
+        },
+        {
+          "id": "i28",
+          "workstreamId": "ws_hr",
+          "phase": "d100",
+          "textKey": "exec.item_i28",
+          "text": "Culture pulse re-run; action plan for gaps agreed."
+        },
+        {
+          "id": "i29",
+          "workstreamId": "ws_ops",
+          "phase": "d100",
+          "textKey": "exec.item_i29",
+          "text": "Integration of operational processes complete or scheduled."
+        },
+        {
+          "id": "i30",
+          "workstreamId": "ws_legal",
+          "phase": "d100",
+          "textKey": "exec.item_i30",
+          "text": "Contract novations over 90% complete; open risks logged."
+        }
+      ],
+      "version": 1
+    }
+  ],
+  "integrationTasks": [
+    {
+      "id": "task_seed_i01",
+      "title": "Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.",
+      "titleKey": "exec.item_i01",
+      "workstreamId": "ws_imo",
+      "phase": "pre",
+      "owner": "David Miller",
+      "due": "2026-04-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i01",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i02",
+      "title": "Confirm regulatory approvals and the closing checklist with external counsel.",
+      "titleKey": "exec.item_i02",
+      "workstreamId": "ws_legal",
+      "phase": "pre",
+      "owner": "Elena Novak",
+      "due": "2026-04-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i02",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i03",
+      "title": "Freeze the key-talent list and approve retention packages.",
+      "titleKey": "exec.item_i03",
+      "workstreamId": "ws_hr",
+      "phase": "pre",
+      "owner": "Karen Peterson",
+      "due": "2026-04-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i03",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i04",
+      "title": "Complete the systems inventory and agree keep/migrate/retire for core systems.",
+      "titleKey": "exec.item_i04",
+      "workstreamId": "ws_it",
+      "phase": "pre",
+      "owner": "Priya Sharma",
+      "due": "2026-04-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i04",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i05",
+      "title": "Prepare the Day-1 communications pack (employees, customers, press).",
+      "titleKey": "exec.item_i05",
+      "workstreamId": "ws_comms",
+      "phase": "pre",
+      "owner": "Sarah Jenkins",
+      "due": "2026-04-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i05",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i06",
+      "title": "Design the Day-1 financial-control framework (approvals, signatories, limits).",
+      "titleKey": "exec.item_i06",
+      "workstreamId": "ws_finance",
+      "phase": "pre",
+      "owner": "Marc Weber",
+      "due": "2026-04-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i06",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i07",
+      "title": "Send Day-1 announcements to employees and customers.",
+      "titleKey": "exec.item_i07",
+      "workstreamId": "ws_comms",
+      "phase": "day1",
+      "owner": "Sarah Jenkins",
+      "due": "2026-05-01",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i07",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-30T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i08",
+      "title": "Payroll and benefits continuity confirmed — first payroll run verified.",
+      "titleKey": "exec.item_i08",
+      "workstreamId": "ws_hr",
+      "phase": "day1",
+      "owner": "Karen Peterson",
+      "due": "2026-05-01",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i08",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-30T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i09",
+      "title": "Day-1 access live: email, VPN, ERP and payroll accounts for every team.",
+      "titleKey": "exec.item_i09",
+      "workstreamId": "ws_it",
+      "phase": "day1",
+      "owner": "Priya Sharma",
+      "due": "2026-05-01",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i09",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-30T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i10",
+      "title": "Legal entity change registered; contract novation plan started.",
+      "titleKey": "exec.item_i10",
+      "workstreamId": "ws_legal",
+      "phase": "day1",
+      "owner": "Elena Novak",
+      "due": "2026-05-01",
+      "status": "doing",
+      "source": "template:ctpl_day1_100:i10",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i11",
+      "title": "Top-20 customers called by their named owner.",
+      "titleKey": "exec.item_i11",
+      "workstreamId": "ws_sales",
+      "phase": "day1",
+      "owner": "Tom Becker",
+      "due": "2026-05-01",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i11",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-30T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i12",
+      "title": "Business continuity confirmed: orders, production and support running.",
+      "titleKey": "exec.item_i12",
+      "workstreamId": "ws_ops",
+      "phase": "day1",
+      "owner": "Jonas Petersen",
+      "due": "2026-05-01",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i12",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-30T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i13",
+      "title": "Day-1 go/no-go review held and logged.",
+      "titleKey": "exec.item_i13",
+      "workstreamId": "ws_imo",
+      "phase": "day1",
+      "owner": "David Miller",
+      "due": "2026-05-01",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i13",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-30T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i14",
+      "title": "Bank access, signatories and payment runs switched to TE control.",
+      "titleKey": "exec.item_i14",
+      "workstreamId": "ws_finance",
+      "phase": "day1",
+      "owner": "Marc Weber",
+      "due": "2026-05-01",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i14",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-04-30T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i15",
+      "title": "Retention 1-on-1s completed with all key talent.",
+      "titleKey": "exec.item_i15",
+      "workstreamId": "ws_hr",
+      "phase": "d30",
+      "owner": "Karen Peterson",
+      "due": "2026-05-30",
+      "status": "doing",
+      "source": "template:ctpl_day1_100:i15",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i16",
+      "title": "Org design for the combined team announced to managers.",
+      "titleKey": "exec.item_i16",
+      "workstreamId": "ws_hr",
+      "phase": "d30",
+      "owner": "Karen Peterson",
+      "due": "2026-05-30",
+      "status": "doing",
+      "source": "template:ctpl_day1_100:i16",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i17",
+      "title": "Data migration wave 1 (CRM + finance) completed and validated.",
+      "titleKey": "exec.item_i17",
+      "workstreamId": "ws_it",
+      "phase": "d30",
+      "owner": "Priya Sharma",
+      "due": "2026-05-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i17",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-05-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i18",
+      "title": "Cross-sell opportunity map agreed with account owners.",
+      "titleKey": "exec.item_i18",
+      "workstreamId": "ws_sales",
+      "phase": "d30",
+      "owner": "Tom Becker",
+      "due": "2026-05-30",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i18",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i19",
+      "title": "First integration pulse survey sent and results reviewed.",
+      "titleKey": "exec.item_i19",
+      "workstreamId": "ws_comms",
+      "phase": "d30",
+      "owner": "Sarah Jenkins",
+      "due": "2026-05-30",
+      "status": "done",
+      "source": "template:ctpl_day1_100:i19",
+      "createdAt": "2026-04-20T09:00:00.000Z",
+      "completedAt": "2026-05-29T00:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i20",
+      "title": "Synergy initiatives baselined with owners and targets.",
+      "titleKey": "exec.item_i20",
+      "workstreamId": "ws_imo",
+      "phase": "d30",
+      "owner": "David Miller",
+      "due": "2026-05-30",
+      "status": "doing",
+      "source": "template:ctpl_day1_100:i20",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i21",
+      "title": "Quality and safety audits of target sites completed.",
+      "titleKey": "exec.item_i21",
+      "workstreamId": "ws_ops",
+      "phase": "d30",
+      "owner": "Jonas Petersen",
+      "due": "2026-05-30",
+      "status": "blocked",
+      "source": "template:ctpl_day1_100:i21",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i22",
+      "title": "Monthly close executed on the TE calendar and chart of accounts.",
+      "titleKey": "exec.item_i22",
+      "workstreamId": "ws_finance",
+      "phase": "d60",
+      "owner": "Marc Weber",
+      "due": "2026-06-29",
+      "status": "doing",
+      "source": "template:ctpl_day1_100:i22",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i23",
+      "title": "Legacy system decommissioning plan approved.",
+      "titleKey": "exec.item_i23",
+      "workstreamId": "ws_it",
+      "phase": "d60",
+      "owner": "Priya Sharma",
+      "due": "2026-06-29",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i23",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i24",
+      "title": "Manager enablement training delivered at every site.",
+      "titleKey": "exec.item_i24",
+      "workstreamId": "ws_hr",
+      "phase": "d60",
+      "owner": "Karen Peterson",
+      "due": "2026-06-29",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i24",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i25",
+      "title": "Joint pipeline reviewed; first cross-sell wins logged.",
+      "titleKey": "exec.item_i25",
+      "workstreamId": "ws_sales",
+      "phase": "d60",
+      "owner": "Tom Becker",
+      "due": "2026-06-29",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i25",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i26",
+      "title": "60-day integration review with the steering committee.",
+      "titleKey": "exec.item_i26",
+      "workstreamId": "ws_imo",
+      "phase": "d60",
+      "owner": "David Miller",
+      "due": "2026-06-29",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i26",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i27",
+      "title": "100-day review: synergy status, lessons learned, handover to the line.",
+      "titleKey": "exec.item_i27",
+      "workstreamId": "ws_imo",
+      "phase": "d100",
+      "owner": "David Miller",
+      "due": "2026-08-08",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i27",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i28",
+      "title": "Culture pulse re-run; action plan for gaps agreed.",
+      "titleKey": "exec.item_i28",
+      "workstreamId": "ws_hr",
+      "phase": "d100",
+      "owner": "Karen Peterson",
+      "due": "2026-08-08",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i28",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i29",
+      "title": "Integration of operational processes complete or scheduled.",
+      "titleKey": "exec.item_i29",
+      "workstreamId": "ws_ops",
+      "phase": "d100",
+      "owner": "Jonas Petersen",
+      "due": "2026-08-08",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i29",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_seed_i30",
+      "title": "Contract novations over 90% complete; open risks logged.",
+      "titleKey": "exec.item_i30",
+      "workstreamId": "ws_legal",
+      "phase": "d100",
+      "owner": "Elena Novak",
+      "due": "2026-08-08",
+      "status": "todo",
+      "source": "template:ctpl_day1_100:i30",
+      "createdAt": "2026-04-20T09:00:00.000Z"
+    },
+    {
+      "id": "task_mrs73oa10952a4b6",
+      "title": "Accelerate retention: a named owner for every key-talent conversation and a weekly flight-risk review.",
+      "titleKey": "assess.remed_tg_people",
+      "workstreamId": "ws_hr",
+      "phase": "d30",
+      "owner": "",
+      "due": "",
+      "status": "todo",
+      "source": "remediation:atpl_company_target:dim_people",
+      "createdAt": "2026-07-19T19:35:14.857Z"
+    },
+    {
+      "id": "task_mrs73oa1c9e66e86",
+      "title": "Run joint culture sessions early: pair target and TE teams on real work, and make the 'why' of new ways of working explicit.",
+      "titleKey": "assess.remed_tg_culture",
+      "workstreamId": "ws_hr",
+      "phase": "d30",
+      "owner": "",
+      "due": "",
+      "status": "todo",
+      "source": "remediation:atpl_company_target:dim_culture",
+      "createdAt": "2026-07-19T19:35:14.857Z"
+    },
+    {
+      "id": "task_mrs73oa13ab4a257",
+      "title": "Stand up a joint systems task force: complete the inventory, then test Day-1 access end-to-end for every team.",
+      "titleKey": "assess.remed_tg_systems",
+      "workstreamId": "ws_it",
+      "phase": "d30",
+      "owner": "",
+      "due": "",
+      "status": "todo",
+      "source": "remediation:atpl_company_target:dim_systems",
+      "createdAt": "2026-07-19T19:35:14.857Z"
+    },
+    {
+      "id": "task_mrs73oa1745bd2c7",
+      "title": "Walk the Day-1 runbook: confirm payroll, invoicing and support continuity with a go/no-go rehearsal.",
+      "titleKey": "assess.remed_tg_day1",
+      "workstreamId": "ws_imo",
+      "phase": "d30",
+      "owner": "",
+      "due": "",
+      "status": "todo",
+      "source": "remediation:atpl_company_target:dim_day1",
+      "createdAt": "2026-07-19T19:35:14.857Z"
+    }
+  ],
+  "customIntegrationTasks": []
 }
