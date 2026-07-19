@@ -2385,6 +2385,13 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <a href="/assessments.html" class="btn btn-secondary" style="font-size:.78rem;padding:.45rem .9rem;flex:none;" data-i18n="assess.gate_cta">Open Assessment Center</a>`;
       kpiTab.insertBefore(strip, kpiTab.children[1] || null);
+      // Disambiguate the two scoring systems: the legacy 1–5 culture-diagnostic
+      // gauges below vs the 0–100 readiness assessments above.
+      const legacyNote = document.createElement('div');
+      legacyNote.style.cssText = 'grid-column:1/-1;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);margin:.35rem 0 -.35rem;';
+      legacyNote.setAttribute('data-i18n', 'assess.kpi_legacy_note');
+      legacyNote.textContent = 'Culture diagnostic — pulse-survey scores on a 1–5 scale (separate from the readiness assessments above)';
+      kpiTab.insertBefore(legacyNote, strip.nextSibling);
     }
 
     const gate = (st.gatesSummary || {})['dashboard.phase.plan'];

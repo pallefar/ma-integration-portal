@@ -1862,7 +1862,8 @@
         "notif.tasks_overdue": "overdue tasks in the Execution Hub",
         "notif.tasks_blocked": "blocked tasks need attention",
         "notif.raid_high": "open high-severity risks or issues",
-        "notif.none": "All clear — nothing needs attention."
+        "notif.none": "All clear — nothing needs attention.",
+        "assess.kpi_legacy_note": "Culture diagnostic — pulse-survey scores on a 1–5 scale (separate from the readiness assessments above)"
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2861,7 +2862,8 @@
         "notif.tasks_overdue": "überfällige Aufgaben im Execution Hub",
         "notif.tasks_blocked": "blockierte Aufgaben benötigen Aufmerksamkeit",
         "notif.raid_high": "offene Risiken/Probleme hoher Schwere",
-        "notif.none": "Alles klar — nichts erfordert Aufmerksamkeit."
+        "notif.none": "Alles klar — nichts erfordert Aufmerksamkeit.",
+        "assess.kpi_legacy_note": "Kultur-Diagnostik — Umfragewerte auf einer Skala von 1–5 (getrennt von den Readiness-Assessments oben)"
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -3860,7 +3862,8 @@
         "notif.tasks_overdue": "执行中心有逾期任务",
         "notif.tasks_blocked": "受阻任务需要关注",
         "notif.raid_high": "存在未解决的高严重度风险/问题",
-        "notif.none": "一切正常——无需处理。"
+        "notif.none": "一切正常——无需处理。",
+        "assess.kpi_legacy_note": "文化诊断——脉搏调查得分（1–5 分制，与上方的就绪度评估相互独立）"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -4859,7 +4862,8 @@
         "notif.tasks_overdue": "úkolů po termínu v Execution Hubu",
         "notif.tasks_blocked": "blokované úkoly vyžadují pozornost",
         "notif.raid_high": "otevřená rizika/problémy vysoké závažnosti",
-        "notif.none": "Vše v pořádku — nic nevyžaduje pozornost."
+        "notif.none": "Vše v pořádku — nic nevyžaduje pozornost.",
+        "assess.kpi_legacy_note": "Kulturní diagnostika — skóre z průzkumů na škále 1–5 (odděleno od hodnocení připravenosti výše)"
       }
     }
   },
