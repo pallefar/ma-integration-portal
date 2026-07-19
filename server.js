@@ -99,17 +99,98 @@ function timingSafeEqualStr(a, b) {
   const hb = crypto.createHash('sha256').update(String(b)).digest();
   return crypto.timingSafeEqual(ha, hb);
 }
+// --- Optional real login (PORTAL_AUTH=1) -------------------------------------
+// Off by default: the local demo stays completely open. When PORTAL_AUTH=1 the
+// API requires a signed session cookie (users live in db.json with scrypt
+// hashes) and the client redirects to /login.html. Set PORTAL_AUTH_SECRET to
+// keep sessions valid across restarts; otherwise a per-boot secret is used.
+const PORTAL_AUTH = process.env.PORTAL_AUTH === '1';
+const AUTH_SECRET = process.env.PORTAL_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+function signSessionPayload(payload) {
+  return crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('base64url');
+}
+function makeSessionToken(user) {
+  const payload = Buffer.from(JSON.stringify({ u: user.username, r: user.role, e: Date.now() + SESSION_TTL_MS })).toString('base64url');
+  return payload + '.' + signSessionPayload(payload);
+}
+function readSession(req) {
+  const cookies = String(req.headers.cookie || '');
+  const m = cookies.match(/(?:^|;\s*)ma_session=([^;]+)/);
+  if (!m) return null;
+  const parts = m[1].split('.');
+  if (parts.length !== 2) return null;
+  if (!timingSafeEqualStr(signSessionPayload(parts[0]), parts[1])) return null;
+  try {
+    const data = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+    if (!data.u || !data.e || data.e < Date.now()) return null;
+    return { username: data.u, role: data.r || 'employee' };
+  } catch (e) { return null; }
+}
+function hashPassword(password, saltHex) {
+  return crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 32).toString('hex');
+}
+
 app.use('/api', (req, res, next) => {
   const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
   const isAdminPath = req.path.startsWith('/admin'); // /api/admin/* (download-zip, migrate-db)
   if (!isWrite && !isAdminPath) return next();        // public read-only GETs stay open (visitor demo)
   if (!ADMIN_TOKEN) return next();                    // dev/demo: no token configured -> open
+  // With real login enabled, an authenticated admin session authorizes writes
+  // without re-supplying the shared token.
+  if (PORTAL_AUTH) {
+    const sess = readSession(req);
+    if (sess && sess.role === 'admin') return next();
+  }
   // Header only — never accept the secret via query string (it would leak into
   // access logs, proxies and browser history). Constant-time compare over fixed
   // -length SHA-256 digests so the token can't be guessed via a timing side channel.
   const supplied = req.get('X-Admin-Token') || '';
   if (supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return next();
   return res.status(401).json({ error: 'Admin authentication required. Provide a valid X-Admin-Token.' });
+});
+
+// Session gate: with PORTAL_AUTH=1 every API call needs a valid session
+// (login/me excepted). Without it this middleware is a straight pass-through.
+app.use('/api', (req, res, next) => {
+  if (!PORTAL_AUTH) return next();
+  if (req.path === '/auth/login' || req.path === '/auth/me') return next();
+  const sess = readSession(req);
+  if (!sess) return res.status(401).json({ error: 'Login required.', authRequired: true });
+  req.portalUser = sess;
+  next();
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (!PORTAL_AUTH) return res.status(400).json({ error: 'Login is disabled (PORTAL_AUTH is not set).' });
+  const db = readDb();
+  const user = (db.users || []).find(u => u.username === String(username || '').trim().toLowerCase());
+  const ok = user && user.salt && user.hash && timingSafeEqualStr(hashPassword(password || '', user.salt), user.hash);
+  if (!ok) {
+    // flat 400ms on failure blunts both timing probes and brute force
+    return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
+  }
+  const cookie = ['ma_session=' + makeSessionToken(user), 'Path=/', 'HttpOnly', 'SameSite=Lax',
+    'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
+  if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
+  res.setHeader('Set-Cookie', cookie.join('; '));
+  res.json({ success: true, user: { username: user.username, name: user.name || user.username, role: user.role } });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'ma_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  res.json({ success: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  if (!PORTAL_AUTH) return res.json({ authEnabled: false });
+  const sess = readSession(req);
+  if (!sess) return res.json({ authEnabled: true, user: null });
+  const db = readDb();
+  const user = (db.users || []).find(u => u.username === sess.username);
+  res.json({ authEnabled: true, user: user ? { username: user.username, name: user.name || user.username, role: user.role } : { username: sess.username, role: sess.role } });
 });
 
 // Lightweight health check for uptime monitors and platform probes
@@ -202,6 +283,8 @@ function readDb() {
     parsed.customSynergyInitiatives = parsed.customSynergyInitiatives || [];
     parsed.raidEntries = parsed.raidEntries || [];
     parsed.customRaidEntries = parsed.customRaidEntries || [];
+    // Portal login accounts (used only when PORTAL_AUTH=1); scrypt salt+hash.
+    parsed.users = parsed.users || [];
     _dbCache = parsed;
     _dbMtime = mtime;
     return parsed;

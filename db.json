@@ -9963,5 +9963,28 @@
       "createdAt": "2026-05-20T09:00:00.000Z"
     }
   ],
-  "customRaidEntries": []
+  "customRaidEntries": [],
+  "users": [
+    {
+      "username": "admin",
+      "name": "Portal Admin",
+      "role": "admin",
+      "salt": "cd1241093fb1d4eb5d504a8c936656ef",
+      "hash": "0c0aa6eb3a799e4c35cfa38a23cb731df86a5da57365a40751d96bc968f7f084"
+    },
+    {
+      "username": "karen",
+      "name": "Karen Peterson",
+      "role": "hrbp",
+      "salt": "2e3fd9bddc6084ef06bde1f284f839c1",
+      "hash": "0c921cb69626b26ba25786facf1e6f4d5e1c24e5bd582398f83d6d61b1e283ad"
+    },
+    {
+      "username": "pmo",
+      "name": "PMO Lead",
+      "role": "pmo",
+      "salt": "aff02926d6e17c351745618668375f49",
+      "hash": "08c9d9a3816c07384605f84286096751aa51fd0d963192501fbf4cbcd40fe43d"
+    }
+  ]
 }

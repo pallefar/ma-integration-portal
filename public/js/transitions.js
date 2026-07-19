@@ -150,6 +150,33 @@
   }
 })();
 
+// Real-login handshake (only active on PORTAL_AUTH=1 deployments; the open demo
+// gets { authEnabled:false } and nothing changes). The server-verified role
+// overrides the client-side demo role, and a logout link joins the sidebar.
+(function () {
+  if (window.location.pathname.includes('login.html')) return;
+  fetch('/api/auth/me').then(r => r.json()).then(me => {
+    if (!me || !me.authEnabled) return;
+    if (!me.user) { window.location.href = '/login.html'; return; }
+    window.__portalUser = me.user;
+    if (me.user.role) localStorage.setItem('active_demo_role', me.user.role);
+    let tries = 0;
+    const addLogout = () => {
+      const foot = document.querySelector('.sidebar-footer');
+      if (!foot) { if (tries++ < 40) setTimeout(addLogout, 250); return; }
+      const a = document.createElement('a');
+      a.href = 'javascript:void(0)';
+      a.textContent = '⎋ ' + (me.user.name || me.user.username) + ' — Logout';
+      a.style.cssText = 'display:block;margin-top:0.4rem;font-size:0.72rem;color:inherit;text-decoration:underline;cursor:pointer;';
+      a.addEventListener('click', () => {
+        fetch('/api/auth/logout', { method: 'POST' }).then(() => { window.location.href = '/login.html'; });
+      });
+      foot.appendChild(a);
+    };
+    addLogout();
+  }).catch(() => { /* auth probe is best-effort */ });
+})();
+
 /**
  * TE Connectivity M&A Integration Portal - Transitions Manager
  * Intercepts document navigation to apply highly premium slide-out, slide-in,

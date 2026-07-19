@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Sign in</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/css/style.css?v=1784500010">
+  <style>
+    body{ display:flex; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg,#f3f6f7,#e8eef0); }
+    .login-card{ background:#fff; border:1px solid var(--border-color,#dde3e6); border-radius:16px; padding:2.25rem 2.5rem; width:100%; max-width:400px; box-shadow:0 24px 60px rgba(9,17,22,.14); }
+    .login-card img{ height:40px; margin-bottom:1.25rem; }
+    .login-card h1{ font-size:1.25rem; color:var(--te-dark-teal,#244C5A); margin:0 0 .35rem; }
+    .login-card p{ font-size:.85rem; color:var(--text-secondary,#5b666c); margin:0 0 1.4rem; line-height:1.5; }
+    .lg-field{ margin-bottom:1rem; }
+    .lg-field label{ display:block; font-size:.74rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--text-dim,#7a848a); margin-bottom:.35rem; }
+    .lg-field input{ width:100%; padding:.65rem .85rem; border:1.5px solid var(--border-color,#dde3e6); border-radius:8px; font-family:inherit; font-size:.95rem; box-sizing:border-box; }
+    .lg-field input:focus{ outline:none; border-color:var(--te-orange,#E98300); }
+    .lg-btn{ width:100%; padding:.7rem; border:none; border-radius:8px; background:var(--te-orange,#E98300); color:#fff; font-family:inherit; font-size:.95rem; font-weight:800; cursor:pointer; }
+    .lg-btn:hover{ filter:brightness(1.05); }
+    .lg-err{ display:none; color:#C0392B; font-size:.82rem; font-weight:700; margin-top:.8rem; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <img src="/te-logo.png" alt="TE Connectivity">
+    <h1>M&A Integration Portal</h1>
+    <p>Sign in to continue. Access is managed by your integration administrator.</p>
+    <form id="login-form">
+      <div class="lg-field"><label for="lg-user">Username</label><input id="lg-user" type="text" autocomplete="username" autofocus></div>
+      <div class="lg-field"><label for="lg-pass">Password</label><input id="lg-pass" type="password" autocomplete="current-password"></div>
+      <button class="lg-btn" type="submit">Sign in</button>
+      <div class="lg-err" id="lg-err">Invalid username or password.</div>
+    </form>
+  </div>
+  <script>
+    // If auth is disabled (local demo) there is nothing to sign in to.
+    fetch('/api/auth/me').then(function (r) { return r.json(); }).then(function (me) {
+      if (!me.authEnabled || me.user) window.location.href = '/';
+    }).catch(function () {});
+    document.getElementById('login-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var err = document.getElementById('lg-err');
+      err.style.display = 'none';
+      fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: document.getElementById('lg-user').value, password: document.getElementById('lg-pass').value })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res && res.success) window.location.href = '/';
+        else err.style.display = 'block';
+      }).catch(function () { err.style.display = 'block'; });
+    });
+  </script>
+</body>
+</html>
