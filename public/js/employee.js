@@ -3606,3 +3606,58 @@ document.addEventListener('DOMContentLoaded', () => {
   window.renderStreakBadge = renderStreakBadge;
 
 });
+
+// ===== Change Readiness Pulse (Assessment Suite v2) =====
+// Anonymous 1–5 pulse posting to the existing /api/pulses with
+// type:'change-readiness'. Aggregated (n≥5 floor) into the target-readiness
+// sentiment tile in the Assessment Center. Strings use the app-wide assess.*
+// i18n keys (translated by transitions.js' portal engine).
+document.addEventListener('DOMContentLoaded', () => {
+  const anchor = document.getElementById('pulse-survey-card');
+  if (!anchor) return;
+  const card = document.createElement('div');
+  card.className = 'pulse-onboarding-card';
+  card.id = 'change-pulse-card';
+  card.style.marginTop = '1.25rem';
+  card.innerHTML = `
+    <h3 data-i18n="assess.pulse_card_title">Change Readiness Pulse</h3>
+    <div id="change-pulse-form">
+      <p style="font-size:0.85rem;color:var(--text-secondary);margin:0.4rem 0 0.75rem;" data-i18n="assess.pulse_q">How ready do you feel for the changes ahead?</p>
+      <div style="display:flex;gap:0.4rem;margin-bottom:0.75rem;" id="change-pulse-scale">
+        ${[1, 2, 3, 4, 5].map(v => `<button type="button" data-cp-val="${v}" style="flex:1;padding:0.55rem 0;border:1.5px solid var(--border-color);border-radius:8px;background:var(--card-bg,#fff);font-weight:800;font-size:0.95rem;cursor:pointer;font-family:inherit;color:var(--text-secondary);">${v}</button>`).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-dim);margin:-0.4rem 0 0.75rem;">
+        <span data-i18n="assess.scale5_1">Strongly disagree</span><span data-i18n="assess.scale5_5">Strongly agree</span>
+      </div>
+      <button type="button" class="btn btn-primary" id="change-pulse-submit" disabled style="width:100%;font-size:0.85rem;" data-i18n="assess.pulse_submit">Send anonymous pulse</button>
+      <p style="font-size:0.7rem;color:var(--text-dim);font-style:italic;margin:0.5rem 0 0;" data-i18n="assess.pulse_anon">Anonymous — only aggregated results (5+ responses) are ever shown.</p>
+    </div>
+    <p id="change-pulse-thanks" style="display:none;font-size:0.9rem;color:var(--te-dark-teal);font-weight:700;margin:0.6rem 0 0;" data-i18n="assess.pulse_thanks">Thanks — your anonymous pulse was recorded.</p>`;
+  anchor.insertAdjacentElement('afterend', card);
+
+  let chosen = null;
+  card.querySelectorAll('[data-cp-val]').forEach(b => {
+    b.addEventListener('click', () => {
+      chosen = parseInt(b.getAttribute('data-cp-val'), 10);
+      card.querySelectorAll('[data-cp-val]').forEach(x => {
+        const sel = x === b;
+        x.style.background = sel ? 'var(--te-dark-teal)' : 'var(--card-bg, #fff)';
+        x.style.color = sel ? '#fff' : 'var(--text-secondary)';
+        x.style.borderColor = sel ? 'var(--te-dark-teal)' : 'var(--border-color)';
+      });
+      card.querySelector('#change-pulse-submit').disabled = false;
+    });
+  });
+  card.querySelector('#change-pulse-submit').addEventListener('click', () => {
+    if (!chosen) return;
+    fetch('/api/pulses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeName: 'Anonymous', rating: chosen, type: 'change-readiness' })
+    }).then(r => r.json()).then(() => {
+      card.querySelector('#change-pulse-form').style.display = 'none';
+      card.querySelector('#change-pulse-thanks').style.display = 'block';
+    }).catch(e => console.error('change pulse failed', e));
+  });
+  if (window.applyPortalI18n) window.applyPortalI18n();
+});

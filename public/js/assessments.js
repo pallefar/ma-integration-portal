@@ -33,6 +33,31 @@
 
   function applyI18n() { if (window.applyPortalI18n) window.applyPortalI18n(); }
 
+  // Anonymous workforce sentiment from pulses: mean rating (1–5 → 0–100) with an
+  // n≥5 anonymity floor — shown alongside, never blended into, assessed scores.
+  function sentimentStats() {
+    var pulses = (state.pulses || []).filter(function (p) { return typeof p.rating === 'number' && p.rating > 0; });
+    if (!pulses.length) return { n: 0, score: null };
+    var mean = pulses.reduce(function (a, p) { return a + p.rating; }, 0) / pulses.length;
+    return { n: pulses.length, score: Math.round(((mean - 1) / 4) * 100) };
+  }
+
+  function sentimentTileHtml() {
+    var s = sentimentStats();
+    var inner;
+    if (s.n >= 5 && s.score != null) {
+      inner = '<span style="font-weight:800;font-size:1.05rem;color:' + C.scoreBandColor(s.score) + '">' + s.score + '</span>'
+        + ' <span style="font-size:.74rem;color:var(--text-dim);">(' + s.n + ' <span data-i18n="assess.sentiment_n">responses</span>)</span>';
+    } else {
+      inner = '<span style="font-size:.8rem;color:var(--text-dim);" data-i18n="assess.sentiment_low_n">Fewer than 5 responses — the aggregate appears once more arrive.</span>';
+    }
+    return '<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;border-top:1px dashed var(--border-color);margin-top:1.1rem;padding-top:.9rem;">'
+      + '<span style="font-size:.8rem;font-weight:800;color:var(--te-dark-teal);">💬 <span data-i18n="assess.sentiment_title">Workforce sentiment</span></span>'
+      + inner
+      + '<span style="font-size:.7rem;color:var(--text-dim);font-style:italic;flex-basis:100%;" data-i18n="assess.sentiment_hint">From anonymous employee pulses — displayed alongside, never blended into, assessed scores.</span>'
+      + '</div>';
+  }
+
   function bandLabelSpan(bandId) {
     return '<span data-i18n="assess.band_' + esc(bandId) + '">' + esc(bandId === 'ready' ? 'Ready' : bandId === 'support' ? 'Ready with support' : 'At risk') + '</span>';
   }
@@ -63,10 +88,12 @@
   function loadAll() {
     return Promise.all([
       fetch('/api/assessment-templates').then(function (r) { return r.json(); }),
-      fetch('/api/assessment-status').then(function (r) { return r.json(); })
+      fetch('/api/assessment-status').then(function (r) { return r.json(); }),
+      fetch('/api/pulses').then(function (r) { return r.json(); }).catch(function () { return []; })
     ]).then(function (res) {
       state.templates = Array.isArray(res[0]) ? res[0] : [];
       state.status = res[1] || {};
+      state.pulses = Array.isArray(res[2]) ? res[2] : [];
       return Promise.all(state.templates.map(function (tpl) {
         return fetch('/api/assessment-instances?templateId=' + encodeURIComponent(tpl.id))
           .then(function (r) { return r.json(); })
@@ -116,13 +143,95 @@
         + (latest ? '<span style="font-size:.72rem;color:var(--text-dim);"><span data-i18n="assess.last_taken">Last taken</span>: ' + fmtDate(latest.timestamp) + '</span>' : '')
         + '</div></div>';
     }).join('');
-    el.innerHTML = '<p style="color:var(--text-secondary);margin:0 0 1.1rem;font-size:.92rem;max-width:820px;line-height:1.55;" data-i18n="assess.overview_intro">Required readiness assessments for this integration. Complete each one — the scores unlock phase gates and drive the coaching plan.</p>'
+    el.innerHTML = '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.1rem;">'
+      + '<p style="color:var(--text-secondary);margin:0;font-size:.92rem;max-width:720px;line-height:1.55;" data-i18n="assess.overview_intro">Required readiness assessments for this integration. Complete each one — the scores unlock phase gates and drive the coaching plan.</p>'
+      + '<button class="btn btn-secondary" id="as-readout-btn" style="font-size:.8rem;padding:.5rem 1rem;flex:none;">🖨 <span data-i18n="assess.readout_btn">Exec readout (print/PDF)</span></button>'
+      + '</div>'
       + '<div class="as-req-grid">' + cards + '</div>'
       + '<p class="as-note" data-i18n="assess.n1_note">Structured judgment by 1 rater — a facilitated read of readiness, not a statistical instrument.</p>';
     el.querySelectorAll('.as-goto').forEach(function (b) {
       b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); });
     });
+    var ro = el.querySelector('#as-readout-btn');
+    if (ro) ro.addEventListener('click', printReadout);
     applyI18n();
+  }
+
+  // ---------------------------------------------------------------- exec readout
+  // Builds a one-page printable summary and opens the browser print dialog
+  // (print CSS in assessments.html shows only #as-readout). PDF = print to PDF.
+  function printReadout() {
+    var old = document.getElementById('as-readout');
+    if (old) old.remove();
+    var by = (state.status || {}).bySubject || {};
+    var compat = ((state.status || {}).compatibility || [])[0];
+    var acq = by['acquirer-org'] && by['acquirer-org'].latestInstance;
+    var tgt = by['target-org'] && by['target-org'].latestInstance;
+    var ilTpl = tplBySubject('integration-leader');
+    var il = ilTpl ? latestFor(ilTpl.id, 'self') : null;
+    var sent = sentimentStats();
+    var lang = localStorage.getItem('employeeLanguage') || 'en';
+    var today = new Date().toLocaleDateString(lang === 'en' ? 'en-GB' : lang, { year: 'numeric', month: 'long', day: 'numeric' });
+
+    var ringCell = function (labelKey, labelEn, score, bandId) {
+      var col = score == null ? '#9aa4ab' : C.scoreBandColor(score);
+      return '<td style="text-align:center;padding:10px;">'
+        + '<div style="width:74px;height:74px;border-radius:50%;background:' + col + ';color:#fff;font-weight:800;font-size:24px;display:flex;align-items:center;justify-content:center;margin:0 auto;print-color-adjust:exact;-webkit-print-color-adjust:exact;">' + (score == null ? '—' : score) + '</div>'
+        + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555;margin-top:6px;" data-i18n="' + labelKey + '">' + labelEn + '</div>'
+        + (bandId ? '<div style="font-size:11px;font-weight:800;color:' + C.bandColor(bandId) + ';">' + t('assess.band_' + bandId, bandId) + '</div>' : '')
+        + '</td>';
+    };
+    var pairRows = compat && compat.complete ? compat.dims.map(function (d) {
+      return '<tr><td style="padding:5px 8px;border-bottom:1px solid #e3e6e8;">' + (d.icon || '') + ' ' + esc(t(d.labelKey, d.label)) + '</td>'
+        + '<td style="text-align:center;padding:5px 8px;border-bottom:1px solid #e3e6e8;font-weight:700;color:#167987;">' + d.acquirer + '</td>'
+        + '<td style="text-align:center;padding:5px 8px;border-bottom:1px solid #e3e6e8;font-weight:700;color:#C77700;">' + d.target + '</td>'
+        + '<td style="text-align:center;padding:5px 8px;border-bottom:1px solid #e3e6e8;font-weight:800;color:' + ((compat.topGaps || []).indexOf(d.mirrorId) > -1 ? '#C0392B' : '#555') + ';">Δ ' + d.gap + '</td></tr>';
+    }).join('') : '';
+    var ilLow = (il && ilTpl) ? (ilTpl.dimensions || [])
+      .map(function (d) { return { d: d, s: (il.dimensionScores || {})[d.id] }; })
+      .filter(function (x) { return typeof x.s === 'number' && x.s < 80; })
+      .sort(function (a, b) { return a.s - b.s; }).slice(0, 3) : [];
+
+    var div = document.createElement('div');
+    div.id = 'as-readout';
+    div.innerHTML = '<div style="font-family:inherit;color:#1c2b33;">'
+      + '<table style="width:100%;border-collapse:collapse;"><tr>'
+      + '<td><img src="/te-logo.png" style="height:34px;" alt="TE"></td>'
+      + '<td style="text-align:right;font-size:11px;color:#555;"><span data-i18n="assess.readout_generated">Generated</span>: ' + today + '</td>'
+      + '</tr></table>'
+      + '<h1 style="font-size:21px;margin:14px 0 2px;color:#244C5A;" data-i18n="assess.readout_title">Integration Readiness Readout</h1>'
+      + '<div style="font-size:12px;color:#555;margin-bottom:14px;">' + esc((state.status && state.status.targetCompany) || document.title.split(' - ')[0] || '') + '</div>'
+      + '<table style="width:100%;border-collapse:collapse;margin-bottom:8px;"><tr>'
+      + ringCell('assess.kpi_acquirer', 'Acquirer (TE)', acq ? acq.overallScore : null, acq && acq.bandId)
+      + ringCell('assess.compat_alignment', 'Alignment', compat && compat.complete ? compat.alignment : null, compat && compat.complete ? compat.fitBand : null)
+      + ringCell('assess.kpi_target', 'Target', tgt ? tgt.overallScore : null, tgt && tgt.bandId)
+      + ringCell('assess.tab_leader', 'Integration Leader', il ? il.overallScore : null, il && il.bandId)
+      + '</tr></table>'
+      + (pairRows
+        ? '<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#E98300;margin:14px 0 6px;" data-i18n="assess.readout_pair">Company readiness — TE vs Target</h2>'
+          + '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+          + '<tr style="font-size:10.5px;text-transform:uppercase;color:#777;"><th style="text-align:left;padding:4px 8px;" data-i18n="assess.readout_dim">Dimension</th><th style="padding:4px 8px;">TE</th><th style="padding:4px 8px;" data-i18n="assess.kpi_target">Target</th><th style="padding:4px 8px;" data-i18n="assess.readout_gap">Gap</th></tr>'
+          + pairRows + '</table>'
+        : '')
+      + (il
+        ? '<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#E98300;margin:14px 0 6px;" data-i18n="assess.tab_leader">Integration Leader</h2>'
+          + '<div style="font-size:12px;line-height:1.6;">' + esc(il.respondentName || '') + ' — <strong style="color:' + C.bandColor(il.bandId) + '">' + t('assess.band_' + il.bandId, il.bandId) + '</strong>'
+          + (il.experienceIndex != null ? ' · <span data-i18n="assess.il_exp">Experience index</span> ' + il.experienceIndex : '')
+          + (ilLow.length ? '<br><span data-i18n="assess.plan_title">Development plan</span>: ' + ilLow.map(function (x) { return esc(t(x.d.labelKey, x.d.label)) + ' (' + x.s + ')'; }).join(' · ') : '')
+          + '</div>'
+        : '')
+      + (sent.n >= 5 && sent.score != null
+        ? '<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#E98300;margin:14px 0 6px;" data-i18n="assess.sentiment_title">Workforce sentiment</h2>'
+          + '<div style="font-size:12px;">' + sent.score + ' / 100 (' + sent.n + ' <span data-i18n="assess.sentiment_n">responses</span>)</div>'
+        : '')
+      + '<div style="font-size:9.5px;color:#888;font-style:italic;margin-top:16px;border-top:1px solid #ddd;padding-top:8px;">'
+      + '<span data-i18n="assess.n1_note">Structured judgment by 1 rater — a facilitated read of readiness, not a statistical instrument.</span> '
+      + '<span data-i18n="assess.compat_note">Alignment measures how closely the two readiness profiles match. The fit band is capped by the weaker company\'s readiness.</span>'
+      + '</div>'
+      + '</div>';
+    document.body.appendChild(div);
+    applyI18n();
+    setTimeout(function () { window.print(); }, 120);
   }
 
   // ---------------------------------------------------------------- scorecard
@@ -186,6 +295,7 @@
       + '<div>' + C.radarSVG(axes, series) + '</div>'
       + '<div><h3 data-i18n="assess.dim_breakdown">Dimension breakdown</h3>' + bars + '</div>'
       + '</div>'
+      + (subject === 'target-org' ? sentimentTileHtml() : '')
       + '</div>'
       + (subject === 'integration-leader' ? ilExtrasHtml(tpl, latest) : '')
       + (remedCards ? '<div class="as-card"><h3 data-i18n="assess.remediation">Recommended actions</h3>' + remedCards + '</div>' : '')

@@ -114,6 +114,13 @@
     .as-warn{ font-size:.78rem; line-height:1.5; background:rgba(199,119,0,.07); border:1px solid rgba(199,119,0,.25); color:#8a5200; border-radius:8px; padding:.6rem .85rem; margin-bottom:1rem; }
     .as-err{ color:#C0392B; font-size:.82rem; font-weight:700; margin-top:.6rem; display:none; }
     .as-actions{ display:flex; gap:.6rem; flex-wrap:wrap; }
+    /* exec readout: hidden on screen; the ONLY thing shown when printing */
+    #as-readout{ display:none; }
+    @media print {
+      body > *:not(#as-readout){ display:none !important; }
+      #as-readout{ display:block !important; padding:0; }
+      @page { margin: 14mm; }
+    }
   </style>
 </head>
 <body>
@@ -155,6 +162,6 @@
   </div>
 
   <script src="/js/assess-charts.js?v=1784500005"></script>
-  <script src="/js/assessments.js?v=1784500005"></script>
+  <script src="/js/assessments.js?v=1784500006"></script>
 </body>
 </html>

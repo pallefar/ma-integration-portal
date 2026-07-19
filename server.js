@@ -1862,7 +1862,11 @@ app.get('/api/assessment-status', (req, res) => {
     });
   });
 
-  res.json({ success: true, required, bySubject, gatesSummary, compatibility });
+  const isCustomStatus = db.settings && db.settings.demoMode === false;
+  const targetCompany = isCustomStatus
+    ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || '')
+    : ((db.settings && db.settings.targetCompany) || '');
+  res.json({ success: true, targetCompany, required, bySubject, gatesSummary, compatibility });
 });
 
 // ==========================================

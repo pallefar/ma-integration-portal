@@ -399,6 +399,14 @@
       "comment": "Exceeded my expectations! Team was incredibly welcoming.",
       "timestamp": "2026-05-21T11:45:00.000Z",
       "type": "30-day"
+    },
+    {
+      "id": "pulse_mrs6u3ocb4ded5ac",
+      "employeeName": "Anonymous",
+      "rating": 4,
+      "comment": "",
+      "timestamp": "2026-07-19T19:27:48.252Z",
+      "type": "change-readiness"
     }
   ],
   "communications": [
@@ -1695,7 +1703,22 @@
         "assess.remed_il_stakeholder": "Map the top 10 stakeholders on both sides and agree sponsorship actions with your executive sponsor.",
         "assess.remed_il_ambiguity": "Time-box three open decisions this week to 48 hours each and log the outcomes.",
         "assess.remed_il_breadth": "Walk the synergy model with Finance and present it back at the next IMO.",
-        "assess.remed_il_resilience": "Block two deep-work half-days per week and delegate one recurring meeting."
+        "assess.remed_il_resilience": "Block two deep-work half-days per week and delegate one recurring meeting.",
+        "assess.sentiment_title": "Workforce sentiment",
+        "assess.sentiment_n": "responses",
+        "assess.sentiment_low_n": "Fewer than 5 responses — the aggregate appears once more arrive.",
+        "assess.sentiment_hint": "From anonymous employee pulses — displayed alongside, never blended into, assessed scores.",
+        "assess.pulse_card_title": "Change Readiness Pulse",
+        "assess.pulse_q": "I feel ready for the changes ahead.",
+        "assess.pulse_submit": "Send anonymous pulse",
+        "assess.pulse_thanks": "Thanks — your anonymous pulse was recorded.",
+        "assess.pulse_anon": "Anonymous — only aggregated results (5+ responses) are ever shown.",
+        "assess.readout_btn": "Exec readout (print/PDF)",
+        "assess.readout_title": "Integration Readiness Readout",
+        "assess.readout_generated": "Generated",
+        "assess.readout_pair": "Company readiness — TE vs Target",
+        "assess.readout_dim": "Dimension",
+        "assess.readout_gap": "Gap"
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2574,7 +2597,22 @@
         "assess.remed_il_stakeholder": "Die Top-10-Stakeholder beider Seiten kartieren und Sponsoring-Aktionen mit dem Executive Sponsor vereinbaren.",
         "assess.remed_il_ambiguity": "Diese Woche drei offene Entscheidungen auf je 48 Stunden timeboxen und die Ergebnisse dokumentieren.",
         "assess.remed_il_breadth": "Das Synergiemodell mit Finance durchgehen und im nächsten IMO vorstellen.",
-        "assess.remed_il_resilience": "Zwei Deep-Work-Halbtage pro Woche blocken und ein wiederkehrendes Meeting delegieren."
+        "assess.remed_il_resilience": "Zwei Deep-Work-Halbtage pro Woche blocken und ein wiederkehrendes Meeting delegieren.",
+        "assess.sentiment_title": "Stimmung der Belegschaft",
+        "assess.sentiment_n": "Antworten",
+        "assess.sentiment_low_n": "Weniger als 5 Antworten — der Durchschnitt erscheint, sobald weitere eingehen.",
+        "assess.sentiment_hint": "Aus anonymen Mitarbeiter-Pulsen — wird neben den bewerteten Scores gezeigt, nie eingerechnet.",
+        "assess.pulse_card_title": "Change-Readiness-Puls",
+        "assess.pulse_q": "Ich fühle mich bereit für die anstehenden Veränderungen.",
+        "assess.pulse_submit": "Anonymen Puls senden",
+        "assess.pulse_thanks": "Danke — Ihr anonymer Puls wurde erfasst.",
+        "assess.pulse_anon": "Anonym — es werden ausschließlich aggregierte Ergebnisse (ab 5 Antworten) angezeigt.",
+        "assess.readout_btn": "Exec-Readout (Druck/PDF)",
+        "assess.readout_title": "Integration-Readiness-Readout",
+        "assess.readout_generated": "Erstellt",
+        "assess.readout_pair": "Unternehmens-Readiness — TE vs. Target",
+        "assess.readout_dim": "Dimension",
+        "assess.readout_gap": "Lücke"
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -3453,7 +3491,22 @@
         "assess.remed_il_stakeholder": "梳理双方前 10 位干系人，并与高管发起人商定支持行动。",
         "assess.remed_il_ambiguity": "本周将三个待决事项各限时 48 小时并记录结果。",
         "assess.remed_il_breadth": "与财务一起走查协同模型，并在下次 IMO 上汇报。",
-        "assess.remed_il_resilience": "每周预留两个深度工作半天，并授权他人主持一个例会。"
+        "assess.remed_il_resilience": "每周预留两个深度工作半天，并授权他人主持一个例会。",
+        "assess.sentiment_title": "员工情绪",
+        "assess.sentiment_n": "份反馈",
+        "assess.sentiment_low_n": "反馈少于 5 份——收到更多后将显示汇总结果。",
+        "assess.sentiment_hint": "来自匿名员工脉搏调查——与评估得分并列展示，绝不混合计算。",
+        "assess.pulse_card_title": "变革就绪脉搏",
+        "assess.pulse_q": "我已准备好迎接即将到来的变化。",
+        "assess.pulse_submit": "发送匿名脉搏",
+        "assess.pulse_thanks": "感谢——您的匿名反馈已记录。",
+        "assess.pulse_anon": "匿名——仅展示汇总结果（5 份及以上）。",
+        "assess.readout_btn": "高管简报（打印/PDF）",
+        "assess.readout_title": "整合就绪度简报",
+        "assess.readout_generated": "生成于",
+        "assess.readout_pair": "公司就绪度——TE 对比目标公司",
+        "assess.readout_dim": "维度",
+        "assess.readout_gap": "差距"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -4332,7 +4385,22 @@
         "assess.remed_il_stakeholder": "Zmapujte top 10 stakeholderů obou stran a dohodněte sponzorské kroky s exekutivním sponzorem.",
         "assess.remed_il_ambiguity": "Tři otevřená rozhodnutí tento týden omezte na 48 hodin a zaznamenejte výsledky.",
         "assess.remed_il_breadth": "Projděte synergický model s finance a odprezentujte jej na příštím IMO.",
-        "assess.remed_il_resilience": "Blokujte si dva půldny hluboké práce týdně a delegujte jednu pravidelnou schůzku."
+        "assess.remed_il_resilience": "Blokujte si dva půldny hluboké práce týdně a delegujte jednu pravidelnou schůzku.",
+        "assess.sentiment_title": "Nálada zaměstnanců",
+        "assess.sentiment_n": "odpovědí",
+        "assess.sentiment_low_n": "Méně než 5 odpovědí — souhrn se zobrazí, jakmile jich přibude.",
+        "assess.sentiment_hint": "Z anonymních pulzů zaměstnanců — zobrazuje se vedle hodnocených skóre, nikdy se do nich nepočítá.",
+        "assess.pulse_card_title": "Puls připravenosti na změnu",
+        "assess.pulse_q": "Cítím se připraven(a) na nadcházející změny.",
+        "assess.pulse_submit": "Odeslat anonymní puls",
+        "assess.pulse_thanks": "Díky — váš anonymní puls byl zaznamenán.",
+        "assess.pulse_anon": "Anonymní — zobrazují se pouze souhrnné výsledky (od 5 odpovědí).",
+        "assess.readout_btn": "Exec readout (tisk/PDF)",
+        "assess.readout_title": "Readout připravenosti integrace",
+        "assess.readout_generated": "Vytvořeno",
+        "assess.readout_pair": "Připravenost společností — TE vs. target",
+        "assess.readout_dim": "Dimenze",
+        "assess.readout_gap": "Rozdíl"
       }
     }
   },
