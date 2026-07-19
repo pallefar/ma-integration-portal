@@ -131,6 +131,7 @@
     'supporting.html': ['admin', 'pmo', 'supporting'],
     'employee.html': ['admin', 'pmo', 'employee'],
     'survey.html': ['admin', 'pmo', 'hrbp'],
+    'assessments.html': ['admin', 'pmo', 'hrbp'],
     'playbook.html': ['admin', 'pmo', 'hrbp', 'supporting']
   };
 
@@ -850,6 +851,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="sidebar-link-icon">\u{1F4C8}</span>
           <span class="sidebar-link-label">M&A Insights</span>
         </a>
+        ${(activeRole === 'admin' || activeRole === 'pmo' || activeRole === 'hrbp') ? `
+        <a href="/assessments.html" class="sidebar-link ${path.includes('assessments.html') ? 'active' : ''}" title="Readiness Assessments — company & Integration Leader readiness">
+          <span class="sidebar-link-icon">\u{1F3AF}</span>
+          <span class="sidebar-link-label">Assessments</span>
+        </a>` : ''}
         ${(activeRole === 'admin' || activeRole === 'pmo' || activeRole === 'hrbp') ? `
         <a href="javascript:void(0)" class="sidebar-link" id="sidebar-survey-link" title="Survey Scorecard">
           <span class="sidebar-link-icon">\u{1F4CB}</span>

@@ -49,7 +49,8 @@
     "size": "",
     "hq": "",
     "acquisitionDate": "",
-    "synergyObjective": ""
+    "synergyObjective": "",
+    "timeTravelDay": 1
   },
   "customEmployees": [],
   "customHrbps": [],
@@ -1526,7 +1527,102 @@
         "survey.tick_moderate": "Moderate",
         "survey.tick_aligned": "Aligned",
         "survey.tick_excellent": "Excellent",
-        "survey.step_diagnostics_suffix": "Diagnostics"
+        "survey.step_diagnostics_suffix": "Diagnostics",
+        "assess.nav": "Assessments",
+        "assess.center_title": "Readiness Assessment Center",
+        "assess.center_sub": "Structured readiness assessments of both companies and the Integration Leader. Scores feed the integration plan, coaching and phase gates.",
+        "assess.tab_overview": "Overview",
+        "assess.tab_acquirer": "Acquirer Readiness",
+        "assess.tab_target": "Target Readiness",
+        "assess.tab_compat": "Compatibility",
+        "assess.tab_leader": "Integration Leader",
+        "assess.required_chip": "Required",
+        "assess.optional_chip": "Optional",
+        "assess.status_done": "Completed",
+        "assess.status_pending": "Not yet completed",
+        "assess.btn_start": "Start assessment",
+        "assess.btn_retake": "Retake assessment",
+        "assess.btn_back": "Back",
+        "assess.btn_next": "Next",
+        "assess.btn_submit": "Submit & score",
+        "assess.btn_view": "View scorecard",
+        "assess.band_ready": "Ready",
+        "assess.band_support": "Ready with support",
+        "assess.band_risk": "At risk",
+        "assess.red_flag": "Red flag",
+        "assess.focus_area": "Focus area",
+        "assess.overall": "Overall readiness",
+        "assess.dim_breakdown": "Dimension breakdown",
+        "assess.remediation": "Recommended actions",
+        "assess.last_taken": "Last taken",
+        "assess.trend": "vs. previous",
+        "assess.section": "Section",
+        "assess.progress": "Progress",
+        "assess.overview_intro": "Required readiness assessments for this integration. Complete each one — the scores unlock phase gates and drive the coaching plan.",
+        "assess.gate_note": "Feeds phase gates",
+        "assess.who_ph": "Your name (optional)",
+        "assess.taken_by": "Taken by",
+        "assess.answer_all": "Please answer every question in this section to continue.",
+        "assess.n1_note": "Structured judgment by 1 rater — a facilitated read of readiness, not a statistical instrument.",
+        "assess.disclaimer_preclose": "Sensitive: answers may contain competitively sensitive information about the target. Before legal close, complete this only with clean-team-approved information and involve Legal if unsure.",
+        "assess.maturity_label": "Maturity level",
+        "assess.select_option": "Select the closest answer",
+        "assess.scale5_1": "Strongly disagree",
+        "assess.scale5_2": "Disagree",
+        "assess.scale5_3": "Neutral",
+        "assess.scale5_4": "Agree",
+        "assess.scale5_5": "Strongly agree",
+        "assess.cmm_1": "Initial — ad hoc, undocumented",
+        "assess.cmm_2": "Managed — tracked informally",
+        "assess.cmm_3": "Defined — documented and repeatable",
+        "assess.cmm_4": "Measured — tracked with KPIs",
+        "assess.cmm_5": "Optimizing — continuously improved",
+        "assess.tpl_company_target_title": "Target Company Readiness",
+        "assess.tpl_company_acquirer_title": "Acquirer Readiness (TE)",
+        "assess.dim_governance": "Strategy & Governance",
+        "assess.dim_people": "People & Organization",
+        "assess.dim_culture": "Culture & Ways of Working",
+        "assess.dim_systems": "Systems & Data",
+        "assess.dim_commercial": "Customers & Commercial",
+        "assess.dim_day1": "Day-1 & 100-Day Readiness",
+        "assess.q_tg_gov1": "Leadership understands the deal rationale and what it means for their organization.",
+        "assess.q_tg_gov2": "Decision rights between target leadership and the integration team are clearly defined.",
+        "assess.q_tg_ppl1": "Key talent is identified and retention conversations are underway.",
+        "assess.q_tg_ppl2": "Critical roles are showing early signs of unwanted attrition.",
+        "assess.q_tg_cul1": "Decisions are made quickly and close to the work rather than escalated by default.",
+        "assess.q_tg_cul2": "People are open to adopting new ways of working when the reasons are clear.",
+        "assess.q_tg_sys1": "There is a complete inventory of core systems, licences and data owners.",
+        "assess.q_tg_sys2": "Day-1 access needs (email, ERP, payroll, VPN) are mapped for every team.",
+        "assess.q_tg_com1": "Top customers have a named owner for Day-1 communication.",
+        "assess.q_tg_com2": "A significant share of revenue depends on relationships held by people at flight risk.",
+        "assess.q_tg_d11": "Business continuity for Day-1 (payroll, invoicing, customer support) is confirmed.",
+        "assess.q_tg_d12": "Three weeks before Day-1, payroll cutover testing uncovers errors for 15% of employees. What happens?",
+        "assess.q_tg_d12_o1": "The issue is escalated to the IMO the same day with a joint fix plan and a fallback (one more cycle on legacy payroll).",
+        "assess.q_tg_d12_o2": "The payroll vendor is asked to fix and re-test quietly, without involving the IMO.",
+        "assess.q_tg_d12_o3": "Cutover continues as planned — errors can be corrected after Day-1.",
+        "assess.q_tg_d13": "How developed is the target's integration-readiness tracking?",
+        "assess.remed_tg_people": "Accelerate retention: a named owner for every key-talent conversation and a weekly flight-risk review.",
+        "assess.remed_tg_culture": "Run joint culture sessions early: pair target and TE teams on real work, and make the 'why' of new ways of working explicit.",
+        "assess.remed_tg_systems": "Stand up a joint systems task force: complete the inventory, then test Day-1 access end-to-end for every team.",
+        "assess.remed_tg_day1": "Walk the Day-1 runbook: confirm payroll, invoicing and support continuity with a go/no-go rehearsal.",
+        "assess.q_ac_gov1": "An Integration Management Office is chartered with a named lead and an executive sponsor.",
+        "assess.q_ac_gov2": "How mature is our integration playbook and governance?",
+        "assess.q_ac_ppl1": "Retention plans for the target's key talent are funded and approved.",
+        "assess.q_ac_ppl2": "The future org design for the combined team has been drafted with HR.",
+        "assess.q_ac_cul1": "We understand how the target's ways of working differ from ours and where friction is likely.",
+        "assess.q_ac_cul2": "Our managers are prepared to lead people through the change, not just the process.",
+        "assess.q_ac_sys1": "The Day-1 systems-access plan (accounts, licences, VPN) is resourced and tested.",
+        "assess.q_ac_sys2": "Keep / migrate / retire decisions are made for the core system landscape.",
+        "assess.q_ac_com1": "Day-1 customer messaging is approved and communication owners are briefed.",
+        "assess.q_ac_com2": "Cross-sell opportunities are mapped with named account owners.",
+        "assess.q_ac_d11": "The Day-1 checklist has an owner and a scheduled go/no-go review.",
+        "assess.q_ac_d12": "One week before Day-1, Legal flags that a customer-consent step was missed for migrating CRM data. What happens?",
+        "assess.q_ac_d12_o1": "That migration is paused, the consent step is run, and the IMO and Day-1 comms owners are informed today.",
+        "assess.q_ac_d12_o2": "Day-1 is postponed entirely until the issue is fully resolved.",
+        "assess.q_ac_d12_o3": "Migration proceeds — consent can be collected afterwards.",
+        "assess.remed_ac_governance": "Charter the IMO formally: named lead, executive sponsor, weekly cadence and a decision log.",
+        "assess.remed_ac_culture": "Prepare managers to lead the change: talking points, listening sessions and visible sponsorship.",
+        "assess.remed_ac_systems": "Resource the Day-1 access plan and rehearse it end-to-end before Day-1."
       },
       "de": {
         "nav.demo_home": "Demo-Start",
@@ -2237,7 +2333,102 @@
         "survey.tick_moderate": "Mäßig",
         "survey.tick_aligned": "Ausgerichtet",
         "survey.tick_excellent": "Ausgezeichnet",
-        "survey.step_diagnostics_suffix": "Diagnostik"
+        "survey.step_diagnostics_suffix": "Diagnostik",
+        "assess.nav": "Assessments",
+        "assess.center_title": "Readiness-Assessment-Center",
+        "assess.center_sub": "Strukturierte Readiness-Assessments beider Unternehmen und des Integration Leaders. Die Ergebnisse speisen Integrationsplan, Coaching und Phasen-Gates.",
+        "assess.tab_overview": "Überblick",
+        "assess.tab_acquirer": "Käufer-Readiness",
+        "assess.tab_target": "Target-Readiness",
+        "assess.tab_compat": "Kompatibilität",
+        "assess.tab_leader": "Integration Leader",
+        "assess.required_chip": "Erforderlich",
+        "assess.optional_chip": "Optional",
+        "assess.status_done": "Abgeschlossen",
+        "assess.status_pending": "Noch nicht abgeschlossen",
+        "assess.btn_start": "Assessment starten",
+        "assess.btn_retake": "Assessment wiederholen",
+        "assess.btn_back": "Zurück",
+        "assess.btn_next": "Weiter",
+        "assess.btn_submit": "Absenden & auswerten",
+        "assess.btn_view": "Scorecard ansehen",
+        "assess.band_ready": "Bereit",
+        "assess.band_support": "Bereit mit Unterstützung",
+        "assess.band_risk": "Gefährdet",
+        "assess.red_flag": "Warnsignal",
+        "assess.focus_area": "Fokusbereich",
+        "assess.overall": "Gesamt-Readiness",
+        "assess.dim_breakdown": "Aufschlüsselung nach Dimensionen",
+        "assess.remediation": "Empfohlene Maßnahmen",
+        "assess.last_taken": "Zuletzt durchgeführt",
+        "assess.trend": "ggü. Vorwert",
+        "assess.section": "Abschnitt",
+        "assess.progress": "Fortschritt",
+        "assess.overview_intro": "Erforderliche Readiness-Assessments für diese Integration. Schließen Sie jedes ab — die Ergebnisse schalten Phasen-Gates frei und steuern den Coaching-Plan.",
+        "assess.gate_note": "Speist Phasen-Gates",
+        "assess.who_ph": "Ihr Name (optional)",
+        "assess.taken_by": "Durchgeführt von",
+        "assess.answer_all": "Bitte beantworten Sie alle Fragen dieses Abschnitts, um fortzufahren.",
+        "assess.n1_note": "Strukturierte Einschätzung durch 1 Bewerter — eine moderierte Readiness-Sicht, kein statistisches Instrument.",
+        "assess.disclaimer_preclose": "Sensibel: Antworten können wettbewerblich sensible Informationen über das Target enthalten. Vor dem Legal Close nur mit Clean-Team-freigegebenen Informationen ausfüllen und im Zweifel Legal einbeziehen.",
+        "assess.maturity_label": "Reifegrad",
+        "assess.select_option": "Wählen Sie die passendste Antwort",
+        "assess.scale5_1": "Stimme überhaupt nicht zu",
+        "assess.scale5_2": "Stimme nicht zu",
+        "assess.scale5_3": "Neutral",
+        "assess.scale5_4": "Stimme zu",
+        "assess.scale5_5": "Stimme voll zu",
+        "assess.cmm_1": "Initial — ad hoc, undokumentiert",
+        "assess.cmm_2": "Gemanagt — informell verfolgt",
+        "assess.cmm_3": "Definiert — dokumentiert und wiederholbar",
+        "assess.cmm_4": "Gemessen — mit KPIs gesteuert",
+        "assess.cmm_5": "Optimierend — kontinuierlich verbessert",
+        "assess.tpl_company_target_title": "Readiness des Target-Unternehmens",
+        "assess.tpl_company_acquirer_title": "Käufer-Readiness (TE)",
+        "assess.dim_governance": "Strategie & Governance",
+        "assess.dim_people": "Menschen & Organisation",
+        "assess.dim_culture": "Kultur & Arbeitsweisen",
+        "assess.dim_systems": "Systeme & Daten",
+        "assess.dim_commercial": "Kunden & Vertrieb",
+        "assess.dim_day1": "Day-1- & 100-Tage-Readiness",
+        "assess.q_tg_gov1": "Die Führung versteht die Deal-Logik und deren Bedeutung für die eigene Organisation.",
+        "assess.q_tg_gov2": "Entscheidungsrechte zwischen Target-Führung und Integrationsteam sind klar definiert.",
+        "assess.q_tg_ppl1": "Schlüsseltalente sind identifiziert, Retention-Gespräche laufen.",
+        "assess.q_tg_ppl2": "In kritischen Rollen zeigen sich erste Anzeichen ungewollter Fluktuation.",
+        "assess.q_tg_cul1": "Entscheidungen fallen schnell und nah an der Arbeit statt standardmäßig eskaliert zu werden.",
+        "assess.q_tg_cul2": "Die Menschen sind offen für neue Arbeitsweisen, wenn die Gründe klar sind.",
+        "assess.q_tg_sys1": "Es gibt ein vollständiges Inventar der Kernsysteme, Lizenzen und Datenverantwortlichen.",
+        "assess.q_tg_sys2": "Day-1-Zugriffsbedarfe (E-Mail, ERP, Payroll, VPN) sind für jedes Team erfasst.",
+        "assess.q_tg_com1": "Top-Kunden haben einen benannten Verantwortlichen für die Day-1-Kommunikation.",
+        "assess.q_tg_com2": "Ein erheblicher Umsatzanteil hängt an Beziehungen von abwanderungsgefährdeten Personen.",
+        "assess.q_tg_d11": "Die Geschäftskontinuität für Day-1 (Payroll, Rechnungsstellung, Kundensupport) ist bestätigt.",
+        "assess.q_tg_d12": "Drei Wochen vor Day-1 deckt der Payroll-Cutover-Test Fehler bei 15 % der Beschäftigten auf. Was passiert?",
+        "assess.q_tg_d12_o1": "Das Thema wird noch am selben Tag mit gemeinsamem Fix-Plan und Fallback (ein weiterer Lauf auf der Alt-Payroll) an das IMO eskaliert.",
+        "assess.q_tg_d12_o2": "Der Payroll-Anbieter soll still korrigieren und erneut testen, ohne das IMO einzubeziehen.",
+        "assess.q_tg_d12_o3": "Der Cutover läuft wie geplant weiter — Fehler lassen sich nach Day-1 korrigieren.",
+        "assess.q_tg_d13": "Wie weit ist das Readiness-Tracking des Targets entwickelt?",
+        "assess.q_ac_gov1": "Ein Integration Management Office ist mit benannter Leitung und Executive Sponsor eingesetzt.",
+        "assess.q_ac_gov2": "Wie reif sind unser Integrations-Playbook und unsere Governance?",
+        "assess.q_ac_ppl1": "Retention-Pläne für die Schlüsseltalente des Targets sind finanziert und genehmigt.",
+        "assess.q_ac_ppl2": "Das künftige Organisationsdesign für das gemeinsame Team ist mit HR entworfen.",
+        "assess.q_ac_cul1": "Wir verstehen, wie sich die Arbeitsweisen des Targets von unseren unterscheiden und wo Reibung wahrscheinlich ist.",
+        "assess.q_ac_cul2": "Unsere Führungskräfte sind vorbereitet, Menschen durch den Wandel zu führen — nicht nur den Prozess.",
+        "assess.q_ac_sys1": "Der Day-1-Systemzugriffsplan (Konten, Lizenzen, VPN) ist mit Ressourcen hinterlegt und getestet.",
+        "assess.q_ac_sys2": "Keep-/Migrate-/Retire-Entscheidungen für die Kernsystemlandschaft sind getroffen.",
+        "assess.q_ac_com1": "Die Day-1-Kundenkommunikation ist freigegeben, die Verantwortlichen sind gebrieft.",
+        "assess.q_ac_com2": "Cross-Selling-Chancen sind mit benannten Account-Ownern erfasst.",
+        "assess.q_ac_d11": "Die Day-1-Checkliste hat einen Owner und ein terminiertes Go/No-Go-Review.",
+        "assess.q_ac_d12": "Eine Woche vor Day-1 meldet Legal, dass bei der CRM-Datenmigration ein Kunden-Einwilligungsschritt fehlt. Was passiert?",
+        "assess.q_ac_d12_o1": "Die Migration wird pausiert, die Einwilligung eingeholt, und IMO sowie Day-1-Kommunikationsverantwortliche werden noch heute informiert.",
+        "assess.q_ac_d12_o2": "Day-1 wird komplett verschoben, bis das Thema vollständig gelöst ist.",
+        "assess.q_ac_d12_o3": "Die Migration läuft weiter — Einwilligungen lassen sich nachträglich einholen.",
+        "assess.remed_tg_people": "Retention beschleunigen: benannte Verantwortliche für jedes Schlüsseltalent-Gespräch und ein wöchentliches Flight-Risk-Review.",
+        "assess.remed_tg_culture": "Früh gemeinsame Kultur-Sessions durchführen: Target- und TE-Teams an echter Arbeit zusammenbringen und das „Warum\" neuer Arbeitsweisen explizit machen.",
+        "assess.remed_tg_systems": "Eine gemeinsame Systems-Taskforce aufsetzen: Inventar vervollständigen, dann Day-1-Zugriffe für jedes Team End-to-End testen.",
+        "assess.remed_tg_day1": "Das Day-1-Runbook durchgehen: Payroll-, Rechnungs- und Support-Kontinuität mit einer Go/No-Go-Probe bestätigen.",
+        "assess.remed_ac_governance": "Das IMO formal aufsetzen: benannte Leitung, Executive Sponsor, wöchentliche Cadence und ein Entscheidungslog.",
+        "assess.remed_ac_culture": "Führungskräfte auf den Wandel vorbereiten: Talking Points, Listening Sessions und sichtbares Sponsorship.",
+        "assess.remed_ac_systems": "Den Day-1-Zugriffsplan mit Ressourcen hinterlegen und vor Day-1 End-to-End proben."
       },
       "zh": {
         "nav.demo_home": "演示主页",
@@ -2948,7 +3139,102 @@
         "survey.tick_moderate": "中等",
         "survey.tick_aligned": "一致",
         "survey.tick_excellent": "优秀",
-        "survey.step_diagnostics_suffix": "诊断"
+        "survey.step_diagnostics_suffix": "诊断",
+        "assess.nav": "评估中心",
+        "assess.center_title": "整合就绪度评估中心",
+        "assess.center_sub": "对双方公司及整合负责人进行结构化就绪度评估。评估结果将驱动整合计划、辅导方案与阶段关卡。",
+        "assess.tab_overview": "总览",
+        "assess.tab_acquirer": "收购方就绪度",
+        "assess.tab_target": "目标公司就绪度",
+        "assess.tab_compat": "兼容性",
+        "assess.tab_leader": "整合负责人",
+        "assess.required_chip": "必填",
+        "assess.optional_chip": "可选",
+        "assess.status_done": "已完成",
+        "assess.status_pending": "尚未完成",
+        "assess.btn_start": "开始评估",
+        "assess.btn_retake": "重新评估",
+        "assess.btn_back": "上一步",
+        "assess.btn_next": "下一步",
+        "assess.btn_submit": "提交并评分",
+        "assess.btn_view": "查看评分卡",
+        "assess.band_ready": "就绪",
+        "assess.band_support": "需支持方可就绪",
+        "assess.band_risk": "存在风险",
+        "assess.red_flag": "红色警示",
+        "assess.focus_area": "重点领域",
+        "assess.overall": "整体就绪度",
+        "assess.dim_breakdown": "维度明细",
+        "assess.remediation": "建议行动",
+        "assess.last_taken": "最近一次评估",
+        "assess.trend": "较上次",
+        "assess.section": "部分",
+        "assess.progress": "进度",
+        "assess.overview_intro": "本次整合所需的就绪度评估。请逐一完成——评估结果将解锁阶段关卡并驱动辅导计划。",
+        "assess.gate_note": "驱动阶段关卡",
+        "assess.who_ph": "您的姓名（可选）",
+        "assess.taken_by": "评估人",
+        "assess.answer_all": "请回答本部分的所有问题后继续。",
+        "assess.n1_note": "由 1 位评估人做出的结构化判断——是对就绪度的引导式解读，而非统计学量表。",
+        "assess.disclaimer_preclose": "敏感提示：答案可能包含目标公司的竞争敏感信息。在法律交割前，仅可使用经清洁团队批准的信息填写，如有疑问请咨询法务。",
+        "assess.maturity_label": "成熟度等级",
+        "assess.select_option": "选择最贴近的答案",
+        "assess.scale5_1": "完全不同意",
+        "assess.scale5_2": "不同意",
+        "assess.scale5_3": "中立",
+        "assess.scale5_4": "同意",
+        "assess.scale5_5": "完全同意",
+        "assess.cmm_1": "初始级——临时性、无文档",
+        "assess.cmm_2": "受管理级——非正式跟踪",
+        "assess.cmm_3": "已定义级——有文档、可重复",
+        "assess.cmm_4": "量化级——以 KPI 跟踪",
+        "assess.cmm_5": "优化级——持续改进",
+        "assess.tpl_company_target_title": "目标公司就绪度",
+        "assess.tpl_company_acquirer_title": "收购方就绪度（TE）",
+        "assess.dim_governance": "战略与治理",
+        "assess.dim_people": "人员与组织",
+        "assess.dim_culture": "文化与工作方式",
+        "assess.dim_systems": "系统与数据",
+        "assess.dim_commercial": "客户与商务",
+        "assess.dim_day1": "Day-1 与 100 天就绪度",
+        "assess.q_tg_gov1": "领导层理解交易逻辑及其对自身组织的意义。",
+        "assess.q_tg_gov2": "目标公司领导层与整合团队之间的决策权已明确界定。",
+        "assess.q_tg_ppl1": "关键人才已识别，保留谈话正在进行。",
+        "assess.q_tg_ppl2": "关键岗位出现非期望流失的早期迹象。",
+        "assess.q_tg_cul1": "决策快速且贴近一线，而非默认层层上报。",
+        "assess.q_tg_cul2": "当理由清晰时，员工乐于采纳新的工作方式。",
+        "assess.q_tg_sys1": "核心系统、许可证和数据负责人已有完整清单。",
+        "assess.q_tg_sys2": "每个团队的 Day-1 访问需求（邮件、ERP、薪资、VPN）均已梳理。",
+        "assess.q_tg_com1": "每个重点客户都有指定的 Day-1 沟通负责人。",
+        "assess.q_tg_com2": "相当比例的收入依赖于可能流失人员维系的客户关系。",
+        "assess.q_tg_d11": "Day-1 业务连续性（薪资、开票、客户支持）已确认。",
+        "assess.q_tg_d12": "Day-1 前三周，薪资切换测试发现 15% 员工的数据存在错误。接下来会发生什么？",
+        "assess.q_tg_d12_o1": "当天即升级至 IMO，制定联合修复计划并准备回退方案（在旧薪资系统再运行一个周期）。",
+        "assess.q_tg_d12_o2": "让薪资供应商悄悄修复并重新测试，不通知 IMO。",
+        "assess.q_tg_d12_o3": "按计划继续切换——错误可在 Day-1 之后修正。",
+        "assess.q_tg_d13": "目标公司的整合就绪度跟踪发展到什么程度？",
+        "assess.q_ac_gov1": "整合管理办公室（IMO)已设立，有指定负责人和高管发起人。",
+        "assess.q_ac_gov2": "我们的整合手册与治理有多成熟？",
+        "assess.q_ac_ppl1": "针对目标公司关键人才的保留方案已获批且有预算。",
+        "assess.q_ac_ppl2": "合并团队的未来组织设计已与 HR 共同起草。",
+        "assess.q_ac_cul1": "我们了解目标公司工作方式与我们的差异，以及摩擦可能出现的环节。",
+        "assess.q_ac_cul2": "我们的管理者已准备好带领员工走过变革，而不仅是执行流程。",
+        "assess.q_ac_sys1": "Day-1 系统访问方案（账号、许可证、VPN）已配备资源并完成测试。",
+        "assess.q_ac_sys2": "核心系统的保留/迁移/退役决策已做出。",
+        "assess.q_ac_com1": "Day-1 客户沟通口径已批准，沟通负责人已完成简报。",
+        "assess.q_ac_com2": "交叉销售机会已梳理并指定客户负责人。",
+        "assess.q_ac_d11": "Day-1 清单有负责人，并已排定 Go/No-Go 评审。",
+        "assess.q_ac_d12": "Day-1 前一周，法务发现 CRM 数据迁移遗漏了客户同意环节。接下来会发生什么？",
+        "assess.q_ac_d12_o1": "暂停该项迁移，补齐同意环节，并于当天通知 IMO 和 Day-1 沟通负责人。",
+        "assess.q_ac_d12_o2": "整体推迟 Day-1，直至问题完全解决。",
+        "assess.q_ac_d12_o3": "迁移继续进行——同意可事后补办。",
+        "assess.remed_tg_people": "加速人才保留：每场关键人才谈话都有指定负责人，并每周进行流失风险评审。",
+        "assess.remed_tg_culture": "尽早开展联合文化工作坊：让目标公司与 TE 团队在真实工作中协作，并明确阐述新工作方式的\"为什么\"。",
+        "assess.remed_tg_systems": "组建联合系统专班：完成系统清单，然后为每个团队端到端测试 Day-1 访问。",
+        "assess.remed_tg_day1": "演练 Day-1 手册：通过 Go/No-Go 彩排确认薪资、开票和支持的连续性。",
+        "assess.remed_ac_governance": "正式设立 IMO：指定负责人、高管发起人、每周例会和决策日志。",
+        "assess.remed_ac_culture": "帮助管理者引领变革：沟通要点、倾听会和可见的高层支持。",
+        "assess.remed_ac_systems": "为 Day-1 访问方案配备资源，并在 Day-1 前端到端演练。"
       },
       "cs": {
         "nav.demo_home": "Domů",
@@ -3659,7 +3945,102 @@
         "survey.tick_moderate": "Střední",
         "survey.tick_aligned": "Sladěné",
         "survey.tick_excellent": "Vynikající",
-        "survey.step_diagnostics_suffix": "Diagnostika"
+        "survey.step_diagnostics_suffix": "Diagnostika",
+        "assess.nav": "Assessmenty",
+        "assess.center_title": "Centrum hodnocení připravenosti",
+        "assess.center_sub": "Strukturovaná hodnocení připravenosti obou společností a integračního leadera. Výsledky řídí integrační plán, koučink a fázové brány.",
+        "assess.tab_overview": "Přehled",
+        "assess.tab_acquirer": "Připravenost kupujícího",
+        "assess.tab_target": "Připravenost targetu",
+        "assess.tab_compat": "Kompatibilita",
+        "assess.tab_leader": "Integrační leader",
+        "assess.required_chip": "Povinné",
+        "assess.optional_chip": "Volitelné",
+        "assess.status_done": "Dokončeno",
+        "assess.status_pending": "Zatím nedokončeno",
+        "assess.btn_start": "Zahájit hodnocení",
+        "assess.btn_retake": "Opakovat hodnocení",
+        "assess.btn_back": "Zpět",
+        "assess.btn_next": "Další",
+        "assess.btn_submit": "Odeslat a vyhodnotit",
+        "assess.btn_view": "Zobrazit scorecard",
+        "assess.band_ready": "Připraveno",
+        "assess.band_support": "Připraveno s podporou",
+        "assess.band_risk": "V ohrožení",
+        "assess.red_flag": "Varovný signál",
+        "assess.focus_area": "Prioritní oblast",
+        "assess.overall": "Celková připravenost",
+        "assess.dim_breakdown": "Rozpad podle dimenzí",
+        "assess.remediation": "Doporučené kroky",
+        "assess.last_taken": "Naposledy provedeno",
+        "assess.trend": "oproti minule",
+        "assess.section": "Sekce",
+        "assess.progress": "Postup",
+        "assess.overview_intro": "Povinná hodnocení připravenosti pro tuto integraci. Dokončete každé z nich — výsledky odemykají fázové brány a řídí koučovací plán.",
+        "assess.gate_note": "Řídí fázové brány",
+        "assess.who_ph": "Vaše jméno (volitelné)",
+        "assess.taken_by": "Provedl(a)",
+        "assess.answer_all": "Pro pokračování prosím odpovězte na všechny otázky této sekce.",
+        "assess.n1_note": "Strukturovaný úsudek 1 hodnotitele — facilitovaný pohled na připravenost, nikoli statistický nástroj.",
+        "assess.disclaimer_preclose": "Citlivé: odpovědi mohou obsahovat konkurenčně citlivé informace o targetu. Před právním uzavřením vyplňujte pouze s informacemi schválenými clean teamem a v případě pochybností zapojte právní oddělení.",
+        "assess.maturity_label": "Úroveň vyspělosti",
+        "assess.select_option": "Vyberte nejbližší odpověď",
+        "assess.scale5_1": "Rozhodně nesouhlasím",
+        "assess.scale5_2": "Nesouhlasím",
+        "assess.scale5_3": "Neutrální",
+        "assess.scale5_4": "Souhlasím",
+        "assess.scale5_5": "Rozhodně souhlasím",
+        "assess.cmm_1": "Počáteční — ad hoc, nezdokumentováno",
+        "assess.cmm_2": "Řízené — sledováno neformálně",
+        "assess.cmm_3": "Definované — zdokumentované a opakovatelné",
+        "assess.cmm_4": "Měřené — řízené pomocí KPI",
+        "assess.cmm_5": "Optimalizované — průběžně zlepšované",
+        "assess.tpl_company_target_title": "Připravenost cílové společnosti",
+        "assess.tpl_company_acquirer_title": "Připravenost kupujícího (TE)",
+        "assess.dim_governance": "Strategie a governance",
+        "assess.dim_people": "Lidé a organizace",
+        "assess.dim_culture": "Kultura a způsoby práce",
+        "assess.dim_systems": "Systémy a data",
+        "assess.dim_commercial": "Zákazníci a obchod",
+        "assess.dim_day1": "Připravenost na Day-1 a 100 dní",
+        "assess.q_tg_gov1": "Vedení rozumí logice transakce a tomu, co znamená pro jejich organizaci.",
+        "assess.q_tg_gov2": "Rozhodovací pravomoci mezi vedením targetu a integračním týmem jsou jasně vymezeny.",
+        "assess.q_tg_ppl1": "Klíčové talenty jsou identifikovány a retenční rozhovory probíhají.",
+        "assess.q_tg_ppl2": "V kritických rolích se objevují první známky nežádoucí fluktuace.",
+        "assess.q_tg_cul1": "Rozhodnutí padají rychle a blízko práci, místo aby se standardně eskalovala.",
+        "assess.q_tg_cul2": "Lidé jsou otevření novým způsobům práce, když jsou důvody jasné.",
+        "assess.q_tg_sys1": "Existuje kompletní inventář klíčových systémů, licencí a vlastníků dat.",
+        "assess.q_tg_sys2": "Potřeby přístupů pro Day-1 (e-mail, ERP, mzdy, VPN) jsou zmapovány pro každý tým.",
+        "assess.q_tg_com1": "Top zákazníci mají jmenovaného vlastníka komunikace pro Day-1.",
+        "assess.q_tg_com2": "Významná část tržeb závisí na vztazích lidí s rizikem odchodu.",
+        "assess.q_tg_d11": "Kontinuita provozu pro Day-1 (mzdy, fakturace, zákaznická podpora) je potvrzena.",
+        "assess.q_tg_d12": "Tři týdny před Day-1 odhalí test převodu mezd chyby u 15 % zaměstnanců. Co se stane?",
+        "assess.q_tg_d12_o1": "Problém je tentýž den eskalován na IMO se společným plánem opravy a záložním řešením (ještě jeden cyklus na původním mzdovém systému).",
+        "assess.q_tg_d12_o2": "Dodavatel mezd je požádán o tichou opravu a nový test bez zapojení IMO.",
+        "assess.q_tg_d12_o3": "Převod pokračuje podle plánu — chyby lze opravit po Day-1.",
+        "assess.q_tg_d13": "Jak rozvinuté je sledování integrační připravenosti targetu?",
+        "assess.q_ac_gov1": "Integration Management Office je ustaveno s jmenovaným vedoucím a exekutivním sponzorem.",
+        "assess.q_ac_gov2": "Jak vyspělý je náš integrační playbook a governance?",
+        "assess.q_ac_ppl1": "Retenční plány pro klíčové talenty targetu jsou financovány a schváleny.",
+        "assess.q_ac_ppl2": "Budoucí organizační design společného týmu je navržen s HR.",
+        "assess.q_ac_cul1": "Rozumíme tomu, jak se způsoby práce targetu liší od našich a kde hrozí tření.",
+        "assess.q_ac_cul2": "Naši manažeři jsou připraveni provést lidi změnou — nejen procesem.",
+        "assess.q_ac_sys1": "Plán systémových přístupů pro Day-1 (účty, licence, VPN) má zdroje a je otestován.",
+        "assess.q_ac_sys2": "Rozhodnutí ponechat/migrovat/vyřadit jsou u klíčových systémů přijata.",
+        "assess.q_ac_com1": "Zákaznická komunikace pro Day-1 je schválena a vlastníci komunikace jsou instruováni.",
+        "assess.q_ac_com2": "Příležitosti ke cross-sellingu jsou zmapovány s jmenovanými account ownery.",
+        "assess.q_ac_d11": "Checklist pro Day-1 má vlastníka a naplánované go/no-go review.",
+        "assess.q_ac_d12": "Týden před Day-1 právní oddělení zjistí, že při migraci CRM dat chybí krok souhlasu zákazníků. Co se stane?",
+        "assess.q_ac_d12_o1": "Migrace se pozastaví, doplní se souhlas a IMO i vlastníci komunikace pro Day-1 jsou informováni ještě dnes.",
+        "assess.q_ac_d12_o2": "Day-1 se celý odloží, dokud není problém zcela vyřešen.",
+        "assess.q_ac_d12_o3": "Migrace pokračuje — souhlasy lze získat dodatečně.",
+        "assess.remed_tg_people": "Zrychlete retenci: jmenovaný vlastník každého rozhovoru s klíčovým talentem a týdenní review rizik odchodu.",
+        "assess.remed_tg_culture": "Brzy spusťte společné kulturní workshopy: propojte týmy targetu a TE na reálné práci a vysvětlete „proč\" nových způsobů práce.",
+        "assess.remed_tg_systems": "Postavte společnou systémovou task force: dokončete inventář a poté end-to-end otestujte přístupy pro Day-1 u každého týmu.",
+        "assess.remed_tg_day1": "Projděte runbook pro Day-1: potvrďte kontinuitu mezd, fakturace a podpory zkouškou go/no-go.",
+        "assess.remed_ac_governance": "Formálně ustavte IMO: jmenovaný vedoucí, exekutivní sponzor, týdenní kadence a log rozhodnutí.",
+        "assess.remed_ac_culture": "Připravte manažery na vedení změny: talking points, listening sessions a viditelný sponzoring.",
+        "assess.remed_ac_systems": "Zajistěte zdroje pro plán přístupů na Day-1 a vyzkoušejte jej end-to-end před Day-1."
       }
     }
   },
@@ -5178,6 +5559,525 @@
             "url": "/slides/welcome-slide.html",
             "pages": "all"
           }
+        ],
+        "assessmentTemplates": [
+          {
+            "id": "atpl_company_acquirer",
+            "slug": "company-readiness-acquirer",
+            "titleKey": "assess.tpl_company_acquirer_title",
+            "title": "Acquirer Readiness (TE)",
+            "subject": "acquirer-org",
+            "audienceRoles": [
+              "hrbp",
+              "admin",
+              "pmo"
+            ],
+            "raterModes": [
+              "self"
+            ],
+            "pairId": "pair_company_readiness",
+            "required": true,
+            "gates": [
+              "dashboard.phase.execute",
+              "pmo.gate.day1",
+              "project.advance"
+            ],
+            "scale": {
+              "min": 1,
+              "max": 5,
+              "step": 1,
+              "type": "likert",
+              "anchorsKeyPrefix": "assess.scale5"
+            },
+            "banding": {
+              "bands": [
+                {
+                  "id": "ready",
+                  "min": 80,
+                  "labelKey": "assess.band_ready",
+                  "color": "green"
+                },
+                {
+                  "id": "support",
+                  "min": 60,
+                  "labelKey": "assess.band_support",
+                  "color": "amber"
+                },
+                {
+                  "id": "risk",
+                  "min": 0,
+                  "labelKey": "assess.band_risk",
+                  "color": "red"
+                }
+              ],
+              "redFlagBelow": 50
+            },
+            "dimensions": [
+              {
+                "id": "dim_governance",
+                "mirrorId": "dim_governance",
+                "weight": 1,
+                "labelKey": "assess.dim_governance",
+                "label": "Strategy & Governance",
+                "iconEmoji": "🧭",
+                "questions": [
+                  {
+                    "id": "q_ac_gov1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_gov1",
+                    "text": "An Integration Management Office is chartered with a named lead and an executive sponsor."
+                  },
+                  {
+                    "id": "q_ac_gov2",
+                    "type": "maturity",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_gov2",
+                    "text": "How mature is our integration playbook and governance?",
+                    "levelsKeyPrefix": "assess.cmm"
+                  }
+                ]
+              },
+              {
+                "id": "dim_people",
+                "mirrorId": "dim_people",
+                "weight": 1,
+                "labelKey": "assess.dim_people",
+                "label": "People & Organization",
+                "iconEmoji": "👥",
+                "questions": [
+                  {
+                    "id": "q_ac_ppl1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_ppl1",
+                    "text": "Retention plans for the target's key talent are funded and approved."
+                  },
+                  {
+                    "id": "q_ac_ppl2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_ppl2",
+                    "text": "The future org design for the combined team has been drafted with HR."
+                  }
+                ]
+              },
+              {
+                "id": "dim_culture",
+                "mirrorId": "dim_culture",
+                "weight": 1,
+                "labelKey": "assess.dim_culture",
+                "label": "Culture & Ways of Working",
+                "iconEmoji": "🧩",
+                "questions": [
+                  {
+                    "id": "q_ac_cul1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_cul1",
+                    "text": "We understand how the target's ways of working differ from ours and where friction is likely."
+                  },
+                  {
+                    "id": "q_ac_cul2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_cul2",
+                    "text": "Our managers are prepared to lead people through the change, not just the process."
+                  }
+                ]
+              },
+              {
+                "id": "dim_systems",
+                "mirrorId": "dim_systems",
+                "weight": 1,
+                "labelKey": "assess.dim_systems",
+                "label": "Systems & Data",
+                "iconEmoji": "💻",
+                "questions": [
+                  {
+                    "id": "q_ac_sys1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_sys1",
+                    "text": "The Day-1 systems-access plan (accounts, licences, VPN) is resourced and tested."
+                  },
+                  {
+                    "id": "q_ac_sys2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_sys2",
+                    "text": "Keep / migrate / retire decisions are made for the core system landscape."
+                  }
+                ]
+              },
+              {
+                "id": "dim_commercial",
+                "mirrorId": "dim_commercial",
+                "weight": 1,
+                "labelKey": "assess.dim_commercial",
+                "label": "Customers & Commercial",
+                "iconEmoji": "📈",
+                "questions": [
+                  {
+                    "id": "q_ac_com1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_com1",
+                    "text": "Day-1 customer messaging is approved and communication owners are briefed."
+                  },
+                  {
+                    "id": "q_ac_com2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_com2",
+                    "text": "Cross-sell opportunities are mapped with named account owners."
+                  }
+                ]
+              },
+              {
+                "id": "dim_day1",
+                "mirrorId": "dim_day1",
+                "weight": 1,
+                "labelKey": "assess.dim_day1",
+                "label": "Day-1 & 100-Day Readiness",
+                "iconEmoji": "🚀",
+                "questions": [
+                  {
+                    "id": "q_ac_d11",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_ac_d11",
+                    "text": "The Day-1 checklist has an owner and a scheduled go/no-go review."
+                  },
+                  {
+                    "id": "q_ac_d12",
+                    "type": "sjt",
+                    "weight": 1.5,
+                    "textKey": "assess.q_ac_d12",
+                    "text": "One week before Day-1, Legal flags that a customer-consent step was missed for migrating CRM data. What happens?",
+                    "options": [
+                      {
+                        "textKey": "assess.q_ac_d12_o1",
+                        "text": "That migration is paused, the consent step is run, and the IMO and Day-1 comms owners are informed today.",
+                        "score": 5
+                      },
+                      {
+                        "textKey": "assess.q_ac_d12_o2",
+                        "text": "Day-1 is postponed entirely until the issue is fully resolved.",
+                        "score": 2
+                      },
+                      {
+                        "textKey": "assess.q_ac_d12_o3",
+                        "text": "Migration proceeds — consent can be collected afterwards.",
+                        "score": 1
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "remediation": [
+              {
+                "dimensionId": "dim_governance",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m3"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_ac_governance",
+                "advice": "Charter the IMO formally: named lead, executive sponsor, weekly cadence and a decision log."
+              },
+              {
+                "dimensionId": "dim_culture",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m1"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_ac_culture",
+                "advice": "Prepare managers to lead the change: talking points, listening sessions and visible sponsorship."
+              },
+              {
+                "dimensionId": "dim_systems",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m2"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_ac_systems",
+                "advice": "Resource the Day-1 access plan and rehearse it end-to-end before Day-1."
+              }
+            ],
+            "published": true,
+            "order": 1,
+            "version": 1
+          },
+          {
+            "id": "atpl_company_target",
+            "slug": "company-readiness-target",
+            "titleKey": "assess.tpl_company_target_title",
+            "title": "Target Company Readiness",
+            "subject": "target-org",
+            "audienceRoles": [
+              "hrbp",
+              "admin",
+              "pmo"
+            ],
+            "raterModes": [
+              "self"
+            ],
+            "pairId": "pair_company_readiness",
+            "required": true,
+            "gates": [
+              "dashboard.phase.plan",
+              "pmo.gate.day1",
+              "project.advance"
+            ],
+            "scale": {
+              "min": 1,
+              "max": 5,
+              "step": 1,
+              "type": "likert",
+              "anchorsKeyPrefix": "assess.scale5"
+            },
+            "banding": {
+              "bands": [
+                {
+                  "id": "ready",
+                  "min": 80,
+                  "labelKey": "assess.band_ready",
+                  "color": "green"
+                },
+                {
+                  "id": "support",
+                  "min": 60,
+                  "labelKey": "assess.band_support",
+                  "color": "amber"
+                },
+                {
+                  "id": "risk",
+                  "min": 0,
+                  "labelKey": "assess.band_risk",
+                  "color": "red"
+                }
+              ],
+              "redFlagBelow": 50
+            },
+            "dimensions": [
+              {
+                "id": "dim_governance",
+                "mirrorId": "dim_governance",
+                "weight": 1,
+                "labelKey": "assess.dim_governance",
+                "label": "Strategy & Governance",
+                "iconEmoji": "🧭",
+                "questions": [
+                  {
+                    "id": "q_tg_gov1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_gov1",
+                    "text": "Leadership understands the deal rationale and what it means for their organization."
+                  },
+                  {
+                    "id": "q_tg_gov2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_gov2",
+                    "text": "Decision rights between target leadership and the integration team are clearly defined."
+                  }
+                ]
+              },
+              {
+                "id": "dim_people",
+                "mirrorId": "dim_people",
+                "weight": 1,
+                "labelKey": "assess.dim_people",
+                "label": "People & Organization",
+                "iconEmoji": "👥",
+                "questions": [
+                  {
+                    "id": "q_tg_ppl1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_ppl1",
+                    "text": "Key talent is identified and retention conversations are underway."
+                  },
+                  {
+                    "id": "q_tg_ppl2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_ppl2",
+                    "text": "Critical roles are showing early signs of unwanted attrition.",
+                    "reverse": true
+                  }
+                ]
+              },
+              {
+                "id": "dim_culture",
+                "mirrorId": "dim_culture",
+                "weight": 1,
+                "labelKey": "assess.dim_culture",
+                "label": "Culture & Ways of Working",
+                "iconEmoji": "🧩",
+                "questions": [
+                  {
+                    "id": "q_tg_cul1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_cul1",
+                    "text": "Decisions are made quickly and close to the work rather than escalated by default."
+                  },
+                  {
+                    "id": "q_tg_cul2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_cul2",
+                    "text": "People are open to adopting new ways of working when the reasons are clear."
+                  }
+                ]
+              },
+              {
+                "id": "dim_systems",
+                "mirrorId": "dim_systems",
+                "weight": 1,
+                "labelKey": "assess.dim_systems",
+                "label": "Systems & Data",
+                "iconEmoji": "💻",
+                "questions": [
+                  {
+                    "id": "q_tg_sys1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_sys1",
+                    "text": "There is a complete inventory of core systems, licences and data owners."
+                  },
+                  {
+                    "id": "q_tg_sys2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_sys2",
+                    "text": "Day-1 access needs (email, ERP, payroll, VPN) are mapped for every team."
+                  }
+                ]
+              },
+              {
+                "id": "dim_commercial",
+                "mirrorId": "dim_commercial",
+                "weight": 1,
+                "labelKey": "assess.dim_commercial",
+                "label": "Customers & Commercial",
+                "iconEmoji": "📈",
+                "questions": [
+                  {
+                    "id": "q_tg_com1",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_com1",
+                    "text": "Top customers have a named owner for Day-1 communication."
+                  },
+                  {
+                    "id": "q_tg_com2",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_com2",
+                    "text": "A significant share of revenue depends on relationships held by people at flight risk.",
+                    "reverse": true
+                  }
+                ]
+              },
+              {
+                "id": "dim_day1",
+                "mirrorId": "dim_day1",
+                "weight": 1,
+                "labelKey": "assess.dim_day1",
+                "label": "Day-1 & 100-Day Readiness",
+                "iconEmoji": "🚀",
+                "questions": [
+                  {
+                    "id": "q_tg_d11",
+                    "type": "likert",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_d11",
+                    "text": "Business continuity for Day-1 (payroll, invoicing, customer support) is confirmed."
+                  },
+                  {
+                    "id": "q_tg_d12",
+                    "type": "sjt",
+                    "weight": 1.5,
+                    "textKey": "assess.q_tg_d12",
+                    "text": "Three weeks before Day-1, payroll cutover testing uncovers errors for 15% of employees. What happens?",
+                    "options": [
+                      {
+                        "textKey": "assess.q_tg_d12_o1",
+                        "text": "The issue is escalated to the IMO the same day with a joint fix plan and a fallback (one more cycle on legacy payroll).",
+                        "score": 5
+                      },
+                      {
+                        "textKey": "assess.q_tg_d12_o2",
+                        "text": "The payroll vendor is asked to fix and re-test quietly, without involving the IMO.",
+                        "score": 2
+                      },
+                      {
+                        "textKey": "assess.q_tg_d12_o3",
+                        "text": "Cutover continues as planned — errors can be corrected after Day-1.",
+                        "score": 1
+                      }
+                    ]
+                  },
+                  {
+                    "id": "q_tg_d13",
+                    "type": "maturity",
+                    "weight": 1,
+                    "textKey": "assess.q_tg_d13",
+                    "text": "How developed is the target's integration-readiness tracking?",
+                    "levelsKeyPrefix": "assess.cmm"
+                  }
+                ]
+              }
+            ],
+            "remediation": [
+              {
+                "dimensionId": "dim_people",
+                "maxBand": "support",
+                "academyModuleIds": [],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_tg_people",
+                "advice": "Accelerate retention: a named owner for every key-talent conversation and a weekly flight-risk review."
+              },
+              {
+                "dimensionId": "dim_culture",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m1"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_tg_culture",
+                "advice": "Run joint culture sessions early: pair target and TE teams on real work, and make the 'why' of new ways of working explicit."
+              },
+              {
+                "dimensionId": "dim_systems",
+                "maxBand": "support",
+                "academyModuleIds": [
+                  "mod_m2"
+                ],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_tg_systems",
+                "advice": "Stand up a joint systems task force: complete the inventory, then test Day-1 access end-to-end for every team."
+              },
+              {
+                "dimensionId": "dim_day1",
+                "maxBand": "support",
+                "academyModuleIds": [],
+                "coachingScenarioIds": [],
+                "adviceKey": "assess.remed_tg_day1",
+                "advice": "Walk the Day-1 runbook: confirm payroll, invoicing and support continuity with a go/no-go rehearsal."
+              }
+            ],
+            "published": true,
+            "order": 2,
+            "version": 1
+          }
         ]
       }
     }
@@ -5479,5 +6379,766 @@
       "url": "/slides/welcome-slide.html",
       "pages": "all"
     }
-  ]
+  ],
+  "assessmentTemplates": [
+    {
+      "id": "atpl_company_acquirer",
+      "slug": "company-readiness-acquirer",
+      "titleKey": "assess.tpl_company_acquirer_title",
+      "title": "Acquirer Readiness (TE)",
+      "subject": "acquirer-org",
+      "audienceRoles": [
+        "hrbp",
+        "admin",
+        "pmo"
+      ],
+      "raterModes": [
+        "self"
+      ],
+      "pairId": "pair_company_readiness",
+      "required": true,
+      "gates": [
+        "dashboard.phase.execute",
+        "pmo.gate.day1",
+        "project.advance"
+      ],
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "type": "likert",
+        "anchorsKeyPrefix": "assess.scale5"
+      },
+      "banding": {
+        "bands": [
+          {
+            "id": "ready",
+            "min": 80,
+            "labelKey": "assess.band_ready",
+            "color": "green"
+          },
+          {
+            "id": "support",
+            "min": 60,
+            "labelKey": "assess.band_support",
+            "color": "amber"
+          },
+          {
+            "id": "risk",
+            "min": 0,
+            "labelKey": "assess.band_risk",
+            "color": "red"
+          }
+        ],
+        "redFlagBelow": 50
+      },
+      "dimensions": [
+        {
+          "id": "dim_governance",
+          "mirrorId": "dim_governance",
+          "weight": 1,
+          "labelKey": "assess.dim_governance",
+          "label": "Strategy & Governance",
+          "iconEmoji": "🧭",
+          "questions": [
+            {
+              "id": "q_ac_gov1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_gov1",
+              "text": "An Integration Management Office is chartered with a named lead and an executive sponsor."
+            },
+            {
+              "id": "q_ac_gov2",
+              "type": "maturity",
+              "weight": 1,
+              "textKey": "assess.q_ac_gov2",
+              "text": "How mature is our integration playbook and governance?",
+              "levelsKeyPrefix": "assess.cmm"
+            }
+          ]
+        },
+        {
+          "id": "dim_people",
+          "mirrorId": "dim_people",
+          "weight": 1,
+          "labelKey": "assess.dim_people",
+          "label": "People & Organization",
+          "iconEmoji": "👥",
+          "questions": [
+            {
+              "id": "q_ac_ppl1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_ppl1",
+              "text": "Retention plans for the target's key talent are funded and approved."
+            },
+            {
+              "id": "q_ac_ppl2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_ppl2",
+              "text": "The future org design for the combined team has been drafted with HR."
+            }
+          ]
+        },
+        {
+          "id": "dim_culture",
+          "mirrorId": "dim_culture",
+          "weight": 1,
+          "labelKey": "assess.dim_culture",
+          "label": "Culture & Ways of Working",
+          "iconEmoji": "🧩",
+          "questions": [
+            {
+              "id": "q_ac_cul1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_cul1",
+              "text": "We understand how the target's ways of working differ from ours and where friction is likely."
+            },
+            {
+              "id": "q_ac_cul2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_cul2",
+              "text": "Our managers are prepared to lead people through the change, not just the process."
+            }
+          ]
+        },
+        {
+          "id": "dim_systems",
+          "mirrorId": "dim_systems",
+          "weight": 1,
+          "labelKey": "assess.dim_systems",
+          "label": "Systems & Data",
+          "iconEmoji": "💻",
+          "questions": [
+            {
+              "id": "q_ac_sys1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_sys1",
+              "text": "The Day-1 systems-access plan (accounts, licences, VPN) is resourced and tested."
+            },
+            {
+              "id": "q_ac_sys2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_sys2",
+              "text": "Keep / migrate / retire decisions are made for the core system landscape."
+            }
+          ]
+        },
+        {
+          "id": "dim_commercial",
+          "mirrorId": "dim_commercial",
+          "weight": 1,
+          "labelKey": "assess.dim_commercial",
+          "label": "Customers & Commercial",
+          "iconEmoji": "📈",
+          "questions": [
+            {
+              "id": "q_ac_com1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_com1",
+              "text": "Day-1 customer messaging is approved and communication owners are briefed."
+            },
+            {
+              "id": "q_ac_com2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_com2",
+              "text": "Cross-sell opportunities are mapped with named account owners."
+            }
+          ]
+        },
+        {
+          "id": "dim_day1",
+          "mirrorId": "dim_day1",
+          "weight": 1,
+          "labelKey": "assess.dim_day1",
+          "label": "Day-1 & 100-Day Readiness",
+          "iconEmoji": "🚀",
+          "questions": [
+            {
+              "id": "q_ac_d11",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_ac_d11",
+              "text": "The Day-1 checklist has an owner and a scheduled go/no-go review."
+            },
+            {
+              "id": "q_ac_d12",
+              "type": "sjt",
+              "weight": 1.5,
+              "textKey": "assess.q_ac_d12",
+              "text": "One week before Day-1, Legal flags that a customer-consent step was missed for migrating CRM data. What happens?",
+              "options": [
+                {
+                  "textKey": "assess.q_ac_d12_o1",
+                  "text": "That migration is paused, the consent step is run, and the IMO and Day-1 comms owners are informed today.",
+                  "score": 5
+                },
+                {
+                  "textKey": "assess.q_ac_d12_o2",
+                  "text": "Day-1 is postponed entirely until the issue is fully resolved.",
+                  "score": 2
+                },
+                {
+                  "textKey": "assess.q_ac_d12_o3",
+                  "text": "Migration proceeds — consent can be collected afterwards.",
+                  "score": 1
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "remediation": [
+        {
+          "dimensionId": "dim_governance",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m3"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_ac_governance",
+          "advice": "Charter the IMO formally: named lead, executive sponsor, weekly cadence and a decision log."
+        },
+        {
+          "dimensionId": "dim_culture",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m1"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_ac_culture",
+          "advice": "Prepare managers to lead the change: talking points, listening sessions and visible sponsorship."
+        },
+        {
+          "dimensionId": "dim_systems",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m2"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_ac_systems",
+          "advice": "Resource the Day-1 access plan and rehearse it end-to-end before Day-1."
+        }
+      ],
+      "published": true,
+      "order": 1,
+      "version": 1
+    },
+    {
+      "id": "atpl_company_target",
+      "slug": "company-readiness-target",
+      "titleKey": "assess.tpl_company_target_title",
+      "title": "Target Company Readiness",
+      "subject": "target-org",
+      "audienceRoles": [
+        "hrbp",
+        "admin",
+        "pmo"
+      ],
+      "raterModes": [
+        "self"
+      ],
+      "pairId": "pair_company_readiness",
+      "required": true,
+      "gates": [
+        "dashboard.phase.plan",
+        "pmo.gate.day1",
+        "project.advance"
+      ],
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "type": "likert",
+        "anchorsKeyPrefix": "assess.scale5"
+      },
+      "banding": {
+        "bands": [
+          {
+            "id": "ready",
+            "min": 80,
+            "labelKey": "assess.band_ready",
+            "color": "green"
+          },
+          {
+            "id": "support",
+            "min": 60,
+            "labelKey": "assess.band_support",
+            "color": "amber"
+          },
+          {
+            "id": "risk",
+            "min": 0,
+            "labelKey": "assess.band_risk",
+            "color": "red"
+          }
+        ],
+        "redFlagBelow": 50
+      },
+      "dimensions": [
+        {
+          "id": "dim_governance",
+          "mirrorId": "dim_governance",
+          "weight": 1,
+          "labelKey": "assess.dim_governance",
+          "label": "Strategy & Governance",
+          "iconEmoji": "🧭",
+          "questions": [
+            {
+              "id": "q_tg_gov1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_gov1",
+              "text": "Leadership understands the deal rationale and what it means for their organization."
+            },
+            {
+              "id": "q_tg_gov2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_gov2",
+              "text": "Decision rights between target leadership and the integration team are clearly defined."
+            }
+          ]
+        },
+        {
+          "id": "dim_people",
+          "mirrorId": "dim_people",
+          "weight": 1,
+          "labelKey": "assess.dim_people",
+          "label": "People & Organization",
+          "iconEmoji": "👥",
+          "questions": [
+            {
+              "id": "q_tg_ppl1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_ppl1",
+              "text": "Key talent is identified and retention conversations are underway."
+            },
+            {
+              "id": "q_tg_ppl2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_ppl2",
+              "text": "Critical roles are showing early signs of unwanted attrition.",
+              "reverse": true
+            }
+          ]
+        },
+        {
+          "id": "dim_culture",
+          "mirrorId": "dim_culture",
+          "weight": 1,
+          "labelKey": "assess.dim_culture",
+          "label": "Culture & Ways of Working",
+          "iconEmoji": "🧩",
+          "questions": [
+            {
+              "id": "q_tg_cul1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_cul1",
+              "text": "Decisions are made quickly and close to the work rather than escalated by default."
+            },
+            {
+              "id": "q_tg_cul2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_cul2",
+              "text": "People are open to adopting new ways of working when the reasons are clear."
+            }
+          ]
+        },
+        {
+          "id": "dim_systems",
+          "mirrorId": "dim_systems",
+          "weight": 1,
+          "labelKey": "assess.dim_systems",
+          "label": "Systems & Data",
+          "iconEmoji": "💻",
+          "questions": [
+            {
+              "id": "q_tg_sys1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_sys1",
+              "text": "There is a complete inventory of core systems, licences and data owners."
+            },
+            {
+              "id": "q_tg_sys2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_sys2",
+              "text": "Day-1 access needs (email, ERP, payroll, VPN) are mapped for every team."
+            }
+          ]
+        },
+        {
+          "id": "dim_commercial",
+          "mirrorId": "dim_commercial",
+          "weight": 1,
+          "labelKey": "assess.dim_commercial",
+          "label": "Customers & Commercial",
+          "iconEmoji": "📈",
+          "questions": [
+            {
+              "id": "q_tg_com1",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_com1",
+              "text": "Top customers have a named owner for Day-1 communication."
+            },
+            {
+              "id": "q_tg_com2",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_com2",
+              "text": "A significant share of revenue depends on relationships held by people at flight risk.",
+              "reverse": true
+            }
+          ]
+        },
+        {
+          "id": "dim_day1",
+          "mirrorId": "dim_day1",
+          "weight": 1,
+          "labelKey": "assess.dim_day1",
+          "label": "Day-1 & 100-Day Readiness",
+          "iconEmoji": "🚀",
+          "questions": [
+            {
+              "id": "q_tg_d11",
+              "type": "likert",
+              "weight": 1,
+              "textKey": "assess.q_tg_d11",
+              "text": "Business continuity for Day-1 (payroll, invoicing, customer support) is confirmed."
+            },
+            {
+              "id": "q_tg_d12",
+              "type": "sjt",
+              "weight": 1.5,
+              "textKey": "assess.q_tg_d12",
+              "text": "Three weeks before Day-1, payroll cutover testing uncovers errors for 15% of employees. What happens?",
+              "options": [
+                {
+                  "textKey": "assess.q_tg_d12_o1",
+                  "text": "The issue is escalated to the IMO the same day with a joint fix plan and a fallback (one more cycle on legacy payroll).",
+                  "score": 5
+                },
+                {
+                  "textKey": "assess.q_tg_d12_o2",
+                  "text": "The payroll vendor is asked to fix and re-test quietly, without involving the IMO.",
+                  "score": 2
+                },
+                {
+                  "textKey": "assess.q_tg_d12_o3",
+                  "text": "Cutover continues as planned — errors can be corrected after Day-1.",
+                  "score": 1
+                }
+              ]
+            },
+            {
+              "id": "q_tg_d13",
+              "type": "maturity",
+              "weight": 1,
+              "textKey": "assess.q_tg_d13",
+              "text": "How developed is the target's integration-readiness tracking?",
+              "levelsKeyPrefix": "assess.cmm"
+            }
+          ]
+        }
+      ],
+      "remediation": [
+        {
+          "dimensionId": "dim_people",
+          "maxBand": "support",
+          "academyModuleIds": [],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_tg_people",
+          "advice": "Accelerate retention: a named owner for every key-talent conversation and a weekly flight-risk review."
+        },
+        {
+          "dimensionId": "dim_culture",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m1"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_tg_culture",
+          "advice": "Run joint culture sessions early: pair target and TE teams on real work, and make the 'why' of new ways of working explicit."
+        },
+        {
+          "dimensionId": "dim_systems",
+          "maxBand": "support",
+          "academyModuleIds": [
+            "mod_m2"
+          ],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_tg_systems",
+          "advice": "Stand up a joint systems task force: complete the inventory, then test Day-1 access end-to-end for every team."
+        },
+        {
+          "dimensionId": "dim_day1",
+          "maxBand": "support",
+          "academyModuleIds": [],
+          "coachingScenarioIds": [],
+          "adviceKey": "assess.remed_tg_day1",
+          "advice": "Walk the Day-1 runbook: confirm payroll, invoicing and support continuity with a go/no-go rehearsal."
+        }
+      ],
+      "published": true,
+      "order": 2,
+      "version": 1
+    }
+  ],
+  "assessmentInstances": [
+    {
+      "id": "ainst_seed_tg1",
+      "templateId": "atpl_company_target",
+      "templateVersion": 1,
+      "subject": "target-org",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 1,
+      "responses": {
+        "q_tg_gov1": 3,
+        "q_tg_gov2": 4,
+        "q_tg_ppl1": 3,
+        "q_tg_ppl2": 3,
+        "q_tg_cul1": 3,
+        "q_tg_cul2": 3,
+        "q_tg_sys1": 2,
+        "q_tg_sys2": 3,
+        "q_tg_com1": 3,
+        "q_tg_com2": 3,
+        "q_tg_d11": 3,
+        "q_tg_d12": 1,
+        "q_tg_d13": 2
+      },
+      "dimensionScores": {
+        "dim_governance": 63,
+        "dim_people": 50,
+        "dim_culture": 50,
+        "dim_systems": 38,
+        "dim_commercial": 50,
+        "dim_day1": 39
+      },
+      "overallScore": 48,
+      "bandId": "risk",
+      "redFlags": [
+        "dim_systems",
+        "dim_day1"
+      ],
+      "experienceIndex": null,
+      "status": "submitted",
+      "timestamp": "2026-05-01T09:00:00.000Z"
+    },
+    {
+      "id": "ainst_seed_tg30",
+      "templateId": "atpl_company_target",
+      "templateVersion": 1,
+      "subject": "target-org",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 30,
+      "responses": {
+        "q_tg_gov1": 4,
+        "q_tg_gov2": 4,
+        "q_tg_ppl1": 4,
+        "q_tg_ppl2": 2,
+        "q_tg_cul1": 3,
+        "q_tg_cul2": 4,
+        "q_tg_sys1": 3,
+        "q_tg_sys2": 4,
+        "q_tg_com1": 4,
+        "q_tg_com2": 2,
+        "q_tg_d11": 4,
+        "q_tg_d12": 0,
+        "q_tg_d13": 3
+      },
+      "dimensionScores": {
+        "dim_governance": 75,
+        "dim_people": 75,
+        "dim_culture": 63,
+        "dim_systems": 63,
+        "dim_commercial": 75,
+        "dim_day1": 79
+      },
+      "overallScore": 72,
+      "bandId": "support",
+      "redFlags": [],
+      "experienceIndex": null,
+      "status": "submitted",
+      "timestamp": "2026-05-30T09:00:00.000Z",
+      "retakeOf": "ainst_seed_tg1"
+    },
+    {
+      "id": "ainst_seed_tg60",
+      "templateId": "atpl_company_target",
+      "templateVersion": 1,
+      "subject": "target-org",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 60,
+      "responses": {
+        "q_tg_gov1": 4,
+        "q_tg_gov2": 5,
+        "q_tg_ppl1": 4,
+        "q_tg_ppl2": 2,
+        "q_tg_cul1": 4,
+        "q_tg_cul2": 4,
+        "q_tg_sys1": 4,
+        "q_tg_sys2": 3,
+        "q_tg_com1": 4,
+        "q_tg_com2": 2,
+        "q_tg_d11": 4,
+        "q_tg_d12": 0,
+        "q_tg_d13": 4
+      },
+      "dimensionScores": {
+        "dim_governance": 88,
+        "dim_people": 75,
+        "dim_culture": 75,
+        "dim_systems": 63,
+        "dim_commercial": 75,
+        "dim_day1": 86
+      },
+      "overallScore": 77,
+      "bandId": "support",
+      "redFlags": [],
+      "experienceIndex": null,
+      "status": "submitted",
+      "timestamp": "2026-06-29T09:00:00.000Z",
+      "retakeOf": "ainst_seed_tg30"
+    },
+    {
+      "id": "ainst_seed_tg90",
+      "templateId": "atpl_company_target",
+      "templateVersion": 1,
+      "subject": "target-org",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 90,
+      "responses": {
+        "q_tg_gov1": 5,
+        "q_tg_gov2": 4,
+        "q_tg_ppl1": 5,
+        "q_tg_ppl2": 1,
+        "q_tg_cul1": 4,
+        "q_tg_cul2": 4,
+        "q_tg_sys1": 4,
+        "q_tg_sys2": 4,
+        "q_tg_com1": 5,
+        "q_tg_com2": 2,
+        "q_tg_d11": 5,
+        "q_tg_d12": 0,
+        "q_tg_d13": 4
+      },
+      "dimensionScores": {
+        "dim_governance": 88,
+        "dim_people": 100,
+        "dim_culture": 75,
+        "dim_systems": 75,
+        "dim_commercial": 88,
+        "dim_day1": 93
+      },
+      "overallScore": 87,
+      "bandId": "ready",
+      "redFlags": [],
+      "experienceIndex": null,
+      "status": "submitted",
+      "timestamp": "2026-07-29T09:00:00.000Z",
+      "retakeOf": "ainst_seed_tg60"
+    },
+    {
+      "id": "ainst_seed_ac1",
+      "templateId": "atpl_company_acquirer",
+      "templateVersion": 1,
+      "subject": "acquirer-org",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 1,
+      "responses": {
+        "q_ac_gov1": 4,
+        "q_ac_gov2": 4,
+        "q_ac_ppl1": 4,
+        "q_ac_ppl2": 4,
+        "q_ac_cul1": 4,
+        "q_ac_cul2": 4,
+        "q_ac_sys1": 4,
+        "q_ac_sys2": 4,
+        "q_ac_com1": 4,
+        "q_ac_com2": 4,
+        "q_ac_d11": 4,
+        "q_ac_d12": 0
+      },
+      "dimensionScores": {
+        "dim_governance": 75,
+        "dim_people": 75,
+        "dim_culture": 75,
+        "dim_systems": 75,
+        "dim_commercial": 75,
+        "dim_day1": 90
+      },
+      "overallScore": 78,
+      "bandId": "support",
+      "redFlags": [],
+      "experienceIndex": null,
+      "status": "submitted",
+      "timestamp": "2026-05-01T09:00:00.000Z"
+    },
+    {
+      "id": "ainst_seed_ac30",
+      "templateId": "atpl_company_acquirer",
+      "templateVersion": 1,
+      "subject": "acquirer-org",
+      "rater": "self",
+      "respondentRole": "hrbp",
+      "respondentName": "Karen Peterson",
+      "demoDay": 30,
+      "responses": {
+        "q_ac_gov1": 5,
+        "q_ac_gov2": 4,
+        "q_ac_ppl1": 4,
+        "q_ac_ppl2": 5,
+        "q_ac_cul1": 4,
+        "q_ac_cul2": 4,
+        "q_ac_sys1": 5,
+        "q_ac_sys2": 4,
+        "q_ac_com1": 5,
+        "q_ac_com2": 4,
+        "q_ac_d11": 5,
+        "q_ac_d12": 0
+      },
+      "dimensionScores": {
+        "dim_governance": 88,
+        "dim_people": 88,
+        "dim_culture": 75,
+        "dim_systems": 88,
+        "dim_commercial": 88,
+        "dim_day1": 100
+      },
+      "overallScore": 88,
+      "bandId": "ready",
+      "redFlags": [],
+      "experienceIndex": null,
+      "status": "submitted",
+      "timestamp": "2026-05-30T09:00:00.000Z",
+      "retakeOf": "ainst_seed_ac1"
+    }
+  ],
+  "customAssessmentInstances": []
 }

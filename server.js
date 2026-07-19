@@ -187,6 +187,11 @@ function readDb() {
     parsed.processCatalog = parsed.processCatalog || [];
     // Admin-authored HTML slide launchers (project-scoped via the cms bundle).
     parsed.slides = parsed.slides || [];
+    // Assessment Suite v2: templates are per-project CMS content; instances are
+    // workspace data with the same demo/custom lane split as `assessments`.
+    parsed.assessmentTemplates = parsed.assessmentTemplates || [];
+    parsed.assessmentInstances = parsed.assessmentInstances || [];
+    parsed.customAssessmentInstances = parsed.customAssessmentInstances || [];
     _dbCache = parsed;
     _dbMtime = mtime;
     return parsed;
@@ -591,6 +596,7 @@ app.post('/api/settings/new-ma', (req, res) => {
   db.customAssessments = [];
   db.customAlerts = [];
   db.customCommunications = [];
+  db.customAssessmentInstances = [];
   
   // Wipe custom physical emails
   const emailDir = path.join(__dirname, 'public', 'sent_emails');
@@ -633,7 +639,8 @@ function saveCustomLaneToProject(db, project) {
     hrbps: db.customHrbps || [],
     assessments: db.customAssessments || [],
     alerts: db.customAlerts || [],
-    communications: db.customCommunications || []
+    communications: db.customCommunications || [],
+    assessmentInstances: db.customAssessmentInstances || []
   };
 }
 
@@ -651,6 +658,7 @@ function loadProjectIntoCustomLane(db, project) {
   db.customAssessments = d.assessments || [];
   db.customAlerts = d.alerts || [];
   db.customCommunications = d.communications || [];
+  db.customAssessmentInstances = d.assessmentInstances || [];
 }
 
 // Persist whatever the live custom lane currently holds back to whichever custom
@@ -676,7 +684,8 @@ function snapshotCms(db) {
     banners: clone(db.banners || []),
     departments: clone(db.departments || []),
     processCatalog: clone(db.processCatalog || []),
-    slides: clone(db.slides || [])
+    slides: clone(db.slides || []),
+    assessmentTemplates: clone(db.assessmentTemplates || [])
   };
 }
 function applyCmsToTopLevel(db, cms) {
@@ -688,6 +697,7 @@ function applyCmsToTopLevel(db, cms) {
   db.departments = cms.departments || [];
   db.processCatalog = cms.processCatalog || [];
   db.slides = cms.slides || [];
+  db.assessmentTemplates = cms.assessmentTemplates || [];
 }
 // Save the live CMS back to whichever project is active (demo included) before switching.
 function stashActiveProjectCms(db) {
@@ -722,7 +732,7 @@ app.post('/api/projects', (req, res) => {
     sector: b.sector || '', size: b.size || '', hq: b.hq || '',
     acquisitionDate: b.acquisitionDate || '', synergyObjective: b.synergyObjective || '',
     intake: b.intake || {}, createdAt: new Date().toISOString(),
-    data: { settings: { demoMode: false }, employees: [], hrbps: [], assessments: [], alerts: [], communications: [] }
+    data: { settings: { demoMode: false }, employees: [], hrbps: [], assessments: [], alerts: [], communications: [], assessmentInstances: [] }
   };
   db.projects = db.projects || [];
   // Preserve the currently-active project's work & CMS before switching to the new one.
@@ -1590,6 +1600,210 @@ app.delete('/api/assessments/:id', (req, res) => {
   }
   writeDb(db);
   res.json({ success: true, message: 'Assessment deleted.' });
+});
+
+// =====================================================================
+// Assessment Suite v2 — template-driven readiness assessments
+// (two-sided company readiness, Integration Leader readiness).
+// Templates ride the per-project cms bundle; instances live in the
+// demo/custom lane split like `assessments`. The legacy questions[] /
+// POST /api/assessment survey engine stays untouched alongside.
+// =====================================================================
+
+function assessLane(db) {
+  const isCustom = db.settings && db.settings.demoMode === false;
+  if (isCustom) { db.customAssessmentInstances = db.customAssessmentInstances || []; return db.customAssessmentInstances; }
+  db.assessmentInstances = db.assessmentInstances || [];
+  return db.assessmentInstances;
+}
+
+// Demo-lane instances carry an explicit `demoDay` (the day in the 100-day arc the
+// record was "taken"); time travel reveals later seeded retakes instead of
+// fabricating score inflation on a single record.
+function visibleAssessInstances(db) {
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const lane = assessLane(db);
+  if (isCustom) return lane;
+  const day = (db.settings && db.settings.timeTravelDay) || 30;
+  return lane.filter(i => i.demoDay == null || i.demoDay <= day);
+}
+
+// Pure synchronous scorer — deliberately NO awaits between readDb and writeDb
+// anywhere on the instance-submit path (file DB has no write concurrency).
+function scoreAssessmentInstance(template, responses) {
+  const scale = template.scale || { min: 1, max: 5 };
+  const span = (scale.max - scale.min) || 4;
+  const dimensionScores = {};
+  const dimWeights = {};
+  let expEarned = 0, expTotal = 0;
+  (template.dimensions || []).forEach(dim => {
+    let sum = 0, wsum = 0;
+    (dim.questions || []).forEach(q => {
+      const raw = responses ? responses[q.id] : undefined;
+      if (q.type === 'checkbox') {
+        // Experience-inventory evidence: counts toward experienceIndex, never banding.
+        expTotal += (q.score || 1);
+        if (raw === true || raw === 'true' || raw === 1) expEarned += (q.score || 1);
+        return;
+      }
+      if (raw === undefined || raw === null || raw === '') return;
+      let pct = null;
+      if (q.type === 'sjt') {
+        const opts = q.options || [];
+        const idx = parseInt(raw, 10);
+        const maxScore = opts.reduce((m, o) => Math.max(m, o.score || 0), 0) || 1;
+        if (!isNaN(idx) && opts[idx]) pct = ((opts[idx].score || 0) / maxScore) * 100;
+      } else if (q.type === 'maturity') {
+        const v = parseFloat(raw);
+        if (!isNaN(v)) pct = ((Math.min(Math.max(v, 1), 5) - 1) / 4) * 100;
+      } else { // likert
+        let v = parseFloat(raw);
+        if (!isNaN(v)) {
+          v = Math.min(Math.max(v, scale.min), scale.max);
+          if (q.reverse) v = scale.max + scale.min - v;
+          pct = ((v - scale.min) / span) * 100;
+        }
+      }
+      if (pct == null) return;
+      const w = q.weight || 1;
+      sum += pct * w; wsum += w;
+    });
+    if (wsum > 0) { dimensionScores[dim.id] = Math.round(sum / wsum); dimWeights[dim.id] = dim.weight || 1; }
+  });
+  let osum = 0, owsum = 0;
+  Object.keys(dimensionScores).forEach(id => { osum += dimensionScores[id] * dimWeights[id]; owsum += dimWeights[id]; });
+  const overallScore = owsum > 0 ? Math.round(osum / owsum) : 0;
+  const banding = template.banding || {};
+  const bands = (banding.bands || []).slice().sort((a, b) => (b.min || 0) - (a.min || 0));
+  const band = bands.find(b => overallScore >= (b.min || 0));
+  const redFlagBelow = banding.redFlagBelow;
+  const redFlags = (redFlagBelow == null) ? [] : Object.keys(dimensionScores).filter(id => dimensionScores[id] < redFlagBelow);
+  const experienceIndex = expTotal > 0 ? Math.round((expEarned / expTotal) * 100) : null;
+  return { dimensionScores, overallScore, bandId: band ? band.id : null, redFlags, experienceIndex };
+}
+
+// Raw answer maps never leave the server via list/status responses — target-company
+// self-ratings and leader competency answers are the most sensitive records in the
+// app, and these endpoints feed open dashboards.
+function publicAssessInstance(inst) {
+  if (!inst) return null;
+  const { responses, ...rest } = inst;
+  return rest;
+}
+
+function latestAssessInstanceFor(visible, tplId, rater) {
+  let latest = null;
+  visible.forEach(i => {
+    if (i.templateId !== tplId) return;
+    if (rater && (i.rater || 'self') !== rater) return;
+    if (!latest) { latest = i; return; }
+    const byDay = (i.demoDay || 0) - (latest.demoDay || 0);
+    if (byDay > 0 || (byDay === 0 && String(i.timestamp) > String(latest.timestamp))) latest = i;
+  });
+  return latest;
+}
+
+// GET published assessment templates (active project's CMS); ?all=1 includes drafts
+app.get('/api/assessment-templates', (req, res) => {
+  const db = readDb();
+  const all = req.query.all === '1';
+  const list = (db.assessmentTemplates || [])
+    .filter(t => all || t.published !== false)
+    .slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  res.json(list);
+});
+
+// POST a completed assessment — server computes every score (client sends raw answers only)
+app.post('/api/assessment-instances', (req, res) => {
+  const { templateId, rater, respondentName, respondentRole, responses, retakeOf } = req.body || {};
+  if (!templateId || !responses || typeof responses !== 'object' || Object.keys(responses).length === 0) {
+    return res.status(400).json({ error: 'templateId and responses are required.' });
+  }
+  const db = readDb();
+  const template = (db.assessmentTemplates || []).find(t => t.id === templateId);
+  if (!template) return res.status(404).json({ error: 'Assessment template not found.' });
+  const scoresBlock = scoreAssessmentInstance(template, responses);
+  const instance = {
+    id: newId('ainst'),
+    templateId,
+    templateVersion: template.version || 1,
+    subject: template.subject || 'target-org',
+    rater: (template.raterModes || ['self']).includes(rater) ? rater : 'self',
+    respondentRole: String(respondentRole || '').slice(0, 60),
+    respondentName: String(respondentName || '').slice(0, 120),
+    responses,
+    ...scoresBlock,
+    status: 'submitted',
+    timestamp: new Date().toISOString(),
+    ...(retakeOf ? { retakeOf } : {})
+  };
+  // Demo-lane submissions belong to "today" in the 100-day demo arc: stamp the
+  // current time-travel day so they order after (and outrank) earlier seeded
+  // retakes, and disappear again when the demo rewinds before their day.
+  if (!(db.settings && db.settings.demoMode === false)) {
+    instance.demoDay = (db.settings && db.settings.timeTravelDay) || 30;
+  }
+  assessLane(db).push(instance);
+  writeDb(db);
+  res.status(201).json({ success: true, instance: publicAssessInstance(instance) });
+});
+
+// GET instances (lane-aware, time-travel-aware, answers stripped)
+app.get('/api/assessment-instances', (req, res) => {
+  const db = readDb();
+  let list = visibleAssessInstances(db);
+  if (req.query.templateId) list = list.filter(i => i.templateId === req.query.templateId);
+  if (req.query.rater) list = list.filter(i => (i.rater || 'self') === req.query.rater);
+  if (req.query.latest === '1') {
+    const byKey = {};
+    list.forEach(i => {
+      const key = i.templateId + '|' + (i.rater || 'self');
+      const cur = byKey[key];
+      if (!cur) { byKey[key] = i; return; }
+      const byDay = (i.demoDay || 0) - (cur.demoDay || 0);
+      if (byDay > 0 || (byDay === 0 && String(i.timestamp) > String(cur.timestamp))) byKey[key] = i;
+    });
+    list = Object.values(byKey);
+  }
+  res.json(list.map(publicAssessInstance));
+});
+
+// DELETE an instance (admin cleanup)
+app.delete('/api/assessment-instances/:id', (req, res) => {
+  const db = readDb();
+  const lane = assessLane(db);
+  const filtered = lane.filter(i => i.id !== req.params.id);
+  if (filtered.length === lane.length) return res.status(404).json({ error: 'Instance not found.' });
+  if (db.settings && db.settings.demoMode === false) db.customAssessmentInstances = filtered;
+  else db.assessmentInstances = filtered;
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// GET the readiness rollup — single source of truth for every gate point in the UI
+app.get('/api/assessment-status', (req, res) => {
+  const db = readDb();
+  const templates = (db.assessmentTemplates || []).filter(t => t.published !== false);
+  const visible = visibleAssessInstances(db);
+  const required = [];
+  const gatesSummary = {};
+  const bySubject = {};
+  templates.forEach(t => {
+    const latest = latestAssessInstanceFor(visible, t.id, 'self');
+    const entry = {
+      templateId: t.id, slug: t.slug, subject: t.subject,
+      required: !!t.required, gates: t.gates || [],
+      satisfied: !!latest,
+      latestInstance: publicAssessInstance(latest)
+    };
+    bySubject[t.subject] = entry;
+    if (t.required) required.push(entry);
+    (t.gates || []).forEach(g => {
+      gatesSummary[g] = gatesSummary[g] || { satisfied: true, blockedBy: [] };
+      if (t.required && !latest) { gatesSummary[g].satisfied = false; gatesSummary[g].blockedBy.push(t.id); }
+    });
+  });
+  res.json({ success: true, required, bySubject, gatesSummary });
 });
 
 // ==========================================
