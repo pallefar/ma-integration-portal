@@ -100,25 +100,46 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 
 ## Traceability
 
-Populated during roadmap creation (Step 8).
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 … FND-04 | TBD | Pending |
-| AUTH-01 … AUTH-04 | TBD | Pending |
-| ISO-01 … ISO-03 | TBD | Pending |
-| AUD-01 … AUD-02 | TBD | Pending |
-| VAL-01 … VAL-02 | TBD | Pending |
-| DD-01 … DD-05 | TBD | Pending |
-| SYN-01 … SYN-05 | TBD | Pending |
-| RPT-01 … RPT-04 | TBD | Pending |
-| ORG-01 … ORG-03 | TBD | Pending |
+| FND-01 | Phase 1: Schema & Migration | Pending |
+| FND-02 | Phase 1: Schema & Migration | Pending |
+| FND-03 | Phase 1: Schema & Migration | Pending |
+| FND-04 | Phase 1: Schema & Migration | Pending |
+| AUTH-01 | Phase 2: Mandatory Auth & Roles | Pending |
+| AUTH-02 | Phase 2: Mandatory Auth & Roles | Pending |
+| AUTH-03 | Phase 2: Mandatory Auth & Roles | Pending |
+| AUTH-04 | Phase 2: Mandatory Auth & Roles | Pending |
+| ISO-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| ISO-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| ISO-03 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| AUD-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| AUD-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| VAL-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| VAL-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| DD-01 | Phase 4: Due Diligence Workspace | Pending |
+| DD-02 | Phase 4: Due Diligence Workspace | Pending |
+| DD-03 | Phase 4: Due Diligence Workspace | Pending |
+| DD-04 | Phase 4: Due Diligence Workspace | Pending |
+| DD-05 | Phase 4: Due Diligence Workspace | Pending |
+| SYN-01 | Phase 5: Synergy Value Capture | Pending |
+| SYN-02 | Phase 5: Synergy Value Capture | Pending |
+| SYN-03 | Phase 5: Synergy Value Capture | Pending |
+| SYN-04 | Phase 5: Synergy Value Capture | Pending |
+| SYN-05 | Phase 5: Synergy Value Capture | Pending |
+| ORG-01 | Phase 6: Org Design & Talent Retention | Pending |
+| ORG-02 | Phase 6: Org Design & Talent Retention | Pending |
+| ORG-03 | Phase 6: Org Design & Talent Retention | Pending |
+| RPT-01 | Phase 7: IMO Reporting & Exports | Pending |
+| RPT-02 | Phase 7: IMO Reporting & Exports | Pending |
+| RPT-03 | Phase 7: IMO Reporting & Exports | Pending |
+| RPT-04 | Phase 7: IMO Reporting & Exports | Pending |
 
 **Coverage:**
-- v1 requirements: 30 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 30 ⚠️ (resolved by roadmapper in Step 8)
+- v1 requirements: 32 total (corrected from an earlier "30" placeholder — a direct count of unique v1 requirement IDs in this document is 32: FND×4, AUTH×4, ISO×3, AUD×2, VAL×2, DD×5, SYN×5, RPT×4, ORG×3)
+- Mapped to phases: 32/32 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-23*
-*Last updated: 2026-07-23 after initial definition*
+*Last updated: 2026-07-23 after roadmap creation — traceability populated, coverage count corrected to 32*
