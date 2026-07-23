@@ -31,7 +31,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The app reads and writes exclusively through SQLite (`better-sqlite3`, WAL mode) — no remaining code path reads or writes `db.json`.
   3. An automated concurrent-write test (two simultaneous writes to the same resource) completes with no lost update.
   4. All three release-zip bundles (any-OS, Windows, macOS) boot successfully with the correct native `better-sqlite3` binary vendored per platform.
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 01-01-PLAN.md — Vendor better-sqlite3@13.0.1 (prebuilds + engines bump) and pre-empt .db leaks in .gitignore + admin download-zip (wave 1)
+- [ ] 01-02-PLAN.md — Schema, re-runnable verified migration, SQLite readDb/writeDb cutover, and the round-trip + concurrent-write proofs (wave 2)
+- [ ] 01-03-PLAN.md — Cross-platform bundle boot verification + reversible cutover archiving db.json (wave 3)
 
 ### Phase 2: Mandatory Auth & Roles
 **Goal**: Every request to the app is authenticated, and every write enforces the caller's role — promoting the existing `PORTAL_AUTH` mechanism rather than building new authentication.
@@ -107,7 +110,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
-| 1. Schema & Migration | 0/TBD | Not started | - |
+| 1. Schema & Migration | 0/3 | Not started | - |
 | 2. Mandatory Auth & Roles | 0/TBD | Not started | - |
 | 3. Deal Isolation, Audit Log & Write Validation | 0/TBD | Not started | - |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
