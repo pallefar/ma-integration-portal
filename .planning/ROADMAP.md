@@ -35,14 +35,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. An automated concurrent-write test (two simultaneous writes to the same resource) completes with no lost update.
   4. All three release-zip bundles (any-OS, Windows, macOS) boot successfully with the correct native `better-sqlite3` binary vendored per platform.
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 **Wave 1**
 
 - [x] 01-01-PLAN.md — Vendor better-sqlite3@13.0.1 (prebuilds + engines bump) and pre-empt .db leaks in .gitignore + admin download-zip (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Schema, re-runnable verified migration, SQLite readDb/writeDb cutover, and the round-trip + concurrent-write proofs (wave 2)
+- [x] 01-02-PLAN.md — Schema, re-runnable verified migration, SQLite readDb/writeDb cutover, and the round-trip + concurrent-write proofs (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
-| 1. Schema & Migration | 1/3 | In Progress|  |
+| 1. Schema & Migration | 2/3 | In Progress|  |
 | 2. Mandatory Auth & Roles | 0/TBD | Not started | - |
 | 3. Deal Isolation, Audit Log & Write Validation | 0/TBD | Not started | - |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |

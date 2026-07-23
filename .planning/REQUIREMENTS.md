@@ -9,9 +9,9 @@
 
 ### Foundation — Persistence (F0)
 
-- [ ] **FND-01**: A re-runnable, diffable migration copies all existing `db.json` data into SQLite, with the source verified against the result before the file store is retired
-- [ ] **FND-02**: The app reads and writes all data through SQLite (`better-sqlite3`, WAL mode) instead of `db.json`
-- [ ] **FND-03**: Concurrent writes never lose data (no lost-update race), verified by a concurrent-write test
+- [x] **FND-01**: A re-runnable, diffable migration copies all existing `db.json` data into SQLite, with the source verified against the result before the file store is retired
+- [x] **FND-02**: The app reads and writes all data through SQLite (`better-sqlite3`, WAL mode) instead of `db.json`
+- [x] **FND-03**: Concurrent writes never lose data (no lost-update race), verified by a concurrent-write test
 - [x] **FND-04**: The zero-install Windows/macOS/any-OS bundles run against SQLite with the correct native binary vendored per platform (same precedent as the committed canvas binaries)
 
 ### Foundation — Authentication & Access (F1)
@@ -102,9 +102,9 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | Phase 1: Schema & Migration | Pending |
-| FND-02 | Phase 1: Schema & Migration | Pending |
-| FND-03 | Phase 1: Schema & Migration | Pending |
+| FND-01 | Phase 1: Schema & Migration | Complete |
+| FND-02 | Phase 1: Schema & Migration | Complete |
+| FND-03 | Phase 1: Schema & Migration | Complete |
 | FND-04 | Phase 1: Schema & Migration | Complete |
 | AUTH-01 | Phase 2: Mandatory Auth & Roles | Pending |
 | AUTH-02 | Phase 2: Mandatory Auth & Roles | Pending |
