@@ -408,7 +408,7 @@ app.get('/api/admin/download-zip', (req, res) => {
     // or secrets (db.json = API key + all records; .env; sent_emails). The downloaded
     // package boots with a fresh database. The temp file is deleted after sending.
     const zipPath = path.join(os.tmpdir(), `ma-app-${Date.now()}.zip`);
-    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" "db.json.bak" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
+    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" "db.json.bak" "data/*.db" "data/*.db-wal" "data/*.db-shm" "data/*.db.bak" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
 
     res.download(zipPath, 'te-ma-integration-portal.zip', (err) => {
       if (err) console.error('Error sending zip file to browser:', err);

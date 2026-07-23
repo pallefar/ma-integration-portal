@@ -15,6 +15,12 @@ npm-debug.log*
 db.json.tmp
 db.json.bak
 
+# SQLite runtime sidecars (WAL/SHM + rolling backup) — the primary data/*.db
+# file itself is committed (demo database), same precedent as db.json above.
+data/*.db-wal
+data/*.db-shm
+data/*.db.bak
+
 # Uploaded media (runtime-generated)
 public/uploads/
 
