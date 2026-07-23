@@ -11,6 +11,9 @@ const ragService = require('./ragService');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
+// Dormant, read-only archive reference (D-01): the live persistence layer is
+// SQLite (db/store.js) as of Phase 1. db.json itself is retained on disk as the
+// pre-migration snapshot but no code path below reads or writes it anymore.
 const DB_FILE = path.join(__dirname, 'db.json');
 
 app.use(compression());
@@ -241,140 +244,15 @@ app.get('/healthz', (req, res) => {
 });
 
 // Helper functions for database I/O
-// In-memory cache keyed on file mtime: a single page load fires ~30 read requests;
-// re-parsing the ~300KB db.json each time is wasteful. Re-read only when the file changes.
-let _dbCache = null;
-let _dbMtime = 0;
-
-function readDb() {
-  try {
-    if (!fs.existsSync(DB_FILE)) {
-      return { settings: { geminiApiKey: "", targetCompany: "NewCo Ltd." }, questions: [], assessments: [], modules: [], employees: [], hrbps: [], alerts: [], pulses: [] };
-    }
-    const mtime = fs.statSync(DB_FILE).mtimeMs;
-    if (_dbCache && mtime === _dbMtime) return _dbCache;
-    const data = fs.readFileSync(DB_FILE, 'utf8');
-    const parsed = JSON.parse(data);
-    parsed.settings = parsed.settings || {};
-    parsed.customSettings = parsed.customSettings || {};
-    parsed.questions = parsed.questions || [];
-    parsed.assessments = parsed.assessments || [];
-    parsed.modules = parsed.modules || [];
-    parsed.employees = parsed.employees || [];
-    parsed.hrbps = parsed.hrbps || [];
-    parsed.alerts = parsed.alerts || [];
-    parsed.pulses = parsed.pulses || [];
-    parsed.ragUploads = parsed.ragUploads || [];
-    parsed.courses = parsed.courses || [];
-    parsed.pages = parsed.pages || [];
-    parsed.media = parsed.media || [];
-    parsed.banners = parsed.banners || [];
-    parsed.i18n = parsed.i18n || { languages: [{ code: 'en', label: 'English', flag: '🇬🇧', enabled: true }], defaultLang: 'en', strings: { en: {} } };
-    parsed.menus = parsed.menus || { sidebar: [], groups: [], landingCards: [], bookmarks: [] };
-    // Quick-Nav bookmarks (admin-authored page+section shortcuts) live inside menus,
-    // so they ride the per-project cms bundle automatically.
-    parsed.menus.bookmarks = parsed.menus.bookmarks || [];
-    // Projects = top of the M&A hierarchy. The seeded demo is always project "proj_demo".
-    parsed.projects = parsed.projects || [];
-    if (!parsed.projects.some(p => p.id === 'proj_demo')) {
-      const s = parsed.settings || {};
-      parsed.projects.unshift({
-        id: 'proj_demo', isDemo: true,
-        name: s.targetCompany || 'NextGen Sensors Ltd.',
-        targetCompany: s.targetCompany || 'NextGen Sensors Ltd.',
-        sector: s.sector || '', size: s.size || '', hq: s.hq || '',
-        acquisitionDate: s.acquisitionDate || '', synergyObjective: s.synergyObjective || '',
-        intake: {}, createdAt: '2026-01-01T00:00:00.000Z'
-      });
-    }
-    parsed.activeProjectId = parsed.activeProjectId || 'proj_demo';
-    // Department modules = the functional integration tracks. Culture & Communication
-    // are SHARED across all departments; only Systems & Trainings differ per department.
-    parsed.departments = parsed.departments || [
-      { id: 'dept_sales', name: 'Sales & Pipelines', icon: '📈', locked: true, phase: 'Phase 2',
-        desc: 'Standardize customer distribution channels, pricing structures, and CRM transfers.',
-        systems: [ { title: 'CRM Migration', desc: 'Consolidate the legacy CRM into TE Salesforce.' }, { title: 'Pricing Harmonization', desc: 'Align pricing books and quote-to-cash flows.' } ],
-        trainings: [ { title: 'TE Sales Playbook', desc: 'Commercial process and tooling onboarding.' }, { title: 'Pipeline Hygiene', desc: 'Forecasting discipline and CRM data quality.' } ] },
-      { id: 'dept_product', name: 'Product & Tech Transfer', icon: '🔧', locked: true, phase: 'Phase 2',
-        desc: 'Migrate engineering documents, shared patents, and synchronize catalog parts directories.',
-        systems: [ { title: 'PLM Integration', desc: 'Merge product-lifecycle and BOM systems.' }, { title: 'Catalog Sync', desc: 'Unify part numbering and product catalogs.' } ],
-        trainings: [ { title: 'Engineering Standards', desc: 'TE design and documentation standards.' }, { title: 'IP & Patents', desc: 'Handling shared patents and IP transfer.' } ] },
-      { id: 'dept_finance', name: 'Finance & Reporting', icon: '💶', locked: true, phase: 'Phase 3',
-        desc: 'Harmonize fiscal accounts, tax structures, and migrate to TE Connectivity accounting ERPs.',
-        systems: [ { title: 'ERP Migration', desc: 'Cut over to the TE accounting ERP.' }, { title: 'Chart of Accounts', desc: 'Map the legacy CoA to the TE standard.' } ],
-        trainings: [ { title: 'Financial Controls', desc: 'SOX and TE reporting compliance.' }, { title: 'Close Process', desc: 'Monthly close and consolidation.' } ] }
-    ];
-    // Per-project process catalog (Sending org → Receiving org). Lives in the cms
-    // bundle so it swaps on project switch, exactly like `departments`.
-    parsed.processCatalog = parsed.processCatalog || [];
-    // Admin-authored HTML slide launchers (project-scoped via the cms bundle).
-    parsed.slides = parsed.slides || [];
-    // Assessment Suite v2: templates are per-project CMS content; instances are
-    // workspace data with the same demo/custom lane split as `assessments`.
-    parsed.assessmentTemplates = parsed.assessmentTemplates || [];
-    parsed.assessmentInstances = parsed.assessmentInstances || [];
-    parsed.customAssessmentInstances = parsed.customAssessmentInstances || [];
-    // Execution engine: checklist templates ride the cms bundle; live tasks are
-    // lane-split workspace data like assessment instances.
-    parsed.checklistTemplates = parsed.checklistTemplates || [];
-    parsed.integrationTasks = parsed.integrationTasks || [];
-    parsed.customIntegrationTasks = parsed.customIntegrationTasks || [];
-    // Synergy tracker + RAID log — lane-split workspace data.
-    parsed.synergyInitiatives = parsed.synergyInitiatives || [];
-    parsed.customSynergyInitiatives = parsed.customSynergyInitiatives || [];
-    parsed.raidEntries = parsed.raidEntries || [];
-    parsed.customRaidEntries = parsed.customRaidEntries || [];
-    // Portal login accounts (used only when PORTAL_AUTH=1); scrypt salt+hash.
-    parsed.users = parsed.users || [];
-    _dbCache = parsed;
-    _dbMtime = mtime;
-    return parsed;
-  } catch (error) {
-    console.error('Error reading database file:', error);
-    // Never silently hand back an EMPTY database when a real db.json exists — the
-    // next writeDb() would then persist that empty skeleton over all the real data
-    // (permanent wipe). Prefer the last good in-memory copy; if there is none but a
-    // non-empty file is present, fail loudly so mutating endpoints 500 instead of
-    // clobbering. Only fall back to a fresh skeleton when there is genuinely no data.
-    if (_dbCache) return _dbCache;
-    try {
-      if (fs.existsSync(DB_FILE) && fs.statSync(DB_FILE).size > 0) {
-        throw new Error('db.json exists but could not be parsed; refusing to serve/overwrite it with an empty database.');
-      }
-    } catch (guardErr) {
-      if (/refusing to serve/.test(guardErr.message)) throw guardErr;
-    }
-    return { settings: { geminiApiKey: "", targetCompany: "NewCo Ltd." }, questions: [], assessments: [], modules: [], employees: [], hrbps: [], alerts: [], pulses: [] };
-  }
-}
-
-function writeDb(data) {
-  // Best-effort rolling backup of the last good file before we overwrite it, so a
-  // bad/truncated write or an accidental destructive call can be recovered from
-  // db.json.bak. (For production, pair this with a scheduled off-box snapshot.)
-  try {
-    if (fs.existsSync(DB_FILE) && fs.statSync(DB_FILE).size > 0) {
-      fs.copyFileSync(DB_FILE, DB_FILE + '.bak');
-    }
-  } catch (e) { console.warn('db backup skipped:', e && e.message); }
-  try {
-    // Atomic write: serialize to a temp file, then rename over the real file.
-    // rename() is atomic on the same filesystem, so a crash mid-write can never
-    // leave db.json truncated/half-written (which would corrupt the whole DB).
-    const tmp = DB_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-    fs.renameSync(tmp, DB_FILE);
-    _dbCache = data;
-    _dbMtime = fs.statSync(DB_FILE).mtimeMs;
-    return true;
-  } catch (error) {
-    console.error('Error writing to database file:', error);
-    // Surface the failure so Express returns a 500 via the error middleware,
-    // instead of silently returning a falsy value that nearly every caller
-    // ignores and then answers HTTP 200 on data that was never persisted.
-    throw new Error('Failed to persist database');
-  }
-}
+// SQLite-backed (better-sqlite3, WAL mode) via db/store.js. readDb()/writeDb(data)
+// keep their exact whole-object signatures (D-03) so every one of the ~90 endpoint
+// call sites below (`const db = readDb(); ...; writeDb(db);`) is unchanged. No
+// in-memory mtime cache: better-sqlite3 reads are sub-millisecond and in-process,
+// so the store is the single source of truth on every call (RESEARCH.md Pitfall 3).
+// db.json (DB_FILE) is retained on disk only as a read-only pre-migration archive —
+// no live code path below reads or writes it.
+const { initDb, readDb, writeDb } = require('./db/store');
+initDb(); // opens (or creates) data/ma-portal.db and ensures the schema exists
 
 // Collision-resistant id: time-sortable base36 timestamp + random suffix. Two
 // creates in the same millisecond used to mint identical `prefix_<Date.now()>`
