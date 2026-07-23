@@ -12,7 +12,7 @@
 - [ ] **FND-01**: A re-runnable, diffable migration copies all existing `db.json` data into SQLite, with the source verified against the result before the file store is retired
 - [ ] **FND-02**: The app reads and writes all data through SQLite (`better-sqlite3`, WAL mode) instead of `db.json`
 - [ ] **FND-03**: Concurrent writes never lose data (no lost-update race), verified by a concurrent-write test
-- [ ] **FND-04**: The zero-install Windows/macOS/any-OS bundles run against SQLite with the correct native binary vendored per platform (same precedent as the committed canvas binaries)
+- [x] **FND-04**: The zero-install Windows/macOS/any-OS bundles run against SQLite with the correct native binary vendored per platform (same precedent as the committed canvas binaries)
 
 ### Foundation — Authentication & Access (F1)
 
@@ -105,7 +105,7 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | FND-01 | Phase 1: Schema & Migration | Pending |
 | FND-02 | Phase 1: Schema & Migration | Pending |
 | FND-03 | Phase 1: Schema & Migration | Pending |
-| FND-04 | Phase 1: Schema & Migration | Pending |
+| FND-04 | Phase 1: Schema & Migration | Complete |
 | AUTH-01 | Phase 2: Mandatory Auth & Roles | Pending |
 | AUTH-02 | Phase 2: Mandatory Auth & Roles | Pending |
 | AUTH-03 | Phase 2: Mandatory Auth & Roles | Pending |
@@ -136,6 +136,7 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | RPT-04 | Phase 7: IMO Reporting & Exports | Pending |
 
 **Coverage:**
+
 - v1 requirements: 32 total (corrected from an earlier "30" placeholder — a direct count of unique v1 requirement IDs in this document is 32: FND×4, AUTH×4, ISO×3, AUD×2, VAL×2, DD×5, SYN×5, RPT×4, ORG×3)
 - Mapped to phases: 32/32 ✓
 - Unmapped: 0 ✓

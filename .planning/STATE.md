@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 1
 current_phase_name: Schema & Migration
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-07-23T20:28:45.735Z"
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-07-23T21:02:11.116Z"
 last_activity: 2026-07-23
-last_activity_desc: "ROADMAP.md created; all 32 v1 requirements mapped across 7 phases (foundation-first: Phases 1-3, then DD/Synergy/Org/Reporting)"
+last_activity_desc: Phase 1 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 ## Current Position
 
-Phase: 1 of 7 (Schema & Migration)
-Plan: 0 of TBD in current phase
+Phase: 1 (Schema & Migration) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-23 — ROADMAP.md created; all 32 v1 requirements mapped across 7 phases (foundation-first: Phases 1-3, then DD/Synergy/Org/Reporting)
+Last activity: 2026-07-23 — Phase 1 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -54,6 +54,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: N/A
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P01 | 15min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -65,6 +70,8 @@ Recent decisions affecting current work:
 - Roadmapping: Merged research's suggested F2 (Deal-Resolver + Audit) and F3 (Write Validation) phases into a single Phase 3, since F3 was itself identified as "a natural byproduct of the routes/ split happening table-by-table in F0-F2" and is thin on its own (2 requirements) — avoids a phase whose success criteria would read as pure technical tasks.
 - Roadmapping: Org Design & Talent Retention placed after Due Diligence Workspace (not in parallel with it) because its sensitive-data access rule reuses the accessPolicy.js clean-room pattern DD establishes, per research guidance — avoids inventing the pattern twice.
 - Roadmapping: REQUIREMENTS.md's own traceability section stated "30 total" v1 requirements, but a direct count of unique v1 requirement IDs in the file is 32 (FND×4, AUTH×4, ISO×3, AUD×2, VAL×2, DD×5, SYN×5, RPT×4, ORG×3). Traceability updated to reflect the true count of 32; flagging here in case "30" was a deliberate earlier scope decision that got silently dropped.
+- [Phase ?]: better-sqlite3 committed to node_modules with all 8 platform prebuilds; engines.node bumped >=20->>=22 to match its declared floor
+- [Phase ?]: .gitignore + admin download-zip export both pre-emptively exclude the SQLite artifact family (.db-wal/.db-shm/.db.bak, plus .db in the zip export) before wave 2 creates the first .db file (T-01-02)
 
 ### Pending Todos
 
@@ -85,6 +92,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-23T19:33:21.638Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-schema-migration/01-CONTEXT.md
+Last session: 2026-07-23T21:02:11.110Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
