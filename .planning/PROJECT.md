@@ -77,6 +77,10 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - TSA / carve-out tracking — Transition Services Agreement management is only relevant for divestitures, which are not the target use case
 - Post-close review and lookback reporting — deferred; the milestone ends at 100 days
 - Portfolio view across multiple simultaneous deals — deferred; the app stays single-active-deal while the primary operator is a single Integration Lead
+- Document storage / VDR in the DD workspace — TE already licenses a virtual data room; the DD workspace tracks request lists, findings and clean-room *access* and links out to the VDR rather than storing or exchanging documents (resolved at requirements gate 2026-07-23)
+- PPTX steerco-pack generation — export is CSV/JSON + formatted PDF only; PowerPoint generation is disproportionate for a laptop tool (resolved at requirements gate)
+- SQLCipher / application-level at-rest encryption — MNPI at-rest protection relies on OS full-disk encryption (FileVault/BitLocker) as a documented deployment requirement; SQLCipher noted as later hardening if the app moves to shared hosting (resolved at requirements gate)
+- Multi-process / network-filesystem SQLite hardening — the data layer is built concurrency-safe (WAL, single-writer-process) but multi-process and shared-host testing is deferred to the shared-host milestone (resolved at requirements gate)
 
 ## Context
 
