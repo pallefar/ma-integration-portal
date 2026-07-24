@@ -68,7 +68,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Coarse ROLE_WRITE_POLICY, break-glass identity, employee seed, self password-change + first-run admin secret (AUTH-02/03/04)
+- [x] 02-02-PLAN.md — Coarse ROLE_WRITE_POLICY, break-glass identity, employee seed, self password-change + first-run admin secret (AUTH-02/03/04)
 - [ ] 02-03-PLAN.md — Client fail-closed redirect-to-login + demo-open launchers (AUTH-01 UX) — parallel with 02-02
 
 ### Phase 3: Deal Isolation, Audit Log & Write Validation
@@ -150,7 +150,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
 | 1. Schema & Migration | 3/3 | In Progress|  |
-| 2. Mandatory Auth & Roles | 1/3 | In Progress|  |
+| 2. Mandatory Auth & Roles | 2/3 | In Progress|  |
 | 3. Deal Isolation, Audit Log & Write Validation | 0/TBD | Not started | - |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |
