@@ -3,7 +3,10 @@
 // row-count parity, across all 38 top-level db.json collections.
 //
 // node:test — Node's built-in runner, zero new dependency (this repo has no
-// test framework installed before this phase). Run via `node --test test/`.
+// test framework installed before this phase). Run via `node --test` (bare —
+// this repo's default test discovery), or `npm test`. `node --test test/`
+// does NOT work on this project's target Node version (v22.18.0) — it
+// errors with "Cannot find module '.../test'".
 
 const test = require('node:test');
 const assert = require('node:assert');

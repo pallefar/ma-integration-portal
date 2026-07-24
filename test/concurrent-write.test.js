@@ -9,7 +9,9 @@
 // array never contained it. See 01-RESEARCH.md Pitfall 2.
 //
 // node:test — Node's built-in runner, zero new dependency. Run via
-// `node --test test/`.
+// `node --test` (bare — this repo's default test discovery), or `npm test`.
+// `node --test test/` does NOT work on this project's target Node version
+// (v22.18.0) — it errors with "Cannot find module '.../test'".
 
 const test = require('node:test');
 const assert = require('node:assert');
