@@ -11,10 +11,14 @@ const ragService = require('./ragService');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
-// Dormant, read-only archive reference (D-01): the live persistence layer is
-// SQLite (db/store.js) as of Phase 1. db.json itself is retained on disk as the
-// pre-migration snapshot but no code path below reads or writes it anymore.
-const DB_FILE = path.join(__dirname, 'db.json');
+// db.json (D-01): the live persistence layer is SQLite (db/store.js) as of
+// Phase 1. db.json itself is retained on disk purely as a frozen, read-only
+// point-in-time snapshot from migration time — no code path below reads or
+// writes it anymore, and it is NOT kept in sync with the live database, so it
+// will progressively drift from data/ma-portal.db as the app receives writes.
+// It exists only as a fixture for the migration test suite (see
+// test/migration-roundtrip.test.js, test/concurrent-write.test.js) and as a
+// historical reference; treat data/ma-portal.db as the sole source of truth.
 
 app.use(compression());
 
@@ -249,8 +253,9 @@ app.get('/healthz', (req, res) => {
 // call sites below (`const db = readDb(); ...; writeDb(db);`) is unchanged. No
 // in-memory mtime cache: better-sqlite3 reads are sub-millisecond and in-process,
 // so the store is the single source of truth on every call (RESEARCH.md Pitfall 3).
-// db.json (DB_FILE) is retained on disk only as a read-only pre-migration archive —
-// no live code path below reads or writes it.
+// db.json is retained on disk only as a frozen, read-only pre-migration
+// archive (see the note near the top of this file) — no live code path
+// below reads or writes it.
 const { initDb, readDb, writeDb } = require('./db/store');
 initDb(); // opens (or creates) data/ma-portal.db and ensures the schema exists
 
