@@ -150,46 +150,102 @@ function readSessionCookie(req) {
   return m ? m[1] : null;
 }
 
+// Coarse role -> resource-group capability map (D-04/D-05, AUTH-02). Consulted
+// ONLY for writes — reads stay gated on session-existence alone (D-05); coarse
+// role-filtering of read *payloads* is Phase 4 clean-room territory, except
+// where an endpoint already hands back admin-only data (the lockedDown(req)/
+// isAdminRequest(req) guards below, preserved).
+//
+// This is a path-PREFIX default-allow table, not a hand-annotated list of the
+// ~90 endpoints (D-05 explicitly rejects that — it wouldn't scale across the
+// next 4 milestone phases' new routes). Unlisted prefixes fall through to
+// DEFAULT_WRITE_ROLES, which matches today's ACTUAL behavior for admin/hrbp/
+// pmo on the 59 non-admin write routes (no regression for those three roles)
+// — the only new restriction this table introduces is that `employee` is
+// opt-in-only via the explicit self-service allowlist below, never silently
+// open by default. A future endpoint added without an explicit prefix entry
+// is therefore safe-by-default (admin/hrbp/pmo, never employee).
+const ROLE_WRITE_POLICY = [
+  { prefix: '/api/admin', roles: ['admin'] }, // migrate-db, download-zip, revoke-sessions
+
+  // Self-service allowlist: the ONLY prefixes 'employee' may write to today.
+  { prefix: '/api/pulses', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
+  { prefix: '/api/employees/complete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
+  { prefix: '/api/employees/uncomplete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
+  { prefix: '/api/assessment', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // covers /api/assessment + /api/assessment-instances
+
+  // Everything else under /api that accepts writes today (projects, employees
+  // roster CRUD, integration-tasks, raid, synergies, departments, processes,
+  // CMS: courses/pages/menus/slides/media/banners, settings, communications,
+  // alerts, questions, hrbps, dashboard/reorder-widgets) — no explicit entry
+  // needed; falls through to DEFAULT_WRITE_ROLES below.
+];
+const DEFAULT_WRITE_ROLES = ['admin', 'hrbp', 'pmo'];
+
+function roleAllowedForWrite(role, path) {
+  const rule = ROLE_WRITE_POLICY.find(r => path.startsWith(r.prefix));
+  const allowed = rule ? rule.roles : DEFAULT_WRITE_ROLES;
+  return allowed.includes(role);
+}
+
 // ONE consolidated /api gate (replaces the two overlapping middlewares this
 // codebase previously ran — a write/admin-token gate and a separate session
 // gate). Every /api/* route now goes through exactly this path:
 //   (a) the 3 public auth-bootstrap paths pass straight through;
 //   (b) DEMO_OPEN mode sets req.portalUser = null (explicit, not undefined —
 //       AUTH-04) and passes through, keeping the demo showcase frictionless;
-//   (c) otherwise, a valid, unexpired sessions-table row is REQUIRED — a miss
+//   (c) an X-Admin-Token bearer resolves to a stable, ATTRIBUTED break-glass
+//       identity (D-11) — {username:'admin-token', role:'admin'} — never an
+//       anonymous bypass, so Phase 3's audit log can attribute its actions;
+//   (d) otherwise, a valid, unexpired sessions-table row is REQUIRED — a miss
 //       401s with `authRequired: true` on every remaining route, reads
 //       included (AUTH-01's fail-closed default, D-01), never trusting any
 //       client-supplied identity claim;
-//   (d) req.portalUser = { username, role, sessionId } is set from the
-//       server-side session lookup alone (AUTH-04).
-// Write-time role enforcement (AUTH-02) is a Plan 02 follow-on: for THIS plan
-// any authenticated role may write (matching today's actual behavior for
-// admin/hrbp/pmo), so no write regression is introduced here. The `isWrite`
-// hook below is the named seam Plan 02 fills with a ROLE_WRITE_POLICY check.
+//   (e) req.portalUser = { username, role, sessionId } is set from (c) or (d)
+//       alone — the server-side session lookup or the attributed token
+//       identity, never a client-supplied header/body/cookie field (AUTH-04);
+//   (f) writes only: the caller's role is checked against ROLE_WRITE_POLICY
+//       (AUTH-02) — a mismatch 403s before the route handler ever runs.
 app.use('/api', (req, res, next) => {
   if (PUBLIC_API_PATHS.has(req.path)) return next();
 
   if (isOpenMode(req)) { req.portalUser = null; return next(); }
 
-  const cookieToken = readSessionCookie(req);
-  const sess = cookieToken ? sessions.findSession(getConnection(), cookieToken) : null;
-  if (!sess) return res.status(401).json({ error: 'Login required.', authRequired: true });
-  req.portalUser = sess; // { username, role, sessionId } — AUTH-04
+  const suppliedToken = req.get('X-Admin-Token') || '';
+  if (ADMIN_TOKEN && suppliedToken && timingSafeEqualStr(suppliedToken, ADMIN_TOKEN)) {
+    // D-11: attributed break-glass identity, not anonymous — Phase 3's audit
+    // log (AUD-01) can attribute every action taken via this token to a
+    // stable, named identity instead of a null/undefined actor.
+    req.portalUser = { username: 'admin-token', role: 'admin', sessionId: null };
+  } else {
+    const cookieToken = readSessionCookie(req);
+    const sess = cookieToken ? sessions.findSession(getConnection(), cookieToken) : null;
+    if (!sess) return res.status(401).json({ error: 'Login required.', authRequired: true });
+    req.portalUser = sess; // { username, role, sessionId } — AUTH-04
+  }
 
   const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
-  if (isWrite) {
-    // Plan 02 fills this in with a coarse ROLE_WRITE_POLICY capability check
-    // (D-04/D-05). Left permissive here on purpose (see comment above).
+  // NOTE: req.path is mount-relative inside `app.use('/api', ...)` (e.g.
+  // '/pulses', not '/api/pulses') — ROLE_WRITE_POLICY's prefixes are written
+  // as full '/api/...' paths (matching this file's route registrations
+  // 1:1), so req.baseUrl ('/api') + req.path reconstructs the full path
+  // roleAllowedForWrite expects. Passing bare req.path here would silently
+  // never match any ROLE_WRITE_POLICY prefix, falling every write through to
+  // DEFAULT_WRITE_ROLES regardless of path — verified against a live request
+  // during this task's own testing.
+  if (isWrite && !roleAllowedForWrite(req.portalUser.role, req.baseUrl + req.path)) {
+    return res.status(403).json({ error: 'Your role cannot perform this action.' });
   }
   next();
 });
 
-// True when the deployment is locked down at all — used by read endpoints
-// that must not hand sensitive records to non-admins. NOTE: this is not yet
-// request-aware (Plan 02 converts every call site to lockedDown(req) per
-// D-03's "isOpenMode is per-request, not a static boolean" requirement); left
-// as-is here so Plan 02's diff is the one that lands that conversion.
-function lockedDown() { return !!ADMIN_TOKEN || PORTAL_AUTH; }
+// True when the deployment is locked down at all (i.e. NOT demo-open) — used
+// by read endpoints that must not hand sensitive records to non-admins.
+// Request-aware per D-03: "locked down" can no longer be a static global
+// boolean once Phase 3's deal-resolver ties isOpenMode() to which database was
+// resolved (a real-deal database is ALWAYS locked down regardless of any
+// flag) — every call site below now passes req.
+function lockedDown(req) { return !isOpenMode(req); }
 function isAdminRequest(req) {
   const supplied = req.get('X-Admin-Token') || '';
   if (ADMIN_TOKEN && supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return true;
@@ -1454,13 +1510,11 @@ app.post('/api/admin/migrate-db', (req, res) => {
   });
 });
 
-// POST revoke all sessions for a user (D-07 offboarding action) — admin-only
-// via the /api/admin/* prefix already gated by the consolidated /api gate
-// (any authenticated session may currently reach this, matching today's
-// permissive write posture for the 59 non-admin routes; AUTH-02's coarse
-// ROLE_WRITE_POLICY that restricts /api/admin/* to the admin role lands in
-// Plan 02). This is deliberately the minimum viable offboarding primitive —
-// NOT the deferred full user-CRUD.
+// POST revoke all sessions for a user (D-07 offboarding action) — admin-only,
+// enforced by ROLE_WRITE_POLICY's `/api/admin` prefix (AUTH-02) in the
+// consolidated /api gate above: an hrbp/pmo/employee session 403s here before
+// this handler ever runs. This is deliberately the minimum viable offboarding
+// primitive — NOT the deferred full user-CRUD.
 app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
   sessions.deleteAllSessionsForUser(getConnection(), req.params.username);
   res.json({ success: true });
@@ -1828,7 +1882,7 @@ app.post('/api/assessment-instances', (req, res) => {
 // In any locked-down posture (ADMIN_TOKEN or PORTAL_AUTH) this list is
 // admin-only: assessment records are the most sensitive data in the app.
 app.get('/api/assessment-instances', (req, res) => {
-  if (lockedDown() && !isAdminRequest(req)) {
+  if (lockedDown(req) && !isAdminRequest(req)) {
     return res.status(401).json({ error: 'Admin authentication required to list assessment records.' });
   }
   const db = readDb();
@@ -1872,7 +1926,7 @@ app.get('/api/assessment-status', (req, res) => {
   // In any locked-down posture the status rollup carries scores/bands only —
   // no respondent names (leader ratings are personal data) — unless the
   // requester is an admin.
-  const stripNames = lockedDown() && !isAdminRequest(req);
+  const stripNames = lockedDown(req) && !isAdminRequest(req);
   const statusInstance = (inst) => {
     const pub = publicAssessInstance(inst);
     if (pub && stripNames) delete pub.respondentName;
@@ -3111,3 +3165,7 @@ if (require.main === module) {
 }
 
 module.exports = app;
+// Exposed alongside app so test/role-enforcement.test.js can unit-check the
+// ROLE_WRITE_POLICY capability check directly, without needing to boot the
+// HTTP server for the pure-function cases (AUTH-02).
+module.exports.roleAllowedForWrite = roleAllowedForWrite;

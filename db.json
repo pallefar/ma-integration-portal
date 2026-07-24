@@ -10029,6 +10029,13 @@
       "role": "pmo",
       "salt": "aff02926d6e17c351745618668375f49",
       "hash": "08c9d9a3816c07384605f84286096751aa51fd0d963192501fbf4cbcd40fe43d"
+    },
+    {
+      "username": "employee-demo",
+      "name": "Demo Employee",
+      "role": "employee",
+      "salt": "d6f54ad32fbcade534cce44e82bb5cd2",
+      "hash": "f560a19d50ced728e2ce6b5c6bf0fc2f8d9d8569990961d0b4c21908ba3deb84"
     }
   ]
 }
