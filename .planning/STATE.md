@@ -4,16 +4,16 @@ milestone: v2.0.1
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Schema & Migration
-status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-07-23T21:12:41.366Z"
+status: verifying
+stopped_at: Completed 01-03-PLAN.md (Phase 1 complete)
+last_updated: "2026-07-24T03:26:07.862Z"
 last_activity: 2026-07-23
 last_activity_desc: Phase 1 execution started
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 Phase: 1 (Schema & Migration) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-23 — Phase 1 execution started
 
-Progress: [███████░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [███████░░░] 67%
 |------|----------|-------|-------|
 | Phase 01 P01 | 15min | 2 tasks | 6 files |
 | Phase 01 P02 | 25min | 3 tasks | 8 files |
+| Phase 01 P03 | 20min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase ?]: .gitignore + admin download-zip export both pre-emptively exclude the SQLite artifact family (.db-wal/.db-shm/.db.bak, plus .db in the zip export) before wave 2 creates the first .db file (T-01-02)
 - [Phase ?]: db/store.js writeDb() uses a snapshot-tagged transactional merge (readDb() stamps a non-enumerable __snapshot; writeDb diffs against that request's own snapshot, not live DB state) — this is what closes the same-collection concurrent-write lost-update race (FND-03)
 - [Phase ?]: users collection items lack an id field (only username) — db/store.js's idOf() falls back to username for internal SQLite row-keying; does not affect the stored JSON or the round-trip diff
+- [Phase ?]: Cutover approved on partial platform coverage: macOS/any-OS bundle boot confirmed live, all 8 native prebuilds verified, migration --verify green, node --test 4/4; Windows/Linux bundle boots deferred to a manual pre-release-cut check (not possible on this Mac).
+- [Phase ?]: db.json archived via chmod 444 (read-only, retained not deleted) rather than rename/move -- minimal, fully-reversible action producing no git diff; server.js already treats it as a dormant archive reference since Plan 02.
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-23T21:12:41.361Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-07-24T03:26:07.856Z
+Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
 Resume file: None
