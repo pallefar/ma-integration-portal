@@ -8,13 +8,19 @@
 // collection, ORDER BY seq) and stamps a hidden, non-enumerable __snapshot onto
 // the returned object: a per-collection Map of id -> the exact serialized JSON
 // string stored at read time. writeDb(data) diffs data[key] against
-// data.__snapshot[key] (THIS request's own read baseline, never live DB state)
-// inside one SQLite transaction, upserting only changed rows and deleting only
-// ids this request's own snapshot saw and dropped. This snapshot-tagged
-// three-way merge is what closes the same-collection lost-update race (D-04):
-// a concurrent add to the same collection by another reader/writer is never
+// data.__snapshot[key] (THIS request's own read baseline, never live DB state,
+// and REQUIRED — writeDb() throws if it's missing) inside one SQLite
+// transaction: ids new to this request's snapshot are INSERTed, ids already in
+// this request's snapshot are unconditionally UPDATEd (so seq/data are rewritten
+// even when content is unchanged — this is what makes pure reorders and
+// non-tail inserts persist, and an UPDATE against an already-deleted row is a
+// harmless 0-row no-op rather than a resurrection), and only ids this request's
+// own snapshot saw and dropped are deleted. This snapshot-tagged three-way merge
+// is what closes both the same-collection lost-update race (D-04) — a
+// concurrent add to the same collection by another reader/writer is never
 // touched by this request's delete pass, because that id was never in this
-// request's own snapshot to begin with.
+// request's own snapshot to begin with — and the delete-vs-stale-edit race
+// (a concurrently deleted row is never resurrected by a stale writer's UPDATE).
 //
 // Concrete algorithm per 01-RESEARCH.md "Code Examples" (readDb/writeDb
 // reimplementation) and 01-PATTERNS.md ("server.js — readDb()/writeDb() rewrite").
@@ -70,6 +76,10 @@ function initDb(dbFilePath) {
   dbPath = target;
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
+  // No-op today: schema.sql defines no FOREIGN KEY constraints (project_id is
+  // deliberately just an indexed metadata column, per schema.sql's own
+  // comment). Kept set now so a future phase that adds real FK constraints
+  // gets enforcement for free without anyone remembering to flip this on.
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
 
@@ -119,13 +129,37 @@ function readDb() {
  * data.__snapshot[key] (the caller's own read baseline captured by readDb()),
  * NOT against current live DB state — this is the mechanism that prevents a
  * concurrent writer's same-collection addition from being deleted by this
- * write (D-04). Collections with zero delta are skipped entirely (no SQL
- * issued for them). Throws on unrecoverable failure (better-sqlite3's
- * db.transaction() re-throws and rolls back automatically).
+ * write (D-04). `data.__snapshot` is REQUIRED — writeDb() throws rather than
+ * silently treating a missing snapshot as "nothing to diff against", since
+ * that would silently degrade into never deleting anything.
+ *
+ * Per-item merge rule, keyed on whether this request's OWN snapshot already
+ * had the id (not on whether the content changed):
+ *   - id NOT in this request's snapshot -> genuinely new this request -> INSERT.
+ *   - id IS in this request's snapshot -> UPDATE unconditionally (never a
+ *     skip-if-unchanged upsert). This is deliberate, not a missed
+ *     optimization: an UPDATE rewrites `seq`/`data` even when content is
+ *     unchanged, so a pure reorder (or a non-tail insert that shifts
+ *     trailing items' positions) actually persists (CR-01) — and if a
+ *     concurrent writer already DELETEd that row, the UPDATE affects 0 rows
+ *     instead of resurrecting it (CR-02), because UPDATE (unlike INSERT ...
+ *     ON CONFLICT DO UPDATE) can never re-create a row that no longer
+ *     exists.
+ * A prepare() call is issued for every array collection on every writeDb()
+ * call regardless of whether that collection has any delta (only the
+ * .run() execution is conditional) — this is a parse/plan round-trip, not
+ * "no SQL issued", contrary to what an earlier version of this comment
+ * claimed.
+ *
+ * Throws on unrecoverable failure (better-sqlite3's db.transaction()
+ * re-throws and rolls back automatically).
  */
 function writeDb(data) {
   const conn = requireDb();
-  const before = (data && data.__snapshot) || {};
+  if (!data || !data.__snapshot) {
+    throw new Error('writeDb(): data was not produced by readDb() — missing __snapshot');
+  }
+  const before = data.__snapshot;
 
   const applyWrite = conn.transaction((payload) => {
     for (const key of ARRAY_COLLECTIONS) {
@@ -133,9 +167,11 @@ function writeDb(data) {
       const afterArr = payload[key] || [];
       const afterIds = new Set();
 
-      const upsert = conn.prepare(
-        `INSERT INTO ${key} (id, project_id, seq, data) VALUES (?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, seq = excluded.seq, data = excluded.data`
+      const insert = conn.prepare(
+        `INSERT INTO ${key} (id, project_id, seq, data) VALUES (?, ?, ?, ?)`
+      );
+      const update = conn.prepare(
+        `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ?`
       );
       const del = conn.prepare(`DELETE FROM ${key} WHERE id = ?`);
 
@@ -143,8 +179,17 @@ function writeDb(data) {
         const id = idOf(item);
         afterIds.add(id);
         const serialized = JSON.stringify(item);
-        if (beforeMap.get(id) !== serialized) {
-          upsert.run(id, projectIdOf(item), i, serialized);
+        if (beforeMap.get(id) === undefined) {
+          // This request's own snapshot never saw this id — genuinely new.
+          insert.run(id, projectIdOf(item), i, serialized);
+        } else {
+          // This request's own snapshot already had this id: always UPDATE
+          // (never insert-or-upsert here). If the row still exists this
+          // rewrites seq/data unconditionally, so reordering and non-tail
+          // inserts persist (CR-01). If a concurrent writer already deleted
+          // this row, the UPDATE affects 0 rows and does NOT resurrect it
+          // (CR-02).
+          update.run(projectIdOf(item), i, serialized, id);
         }
       });
 
