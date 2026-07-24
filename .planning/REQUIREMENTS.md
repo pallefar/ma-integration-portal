@@ -16,10 +16,10 @@
 
 ### Foundation — Authentication & Access (F1)
 
-- [ ] **AUTH-01**: Authentication is mandatory — no `/api/*` endpoint serves data or accepts a write without a valid authenticated session (verified against a full route inventory, read endpoints included)
+- [x] **AUTH-01**: Authentication is mandatory — no `/api/*` endpoint serves data or accepts a write without a valid authenticated session (verified against a full route inventory, read endpoints included)
 - [ ] **AUTH-02**: Every write endpoint enforces the caller's role, rejecting actions outside that role
-- [ ] **AUTH-03**: Sessions are revocable and expire, backed by a `sessions` table; passwords are stored hashed (existing `scryptSync`) with `SameSite=Strict` session cookies
-- [ ] **AUTH-04**: A signed-in user's role and identity are resolvable server-side on every request for audit and access decisions
+- [x] **AUTH-03**: Sessions are revocable and expire, backed by a `sessions` table; passwords are stored hashed (existing `scryptSync`) with `SameSite=Strict` session cookies
+- [x] **AUTH-04**: A signed-in user's role and identity are resolvable server-side on every request for audit and access decisions
 
 ### Foundation — Deal Isolation & Audit (F2)
 
@@ -106,10 +106,10 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | FND-02 | Phase 1: Schema & Migration | Complete |
 | FND-03 | Phase 1: Schema & Migration | Complete |
 | FND-04 | Phase 1: Schema & Migration | Complete |
-| AUTH-01 | Phase 2: Mandatory Auth & Roles | Pending |
+| AUTH-01 | Phase 2: Mandatory Auth & Roles | Complete |
 | AUTH-02 | Phase 2: Mandatory Auth & Roles | Pending |
-| AUTH-03 | Phase 2: Mandatory Auth & Roles | Pending |
-| AUTH-04 | Phase 2: Mandatory Auth & Roles | Pending |
+| AUTH-03 | Phase 2: Mandatory Auth & Roles | Complete |
+| AUTH-04 | Phase 2: Mandatory Auth & Roles | Complete |
 | ISO-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
 | ISO-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
 | ISO-03 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |

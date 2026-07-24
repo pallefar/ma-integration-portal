@@ -60,11 +60,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A session can be revoked and expires on its own; a revoked or expired session immediately stops authorizing requests.
   4. Every server-side request handler can resolve the calling user's identity and role, for use by access decisions and the audit log in Phase 3.
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Requireable server + sessions table + consolidated fail-closed gate (tracer) and session revoke/expire proofs (AUTH-01/03/04)
+- [x] 02-01-PLAN.md — Requireable server + sessions table + consolidated fail-closed gate (tracer) and session revoke/expire proofs (AUTH-01/03/04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -150,7 +150,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
 | 1. Schema & Migration | 3/3 | In Progress|  |
-| 2. Mandatory Auth & Roles | 0/3 | Not started | - |
+| 2. Mandatory Auth & Roles | 1/3 | In Progress|  |
 | 3. Deal Isolation, Audit Log & Write Validation | 0/TBD | Not started | - |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |

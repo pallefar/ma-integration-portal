@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 1
-current_phase_name: Schema & Migration
+current_phase: 02
+current_phase_name: Mandatory Auth & Roles
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-07-24T05:04:23.181Z"
-last_activity: 2026-07-23
-last_activity_desc: Phase 1 execution started
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-07-24T05:29:06.899Z"
+last_activity: 2026-07-24
+last_activity_desc: Phase 02 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 1 — Schema & Migration
+**Current focus:** Phase 02 — Mandatory Auth & Roles
 
 ## Current Position
 
-Phase: 1 (Schema & Migration) — EXECUTING
-Plan: 3 of 3
+Phase: 02 (Mandatory Auth & Roles) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-23 — Phase 1 execution started
+Last activity: 2026-07-24 — Phase 02 execution started
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [██████████] 100%
 | Phase 01 P01 | 15min | 2 tasks | 6 files |
 | Phase 01 P02 | 25min | 3 tasks | 8 files |
 | Phase 01 P03 | 20min | 2 tasks | 1 files |
+| Phase 02 P01 | 22min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase ?]: users collection items lack an id field (only username) — db/store.js's idOf() falls back to username for internal SQLite row-keying; does not affect the stored JSON or the round-trip diff
 - [Phase ?]: Cutover approved on partial platform coverage: macOS/any-OS bundle boot confirmed live, all 8 native prebuilds verified, migration --verify green, node --test 4/4; Windows/Linux bundle boots deferred to a manual pre-release-cut check (not possible on this Mac).
 - [Phase ?]: db.json archived via chmod 444 (read-only, retained not deleted) rather than rename/move -- minimal, fully-reversible action producing no git diff; server.js already treats it as a dormant archive reference since Plan 02.
+- [Phase ?]: Phase 2 Plan 1: AUTH-02 write-role enforcement intentionally deferred to Plan 02 -- this plan's gate write branch is permissive (matches today's behavior) via a named isWrite hook, avoiding a write regression before ROLE_WRITE_POLICY exists
+- [Phase ?]: Phase 2 Plan 1: lockedDown()/isAdminRequest(req) request-aware conversion and X-Admin-Token attributed identity (D-11) left for Plan 02 per its own explicit acceptance criteria -- not touched in Plan 01 to avoid duplicating/conflicting work
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-24T04:09:34.610Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-mandatory-auth-roles/02-CONTEXT.md
+Last session: 2026-07-24T05:29:06.892Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
