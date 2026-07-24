@@ -173,6 +173,7 @@ const ROLE_WRITE_POLICY = [
   { prefix: '/api/employees/complete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/employees/uncomplete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/assessment', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // covers /api/assessment + /api/assessment-instances
+  { prefix: '/api/auth/change-password', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // D-09: every role may change their OWN password
 
   // Everything else under /api that accepts writes today (projects, employees
   // roster CRUD, integration-tasks, raid, synergies, departments, processes,
@@ -320,6 +321,33 @@ app.get('/api/auth/me', (req, res) => {
   const db = readDb();
   const user = (db.users || []).find(u => u.username === sess.username);
   res.json({ authEnabled: true, user: user ? { username: user.username, name: user.name || user.username, role: user.role } : { username: sess.username, role: sess.role } });
+});
+
+// Self password-change (D-09): available to ANY authenticated role (its
+// prefix is on the ROLE_WRITE_POLICY self-service allowlist so employee can
+// change their own password too) — never full user-CRUD, only the caller's
+// own credential. Requires a valid session (401 without one — not on
+// PUBLIC_API_PATHS), verifies the CURRENT password with the same
+// scrypt+constant-time-compare primitive login uses (401 on mismatch), then
+// rotates to a fresh 16-byte salt before persisting the new hash.
+app.post('/api/auth/change-password', (req, res) => {
+  if (!req.portalUser) return res.status(401).json({ error: 'Login required.' });
+  const { currentPassword, newPassword } = req.body || {};
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  }
+  const db = readDb();
+  const user = (db.users || []).find(u => u.username === req.portalUser.username);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  const computed = hashPassword(currentPassword || '', user.salt);
+  if (!user.hash || !timingSafeEqualStr(computed, user.hash)) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+  const newSalt = crypto.randomBytes(16).toString('hex');
+  user.salt = newSalt;
+  user.hash = hashPassword(newPassword, newSalt);
+  writeDb(db);
+  res.json({ success: true });
 });
 
 // Lightweight health check for uptime monitors and platform probes
