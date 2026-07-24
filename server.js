@@ -106,90 +106,94 @@ function timingSafeEqualStr(a, b) {
   const hb = crypto.createHash('sha256').update(String(b)).digest();
   return crypto.timingSafeEqual(ha, hb);
 }
-// --- Optional real login (PORTAL_AUTH=1) -------------------------------------
-// Off by default: the local demo stays completely open. When PORTAL_AUTH=1 the
-// API requires a signed session cookie (users live in db.json with scrypt
-// hashes) and the client redirects to /login.html. Set PORTAL_AUTH_SECRET to
-// keep sessions valid across restarts; otherwise a per-boot secret is used.
-const PORTAL_AUTH = process.env.PORTAL_AUTH === '1';
-const AUTH_SECRET = process.env.PORTAL_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+// --- Mandatory login (fail-closed by default, D-01) --------------------------
+// Auth is now ALWAYS required on every /api/* endpoint (reads included)
+// unless the deployment explicitly opts into DEMO_OPEN=1 (D-02 — the demo
+// showcase launchers set this; real-deal deployments never do). This inverts
+// the previous "open unless PORTAL_AUTH=1" default. PORTAL_AUTH is kept as a
+// tolerated, non-gating env var name for backward compatibility with any
+// existing deployment scripts, but no code path below reads it to make an
+// authorization decision anymore.
+//
+// Sessions are opaque tokens backed by a revocable SQLite `sessions` table
+// (db/sessions.js) rather than the previous stateless HMAC-signed cookie —
+// see D-06/D-07: logout, admin revoke-all and absolute expiry all now take
+// effect immediately instead of waiting out an unrevocable signed cookie.
+const PORTAL_AUTH = process.env.PORTAL_AUTH === '1'; // vestigial; not used to gate anything below
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
-function signSessionPayload(payload) {
-  return crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('base64url');
-}
-function makeSessionToken(user) {
-  const payload = Buffer.from(JSON.stringify({ u: user.username, r: user.role, e: Date.now() + SESSION_TTL_MS })).toString('base64url');
-  return payload + '.' + signSessionPayload(payload);
-}
-function readSession(req) {
-  const cookies = String(req.headers.cookie || '');
-  const m = cookies.match(/(?:^|;\s*)ma_session=([^;]+)/);
-  if (!m) return null;
-  const parts = m[1].split('.');
-  if (parts.length !== 2) return null;
-  if (!timingSafeEqualStr(signSessionPayload(parts[0]), parts[1])) return null;
-  try {
-    const data = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
-    if (!data.u || !data.e || data.e < Date.now()) return null;
-    return { username: data.u, role: data.r || 'employee' };
-  } catch (e) { return null; }
-}
 function hashPassword(password, saltHex) {
   return crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 32).toString('hex');
 }
 
-// Write/admin gate. Three postures:
-// - Demo (no PORTAL_AUTH, no ADMIN_TOKEN): everything open.
-// - Token-only (ADMIN_TOKEN set): writes + /api/admin/* need the X-Admin-Token.
-// - Login (PORTAL_AUTH=1): /api/admin/* needs an ADMIN-role session (or the
-//   token); ordinary writes need any authenticated session. Login/logout are
-//   always reachable — a session cannot exist before login succeeds.
-app.use('/api', (req, res, next) => {
-  const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
-  const isAdminPath = req.path.startsWith('/admin'); // /api/admin/* (download-zip, migrate-db)
-  if (!isWrite && !isAdminPath) return next();        // public read-only GETs handled per-endpoint
-  if (req.path === '/auth/login' || req.path === '/auth/logout') return next();
-  // Header only — never accept the secret via query string (it would leak into
-  // access logs, proxies and browser history). Constant-time compare over fixed
-  // -length SHA-256 digests so the token can't be guessed via a timing side channel.
-  const supplied = req.get('X-Admin-Token') || '';
-  const tokenOk = !!(ADMIN_TOKEN && supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN));
-  if (PORTAL_AUTH) {
-    const sess = readSession(req);
-    if (isAdminPath) {
-      if (tokenOk || (sess && sess.role === 'admin')) return next();
-      return res.status(403).json({ error: 'Administrator access required.' });
-    }
-    if (sess || tokenOk) return next();
-    return res.status(401).json({ error: 'Login required.', authRequired: true });
-  }
-  if (!ADMIN_TOKEN) return next();                    // dev/demo: no token configured -> open
-  if (tokenOk) return next();
-  return res.status(401).json({ error: 'Admin authentication required. Provide a valid X-Admin-Token.' });
-});
+// isOpenMode(req) is the ONE seam that decides whether this request may skip
+// the session gate entirely (D-02, the demo showcase). Kept as a named
+// function — not an inlined boolean — specifically so Phase 3's deal-resolver
+// can extend it to `process.env.DEMO_OPEN === '1' && req.isDemo` (D-03) so a
+// real-deal database is NEVER open regardless of this flag, while the demo.db
+// path stays frictionless. Do not hard-code assumptions elsewhere that would
+// block that extension.
+function isOpenMode(req) {
+  return process.env.DEMO_OPEN === '1';
+}
 
-// Session gate: with PORTAL_AUTH=1 every API call needs a valid session
-// (login/me excepted). Without it this middleware is a straight pass-through.
+// The only /api paths reachable without a session — auth bootstrapping itself
+// cannot require a session to exist first.
+const PUBLIC_API_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me']);
+
+// Extracts the raw opaque session token from the `ma_session` cookie (replaces
+// the previous HMAC payload decode — the token itself carries no data; it is
+// looked up against the sessions table).
+function readSessionCookie(req) {
+  const cookies = String(req.headers.cookie || '');
+  const m = cookies.match(/(?:^|;\s*)ma_session=([^;]+)/);
+  return m ? m[1] : null;
+}
+
+// ONE consolidated /api gate (replaces the two overlapping middlewares this
+// codebase previously ran — a write/admin-token gate and a separate session
+// gate). Every /api/* route now goes through exactly this path:
+//   (a) the 3 public auth-bootstrap paths pass straight through;
+//   (b) DEMO_OPEN mode sets req.portalUser = null (explicit, not undefined —
+//       AUTH-04) and passes through, keeping the demo showcase frictionless;
+//   (c) otherwise, a valid, unexpired sessions-table row is REQUIRED — a miss
+//       401s with `authRequired: true` on every remaining route, reads
+//       included (AUTH-01's fail-closed default, D-01), never trusting any
+//       client-supplied identity claim;
+//   (d) req.portalUser = { username, role, sessionId } is set from the
+//       server-side session lookup alone (AUTH-04).
+// Write-time role enforcement (AUTH-02) is a Plan 02 follow-on: for THIS plan
+// any authenticated role may write (matching today's actual behavior for
+// admin/hrbp/pmo), so no write regression is introduced here. The `isWrite`
+// hook below is the named seam Plan 02 fills with a ROLE_WRITE_POLICY check.
 app.use('/api', (req, res, next) => {
-  if (!PORTAL_AUTH) return next();
-  if (req.path === '/auth/login' || req.path === '/auth/me') return next();
-  const sess = readSession(req);
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
+
+  if (isOpenMode(req)) { req.portalUser = null; return next(); }
+
+  const cookieToken = readSessionCookie(req);
+  const sess = cookieToken ? sessions.findSession(getConnection(), cookieToken) : null;
   if (!sess) return res.status(401).json({ error: 'Login required.', authRequired: true });
-  req.portalUser = sess;
+  req.portalUser = sess; // { username, role, sessionId } — AUTH-04
+
+  const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+  if (isWrite) {
+    // Plan 02 fills this in with a coarse ROLE_WRITE_POLICY capability check
+    // (D-04/D-05). Left permissive here on purpose (see comment above).
+  }
   next();
 });
 
-// True when the deployment is locked down at all (token or login mode) — used
-// by read endpoints that must not hand sensitive records to non-admins.
+// True when the deployment is locked down at all — used by read endpoints
+// that must not hand sensitive records to non-admins. NOTE: this is not yet
+// request-aware (Plan 02 converts every call site to lockedDown(req) per
+// D-03's "isOpenMode is per-request, not a static boolean" requirement); left
+// as-is here so Plan 02's diff is the one that lands that conversion.
 function lockedDown() { return !!ADMIN_TOKEN || PORTAL_AUTH; }
 function isAdminRequest(req) {
   const supplied = req.get('X-Admin-Token') || '';
   if (ADMIN_TOKEN && supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return true;
-  if (PORTAL_AUTH) {
-    const sess = readSession(req);
-    if (sess && sess.role === 'admin') return true;
-  }
+  if (req.portalUser && req.portalUser.role === 'admin') return true;
   return false;
 }
 
@@ -207,7 +211,8 @@ const DUMMY_SALT = crypto.randomBytes(16).toString('hex');
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body || {};
-  if (!PORTAL_AUTH) return res.status(400).json({ error: 'Login is disabled (PORTAL_AUTH is not set).' });
+  // D-01: login is now ALWAYS available (no more "disabled unless PORTAL_AUTH=1") —
+  // it is the sole path into a mandatory-by-default app.
   if (loginThrottled(req.ip || req.socket.remoteAddress || '?')) {
     return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
   }
@@ -220,7 +225,16 @@ app.post('/api/auth/login', (req, res) => {
   if (!ok) {
     return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
   }
-  const cookie = ['ma_session=' + makeSessionToken(user), 'Path=/', 'HttpOnly', 'SameSite=Lax',
+  const token = sessions.createSession(getConnection(), {
+    username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
+    userAgent: req.get('user-agent'), ip: req.ip,
+  });
+  // SameSite=Strict (was Lax, D-08) — this app has no cross-site inbound-link
+  // flow that depends on Lax's top-level-navigation carve-out, and every
+  // write is already same-origin JSON fetch() (no classic <form> posts, no
+  // CORS headers ever set), so Strict closes the CSRF gap with no functional
+  // impact.
+  const cookie = ['ma_session=' + token, 'Path=/', 'HttpOnly', 'SameSite=Strict',
     'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
   if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
   res.setHeader('Set-Cookie', cookie.join('; '));
@@ -228,13 +242,20 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  res.setHeader('Set-Cookie', 'ma_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  // D-07: logout deletes the session row immediately — revocation is real,
+  // not a wait for the cookie to expire.
+  const token = readSessionCookie(req);
+  if (token) sessions.deleteSession(getConnection(), token);
+  res.setHeader('Set-Cookie', 'ma_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
   res.json({ success: true });
 });
 
 app.get('/api/auth/me', (req, res) => {
-  if (!PORTAL_AUTH) return res.json({ authEnabled: false });
-  const sess = readSession(req);
+  // Stays on PUBLIC_API_PATHS by design — this is the client's "am I logged
+  // in" probe and must be reachable without a session already existing.
+  if (isOpenMode(req)) return res.json({ authEnabled: false, user: null });
+  const cookieToken = readSessionCookie(req);
+  const sess = cookieToken ? sessions.findSession(getConnection(), cookieToken) : null;
   if (!sess) return res.json({ authEnabled: true, user: null });
   const db = readDb();
   const user = (db.users || []).find(u => u.username === sess.username);
@@ -256,7 +277,8 @@ app.get('/healthz', (req, res) => {
 // db.json is retained on disk only as a frozen, read-only pre-migration
 // archive (see the note near the top of this file) — no live code path
 // below reads or writes it.
-const { initDb, readDb, writeDb } = require('./db/store');
+const { initDb, readDb, writeDb, getConnection } = require('./db/store');
+const sessions = require('./db/sessions');
 initDb(); // opens (or creates) data/ma-portal.db and ensures the schema exists
 
 // Collision-resistant id: time-sortable base36 timestamp + random suffix. Two
@@ -3039,23 +3061,33 @@ app.use((err, req, res, next) => {
 process.on('uncaughtException', (err) => console.error('uncaughtException:', err));
 process.on('unhandledRejection', (err) => console.error('unhandledRejection:', err));
 
-const server = app.listen(PORT, () => {
-  console.log(`TE Connectivity M&A Portal server running on port ${PORT} (${PUBLIC_BASE_URL})`);
-});
+// Requireable-module refactor (Phase 2, AUTH-01 prerequisite): binding a real
+// listener is now guarded behind direct invocation (`node server.js`) so a
+// test file can `require('../server.js')` and drive the app object against an
+// ephemeral port without colliding with a real running server. `node
+// server.js` — every launcher, every deployment — is unaffected: this branch
+// still runs exactly as before whenever the file is the process entry point.
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`TE Connectivity M&A Portal server running on port ${PORT} (${PUBLIC_BASE_URL})`);
+  });
 
-// Bound how long a single request may hold a socket — mitigates slow-request /
-// slowloris resource exhaustion. headersTimeout must exceed requestTimeout.
-server.requestTimeout = 60000;   // 60s to receive the full request body
-server.headersTimeout = 65000;   // 65s to receive the request headers
-server.keepAliveTimeout = 61000;
+  // Bound how long a single request may hold a socket — mitigates slow-request /
+  // slowloris resource exhaustion. headersTimeout must exceed requestTimeout.
+  server.requestTimeout = 60000;   // 60s to receive the full request body
+  server.headersTimeout = 65000;   // 65s to receive the request headers
+  server.keepAliveTimeout = 61000;
 
-// Graceful shutdown: stop accepting new connections and let in-flight requests
-// finish before exiting (so a deploy/restart doesn't drop live requests), with a
-// hard fallback so a stuck connection can't block shutdown forever.
-function shutdown(signal) {
-  console.log(`${signal} received — shutting down gracefully...`);
-  server.close(() => { console.log('HTTP server closed.'); process.exit(0); });
-  setTimeout(() => { console.error('Forced shutdown after timeout.'); process.exit(1); }, 10000).unref();
+  // Graceful shutdown: stop accepting new connections and let in-flight requests
+  // finish before exiting (so a deploy/restart doesn't drop live requests), with a
+  // hard fallback so a stuck connection can't block shutdown forever.
+  function shutdown(signal) {
+    console.log(`${signal} received — shutting down gracefully...`);
+    server.close(() => { console.log('HTTP server closed.'); process.exit(0); });
+    setTimeout(() => { console.error('Forced shutdown after timeout.'); process.exit(1); }, 10000).unref();
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+
+module.exports = app;

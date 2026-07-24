@@ -95,6 +95,16 @@ function requireDb() {
 }
 
 /**
+ * Expose the single shared connection to sibling modules that need direct SQL
+ * access outside the whole-object readDb()/writeDb() API (e.g. db/sessions.js,
+ * Phase 2 AUTH-03) — so they share the SAME open handle/pragmas rather than
+ * opening a second Database instance on the same file.
+ */
+function getConnection() {
+  return requireDb();
+}
+
+/**
  * Reconstruct the full whole-object database from SQLite. Throws (does not
  * silently return an empty object) on any unrecoverable read failure — the
  * throw-on-failure contract server.js's endpoints already depend on.
@@ -215,4 +225,4 @@ function writeDb(data) {
   return true; // preserves existing callers' truthy-return expectation
 }
 
-module.exports = { initDb, readDb, writeDb, idOf, projectIdOf, DEFAULT_DB_PATH };
+module.exports = { initDb, readDb, writeDb, idOf, projectIdOf, DEFAULT_DB_PATH, getConnection };

@@ -281,3 +281,26 @@ CREATE TABLE IF NOT EXISTS app_state (
   key TEXT PRIMARY KEY,
   data TEXT NOT NULL
 );
+
+-- Phase 2 (Mandatory Auth & Roles): server-side revocable sessions (AUTH-03,
+-- D-06). This table is DELIBERATELY NOT part of the id/project_id/seq/data
+-- ARRAY_COLLECTIONS inventory above (db/collections.js is the single source
+-- of truth for that list and must NOT be extended for this table) — sessions
+-- are looked up on every single authenticated request, not read-modify-
+-- written as part of a whole-object business CRUD flow, and routing them
+-- through readDb()/writeDb()'s snapshot-diff merge would be wasteful and
+-- would pollute the __snapshot bookkeeping for no reason. `token_hash` stores
+-- ONLY the SHA-256 hash of the opaque session token (never the raw token) so
+-- that an exfiltrated database file cannot be replayed as a live session —
+-- mirroring this app's existing password-hash discipline.
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash  TEXT PRIMARY KEY,   -- sha256(raw opaque token), hex
+  username    TEXT NOT NULL,
+  role        TEXT NOT NULL,
+  created_at  TEXT NOT NULL,      -- ISO-8601
+  expires_at  TEXT NOT NULL,      -- ISO-8601, created_at + 12h, ABSOLUTE (D-07: no sliding/refresh)
+  user_agent  TEXT,
+  ip          TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires  ON sessions(expires_at);
