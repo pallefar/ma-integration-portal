@@ -21,6 +21,12 @@ data/*.db-wal
 data/*.db-shm
 data/*.db.bak
 
+# Migration script's in-progress temp DB (+ WAL/SHM sidecars) — normally
+# renamed away on success and cleaned up at the start of the next run on
+# failure, but ignored here too as a belt-and-suspenders guard against ever
+# committing an orphaned, potentially PII-containing partial data dump.
+data/.*.migrating-*
+
 # Uploaded media (runtime-generated)
 public/uploads/
 

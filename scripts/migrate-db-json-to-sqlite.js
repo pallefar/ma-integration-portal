@@ -63,14 +63,24 @@ function runMigration(sourcePath, outPath) {
   const outDir = path.dirname(resolvedOut);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
+  // Clean up genuinely stale temp files left behind by a prior run that
+  // crashed before it could rename its temp DB (+ sidecars) over --out. The
+  // temp filename embeds Date.now() + a random suffix, so it is unique to
+  // THIS run — a cleanup keyed on tmpPath itself could never find a match
+  // from a previous run. Instead, glob every file in outDir that matches
+  // this basename's temp-file prefix and remove it, regardless of the
+  // random suffix that generated it.
+  const tmpPrefix = `.${path.basename(resolvedOut)}.migrating-`;
+  for (const f of fs.readdirSync(outDir)) {
+    if (f.startsWith(tmpPrefix)) {
+      try { fs.unlinkSync(path.join(outDir, f)); } catch (e) { /* ignore */ }
+    }
+  }
+
   // Build at a temp path; only rename over --out on full success, so a
   // crash/error mid-migration never leaves a half-written database at the
   // real output path.
-  const tmpPath = path.join(outDir, `.${path.basename(resolvedOut)}.migrating-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.tmp`);
-  // Clean up any stale sidecar files that might exist from a prior aborted run.
-  for (const ext of ['', '-wal', '-shm']) {
-    try { fs.unlinkSync(tmpPath + ext); } catch (e) { /* ignore */ }
-  }
+  const tmpPath = path.join(outDir, `${tmpPrefix}${Date.now()}-${crypto.randomBytes(4).toString('hex')}.tmp`);
 
   const db = new Database(tmpPath);
   try {
