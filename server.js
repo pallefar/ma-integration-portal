@@ -225,6 +225,10 @@ app.post('/api/auth/login', (req, res) => {
   if (!ok) {
     return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
   }
+  // Opportunistic cleanup, not a security mechanism — piggyback on the
+  // low-frequency login path rather than adding an interval timer (this
+  // codebase has none).
+  sessions.pruneExpiredSessions(getConnection());
   const token = sessions.createSession(getConnection(), {
     username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
     userAgent: req.get('user-agent'), ip: req.ip,
@@ -280,6 +284,10 @@ app.get('/healthz', (req, res) => {
 const { initDb, readDb, writeDb, getConnection } = require('./db/store');
 const sessions = require('./db/sessions');
 initDb(); // opens (or creates) data/ma-portal.db and ensures the schema exists
+// Startup sweep of expired session rows — a table-bloat cleanup, NOT a
+// security mechanism (findSession() already treats a past expires_at as an
+// immediate miss regardless of whether the row has been physically deleted).
+sessions.pruneExpiredSessions(getConnection());
 
 // Collision-resistant id: time-sortable base36 timestamp + random suffix. Two
 // creates in the same millisecond used to mint identical `prefix_<Date.now()>`
@@ -1444,6 +1452,18 @@ app.post('/api/admin/migrate-db', (req, res) => {
     message: `Database successfully migrated to ${provider.toUpperCase()} SQL Relational schema!`,
     schema: sqlSchema
   });
+});
+
+// POST revoke all sessions for a user (D-07 offboarding action) — admin-only
+// via the /api/admin/* prefix already gated by the consolidated /api gate
+// (any authenticated session may currently reach this, matching today's
+// permissive write posture for the 59 non-admin routes; AUTH-02's coarse
+// ROLE_WRITE_POLICY that restricts /api/admin/* to the admin role lands in
+// Plan 02). This is deliberately the minimum viable offboarding primitive —
+// NOT the deferred full user-CRUD.
+app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
+  sessions.deleteAllSessionsForUser(getConnection(), req.params.username);
+  res.json({ success: true });
 });
 
 // GET AI Insight dynamic RAG portal insight

@@ -77,4 +77,29 @@ function deleteSession(conn, token) {
   conn.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(hashToken(token));
 }
 
-module.exports = { createSession, findSession, deleteSession, newSessionToken, hashToken };
+/**
+ * Admin offboarding action (D-07): delete every session belonging to a user,
+ * revoking all of that user's devices/tabs at once. A single indexed
+ * `DELETE ... WHERE username = ?` — trivial given idx_sessions_username.
+ */
+function deleteAllSessionsForUser(conn, username) {
+  conn.prepare(`DELETE FROM sessions WHERE username = ?`).run(username);
+}
+
+/**
+ * Physically delete rows whose expires_at has passed. This is a table-bloat
+ * cleanup only, NOT a security mechanism — findSession() already treats a
+ * past-expiry row as an immediate miss regardless of whether it has been
+ * physically deleted yet (D-07's "an expired row stops authorizing
+ * immediately" holds with zero background sweeps). Called once at server
+ * startup and opportunistically on login (cheap; this app has no interval
+ * timers or job scheduler anywhere).
+ */
+function pruneExpiredSessions(conn) {
+  conn.prepare(`DELETE FROM sessions WHERE expires_at < ?`).run(new Date().toISOString());
+}
+
+module.exports = {
+  createSession, findSession, deleteSession, deleteAllSessionsForUser, pruneExpiredSessions,
+  newSessionToken, hashToken,
+};
