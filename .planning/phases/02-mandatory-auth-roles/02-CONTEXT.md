@@ -34,6 +34,11 @@ Make authentication mandatory (not opt-in behind an env var), enforce the caller
 - **D-09:** Scope = **login (existing) + logged-in user can change their own password + a first-run/env mechanism to set the REAL admin password** so real-deal mode never ships with the publicly-known demo password (`TEdemo!2026`). Full user-CRUD admin UI = **deferred**. — **Reversibility:** reversible.
 - **D-10:** The seeded demo accounts (admin/karen/pmo with the known demo password) stay for demo mode; real-deal mode requires the first-run admin secret to be set (fail-closed if a real deployment still has the demo password — warn loudly at minimum).
 
+### Resolved after research (2026-07-24, from 02-RESEARCH.md open questions)
+- **D-11:** `ADMIN_TOKEN` write-bypass SURVIVES mandatory login but as an **attributed break-glass identity** — treat `X-Admin-Token` requests as a distinct, logged identity (e.g. `admin-token`/automation), not an anonymous bypass, so Phase 3's audit log can attribute its actions. Preserves existing admin/CI tooling while making it accountable.
+- **D-12:** Implement the `employee = self-only` capability rule AND **seed one demo employee account** so AUTH-02's non-admin role-rejection path is actually testable (the role-enforcement test needs a non-admin subject). Minimal demo-data change.
+- Also from research (builder must cover, not user decisions): (a) the client `fetch()` wrapper (public/js/transitions.js) currently handles 401 only on WRITES — under fail-closed GET-gating it MUST handle 401 on reads too (redirect to /login.html) or pages silently blank; (b) `/api/auth/me` stays public by design (confirmed); (c) AUTH-01 route inventory needs the prerequisite refactor: `server.js` must `module.exports = app` and guard `app.listen()` behind `require.main === module` (today it binds unconditionally with no exports).
+
 ### Claude's Discretion (builder/researcher decides)
 - The `sessions` table schema and indexing; opaque-token generation (crypto.randomBytes) and lookup.
 - Consolidating the TWO overlapping `/api` gate middlewares (server.js ~148 write/admin gate + ~174 session gate) into one coherent gate — currently redundant.
