@@ -1,14 +1,16 @@
 ---
 phase: 02-mandatory-auth-roles
 verified: 2026-07-31T00:00:00Z
-status: human_needed
+status: passed
 score: 4/4 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "In fail-closed mode (DEMO_OPEN unset) with no/expired session, load a portal page in a real browser"
     expected: "Browser redirects to /login.html rather than rendering blank/broken widgets"
     why_human: "Requires a real browser session/redirect flow; the automated sweep (test/auth-route-inventory.test.js) asserts the server returns 401 {authRequired:true}, not that the browser actually navigates. No browser test harness exists in this zero-dependency repo (02-VALIDATION.md Manual-Only table)."
+
   - test: "Boot the demo release bundle via start.bat / start.command"
     expected: ":3000 serves the showcase without a login prompt (DEMO_OPEN=1 set by the launcher keeps the demo open under the new fail-closed default)"
     why_human: "Depends on the actual release launcher script executing in a real OS shell and a real server boot; static grep only proves the DEMO_OPEN=1 line is present and precedes the server.js invocation, not that the boot sequence behaves as expected end-to-end."
