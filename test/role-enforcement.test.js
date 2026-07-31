@@ -326,6 +326,41 @@ test('CR-02 (integration): an hrbp session also gets 403 on GET /api/admin/downl
   }
 });
 
+// --- WR-01: change-password must revoke this user's OTHER outstanding sessions ---
+
+test('WR-01 (integration): a successful password change revokes the caller\'s prior sessions and issues a fresh one', async () => {
+  // Seeded fixture password (see 02-CONTEXT.md D-10) — shared demo credential.
+  const DEMO_PASSWORD = 'TEdemo!2026';
+  const oldToken = sessionsDb.createSession(conn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
+  const callerToken = sessionsDb.createSession(conn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { Cookie: cookieHeader(callerToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: DEMO_PASSWORD, newPassword: DEMO_PASSWORD }),
+    });
+    assert.strictEqual(res.status, 200, 'the password change itself must succeed for the correct current password');
+
+    assert.strictEqual(
+      sessionsDb.findSession(conn, oldToken), null,
+      'a DIFFERENT prior session for this user must be revoked by a successful password change (WR-01)'
+    );
+
+    const setCookieHeader = res.headers.get('set-cookie') || '';
+    const newTokenMatch = setCookieHeader.match(/ma_session=([^;]+)/);
+    assert.ok(newTokenMatch, 'change-password must issue a fresh session cookie for the current caller');
+    assert.ok(
+      sessionsDb.findSession(conn, newTokenMatch[1]),
+      'the freshly issued session for the CURRENT caller must be valid — the caller is not logged out by their own change'
+    );
+  } finally {
+    sessionsDb.deleteSession(conn, oldToken);
+    server.close();
+  }
+});
+
 test('AUTH-04 (D-02): an isOpenMode request is not gated on role/session at all (req.portalUser === null, never consulted)', async () => {
   const originalDemoOpen = process.env.DEMO_OPEN;
   process.env.DEMO_OPEN = '1';

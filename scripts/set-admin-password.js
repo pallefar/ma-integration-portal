@@ -19,6 +19,7 @@
 const crypto = require('crypto');
 const readline = require('readline');
 const store = require('../db/store');
+const sessions = require('../db/sessions');
 
 // The publicly-known demo password shared by every seeded demo account
 // (admin/karen/pmo/employee-demo) — see 02-CONTEXT.md D-10.
@@ -96,6 +97,14 @@ async function run(opts = {}) {
   user.salt = newSalt;
   user.hash = hashPassword(password, newSalt);
   store.writeDb(db);
+
+  // WR-01: rotating the admin credential must revoke every outstanding admin
+  // session immediately (db/sessions.js's own docstring calls this "Admin
+  // offboarding action") — otherwise a session token issued under the OLD
+  // password (e.g. one an attacker already stole via a leaked cookie, the
+  // exact scenario this script's D-10 warning above responds to) stays valid
+  // for up to SESSION_TTL_MS after this rotation.
+  sessions.deleteAllSessionsForUser(store.getConnection(), user.username);
 
   console.log(`Admin password updated for user '${user.username}'.`);
   return { success: true, username: user.username };

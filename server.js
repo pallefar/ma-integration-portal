@@ -386,6 +386,22 @@ app.post('/api/auth/change-password', (req, res) => {
   user.salt = newSalt;
   user.hash = hashPassword(newPassword, newSalt);
   writeDb(db);
+  // WR-01: rotating a credential must revoke every OTHER outstanding session
+  // for this user (db/sessions.js's own docstring calls this "Admin
+  // offboarding action", but the same primitive applies here) — otherwise a
+  // token an attacker already stole via a leaked cookie remains valid for up
+  // to SESSION_TTL_MS after the password that would have invalidated it is
+  // changed. Re-issue a fresh session for the CURRENT caller only, so they
+  // are not logged out by their own password change.
+  sessions.deleteAllSessionsForUser(getConnection(), user.username);
+  const newToken = sessions.createSession(getConnection(), {
+    username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
+    userAgent: req.get('user-agent'), ip: req.ip,
+  });
+  const cookie = ['ma_session=' + newToken, 'Path=/', 'HttpOnly', 'SameSite=Strict',
+    'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
+  if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
+  res.setHeader('Set-Cookie', cookie.join('; '));
   res.json({ success: true });
 });
 
