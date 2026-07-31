@@ -35,6 +35,10 @@ echo.
 REM Open the browser a few seconds after the server begins booting.
 start "" cmd /c "timeout /t 3 >nul & start http://localhost:3000"
 
+REM Demo release bundles stay open under the new fail-closed default (D-02);
+REM real-deal deployments never run this launcher, so they stay fail-closed.
+set "DEMO_OPEN=1"
+
 REM Run the server in this window (blocks until the window is closed).
 "%NODE_CMD%" server.js
 

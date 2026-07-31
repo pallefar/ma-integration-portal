@@ -25,4 +25,8 @@ echo "Opening http://localhost:3000 - keep this window open; close it to stop th
 # Open the browser a few seconds after the server begins booting.
 ( sleep 3; (command -v open >/dev/null && open "http://localhost:3000") || (command -v xdg-open >/dev/null && xdg-open "http://localhost:3000") ) >/dev/null 2>&1 &
 
+# Demo release bundles stay open under the new fail-closed default (D-02);
+# real-deal deployments never run this launcher, so they stay fail-closed.
+export DEMO_OPEN=1
+
 exec "$NODE_CMD" server.js
