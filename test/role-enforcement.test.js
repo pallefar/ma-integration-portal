@@ -235,6 +235,63 @@ test('AUTH-04: role is read exclusively server-side — a client-supplied role c
   }
 });
 
+// --- CR-01: employee must NOT be able to DELETE assessments/instances -----
+
+test('CR-01 (unit): roleAllowedForWrite rejects employee on DELETE /api/assessments/:id and /api/assessment-instances/:id, but allows the POST self-service routes', () => {
+  assert.strictEqual(
+    app.roleAllowedForWrite('employee', '/api/assessments/xyz', 'DELETE'), false,
+    'employee must be rejected on DELETE /api/assessments/:id (admin cleanup, plural CRUD route)'
+  );
+  assert.strictEqual(
+    app.roleAllowedForWrite('employee', '/api/assessment-instances/xyz', 'DELETE'), false,
+    'employee must be rejected on DELETE /api/assessment-instances/:id (admin cleanup per its own inline comment)'
+  );
+  assert.strictEqual(
+    app.roleAllowedForWrite('employee', '/api/assessment', 'POST'), true,
+    'employee must still be allowed to POST /api/assessment (own submission) — no regression'
+  );
+  assert.strictEqual(
+    app.roleAllowedForWrite('employee', '/api/assessment-instances', 'POST'), true,
+    'employee must still be allowed to POST /api/assessment-instances (self-submission) — no regression'
+  );
+  assert.strictEqual(
+    app.roleAllowedForWrite('admin', '/api/assessments/xyz', 'DELETE'), true,
+    'admin must still be allowed to DELETE /api/assessments/:id — no regression for the intended cleanup role'
+  );
+});
+
+test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessments/:id', async () => {
+  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/assessments/does-not-exist`, {
+      method: 'DELETE',
+      headers: { Cookie: cookieHeader(token) },
+    });
+    assert.strictEqual(res.status, 403, 'employee DELETE on /api/assessments/:id must be rejected with 403 (role), not fall through to the handler');
+  } finally {
+    sessionsDb.deleteSession(conn, token);
+    server.close();
+  }
+});
+
+test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessment-instances/:id', async () => {
+  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/assessment-instances/does-not-exist`, {
+      method: 'DELETE',
+      headers: { Cookie: cookieHeader(token) },
+    });
+    assert.strictEqual(res.status, 403, 'employee DELETE on /api/assessment-instances/:id must be rejected with 403 (role), not fall through to the handler');
+  } finally {
+    sessionsDb.deleteSession(conn, token);
+    server.close();
+  }
+});
+
 test('AUTH-04 (D-02): an isOpenMode request is not gated on role/session at all (req.portalUser === null, never consulted)', async () => {
   const originalDemoOpen = process.env.DEMO_OPEN;
   process.env.DEMO_OPEN = '1';

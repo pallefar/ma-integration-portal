@@ -165,14 +165,39 @@ function readSessionCookie(req) {
 // opt-in-only via the explicit self-service allowlist below, never silently
 // open by default. A future endpoint added without an explicit prefix entry
 // is therefore safe-by-default (admin/hrbp/pmo, never employee).
+// CR-01 fix: a plain `path.startsWith(prefix)` has no path-boundary check, so
+// e.g. the `/api/assessment` self-service entry used to ALSO match
+// `/api/assessments/:id` (plural, admin CRUD) and `/api/assessment-instances/:id`
+// purely because both strings happen to begin with the same characters. Every
+// rule below is matched boundary-safely — `path === prefix` or
+// `path.startsWith(prefix + '/')` — via pathMatchesPrefix(), so a rule can
+// never bleed into an unrelated sibling route just because it shares a string
+// prefix (this also closes WR-05's broader "any future route silently
+// inherits an existing prefix's roles" class of bug). A rule may additionally
+// pin `methods: [...]` so it only ever applies to specific HTTP verbs — used
+// below so the self-service `POST /api/assessment(-instances)` entries can
+// NEVER cover `DELETE /api/assessments/:id` or
+// `DELETE /api/assessment-instances/:id` (both admin/PMO cleanup per their
+// own inline route comments), which instead fall through untouched to
+// DEFAULT_WRITE_ROLES (no `employee`).
+function pathMatchesPrefix(path, prefix) {
+  return path === prefix || path.startsWith(prefix + '/');
+}
+
 const ROLE_WRITE_POLICY = [
-  { prefix: '/api/admin', roles: ['admin'] }, // migrate-db, download-zip, revoke-sessions
+  { prefix: '/api/admin', roles: ['admin'] }, // migrate-db, download-zip, revoke-sessions — ALL methods (see CR-02 gate below)
 
   // Self-service allowlist: the ONLY prefixes 'employee' may write to today.
   { prefix: '/api/pulses', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/employees/complete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/employees/uncomplete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
-  { prefix: '/api/assessment', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // covers /api/assessment + /api/assessment-instances
+  // Boundary-safe AND POST-only: covers only `POST /api/assessment` (own
+  // submission) and `POST /api/assessment-instances` (self-submission).
+  // `DELETE /api/assessments/:id` and `DELETE /api/assessment-instances/:id`
+  // do not match `methods: ['POST']` here, and no other rule below matches
+  // them either, so both fall through to DEFAULT_WRITE_ROLES (CR-01).
+  { prefix: '/api/assessment', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
+  { prefix: '/api/assessment-instances', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/auth/change-password', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // D-09: every role may change their OWN password
 
   // Everything else under /api that accepts writes today (projects, employees
@@ -183,8 +208,13 @@ const ROLE_WRITE_POLICY = [
 ];
 const DEFAULT_WRITE_ROLES = ['admin', 'hrbp', 'pmo'];
 
-function roleAllowedForWrite(role, path) {
-  const rule = ROLE_WRITE_POLICY.find(r => path.startsWith(r.prefix));
+function roleAllowedForWrite(role, path, method) {
+  const rule = ROLE_WRITE_POLICY.find(r => {
+    const pathMatches = r.exact ? path === r.prefix : pathMatchesPrefix(path, r.prefix);
+    if (!pathMatches) return false;
+    if (r.methods && !r.methods.includes(method)) return false;
+    return true;
+  });
   const allowed = rule ? rule.roles : DEFAULT_WRITE_ROLES;
   return allowed.includes(role);
 }
