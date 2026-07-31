@@ -2,6 +2,14 @@
 // ADMIN_TOKEN is set), attach it to same-origin /api requests and prompt for it once
 // on a 401 write. Completely inert in the demo — the server leaves the API open when
 // ADMIN_TOKEN is unset, so no token is stored, no header is added, and writes never 401.
+//
+// This wrapper also handles the fail-closed session gate (Plan 01): any /api 401
+// carrying { authRequired: true } means the session is missing or expired — a
+// distinct failure mode from the admin-token write-401 (different cause, different
+// remedy) — so it redirects to /login.html deterministically on ANY method (GET
+// reads included), rather than racing the best-effort /api/auth/me probe further
+// below. Checked first, falling through to the write-only token prompt only when
+// the 401 is NOT an authRequired session gate.
 (function () {
   if (window.__adminAuthWrapped || !window.fetch) return;
   window.__adminAuthWrapped = true;
@@ -16,6 +24,16 @@
     h.set('X-Admin-Token', tok);
     return Object.assign({}, init, { headers: h });
   };
+  const onLoginPage = () => window.location.pathname.includes('login.html');
+  const maybePromptForToken = (res, input, init, method) => {
+    if (method === 'GET' || typeof input !== 'string') return res;
+    const entered = window.prompt('Admin token required to save changes:');
+    if (entered && entered.trim()) {
+      localStorage.setItem(KEY, entered.trim());
+      return origFetch(input, withToken(init, entered.trim()));
+    }
+    return res;
+  };
   window.fetch = function (input, init) {
     init = init || {};
     const url = typeof input === 'string' ? input : (input && input.url) || '';
@@ -23,14 +41,14 @@
     const tok = localStorage.getItem(KEY);
     if (tok && isApi(url)) init = withToken(init, tok);
     return origFetch(input, init).then((res) => {
-      if (res.status === 401 && isApi(url) && method !== 'GET' && typeof input === 'string') {
-        const entered = window.prompt('Admin token required to save changes:');
-        if (entered && entered.trim()) {
-          localStorage.setItem(KEY, entered.trim());
-          return origFetch(input, withToken(init, entered.trim()));
+      if (res.status !== 401 || !isApi(url)) return res;
+      return res.clone().json().then((body) => {
+        if (body && body.authRequired) {
+          if (!onLoginPage()) window.location.href = '/login.html';
+          return res;
         }
-      }
-      return res;
+        return maybePromptForToken(res, input, init, method);
+      }).catch(() => maybePromptForToken(res, input, init, method));
     });
   };
 })();
