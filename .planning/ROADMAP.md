@@ -14,7 +14,7 @@ This milestone turns the existing demo-shaped portal (v2.0.1) into a tool an Int
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Schema & Migration** - Replace `db.json` with SQLite (WAL mode) via a re-runnable, verified migration
-- [ ] **Phase 2: Mandatory Auth & Roles** - Promote `PORTAL_AUTH` to mandatory, with full route coverage and role enforcement
+- [x] **Phase 2: Mandatory Auth & Roles** - Promote `PORTAL_AUTH` to mandatory, with full route coverage and role enforcement (completed 2026-07-31)
 - [ ] **Phase 3: Deal Isolation, Audit Log & Write Validation** - File-per-deal isolation from demo data, an audit trail on every write, and schema validation on every write
 - [ ] **Phase 4: Due Diligence Workspace** - DD request lists, findings register, and server-side clean-room access control
 - [ ] **Phase 5: Synergy Value Capture** - Baseline, phasing, cost-to-achieve and confidence stage-gating on synergy initiatives
@@ -150,7 +150,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
 | 1. Schema & Migration | 3/3 | In Progress|  |
-| 2. Mandatory Auth & Roles | 3/3 | In Progress|  |
+| 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
 | 3. Deal Isolation, Audit Log & Write Validation | 0/TBD | Not started | - |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |

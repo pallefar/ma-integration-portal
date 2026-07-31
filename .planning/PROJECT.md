@@ -26,8 +26,9 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - ✓ Four-language internationalisation (EN/DE/ZH/CS) with an admin translation editor — existing (`i18n`, ~698 keys × 4 languages)
 - ✓ Playbook grounded in the real 52-slide HR M&A Guidebook, with an app-wide slide viewer and RAG retrieval over it — existing (`playbook.html`, `ragService.js`)
 - ✓ Process integration catalog — 10-process sending→receiving transformation view — existing (`processCatalog`)
-- ✓ Opt-in server-verified login with roles (`PORTAL_AUTH=1`, admin/hrbp/pmo) — existing
+- ✓ Server-verified login with roles (admin/hrbp/pmo/employee) — was opt-in (`PORTAL_AUTH=1`), now mandatory fail-closed by default — Phase 2
 - ✓ Zero-install turnkey distribution — any-OS, Windows and macOS bundles with portable Node — existing
+- ✓ Mandatory authentication with roles enforced on every write endpoint — fail-closed `/api` gate (reads included), SQLite-backed revocable sessions (tokens hashed at rest), coarse `ROLE_WRITE_POLICY` (boundary-safe + method-scoped), attributed `X-Admin-Token` break-glass, self password-change + first-run admin secret, client 401→login redirect, `DEMO_OPEN=1` demo escape hatch — Phase 2 (2026-07-31)
 
 ### Active
 
@@ -37,7 +38,6 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 
 - [ ] Replace the `db.json` file store with SQLite in WAL mode, sized for concurrent users from day one even while running laptop-local
 - [ ] Eliminate the documented concurrent-write race that can silently lose a write
-- [ ] Make authentication mandatory rather than opt-in, with roles enforced on every write endpoint
 - [ ] Add an audit log recording who changed what, when, with before/after values
 - [ ] Add schema validation on all write paths, with length and type limits
 - [ ] Separate real-deal data from demo data so the two never share a store, and make time-travel, XP/leaderboard and other showcase mechanics unreachable from real-deal mode
@@ -139,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-23 after initialization*
+*Last updated: 2026-07-31 after Phase 2 (Mandatory Auth & Roles)*

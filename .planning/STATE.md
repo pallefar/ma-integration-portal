@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 02
-current_phase_name: mandatory-auth-roles
-status: executing
+current_phase: 3
+current_phase_name: Deal Isolation, Audit Log & Write Validation
+status: planning
 stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-07-31T18:40:15.976Z"
+last_updated: "2026-07-31T19:15:47.080Z"
 last_activity: 2026-07-31
-last_activity_desc: Phase 02 execution started
+last_activity_desc: Phase 2 complete, transitioned to Phase 3
 progress:
   total_phases: 2
   completed_phases: 2
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 02 — mandatory-auth-roles
+**Current focus:** Phase 03 — Deal Isolation, Audit Log & Write Validation
 
 ## Current Position
 
-Phase: 02 (mandatory-auth-roles) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
-Last activity: 2026-07-31 — Phase 02 execution started
+Phase: 3 — Deal Isolation, Audit Log & Write Validation
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-31 — Phase 2 complete, transitioned to Phase 3
 
 Progress: [██████████] 100%
 
@@ -38,7 +38,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 3
 - Average duration: - min
 - Total execution time: 0 hours
 
@@ -46,7 +46,7 @@ Progress: [██████████] 100%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 2 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -94,7 +94,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- Research flagged three open gaps to resolve before/during planning: (1) exact better-sqlite3 v13 bundled-binary platform manifest — verify post-install, relevant to Phase 1; (2) PDF-generation approach for this vanilla-JS/no-build-step stack — needs concrete implementation research, relevant to Phase 7; (3) exact workstream-lead role taxonomy (ws_lead_hr, ws_lead_legal, etc.) — needs concrete definition before Phase 2's role enum and Phase 4's access-policy config can be finalized.
+- ⚠️ [Phase 7] PDF-generation approach for this vanilla-JS/no-build-step stack — needs concrete implementation research.
+- ⚠️ [Phase 4] Exact workstream-lead role taxonomy (ws_lead_hr, ws_lead_legal, etc.) — Phase 2 shipped the coarse role set (admin/hrbp/pmo/employee); finer taxonomy still needed before Phase 4's access-policy config.
+- ⚠️ [Release-cut] Phase 1 Windows/Linux bundle boots + Phase 1 formal close (`/gsd-verify-work 1`) still deferred; 01-VERIFICATION.md remains untracked.
+- ⚠️ [Phase 3] Phase 2 left the `isOpenMode(req)` seam and `sessions.ip` (TRUST_PROXY opt-in) for Phase 3 to bind to the deal-resolver (`DEMO_OPEN && req.isDemo`) and the audit log respectively.
+- ⚠️ [Traceability] phase.complete warned: HOST-01..03 / HARD-01..03 (v2-deferred) appear in REQUIREMENTS.md body but not its Traceability table.
 
 ## Deferred Items
 
@@ -107,6 +111,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-31T18:40:15.967Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-07-31T21:30:00Z
+Stopped at: Phase 2 complete (UAT passed, SECURITY.md verified, threats_open 0), ready to plan Phase 3
 Resume file: None
