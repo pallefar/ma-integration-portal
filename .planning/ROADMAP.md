@@ -60,7 +60,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A session can be revoked and expires on its own; a revoked or expired session immediately stops authorizing requests.
   4. Every server-side request handler can resolve the calling user's identity and role, for use by access decisions and the audit log in Phase 3.
 
-**Plans**: 1/3 plans executed
+**Plans**: 3/3 plans executed
 
 **Wave 1**
 
@@ -69,7 +69,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 02-02-PLAN.md — Coarse ROLE_WRITE_POLICY, break-glass identity, employee seed, self password-change + first-run admin secret (AUTH-02/03/04)
-- [ ] 02-03-PLAN.md — Client fail-closed redirect-to-login + demo-open launchers (AUTH-01 UX) — parallel with 02-02
+- [x] 02-03-PLAN.md — Client fail-closed redirect-to-login + demo-open launchers (AUTH-01 UX) — parallel with 02-02
 
 ### Phase 3: Deal Isolation, Audit Log & Write Validation
 
@@ -150,7 +150,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
 | 1. Schema & Migration | 3/3 | In Progress|  |
-| 2. Mandatory Auth & Roles | 2/3 | In Progress|  |
+| 2. Mandatory Auth & Roles | 3/3 | In Progress|  |
 | 3. Deal Isolation, Audit Log & Write Validation | 0/TBD | Not started | - |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |

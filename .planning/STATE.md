@@ -2,16 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
+current_phase: 02
+current_phase_name: mandatory-auth-roles
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-24T09:42:59.629Z"
-last_activity: 2026-07-24
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-07-31T18:40:15.976Z"
+last_activity: 2026-07-31
+last_activity_desc: Phase 02 execution started
 progress:
-  total_phases: 7
-  completed_phases: 1
+  total_phases: 2
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 14
+  completed_plans: 6
 ---
 
 # Project State
@@ -21,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 02 — Mandatory Auth & Roles
+**Current focus:** Phase 02 — mandatory-auth-roles
 
 ## Current Position
 
-Phase: 02 (Mandatory Auth & Roles) — EXECUTING
-Plan: 3 of 3
+Phase: 02 (mandatory-auth-roles) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-24
+Last activity: 2026-07-31 — Phase 02 execution started
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -61,6 +63,7 @@ Progress: [████████░░] 83%
 | Phase 01 P03 | 20min | 2 tasks | 1 files |
 | Phase 02 P01 | 22min | 2 tasks | 6 files |
 | Phase 02 P02 | 26min | 2 tasks | 6 files |
+| Phase 02 P03 | 6min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -83,6 +86,7 @@ Recent decisions affecting current work:
 - [Phase ?]: ROLE_WRITE_POLICY prefixes stay /api/-prefixed; gate reconstructs the full path via req.baseUrl + req.path (Express strips the mount prefix from req.path inside app.use('/api', ...))
 - [Phase ?]: employee-demo (D-12) seeded into both db.json and the live data/ma-portal.db SQLite store, since db.json is a frozen fixture and SQLite is the actual source of truth since Phase 1
 - [Phase ?]: X-Admin-Token (D-11) resolves req.portalUser through the same code path as session cookies, feeding the identical ROLE_WRITE_POLICY check rather than an early-return bypass
+- [Phase ?]: Phase 2 Plan 3: Merged the authRequired-redirect logic into the existing admin-token window.fetch wrapper (single coherent wrapper) rather than a standalone second IIFE, per the plan's acceptance criterion that window.fetch not be reassigned via two independent stacked patches
 
 ### Pending Todos
 
@@ -103,6 +107,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-24T09:42:59.620Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-07-31T18:40:15.967Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
