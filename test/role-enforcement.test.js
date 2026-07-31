@@ -292,6 +292,40 @@ test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessmen
   }
 });
 
+// --- CR-02: a non-admin session must NOT be able to GET /api/admin/* ------
+
+test('CR-02 (integration): a non-admin (employee) session gets 403 on GET /api/admin/download-zip', async () => {
+  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/admin/download-zip`, {
+      method: 'GET',
+      headers: { Cookie: cookieHeader(token) },
+    });
+    assert.strictEqual(res.status, 403, 'a non-admin session must be rejected with 403 on GET /api/admin/download-zip, not allowed through on session-existence alone');
+  } finally {
+    sessionsDb.deleteSession(conn, token);
+    server.close();
+  }
+});
+
+test('CR-02 (integration): an hrbp session also gets 403 on GET /api/admin/download-zip (admin-only read, not just admin-only write)', async () => {
+  const token = sessionsDb.createSession(conn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/admin/download-zip`, {
+      method: 'GET',
+      headers: { Cookie: cookieHeader(token) },
+    });
+    assert.strictEqual(res.status, 403, 'hrbp must be rejected with 403 on GET /api/admin/download-zip — /api/admin/* requires admin for ALL methods, reads included');
+  } finally {
+    sessionsDb.deleteSession(conn, token);
+    server.close();
+  }
+});
+
 test('AUTH-04 (D-02): an isOpenMode request is not gated on role/session at all (req.portalUser === null, never consulted)', async () => {
   const originalDemoOpen = process.env.DEMO_OPEN;
   process.env.DEMO_OPEN = '1';

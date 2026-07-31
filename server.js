@@ -264,7 +264,16 @@ app.use('/api', (req, res, next) => {
   // never match any ROLE_WRITE_POLICY prefix, falling every write through to
   // DEFAULT_WRITE_ROLES regardless of path — verified against a live request
   // during this task's own testing.
-  if (isWrite && !roleAllowedForWrite(req.portalUser.role, req.baseUrl + req.path)) {
+  const fullPath = req.baseUrl + req.path;
+  // CR-02: /api/admin/* must require the admin role for EVERY method, not
+  // just writes — before this phase, admin-prefixed routes (e.g.
+  // GET /api/admin/download-zip) were gated regardless of method. The
+  // consolidated gate had narrowed that role check to writes only, silently
+  // opening every admin-prefixed GET (source/db archive download, etc.) to
+  // any authenticated non-admin session. Reads elsewhere stay gated on
+  // session-existence alone (D-05) — this carve-out is admin-prefix-only.
+  const requiresRoleCheck = isWrite || pathMatchesPrefix(fullPath, '/api/admin');
+  if (requiresRoleCheck && !roleAllowedForWrite(req.portalUser.role, fullPath, req.method)) {
     return res.status(403).json({ error: 'Your role cannot perform this action.' });
   }
   next();
