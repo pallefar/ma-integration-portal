@@ -99,6 +99,15 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 if (!ADMIN_TOKEN) {
   console.warn('[security] ADMIN_TOKEN not set — write/admin API endpoints are OPEN. Set ADMIN_TOKEN in production to require authentication.');
 }
+// WR-03: DEMO_OPEN=1 is strictly more consequential than an unset ADMIN_TOKEN
+// — it disables the ENTIRE mandatory session gate for every /api/* route,
+// reads included (see isOpenMode() below) — yet previously logged nothing at
+// startup. An operator who carries DEMO_OPEN=1 into a real-deal deployment
+// (e.g. by copying start.bat/start.command verbatim, which set it
+// unconditionally for the demo showcase) must get a loud server-side signal.
+if (process.env.DEMO_OPEN === '1') {
+  console.warn('[security] DEMO_OPEN=1 — ALL /api authentication and authorization is DISABLED. Never set this for a real-deal deployment.');
+}
 // Constant-time string comparison (hash to equal length first so timingSafeEqual
 // never throws on mismatched lengths and the compare itself leaks no timing info).
 function timingSafeEqualStr(a, b) {
