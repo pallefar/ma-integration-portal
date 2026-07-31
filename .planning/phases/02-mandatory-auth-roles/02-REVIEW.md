@@ -21,7 +21,7 @@ findings:
   warning: 5
   info: 2
   total: 9
-status: issues_found
+status: resolved
 ---
 
 # Phase 02: Code Review Report
@@ -29,7 +29,9 @@ status: issues_found
 **Reviewed:** 2026-07-31T00:00:00Z
 **Depth:** standard
 **Files Reviewed:** 12
-**Status:** issues_found
+**Status:** resolved
+
+**Fix pass (2026-07-31):** All 2 Critical + all 5 Warning findings fixed and committed (see per-finding `**Status:**` lines below and `test/role-enforcement.test.js` for the regression tests added). The 2 Info findings are unchanged/deferred — see their entries below. `npm test` — 32/32 passing (25 baseline + 7 new regression tests for CR-01/CR-02/WR-01/WR-02).
 
 ## Summary
 
@@ -40,6 +42,8 @@ The fail-closed session gate itself (AUTH-01) is sound and well tested (`test/au
 ## Critical Issues
 
 ### CR-01: `ROLE_WRITE_POLICY`'s `/api/assessment` prefix accidentally grants `employee` DELETE rights on assessments and assessment instances
+
+**Status:** fixed (commit `bff4298`) — `roleAllowedForWrite()` now matches boundary-safely (`path === prefix || path.startsWith(prefix + '/')`) and rules may pin `methods: [...]`; the self-service `/api/assessment` and `/api/assessment-instances` entries are `exact + POST-only`, so `DELETE /api/assessments/:id` and `DELETE /api/assessment-instances/:id` fall through to `DEFAULT_WRITE_ROLES` (no `employee`). Regression tests added in `test/role-enforcement.test.js` (CR-01 unit + 2 integration tests).
 
 **File:** `server.js:172-190` (policy table + `roleAllowedForWrite`), consumed at `server.js:210-241` (the `/api` gate)
 
@@ -90,6 +94,8 @@ Then, separately, remove `employee` from `DELETE /api/assessment-instances/:id`'
 
 ### CR-02: `GET /api/admin/download-zip` lost its admin-role requirement — any authenticated user can now reach it
 
+**Status:** fixed (commit `48dff92`) — the `/api` gate now checks `ROLE_WRITE_POLICY` on every method for `/api/admin/*` paths (`requiresRoleCheck = isWrite || pathMatchesPrefix(fullPath, '/api/admin')`), not just writes. Regression tests added in `test/role-enforcement.test.js` (employee and hrbp sessions both get 403 on `GET /api/admin/download-zip`).
+
 **File:** `server.js:400-418` (route), `server.js:210-241` (the consolidated `/api` gate)
 
 **Issue:** Before this phase, `/api/admin/*` was gated for **every HTTP method** (see the diff's removed code): `isAdminPath` was checked regardless of `isWrite`, and under `PORTAL_AUTH` required `sess.role === 'admin'` (or the token) for both reads and writes.
@@ -124,6 +130,8 @@ This naturally reuses the existing `{ prefix: '/api/admin', roles: ['admin'] }` 
 
 ### WR-01: Neither self-service password change nor the first-run admin-password script revokes existing sessions
 
+**Status:** fixed (commit `71c654b`) — both `POST /api/auth/change-password` and `scripts/set-admin-password.js` now call `sessions.deleteAllSessionsForUser()` immediately after persisting the new hash; the self-service endpoint re-issues a fresh session/cookie for the current caller only. Regression test added in `test/role-enforcement.test.js`.
+
 **File:** `server.js:333-351` (`POST /api/auth/change-password`), `scripts/set-admin-password.js:63-102` (`run()`)
 
 **Issue:** `db/sessions.js` exposes `deleteAllSessionsForUser(conn, username)` specifically for this purpose (its own docstring calls it "Admin offboarding action"), but neither credential-rotation path calls it. After a password change, every previously-issued session token for that user (other tabs, other devices, or — critically — a token an attacker already stole via a leaked cookie) remains valid for up to 12h. This defeats the standard security rationale for rotating a credential after suspected compromise, which is the exact scenario `scripts/set-admin-password.js`'s own D-10 warning is designed to respond to (rotating off the publicly-known demo password).
@@ -132,6 +140,8 @@ This naturally reuses the existing `{ prefix: '/api/admin', roles: ['admin'] }` 
 
 ### WR-02: `POST /api/auth/change-password` has no attempt throttle, unlike `/api/auth/login`
 
+**Status:** fixed (commit `2ef543b`) — `change-password` now calls `loginThrottled('change-password:' + req.portalUser.username)` before verifying `currentPassword`, mirroring `/api/auth/login`'s 8-attempts/minute cap. Keyed by username (not IP) so callers behind the same proxy/NAT don't share a bucket. Regression test added in `test/role-enforcement.test.js`.
+
 **File:** `server.js:333-351`
 
 **Issue:** `/api/auth/login` is protected by `loginThrottled()` (8 attempts/minute per IP) specifically because `scrypt` is expensive and repeated guessing should be capped before the hashing work runs. `change-password` performs the identical `hashPassword()` + `timingSafeEqualStr()` verification of `currentPassword` but has no equivalent throttle, so a caller who already holds a valid session (e.g. a stolen cookie without the password) can attempt unlimited current-password guesses.
@@ -139,6 +149,8 @@ This naturally reuses the existing `{ prefix: '/api/admin', roles: ['admin'] }` 
 **Fix:** Reuse `loginThrottled()` (keyed by `req.portalUser.username` or IP) before computing `hashPassword(currentPassword, ...)` in this handler.
 
 ### WR-03: No startup warning when `DEMO_OPEN=1` is active, despite it disabling ALL `/api` authentication
+
+**Status:** fixed (commit `f54b784`) — added the exact `console.warn('[security] DEMO_OPEN=1 — ...')` suggested by this finding, right next to the existing `ADMIN_TOKEN` warning. Manually verified via `DEMO_OPEN=1 node -e "require('./server.js')"`.
 
 **File:** `server.js:136-138` (`isOpenMode`), contrast with `server.js:98-101` (existing `ADMIN_TOKEN` warning)
 
@@ -153,6 +165,8 @@ if (process.env.DEMO_OPEN === '1') {
 
 ### WR-04: Session `ip` metadata will record the reverse proxy's address, not the client's, in the deployment topology this feature targets
 
+**Status:** fixed (commit `02f4114`) — added an opt-in `TRUST_PROXY` env var wired to `app.set('trust proxy', ...)`, left OFF by default (Express's own safe default) so an unbounded `X-Forwarded-For` chain is never trusted unconditionally. Operators behind a reverse proxy set `TRUST_PROXY` to their actual hop count/address; a `[security]` console.warn fires when set, same as this finding's alternative recommendation ("or document that operators must set it").
+
 **File:** `server.js:289-292` (`sessions.createSession(..., ip: req.ip, ...)`), `db/schema.sql:296-304` (new `sessions.ip` column)
 
 **Issue:** This phase adds an `ip` column to the new `sessions` table specifically to record which client created a session (forensic/audit value). It is populated from Express's `req.ip`. `CLAUDE.md` documents this app's production target as "self-hosted Node.js servers" behind "TLS termination" (i.e. a reverse proxy) — but nowhere does `server.js` call `app.set('trust proxy', ...)`. Without it, `req.ip` under a reverse-proxy deployment resolves to the proxy's own address for every request, so every row in the new `sessions` table will carry the same useless `ip` value in exactly the deployment this feature is meant to support. (The pre-existing `loginThrottled(req.ip)` throttle has the same blind spot, collapsing all users behind the proxy into one shared attempt-counter bucket.)
@@ -160,6 +174,8 @@ if (process.env.DEMO_OPEN === '1') {
 **Fix:** Configure `app.set('trust proxy', ...)` appropriately for the target reverse-proxy topology (e.g. `'loopback'` or a specific proxy count/IP), or document that operators must set it, before relying on `req.ip` for either the session audit trail or the login throttle.
 
 ### WR-05: `ROLE_WRITE_POLICY`'s prefix design is inherently order/substring-fragile beyond CR-01's specific instance
+
+**Status:** fixed (commit `bff4298`, bundled with CR-01) — `pathMatchesPrefix()` (`path === prefix || path.startsWith(prefix + '/')`) replaced the unbounded `startsWith(prefix)` match for every rule in `ROLE_WRITE_POLICY`, not just the `/api/assessment` entries, closing the general "a future route silently inherits an existing prefix's roles" class of bug this finding describes. A dedicated live-route-inventory walk (in the spirit of `test/auth-route-inventory.test.js`) was not added separately — the CR-01 regression tests exercise the specific boundary case this review flagged; a broader route-inventory assertion is left as a follow-up if a future phase adds more prefix-adjacent routes.
 
 **File:** `server.js:168-190`
 
