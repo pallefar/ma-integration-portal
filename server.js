@@ -20,6 +20,25 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}
 // test/migration-roundtrip.test.js, test/concurrent-write.test.js) and as a
 // historical reference; treat data/ma-portal.db as the sole source of truth.
 
+// WR-04: req.ip (used for the new sessions.ip audit column and the login
+// throttle) resolves to the DIRECT peer address by default — under this
+// app's documented production target (self-hosted behind a reverse proxy /
+// TLS terminator, see CLAUDE.md) that peer is the proxy itself, not the
+// client, unless Express is told how many hops to trust. Defaulting to
+// trusting an unbounded X-Forwarded-For chain would let any client spoof its
+// own IP (defeating both the session audit trail and the throttle), so this
+// stays OFF (Express default: req.ip = the raw socket address) unless an
+// operator opts in with TRUST_PROXY, matching their actual reverse-proxy hop
+// count (e.g. TRUST_PROXY=1 for a single nginx/Caddy hop in front of Node).
+// See https://expressjs.com/en/guide/behind-proxies.html for the accepted
+// value shapes (integer hop count, 'loopback', a specific IP/CIDR, etc.).
+if (process.env.TRUST_PROXY) {
+  const raw = process.env.TRUST_PROXY;
+  const asNumber = Number(raw);
+  app.set('trust proxy', Number.isInteger(asNumber) && String(asNumber) === raw ? asNumber : raw);
+  console.warn(`[security] TRUST_PROXY=${raw} — req.ip now resolves via X-Forwarded-For per this setting. Ensure it matches your ACTUAL reverse-proxy hop count/address, or a client can spoof its own IP.`);
+}
+
 app.use(compression());
 
 // --- Security response headers -----------------------------------------------
