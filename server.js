@@ -371,6 +371,16 @@ app.get('/api/auth/me', (req, res) => {
 // rotates to a fresh 16-byte salt before persisting the new hash.
 app.post('/api/auth/change-password', (req, res) => {
   if (!req.portalUser) return res.status(401).json({ error: 'Login required.' });
+  // WR-02: reuse the same throttle /api/auth/login uses — scrypt is
+  // deliberately expensive, and a caller who already holds a valid session
+  // (e.g. a stolen cookie without the password) must not get unlimited
+  // current-password guesses just because change-password skips login.
+  // Keyed by username (a session already proves who the caller claims to be)
+  // rather than IP, so one throttled user cannot lock out others behind the
+  // same proxy/NAT.
+  if (loginThrottled('change-password:' + req.portalUser.username)) {
+    return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
+  }
   const { currentPassword, newPassword } = req.body || {};
   if (typeof newPassword !== 'string' || newPassword.length < 8) {
     return res.status(400).json({ error: 'New password must be at least 8 characters.' });

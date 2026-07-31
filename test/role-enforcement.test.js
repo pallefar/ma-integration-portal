@@ -361,6 +361,29 @@ test('WR-01 (integration): a successful password change revokes the caller\'s pr
   }
 });
 
+// --- WR-02: change-password must throttle repeated attempts like login ----
+
+test('WR-02 (integration): repeated change-password attempts are throttled (429) after 8 tries/minute, mirroring /api/auth/login', async () => {
+  const token = sessionsDb.createSession(conn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    let lastStatus = null;
+    for (let i = 0; i < 9; i++) {
+      const res = await fetch(`http://127.0.0.1:${port}/api/auth/change-password`, {
+        method: 'POST',
+        headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: 'definitely-wrong', newPassword: 'irrelevant-value' }),
+      });
+      lastStatus = res.status;
+    }
+    assert.strictEqual(lastStatus, 429, 'the 9th attempt within a minute must be throttled (429), mirroring the login throttle');
+  } finally {
+    sessionsDb.deleteSession(conn, token);
+    server.close();
+  }
+});
+
 test('AUTH-04 (D-02): an isOpenMode request is not gated on role/session at all (req.portalUser === null, never consulted)', async () => {
   const originalDemoOpen = process.env.DEMO_OPEN;
   process.env.DEMO_OPEN = '1';
