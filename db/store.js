@@ -46,6 +46,11 @@ const path = require('path');
 const { AsyncLocalStorage } = require('node:async_hooks');
 const { ARRAY_COLLECTIONS, SINGLETON_KEYS } = require('./collections');
 const { openDbFile } = require('./dbFiles');
+// AUD-01/D-08/D-09/D-11 (Phase 3 Plan 05): the store-layer audit hook.
+// db/auditHook.js has NO require() back to this module (it opens its own
+// independent connection to audit.db via db/dbFiles.js's openDbFile(), never
+// via the getOrOpenConnection() cache below) — safe to require directly here.
+const auditHook = require('./auditHook');
 
 const DEFAULT_DB_PATH = path.join(__dirname, '..', 'data', 'ma-portal.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
@@ -286,6 +291,17 @@ function writeDb(data) {
   }
   const before = data.__snapshot;
 
+  // AUD-01/D-08 (Phase 3 Plan 05): only collect a per-row delta list when
+  // THIS request's resolved context is one of auditHook.AUDITED_DB_KINDS —
+  // `scoped` is null/undefined outside any runWithDb() context (server
+  // startup, migration scripts, every pre-Phase-3 test), and a demo write
+  // must not pay for collecting deltas it will never use. `deltas` staying
+  // `null` (not an empty array) is the signal below that this write is not
+  // audited at all, distinct from "audited but produced zero rows".
+  const scoped = requestDbStorage.getStore();
+  const auditKind = scoped ? scoped.kind : null;
+  const deltas = (scoped && auditHook.AUDITED_DB_KINDS.has(auditKind)) ? [] : null;
+
   const applyWrite = conn.transaction((payload) => {
     for (const key of ARRAY_COLLECTIONS) {
       const beforeMap = before[key] || new Map();
@@ -304,9 +320,11 @@ function writeDb(data) {
         const id = idOf(item);
         afterIds.add(id);
         const serialized = JSON.stringify(item);
-        if (beforeMap.get(id) === undefined) {
+        const priorRaw = beforeMap.get(id);
+        if (priorRaw === undefined) {
           // This request's own snapshot never saw this id — genuinely new.
           insert.run(id, projectIdOf(item), i, serialized);
+          if (deltas) deltas.push({ collection: key, rowId: id, action: 'insert', before: null, after: serialized });
         } else {
           // This request's own snapshot already had this id: always UPDATE
           // (never insert-or-upsert here). If the row still exists this
@@ -315,6 +333,7 @@ function writeDb(data) {
           // this row, the UPDATE affects 0 rows and does NOT resurrect it
           // (CR-02).
           update.run(projectIdOf(item), i, serialized, id);
+          if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: serialized });
         }
       });
 
@@ -322,7 +341,10 @@ function writeDb(data) {
       // never an id this request never knew about (never touch another
       // writer's concurrent same-collection addition).
       for (const id of beforeMap.keys()) {
-        if (!afterIds.has(id)) del.run(id);
+        if (!afterIds.has(id)) {
+          del.run(id);
+          if (deltas) deltas.push({ collection: key, rowId: id, action: 'delete', before: beforeMap.get(id), after: null });
+        }
       }
     }
 
@@ -337,6 +359,33 @@ function writeDb(data) {
   });
 
   applyWrite(data);
+
+  // AUD-01/D-09/D-11: dispatch the audit batch ONLY after applyWrite() above
+  // has returned successfully — a throw from applyWrite() propagates before
+  // this line is ever reached (better-sqlite3's transaction() rolls back
+  // automatically), so a rolled-back write never produces an audit row.
+  if (deltas && deltas.length) {
+    const actor = scoped.actor;
+    if (!actor || !actor.username) {
+      // D-11: never synthesize an actor here — an audited write reaching
+      // this point with no resolved identity is a bug in the caller (a
+      // request that should have 401'd, or a test/script that opened a
+      // runWithDb() context without an actor), not something this hook may
+      // silently paper over with an anonymous row.
+      throw new Error(
+        `db/store.js: writeDb() resolved an audited context (kind=${auditKind}) with no attributed actor — refusing to write an anonymous audit row (D-11)`
+      );
+    }
+    // Never swallowed: if the audit write itself throws (e.g. audit.db is
+    // unwritable), it propagates through writeDb()'s existing no-swallow
+    // error contract — a silently-missing audit entry must never look like
+    // an action that never happened.
+    auditHook.writeAuditBatch(auditHook.getAuditConnection(), {
+      actor, dealId: scoped.dealId || null, dbKind: auditKind,
+      request: scoped.request || null, ts: new Date().toISOString(), rows: deltas,
+    });
+  }
+
   return true; // preserves existing callers' truthy-return expectation
 }
 

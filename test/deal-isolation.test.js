@@ -36,6 +36,10 @@ process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
 process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
 process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
 process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
+// AUD-01 (Phase 3 Plan 05): writeDb() now dispatches an audit batch for any
+// 'deal'-kind write — isolate this suite's audit rows in its own temp file
+// rather than writing into the live, gitignored data/audit.db.
+process.env.MA_AUDIT_DB_PATH = path.join(TMP_DIR, 'audit.db');
 
 const { runMigration } = require('../scripts/migrate-db-json-to-sqlite.js');
 const SOURCE_PATH = path.join(__dirname, '..', 'db.json');
@@ -90,12 +94,20 @@ test.after(() => {
 
 /** Simulate the resolver binding a request to `dealId` (or demo, if null)
  * and run `fn` inside that AsyncLocalStorage context, exactly the way
- * db/resolver.js's dealResolverMiddleware does for a real request. */
+ * db/resolver.js's dealResolverMiddleware does for a real request —
+ * including the `actor`/`request` fields the resolver derives from
+ * `req.portalUser` (Phase 3 Plan 05, AUD-01/D-11), since this test's writes
+ * against a 'deal'-kind context are now audited writes and writeDb() throws
+ * if an audited write resolves with no actor. */
 function runAsDeal(dealId, fn) {
-  const fakeReq = { baseUrl: '/api', path: '/whatever', portalUser: dealId ? { username: 'karen', role: 'hrbp', dealId } : null };
+  const fakeReq = { baseUrl: '/api', path: '/whatever', portalUser: dealId ? { username: 'karen', role: 'hrbp', dealId, sessionId: null } : null };
   const resolved = resolver.resolveDatabase(fakeReq);
   const conn = store.getOrOpenConnection(resolved.dbPath, resolved.schemaPath);
-  return store.runWithDb({ conn, kind: resolved.kind, dealId: resolved.dealId, dbPath: resolved.dbPath }, fn);
+  const actor = fakeReq.portalUser
+    ? { username: fakeReq.portalUser.username, role: fakeReq.portalUser.role, sessionId: fakeReq.portalUser.sessionId || null }
+    : null;
+  const request = { method: 'TEST', path: fakeReq.path, ip: null };
+  return store.runWithDb({ conn, kind: resolved.kind, dealId: resolved.dealId, dbPath: resolved.dbPath, actor, request }, fn);
 }
 
 test('deal-isolation (a): a distinct row written through the resolver-bound path to each of two deals never appears in the other file, across EVERY array collection', () => {

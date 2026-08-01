@@ -27,7 +27,14 @@ const { getOrOpenConnection, runWithDb } = require('./store');
 // session can be bound to some unrelated, since-archived deal at the moment
 // they try to archive/delete a DIFFERENT one; without this, that stale
 // binding would 404 the admin out of the very endpoint meant to fix it.
-const CONTROL_PLANE_PATHS = new Set(['/api/deals']);
+//
+// D-10 (Phase 3 Plan 05): `/api/admin/audit` joins this set for the exact
+// same reason — the admin audit viewer must stay reachable regardless of
+// the admin's OWN current deal binding (the viewer's handler never reads
+// req.dealContext at all; it talks to audit.db directly via
+// db/auditHook.js's queryAudit()), so a missing/archived stale binding must
+// never lock the admin out of the one place they can inspect the trail.
+const CONTROL_PLANE_PATHS = new Set(['/api/deals', '/api/admin/audit']);
 function isControlPlanePath(fullPath) {
   return CONTROL_PLANE_PATHS.has(fullPath)
     || fullPath.startsWith('/api/deals/')
@@ -86,6 +93,18 @@ function resolveDatabase(req) {
  * A DealAccessError becomes its carried HTTP status with the existing
  * `{ error: '...' }` body shape, matching every other short-circuit in the
  * consolidated /api gate.
+ *
+ * AUD-01/D-11 (Phase 3 Plan 05): the bound context ALSO carries `actor` and
+ * `request` — this is how the request-bound identity reaches db/store.js's
+ * writeDb() audit hook with NO new parameter threaded through the ~90
+ * existing readDb()/writeDb() call sites (03-RESEARCH.md's own named
+ * anti-pattern rules that out). `actor` is captured HERE from
+ * `req.portalUser`, a session identity or the attributed break-glass
+ * identity the Phase-2 gate already resolved — NEVER synthesized, and
+ * captured before the caller's isOpenMode(req) check (server.js's gate) may
+ * null `req.portalUser` for an open-mode demo request; that nulling only
+ * ever applies to a resolved 'demo' kind, which is never audited (D-08), so
+ * it cannot affect an audited write's actor.
  */
 function dealResolverMiddleware(req, res, next) {
   let resolved;
@@ -102,7 +121,11 @@ function dealResolverMiddleware(req, res, next) {
   req.isDemo = resolved.kind === 'demo';
 
   const conn = getOrOpenConnection(resolved.dbPath, resolved.schemaPath);
-  runWithDb({ conn, kind: resolved.kind, dealId: resolved.dealId, dbPath: resolved.dbPath }, () => next());
+  const actor = req.portalUser
+    ? { username: req.portalUser.username, role: req.portalUser.role, sessionId: req.portalUser.sessionId || null }
+    : null;
+  const request = { method: req.method, path: (req.baseUrl || '') + (req.path || ''), ip: req.ip };
+  runWithDb({ conn, kind: resolved.kind, dealId: resolved.dealId, dbPath: resolved.dbPath, actor, request }, () => next());
 }
 
 module.exports = {
