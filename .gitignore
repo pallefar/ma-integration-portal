@@ -27,6 +27,16 @@ data/*.db.bak
 # committing an orphaned, potentially PII-containing partial data dump.
 data/.*.migrating-*
 
+# Phase 3 (Deal Isolation, Audit Log & Write Validation, D-07/D-09): these
+# three families hold live, churning material — session tokens, compliance
+# history, and real-deal MNPI — and must NEVER reach git, unlike data/demo.db
+# and data/control.db above (which stay committed, near-static, for the
+# zero-install boot with pre-seeded demo accounts). This section lands BEFORE
+# any of those files can exist (T-03-01), matching Phase 1's .db precedent.
+data/runtime.db*
+data/audit.db*
+data/deals/
+
 # Uploaded media (runtime-generated)
 public/uploads/
 

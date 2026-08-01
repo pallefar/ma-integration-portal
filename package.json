@@ -15,7 +15,8 @@
     "better-sqlite3": "13.0.1",
     "compression": "^1.8.1",
     "express": "^4.19.2",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "zod": "4.4.3"
   },
   "private": true
 }
