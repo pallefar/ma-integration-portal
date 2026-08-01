@@ -8174,6 +8174,82 @@ body.cms-inline-on [data-i18n-html]:hover {
 .page-banner--critical { border-left-color: #C0341D; background: rgba(192,52,29,0.08); }
 .page-banner--critical .page-banner-title { color: #9C2A17; }
 
+/* ===== Deal switcher (Phase 3, D-04) ==================================
+   Deliberately distinct from the demo Projects/Custom-M&A switcher
+   (#demo-mode-switcher-container: dashed orange border) — SOLID border, a
+   different accent (dark teal, TE's own secondary brand color, not orange),
+   and an explicit "Real deal"/"Demo" state pill, so the two modes can never
+   be confused at a glance (03-CONTEXT.md "## Specific Ideas"). Built from
+   existing CSS variables only, no new hard-coded palette. ========= */
+.deal-switcher { position: relative; margin-left: 0.5rem; }
+.deal-switcher-trigger {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.35rem 0.75rem; border-radius: 999px;
+  font-family: inherit; font-size: 0.78rem; font-weight: 700;
+  cursor: pointer; transition: var(--transition-fast);
+  border: 1.5px solid var(--te-dark-teal);
+  background: var(--te-dark-teal-light);
+  color: var(--te-dark-teal);
+}
+.deal-switcher--real .deal-switcher-trigger {
+  background: var(--te-dark-teal);
+  border-color: var(--te-dark-teal);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(36, 76, 90, 0.35);
+}
+.deal-switcher-trigger:hover { filter: brightness(1.06); }
+.deal-switcher-state {
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.66rem;
+  padding: 0.1rem 0.4rem; border-radius: 999px;
+}
+.deal-switcher--demo .deal-switcher-state { background: var(--status-info-light); color: var(--status-info); }
+.deal-switcher--real .deal-switcher-state { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.deal-switcher-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deal-switcher-chevron { font-size: 0.65rem; opacity: 0.75; }
+
+.deal-switcher-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 5000;
+  min-width: 260px; max-width: 340px; max-height: 60vh; overflow-y: auto;
+  background: var(--bg-white); border: 1px solid var(--border-color);
+  border-radius: 12px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+  padding: 0.4rem;
+}
+.deal-switcher-menu-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem;
+  width: 100%; padding: 0.55rem 0.7rem; border: none; background: none;
+  border-radius: 8px; cursor: pointer; text-align: left;
+  font-family: inherit; font-size: 0.82rem; color: var(--text-primary);
+}
+.deal-switcher-menu-item:hover { background: var(--te-dark-teal-light); }
+.deal-switcher-menu-item.active { background: var(--te-orange-light); font-weight: 700; }
+.deal-switcher-menu-item-name { font-weight: 700; }
+.deal-switcher-menu-item-company { font-size: 0.72rem; color: var(--text-secondary); }
+.deal-switcher-menu-item-create { color: var(--te-orange); font-weight: 700; }
+.deal-switcher-menu-divider { height: 1px; background: var(--border-color); margin: 0.35rem 0.2rem; }
+
+/* Create-deal modal (D-04's "minimal create-deal form") — shared by the
+   header switcher's own affordance and the admin console's Deals tab. */
+.deal-modal-overlay {
+  position: fixed; inset: 0; z-index: 12000;
+  background: rgba(15, 30, 38, 0.72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 2rem; backdrop-filter: blur(3px);
+}
+.deal-modal {
+  background: #fff; border-radius: 14px; width: min(440px, 94vw);
+  padding: 1.5rem; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+}
+.deal-modal-title { margin: 0 0 0.25rem; font-size: 1.15rem; font-weight: 800; color: var(--te-dark-teal); }
+.deal-modal-sub { margin: 0 0 1rem; font-size: 0.82rem; color: var(--text-secondary); }
+.deal-modal-form { display: flex; flex-direction: column; gap: 0.85rem; }
+.deal-modal-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; font-weight: 700; color: var(--text-primary); }
+.deal-modal-field input {
+  padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--border-color);
+  font-family: inherit; font-size: 0.85rem; font-weight: 500;
+}
+.deal-modal-error { margin: 0; font-size: 0.8rem; color: var(--status-danger); }
+.deal-modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.25rem; }
+
 /* ===== Playbook slide-viewer modal (HR M&A Guidebook) ===== */
 .playbook-modal-overlay {
   position: fixed; inset: 0; z-index: 12000;

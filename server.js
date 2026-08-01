@@ -481,7 +481,18 @@ app.get('/api/auth/me', (req, res) => {
   if (process.env.DEMO_OPEN === '1' && wouldResolveDemo) return res.json({ authEnabled: false, user: null });
   if (!sess) return res.json({ authEnabled: true, user: null });
   const user = controlStore.findUser(sess.username);
-  res.json({ authEnabled: true, user: user ? { username: user.username, name: user.name || user.username, role: user.role } : { username: sess.username, role: sess.role } });
+  // D-04: dealId is the caller's CURRENT server-side binding (D-01) — the
+  // header deal switcher (public/js/deal-switcher.js) needs this to render
+  // "which context am I in right now" without a second round-trip. Never the
+  // full deal object here (name/targetCompany are cross-referenced from the
+  // caller's own GET /api/deals response, which is already membership-
+  // filtered) — this endpoint stays resolver-free (PUBLIC_API_PATHS) by
+  // design, so it must not itself look up a deal by id.
+  res.json({
+    authEnabled: true,
+    dealId: sess.dealId || null,
+    user: user ? { username: user.username, name: user.name || user.username, role: user.role } : { username: sess.username, role: sess.role },
+  });
 });
 
 // Self password-change (D-09): available to ANY authenticated role (its

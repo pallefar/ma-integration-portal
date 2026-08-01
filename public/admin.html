@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TE Connectivity - Admin Control Center</title>
   <meta name="description" content="Manage post-merger integration settings, customize dynamic recommended action modules, compile personalized employee welcome portals, and publish system announcements.">
-  <link rel="stylesheet" href="/css/style.css?v=1784300020">
+  <link rel="stylesheet" href="/css/style.css?v=1784600001">
   <script src="/js/transitions.js?v=1784500010"></script>
 </head>
 <body>
@@ -54,6 +54,10 @@
             <div class="admin-rail-group">
               <span class="admin-rail-label">Workspace</span>
               <button class="admin-tab-btn active" data-tab="projects"><span class="admin-rail-ic">🏢</span> Projects</button>
+            </div>
+            <div class="admin-rail-group">
+              <span class="admin-rail-label">Real Deals</span>
+              <button class="admin-tab-btn" data-tab="deals"><span class="admin-rail-ic">🔒</span> Deals</button>
             </div>
             <div class="admin-rail-group">
               <span class="admin-rail-label">Content</span>
@@ -111,6 +115,22 @@
               <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each acquired company is a project at the top of the hierarchy. Create one from an intake survey, then switch the active workspace — the demo project is always available.</p>
               <div id="projects-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
                 <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading projects…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Real Deals (Phase 3, D-04) — deliberately separate from the
+               demo Projects UI above: a real deal is an isolated database, not
+               a demo showcase workspace. ===== -->
+          <div class="tab-content tab-content-panel" id="tab-deals" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Real Deals</h2>
+                <button class="btn btn-primary" id="btn-new-deal" style="font-size:0.82rem;">+ New Deal</button>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each real acquisition is its own isolated database, separate from the demo showcase. Creation is admin + Integration Lead only; archive and delete are admin-only and require typing the deal's own id to confirm.</p>
+              <div id="deals-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading deals…</p>
               </div>
             </div>
           </div>

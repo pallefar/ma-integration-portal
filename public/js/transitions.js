@@ -143,7 +143,14 @@
 
   // Define allowed roles for each page
   const pageAccess = {
-    'admin.html': ['admin'],
+    // D-02 (Phase 3): hrbp (Integration Lead) must also reach the admin
+    // console — it is the only place the real-deal create-deal form and
+    // Deals tab live (public/js/admin.js). This is a coarse, page-level
+    // allowance (not a capability grant) — every actual write the console
+    // makes is independently re-checked server-side by ROLE_WRITE_POLICY, so
+    // an hrbp session visiting this page still gets 403'd by the server on
+    // any action outside what D-02 actually allows it to do.
+    'admin.html': ['admin', 'hrbp'],
     'pmo.html': ['admin', 'pmo'],
     'dashboard.html': ['admin', 'pmo', 'hrbp'],
     'supporting.html': ['admin', 'pmo', 'supporting'],
@@ -1227,6 +1234,20 @@ document.addEventListener('DOMContentLoaded', () => {
       bScript.id = 'banners-js';
       bScript.src = '/js/banners.js?v=1783577700';
       document.body.appendChild(bScript);
+    }
+
+    // D-04 (Phase 3): the real-deal header switcher — loaded once, app-wide,
+    // the SAME way inline-edit.js/banners.js are above. Deliberately loaded
+    // AFTER headerToolsContainer/topRow are appended below (this code block
+    // runs synchronously before the browser yields to fetch/execute the
+    // newly-inserted <script>), so deal-switcher.js's own
+    // document.querySelector('.header-tools-container') lookup always finds
+    // its target already in the DOM.
+    if (!document.getElementById('deal-switcher-js')) {
+      const dsScript = document.createElement('script');
+      dsScript.id = 'deal-switcher-js';
+      dsScript.src = '/js/deal-switcher.js?v=1784600000';
+      document.body.appendChild(dsScript);
     }
 
     if (topRow) {

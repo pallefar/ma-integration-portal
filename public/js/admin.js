@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Section metadata drives the topbar heading
   const SECTION_META = {
     projects: ['M&A Projects', 'Each acquisition is a project at the top of the hierarchy — create, switch, and manage them'],
+    deals: ['Real Deals', 'Isolated real-acquisition workspaces — create, manage membership, archive or delete (separate from the demo Projects above)'],
     courses: ['Courses', 'Manage the academy curriculum — courses, modules, lessons & quizzes'],
     modules: ['Action Modules', 'Score-gated recommendations shown on the Integration Leader dashboard'],
     departments: ['Department Modules', 'Functional integration tracks — shared culture & communication, per-department systems & trainings'],
@@ -2434,6 +2435,141 @@ document.addEventListener('DOMContentLoaded', () => {
   // Exposed so the Projects panel (admin-cms.js) can refresh the DEMO/CUSTOM badge on switch.
   window.syncTopbarMode = syncTopbarMode;
 
+  // ---------- Real Deals (Phase 3, D-04) ----------------------------------
+  // Deliberately separate from the demo Projects panel (admin-cms.js) — a
+  // real deal is an isolated database, not a demo showcase workspace. Every
+  // deal-identifying string (name/targetCompany, both potentially MNPI) is
+  // set via textContent below, never interpolated into an innerHTML
+  // template, mirroring public/js/deal-switcher.js's own discipline —
+  // deliberately stricter here than this file's usual innerHTML+manual-
+  // escape convention elsewhere, since a deal name is pre-announcement MNPI.
+  let dealsList = [];
+
+  function currentRole() { return window.__portalUser && window.__portalUser.role; }
+
+  function loadDeals() {
+    const wrap = document.getElementById('deals-admin-list');
+    if (!wrap) return;
+    fetch('/api/deals').then(r => r.json()).then(list => {
+      dealsList = Array.isArray(list) ? list : [];
+      renderDeals();
+    }).catch(() => {
+      wrap.innerHTML = '';
+      const err = document.createElement('p');
+      err.style.cssText = 'text-align:center;color:#B91C1C;padding:1.5rem;';
+      err.textContent = 'Failed to load deals.';
+      wrap.appendChild(err);
+    });
+  }
+
+  function confirmDestructiveDealAction(d, action) {
+    const typed = window.prompt(
+      'This is DESTRUCTIVE and cannot be casually undone. Type the deal\'s exact id to confirm ' + action + ':\n\n' + d.id
+    );
+    if (typed === null) return; // cancelled
+    if (typed !== d.id) { alert('Confirmation did not match the deal id — nothing was changed.'); return; }
+    const url = action === 'archive' ? ('/api/admin/deals/' + encodeURIComponent(d.id) + '/archive') : ('/api/admin/deals/' + encodeURIComponent(d.id));
+    const method = action === 'archive' ? 'POST' : 'DELETE';
+    fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: typed }) })
+      .then(r => r.json().then(body => ({ ok: r.ok, body })))
+      .then(({ ok, body }) => {
+        if (!ok) { alert(body.error || ('Failed to ' + action + ' the deal.')); return; }
+        if (window.adminToast) window.adminToast('Deal ' + action + 'd.');
+        loadDeals();
+        if (typeof window.renderDealSwitcher === 'function') window.renderDealSwitcher();
+      }).catch(() => alert('Network error — please try again.'));
+  }
+
+  function editDealMembers(d) {
+    const typed = window.prompt('Members (comma-separated usernames):', (d.members || []).join(', '));
+    if (typed === null) return;
+    const members = typed.split(',').map(s => s.trim()).filter(Boolean);
+    fetch('/api/deals/' + encodeURIComponent(d.id) + '/members', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ members }),
+    }).then(r => r.json().then(body => ({ ok: r.ok, body })))
+      .then(({ ok, body }) => {
+        if (!ok) { alert(body.error || 'Failed to update deal membership.'); return; }
+        if (window.adminToast) window.adminToast('Deal membership updated.');
+        loadDeals();
+      }).catch(() => alert('Network error — please try again.'));
+  }
+
+  function renderDeals() {
+    const wrap = document.getElementById('deals-admin-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const isAdmin = currentRole() === 'admin';
+
+    if (!dealsList.length) {
+      const empty = document.createElement('p');
+      empty.style.cssText = 'text-align:center;color:var(--text-dim);padding:1.5rem;';
+      empty.textContent = 'No real deals yet.';
+      wrap.appendChild(empty);
+    }
+
+    dealsList.forEach(d => {
+      const row = document.createElement('div');
+      row.className = 'cms-row';
+
+      const main = document.createElement('div');
+      main.className = 'cms-row-main';
+      const titleEl = document.createElement('span');
+      titleEl.className = 'cms-row-title';
+      titleEl.textContent = d.name + (d.status === 'archived' ? ' (archived)' : '');
+      const subEl = document.createElement('span');
+      subEl.className = 'cms-row-sub';
+      subEl.textContent = (d.targetCompany || '') + ' · ' + (d.members || []).length + ' member(s)';
+      main.appendChild(titleEl);
+      main.appendChild(subEl);
+      row.appendChild(main);
+
+      if (isAdmin) {
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
+
+        const membersBtn = document.createElement('button');
+        membersBtn.type = 'button'; membersBtn.className = 'cms-mini'; membersBtn.textContent = 'Members';
+        membersBtn.addEventListener('click', () => editDealMembers(d));
+        actions.appendChild(membersBtn);
+
+        if (d.status !== 'archived') {
+          const archiveBtn = document.createElement('button');
+          archiveBtn.type = 'button'; archiveBtn.className = 'cms-mini'; archiveBtn.textContent = 'Archive';
+          archiveBtn.addEventListener('click', () => confirmDestructiveDealAction(d, 'archive'));
+          actions.appendChild(archiveBtn);
+        }
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button'; deleteBtn.className = 'cms-mini danger'; deleteBtn.textContent = '✕ Delete';
+        deleteBtn.addEventListener('click', () => confirmDestructiveDealAction(d, 'delete'));
+        actions.appendChild(deleteBtn);
+
+        row.appendChild(actions);
+      }
+      wrap.appendChild(row);
+    });
+  }
+
+  const btnNewDeal = document.getElementById('btn-new-deal');
+  if (btnNewDeal) {
+    btnNewDeal.addEventListener('click', () => {
+      if (typeof window.openCreateDealForm === 'function') window.openCreateDealForm(loadDeals);
+      else alert('Deal creation is still loading — please try again in a moment.');
+    });
+  }
+
+  // window.__portalUser (transitions.js's real-login handshake) resolves
+  // asynchronously and may not be set yet when this file's own
+  // DOMContentLoaded handler runs — poll briefly (same 250ms/40-try pattern
+  // transitions.js's own addLogout() uses) so the admin-only row actions
+  // (Members/Archive/Delete) appear once the caller's real role is known,
+  // rather than staying permanently hidden on a slow /api/auth/me response.
+  (function pollPortalUserForDeals(tries) {
+    tries = tries || 0;
+    if (!window.__portalUser && tries < 40) { setTimeout(() => pollPortalUserForDeals(tries + 1), 250); return; }
+    renderDeals();
+  })();
+
   // --- Initial runs ---
   loadSettings();
   loadQuestions();
@@ -2450,5 +2586,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadTranslationsAdmin();
   // Menus panel is owned by admin-cms.js (full editor); loadMenusAdmin() no longer called.
   loadMediaAdmin();
+  loadDeals();
   syncTopbarMode();
 });
