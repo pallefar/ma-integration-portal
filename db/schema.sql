@@ -11,6 +11,16 @@
 --
 -- CREATE TABLE IF NOT EXISTS so opening a fresh/empty database yields empty collections,
 -- mirroring today's missing-db.json skeleton behaviour.
+--
+-- Phase 3 (Deal Isolation, Audit Log & Write Validation), Task 2: this file is
+-- now the schema for BOTH demo.db AND every deals/<id>.db (D-06: "same schema
+-- as demo"), no longer for a single ma-portal.db. Its `users` table (Phase
+-- 1/2's account store) is REMOVED — accounts now live exclusively in
+-- control-schema.sql's `users` table, reached only through
+-- db/controlStore.js, never through readDb()/writeDb() or any collection
+-- routed here. A deal or demo database structurally cannot carry account
+-- rows anymore, matching ISO-01's isolation goal one step further than a
+-- routing convention: there is no table to misroute into.
 
 CREATE TABLE IF NOT EXISTS alerts (
   id TEXT PRIMARY KEY,
@@ -267,14 +277,6 @@ CREATE TABLE IF NOT EXISTS synergyInitiatives (
   data TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_synergyInitiatives_project ON synergyInitiatives(project_id);
-
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  project_id TEXT,
-  seq INTEGER NOT NULL,
-  data TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_users_project ON users(project_id);
 
 -- Shared table for the 5 non-array top-level keys.
 CREATE TABLE IF NOT EXISTS app_state (

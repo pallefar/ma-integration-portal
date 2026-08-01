@@ -12,6 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { runSplit, verifySplit } = require('../scripts/split-db-into-control-demo-deals.js');
+const { COLLECTION_TARGETS } = require('../db/collections.js');
 
 const SCHEMA_PATH = path.join(__dirname, '..', 'db', 'schema.sql');
 
@@ -26,11 +27,12 @@ function cleanupDbFile(dbPath) {
 }
 
 /** Build a small synthetic source database, shaped exactly like
- * data/ma-portal.db (the real db/schema.sql), with rows across a
- * control-target collection ('users'), a demo-target collection
- * ('employees'), a custom* shadow-lane collection ('customEmployees'), and
- * all five singletons — including a `settings` object carrying both
- * SECRET_SETTINGS_FIELDS values. */
+ * data/ma-portal.db (the real db/schema.sql, Phase 3 Task 2: no longer
+ * carries a `users` table — accounts are a control.db-native table reached
+ * only through db/controlStore.js, outside this generic split entirely),
+ * with rows across a demo-target collection ('employees'), a custom*
+ * shadow-lane collection ('customEmployees'), and all five singletons —
+ * including a `settings` object carrying both SECRET_SETTINGS_FIELDS values. */
 function buildSyntheticSource(dbPath) {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
@@ -42,9 +44,6 @@ function buildSyntheticSource(dbPath) {
     db.prepare(`INSERT INTO ${table} (id, project_id, seq, data) VALUES (?, ?, ?, ?)`)
       .run(id, projectId, seq, JSON.stringify(data));
   };
-
-  insertRow('users', 'admin', null, 0, { username: 'admin', role: 'admin', passwordHash: 'hash-admin' });
-  insertRow('users', 'karen', null, 1, { username: 'karen', role: 'hrbp', passwordHash: 'hash-karen' });
 
   insertRow('employees', 'emp_1', 'proj_demo', 0, { id: 'emp_1', name: 'Alice', projectId: 'proj_demo' });
   insertRow('employees', 'emp_2', 'proj_demo', 1, { id: 'emp_2', name: 'Bob', projectId: 'proj_demo' });
@@ -91,19 +90,20 @@ test('db-split-migration', async (t) => {
     assert.strictEqual(ok, true, 'verifySplit() should report parity against the synthetic source');
   });
 
-  await t.test('(c) users rows land in control.db and are absent from demo.db', () => {
+  await t.test('(c) no array collection routes to control.db anymore — accounts are a control.db-native table outside this split (ISO-01, Phase 3 Task 2)', () => {
     const control = new Database(path.join(outDir, 'control.db'), { readonly: true });
-    const demo = new Database(path.join(outDir, 'demo.db'), { readonly: true });
     try {
-      const controlUsers = control.prepare('SELECT id, data FROM users ORDER BY seq').all();
-      assert.strictEqual(controlUsers.length, 2);
-      assert.deepStrictEqual(controlUsers.map((r) => JSON.parse(r.data).username).sort(), ['admin', 'karen']);
-
-      const demoUsersCount = demo.prepare('SELECT COUNT(*) AS c FROM users').get().c;
-      assert.strictEqual(demoUsersCount, 0, 'demo.db must not carry any users rows');
+      assert.strictEqual(
+        Object.values(COLLECTION_TARGETS).includes('control'), false,
+        'COLLECTION_TARGETS must route every array collection to demo now that users left the request-bound inventory (db/collections.js)'
+      );
+      // control.db's `users` table still exists (control-schema.sql defines it
+      // structurally) but this generic split never seeds it — real accounts
+      // are managed exclusively through db/controlStore.js, not this mechanism.
+      const controlUsersCount = control.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+      assert.strictEqual(controlUsersCount, 0, 'the split must not seed control.db\'s users table from ARRAY_COLLECTIONS');
     } finally {
       control.close();
-      demo.close();
     }
   });
 
@@ -158,10 +158,10 @@ test('db-split-migration', async (t) => {
   });
 
   await t.test('(g) a deliberately corrupted output makes verifySplit() return failure', () => {
-    const controlPath = path.join(outDir, 'control.db');
-    const corrupt = new Database(controlPath);
+    const demoPath = path.join(outDir, 'demo.db');
+    const corrupt = new Database(demoPath);
     try {
-      corrupt.prepare('DELETE FROM users WHERE id = ?').run('karen');
+      corrupt.prepare('DELETE FROM employees WHERE id = ?').run('emp_2');
     } finally {
       corrupt.close();
     }

@@ -1,6 +1,12 @@
 // FND-01 / D-06: the migration is re-runnable and its result is verified by a
 // full round-trip deep diff (canonical-JSON equality) plus per-collection
-// row-count parity, across all 38 top-level db.json collections.
+// row-count parity, across every db/collections.js-tracked top-level db.json
+// collection. db.json itself still has 38 top-level keys (it is a frozen
+// historical fixture), but as of Phase 3 Task 2 `users` is no longer one of
+// db/collections.js's ARRAY_COLLECTIONS (accounts moved to a control.db-native
+// table reached only through db/controlStore.js, never through this
+// migration's whole-object readDb()/writeDb() model) — so this migration
+// (and this test) now covers 37 of db.json's 38 keys by design, not by gap.
 //
 // node:test — Node's built-in runner, zero new dependency (this repo has no
 // test framework installed before this phase). Run via `node --test` (bare —
@@ -43,8 +49,8 @@ test('migration-roundtrip: reconstructs all 38 collections with exact canonical-
 
     assert.strictEqual(
       ARRAY_COLLECTIONS.length + SINGLETON_KEYS.length,
-      38,
-      'the ground-truth inventory must cover exactly 38 top-level keys'
+      37,
+      'the ground-truth inventory must cover exactly 37 top-level keys (38 minus `users`, moved to control.db in Phase 3 Task 2)'
     );
 
     for (const key of ARRAY_COLLECTIONS) {

@@ -15,9 +15,20 @@
 // This does NOT implement user-CRUD (create/delete/rename users, assign
 // roles) — that is explicitly deferred per D-09. This script only rotates
 // the salt/hash of the EXISTING `admin` account.
+//
+// ISO-01 (Phase 3 cutover): accounts moved out of the request-bound
+// readDb()/writeDb() model into control.db, reached only through
+// db/controlStore.js — this script no longer touches db/store.js's
+// readDb()/writeDb() at all for the account lookup/update. To point this
+// script at a temp control.db/runtime.db pair (tests), set the
+// MA_CONTROL_DB_PATH / MA_RUNTIME_DB_PATH env vars (db/dbFiles.js) before
+// requiring this module — the previous `opts.dbPath` override is retired
+// along with the single-file architecture it pointed at.
 
 const crypto = require('crypto');
 const readline = require('readline');
+const controlStore = require('../db/controlStore');
+const dbFiles = require('../db/dbFiles');
 const store = require('../db/store');
 const sessions = require('../db/sessions');
 
@@ -58,11 +69,9 @@ function promptPassword(question) {
  * @param {string} [opts.password] - the new admin password. If omitted, an
  *   interactive stdin prompt is used (CLI-only path) — a caller invoking
  *   run() programmatically (e.g. a test) must always supply it directly.
- * @param {string} [opts.dbPath] - optional SQLite path override, for tests;
- *   defaults to db/store.js's own DEFAULT_DB_PATH when omitted.
  */
 async function run(opts = {}) {
-  let { password, dbPath } = opts;
+  let { password } = opts;
   if (!password) {
     password = await promptPassword('New admin password (min 8 characters): ');
   }
@@ -70,11 +79,9 @@ async function run(opts = {}) {
     throw new Error('Password must be at least 8 characters.');
   }
 
-  store.initDb(dbPath);
-  const db = store.readDb();
-  const user = (db.users || []).find((u) => u.username === 'admin');
+  const user = controlStore.findUser('admin');
   if (!user) {
-    throw new Error("No 'admin' user found in the database — cannot set its password.");
+    throw new Error("No 'admin' user found in control.db — cannot set its password.");
   }
 
   // D-10: warn loudly (do not silently proceed) if the admin account is
@@ -94,17 +101,17 @@ async function run(opts = {}) {
   }
 
   const newSalt = crypto.randomBytes(16).toString('hex');
-  user.salt = newSalt;
-  user.hash = hashPassword(password, newSalt);
-  store.writeDb(db);
+  controlStore.updateUser('admin', { salt: newSalt, hash: hashPassword(password, newSalt) });
 
   // WR-01: rotating the admin credential must revoke every outstanding admin
   // session immediately (db/sessions.js's own docstring calls this "Admin
   // offboarding action") — otherwise a session token issued under the OLD
   // password (e.g. one an attacker already stole via a leaked cookie, the
   // exact scenario this script's D-10 warning above responds to) stays valid
-  // for up to SESSION_TTL_MS after this rotation.
-  sessions.deleteAllSessionsForUser(store.getConnection(), user.username);
+  // for up to SESSION_TTL_MS after this rotation. Sessions live in
+  // runtime.db (D-07), reached the same way server.js's own gate does.
+  const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+  sessions.deleteAllSessionsForUser(runtimeConn, user.username);
 
   console.log(`Admin password updated for user '${user.username}'.`);
   return { success: true, username: user.username };

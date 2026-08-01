@@ -47,7 +47,6 @@ const ARRAY_COLLECTIONS = [
   'raidEntries',
   'slides',
   'synergyInitiatives',
-  'users',
 ];
 
 // The 5 singleton (non-array) top-level keys. Each is stored as one row in
@@ -60,8 +59,8 @@ const SINGLETON_KEYS = [
   'activeProjectId',
 ];
 
-if (ARRAY_COLLECTIONS.length !== 33) {
-  throw new Error(`db/collections.js: expected 33 array collections, got ${ARRAY_COLLECTIONS.length}`);
+if (ARRAY_COLLECTIONS.length !== 32) {
+  throw new Error(`db/collections.js: expected 32 array collections, got ${ARRAY_COLLECTIONS.length}`);
 }
 if (SINGLETON_KEYS.length !== 5) {
   throw new Error(`db/collections.js: expected 5 singleton keys, got ${SINGLETON_KEYS.length}`);
@@ -70,16 +69,20 @@ if (SINGLETON_KEYS.length !== 5) {
 // ISO-01 / D-05: single source of truth for which physical database file
 // (control.db | demo.db | runtime.db) owns each collection/singleton once
 // db.json's single blob-per-row store is physically split
-// (scripts/split-db-into-control-demo-deals.js, Phase 3 Plan 02). `users` is
-// the only array collection routed to control.db — the app-managed account
-// registry belongs alongside the new deal registry, not the demo store.
-// Every OTHER array collection routes to demo.db, INCLUDING all nine
-// `custom*` shadow-lane collections (D-05: they were always showcase data,
-// so a new real deal starts with zero demo-derived rows by construction, not
-// by filtering) — and all five singleton keys route to demo.db too. No
-// collection routes directly to 'runtime' here: runtime.db instead receives
-// two individual FIELD PATHS lifted out of the demo `settings` singleton
-// (see SECRET_SETTINGS_FIELDS below), never a whole collection.
+// (scripts/split-db-into-control-demo-deals.js, Phase 3 Plan 02). Every
+// array collection routes to demo.db, INCLUDING all nine `custom*`
+// shadow-lane collections (D-05: they were always showcase data, so a new
+// real deal starts with zero demo-derived rows by construction, not by
+// filtering) — and all five singleton keys route to demo.db too. No
+// collection routes directly to 'control' or 'runtime' here: accounts and
+// the deal registry (formerly `users`, the ONE array collection that used to
+// route to control.db) moved OUT of this generic split entirely as of Phase
+// 3 Task 2 — they are control.db-native tables reached only through
+// db/controlStore.js, never through readDb()/writeDb() or this routing map
+// (a deal-bound request must never be able to reach them through its own
+// connection, T-03-16). runtime.db instead receives two individual FIELD
+// PATHS lifted out of the demo `settings` singleton (see
+// SECRET_SETTINGS_FIELDS below), never a whole collection.
 //
 // The completeness assertion below (same style as the two above) guarantees
 // a collection added in a later phase cannot silently go unclassified —
@@ -87,7 +90,7 @@ if (SINGLETON_KEYS.length !== 5) {
 // module fails to load.
 const COLLECTION_TARGETS = {};
 for (const key of ARRAY_COLLECTIONS) {
-  COLLECTION_TARGETS[key] = key === 'users' ? 'control' : 'demo';
+  COLLECTION_TARGETS[key] = 'demo';
 }
 for (const key of SINGLETON_KEYS) {
   COLLECTION_TARGETS[key] = 'demo';
