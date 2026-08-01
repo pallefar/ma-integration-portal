@@ -50,25 +50,43 @@ function createSession(conn, { username, role, ttlMs, userAgent, ip }) {
 }
 
 /**
- * Resolve a raw cookie token to `{ username, role, sessionId }`, or `null` if
- * the token is missing/unknown or has expired. `sessionId` is the token's
- * SHA-256 hash — a stable per-session identifier (AUTH-04's
+ * Resolve a raw cookie token to `{ username, role, sessionId, dealId }`, or
+ * `null` if the token is missing/unknown or has expired. `sessionId` is the
+ * token's SHA-256 hash — a stable per-session identifier (AUTH-04's
  * req.portalUser.sessionId) that never re-derives or exposes the raw token.
- * Expiry is enforced lazily right here: a row whose `expires_at` has already
- * passed is treated as an immediate miss, so AUTH-03's "an expired row stops
- * authorizing immediately" holds with no background sweep required (physical
- * deletion of stale rows is a separate, non-security table-bloat concern —
- * see pruneExpiredSessions(), added in Task 2).
+ * `dealId` (Phase 3, D-01) is this session's server-side deal binding —
+ * `null` when the session has not bound to a deal, which db/resolver.js
+ * treats as "resolves to demo.db". Expiry is enforced lazily right here: a
+ * row whose `expires_at` has already passed is treated as an immediate miss,
+ * so AUTH-03's "an expired row stops authorizing immediately" holds with no
+ * background sweep required (physical deletion of stale rows is a separate,
+ * non-security table-bloat concern — see pruneExpiredSessions(), added in
+ * Task 2).
  */
 function findSession(conn, token) {
   if (!token) return null;
   const tokenHash = hashToken(token);
   const row = conn.prepare(
-    `SELECT username, role, expires_at FROM sessions WHERE token_hash = ?`
+    `SELECT username, role, expires_at, deal_id FROM sessions WHERE token_hash = ?`
   ).get(tokenHash);
   if (!row) return null;
   if (new Date(row.expires_at) <= new Date()) return null;
-  return { username: row.username, role: row.role, sessionId: tokenHash };
+  return { username: row.username, role: row.role, sessionId: tokenHash, dealId: row.deal_id || null };
+}
+
+/**
+ * D-01: bind (or unbind, `dealId = null`) an existing session's server-side
+ * deal selection — this IS the entire "select a deal" mechanism this phase
+ * introduces; a later plan's deal-switcher endpoint is expected to call
+ * this, not re-implement session mutation itself. Returns `true` if a row
+ * was updated, `false` if the token is unknown (never throws on a miss —
+ * mirrors deleteSession()'s no-op-on-miss shape).
+ */
+function bindSessionDeal(conn, token, dealId) {
+  if (!token) return false;
+  const info = conn.prepare(`UPDATE sessions SET deal_id = ? WHERE token_hash = ?`)
+    .run(dealId || null, hashToken(token));
+  return info.changes > 0;
 }
 
 /** Logout: delete the session row immediately — revocation is real, not a wait-for-expiry (D-07). */
@@ -101,5 +119,5 @@ function pruneExpiredSessions(conn) {
 
 module.exports = {
   createSession, findSession, deleteSession, deleteAllSessionsForUser, pruneExpiredSessions,
-  newSessionToken, hashToken,
+  newSessionToken, hashToken, bindSessionDeal,
 };

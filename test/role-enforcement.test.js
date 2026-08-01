@@ -7,17 +7,19 @@
 // client-supplied header/body/cookie field the caller controls. This is the
 // concrete mitigation for privilege escalation via a tampered role claim.
 //
-// Integration tests boot the real app (require('../server.js')) against a
-// TEMP SQLite database seeded from db.json via the established
-// migrate-db-json-to-sqlite.js runner (same pattern test/concurrent-write.test.js
-// uses) — never the live data/ma-portal.db. Because server.js's own top-level
-// `initDb()` call (no path argument) would otherwise reopen the DEFAULT
-// data/ma-portal.db and silently discard our temp DB the moment server.js is
-// required, db/store.js's exported `initDb` is patched (BEFORE requiring
-// server.js) so a no-arg call after we've already opened our own temp path is
-// a harmless no-op returning the existing connection — this does not touch
-// db/store.js's source, only the in-memory export server.js destructures at
-// require time.
+// ISO-01 (Phase 3): the live app now reads/writes exclusively through
+// control.db/runtime.db/demo.db (db/dbFiles.js), never a single legacy file.
+// This test boots the REAL requireable app (`require('../server.js')`)
+// against an ISOLATED temp trio of those three files — never the live,
+// committed data/control.db etc — by setting the MA_CONTROL_DB_PATH /
+// MA_RUNTIME_DB_PATH / MA_DEMO_DB_PATH / MA_DEALS_DIR env var overrides
+// (db/dbFiles.js) BEFORE requiring ANY module that resolves one of those
+// path constants at require time. The temp trio itself is produced by the
+// SAME re-runnable split scripts/split-db-into-control-demo-deals.js already
+// uses in production, seeded from db.json via the established
+// migrate-db-json-to-sqlite.js runner (same fixture test/concurrent-write.test.js
+// uses) — this reuses tested infrastructure rather than hand-rolling a
+// second seeding path.
 //
 // node:test — Node's built-in runner, zero new dependency. Run via
 // `node --test` (bare — this repo's default test discovery), or `npm test`.
@@ -31,10 +33,6 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
-const { runMigration } = require('../scripts/migrate-db-json-to-sqlite.js');
-
-const SOURCE_PATH = path.join(__dirname, '..', 'db.json');
-
 function tempDbPath(label) {
   return path.join(os.tmpdir(), `gsd-role-enforcement-${label}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.db`);
 }
@@ -44,25 +42,38 @@ function cleanupDbFile(dbPath) {
   }
 }
 
-const DB_PATH = tempDbPath('main');
-runMigration(SOURCE_PATH, DB_PATH); // seeds admin/karen/pmo/employee-demo + full fixture data
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-role-enforcement-split-'));
+process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
+process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
+process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
+process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
 
-delete require.cache[require.resolve('../db/store.js')];
-delete require.cache[require.resolve('../db/sessions.js')];
-delete require.cache[require.resolve('../server.js')];
+const { runMigration } = require('../scripts/migrate-db-json-to-sqlite.js');
+const SOURCE_PATH = path.join(__dirname, '..', 'db.json');
+const SOURCE_DB_PATH = tempDbPath('legacy-source');
+runMigration(SOURCE_PATH, SOURCE_DB_PATH); // seeds the full non-account fixture data, single-file legacy shape (`users` is no longer part of db/collections.js's ARRAY_COLLECTIONS as of Phase 3 Task 2 — see below)
+
+const { runSplit } = require('../scripts/split-db-into-control-demo-deals.js');
+runSplit({ sourcePath: SOURCE_DB_PATH, outDir: TMP_DIR }); // fans out to TMP_DIR/{control,demo,runtime}.db — the exact paths the env overrides above point to
 
 const store = require('../db/store.js');
-store.initDb(DB_PATH);
+const dbFiles = require('../db/dbFiles.js');
 const sessionsDb = require('../db/sessions.js');
+const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
 
-// Patch AFTER our own initDb(DB_PATH) call above — server.js's require of
-// './db/store' resolves to this SAME cached module instance, so its
-// destructured `initDb` binding picks up this wrapper, not the original.
-const realInitDb = store.initDb;
-store.initDb = function (p) {
-  if (!p) return store.getConnection();
-  return realInitDb(p);
-};
+// Phase 3 Task 2: accounts are a control.db-native table reached only
+// through db/controlStore.js — they are no longer part of ARRAY_COLLECTIONS,
+// so neither runMigration() nor runSplit() above touches them anymore (by
+// design, see db/collections.js). Seed control.db's `users` table directly
+// from db.json's own `users` array (real salt/hash pairs, the exact fixture
+// every other test in this suite already trusts) so login-adjacent
+// assertions (WR-01/WR-02) have real accounts to authenticate against.
+const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+const fixtureUsers = JSON.parse(fs.readFileSync(SOURCE_PATH, 'utf8')).users || [];
+fixtureUsers.forEach((user, i) => {
+  controlConn.prepare('INSERT INTO users (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+    .run(user.username, null, i, JSON.stringify(user));
+});
 
 // ADMIN_TOKEN is captured ONCE as a module-load-time constant inside
 // server.js (`const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';`) — it must
@@ -73,14 +84,14 @@ const TEST_ADMIN_TOKEN = 'test-role-enforcement-admin-token-secret';
 process.env.ADMIN_TOKEN = TEST_ADMIN_TOKEN;
 
 const app = require('../server.js');
-const conn = store.getConnection();
 
 function cookieHeader(token) {
   return `ma_session=${token}`;
 }
 
 test.after(() => {
-  cleanupDbFile(DB_PATH);
+  cleanupDbFile(SOURCE_DB_PATH);
+  try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
 });
 
 // --- AUTH-02 (unit): roleAllowedForWrite -----------------------------------
@@ -107,7 +118,7 @@ test('AUTH-02 (unit): roleAllowedForWrite enforces the coarse capability map', (
 // --- AUTH-02 (integration): hrbp/pmo -> 403 on an admin-only write ---------
 
 test('AUTH-02 (integration): an hrbp session writing to an /api/admin/* route gets 403', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -117,7 +128,7 @@ test('AUTH-02 (integration): an hrbp session writing to an /api/admin/* route ge
     });
     assert.strictEqual(res.status, 403, 'hrbp writing to /api/admin/* must be rejected with 403 (role, not auth)');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -125,7 +136,7 @@ test('AUTH-02 (integration): an hrbp session writing to an /api/admin/* route ge
 // --- AUTH-02 (integration): employee -> 403 on a non-self-service write ---
 
 test('AUTH-02 (integration): an employee session writing to a non-self-service route gets 403', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -136,7 +147,7 @@ test('AUTH-02 (integration): an employee session writing to a non-self-service r
     });
     assert.strictEqual(res.status, 403, 'employee writing outside the self-service allowlist must be rejected with 403');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -144,7 +155,7 @@ test('AUTH-02 (integration): an employee session writing to a non-self-service r
 // --- AUTH-02 (integration): employee IS allowed on the self-service allowlist ---
 
 test('AUTH-02 (integration): an employee session IS allowed to write to a self-service route', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -155,7 +166,7 @@ test('AUTH-02 (integration): an employee session IS allowed to write to a self-s
     });
     assert.notStrictEqual(res.status, 403, 'employee must NOT be rejected on the self-service allowlist for role reasons');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -163,7 +174,7 @@ test('AUTH-02 (integration): an employee session IS allowed to write to a self-s
 // --- AUTH-02 (integration): admin session is never blocked for role reasons ---
 
 test('AUTH-02 (integration): an admin session writing to an /api/admin/* route is not 403', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -174,7 +185,7 @@ test('AUTH-02 (integration): an admin session writing to an /api/admin/* route i
     assert.notStrictEqual(res.status, 403, 'admin must never be rejected for role reasons — admin is allowed everywhere');
     assert.strictEqual(res.status, 200, 'the admin-only route itself must actually execute for an admin caller');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -200,7 +211,7 @@ test('D-11: an X-Admin-Token request resolves to the attributed admin-token iden
 // --- AUTH-04: identity resolution + explicit-null in open mode ------------
 
 test('AUTH-04: a request with a valid session exposes req.portalUser.username/.role via /api/auth/me', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -211,7 +222,7 @@ test('AUTH-04: a request with a valid session exposes req.portalUser.username/.r
     assert.strictEqual(body.user.username, 'admin', 'the resolved identity must carry the correct username');
     assert.strictEqual(body.user.role, 'admin', 'the resolved identity must carry the correct role');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -219,7 +230,7 @@ test('AUTH-04: a request with a valid session exposes req.portalUser.username/.r
 test('AUTH-04: role is read exclusively server-side — a client-supplied role claim (header/body) is never honored', async () => {
   // hrbp session, but the caller ALSO tries to claim admin via a body field
   // and a custom header — neither must be able to escalate the write.
-  const token = sessionsDb.createSession(conn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -230,7 +241,7 @@ test('AUTH-04: role is read exclusively server-side — a client-supplied role c
     });
     assert.strictEqual(res.status, 403, 'a client-supplied role claim must never override the server-side session role');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -261,7 +272,7 @@ test('CR-01 (unit): roleAllowedForWrite rejects employee on DELETE /api/assessme
 });
 
 test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessments/:id', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -271,13 +282,13 @@ test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessmen
     });
     assert.strictEqual(res.status, 403, 'employee DELETE on /api/assessments/:id must be rejected with 403 (role), not fall through to the handler');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
 
 test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessment-instances/:id', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -287,7 +298,7 @@ test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessmen
     });
     assert.strictEqual(res.status, 403, 'employee DELETE on /api/assessment-instances/:id must be rejected with 403 (role), not fall through to the handler');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -295,7 +306,7 @@ test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessmen
 // --- CR-02: a non-admin session must NOT be able to GET /api/admin/* ------
 
 test('CR-02 (integration): a non-admin (employee) session gets 403 on GET /api/admin/download-zip', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -305,13 +316,13 @@ test('CR-02 (integration): a non-admin (employee) session gets 403 on GET /api/a
     });
     assert.strictEqual(res.status, 403, 'a non-admin session must be rejected with 403 on GET /api/admin/download-zip, not allowed through on session-existence alone');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
 
 test('CR-02 (integration): an hrbp session also gets 403 on GET /api/admin/download-zip (admin-only read, not just admin-only write)', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -321,7 +332,7 @@ test('CR-02 (integration): an hrbp session also gets 403 on GET /api/admin/downl
     });
     assert.strictEqual(res.status, 403, 'hrbp must be rejected with 403 on GET /api/admin/download-zip — /api/admin/* requires admin for ALL methods, reads included');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -331,8 +342,8 @@ test('CR-02 (integration): an hrbp session also gets 403 on GET /api/admin/downl
 test('WR-01 (integration): a successful password change revokes the caller\'s prior sessions and issues a fresh one', async () => {
   // Seeded fixture password (see 02-CONTEXT.md D-10) — shared demo credential.
   const DEMO_PASSWORD = 'TEdemo!2026';
-  const oldToken = sessionsDb.createSession(conn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
-  const callerToken = sessionsDb.createSession(conn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
+  const oldToken = sessionsDb.createSession(runtimeConn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
+  const callerToken = sessionsDb.createSession(runtimeConn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -344,7 +355,7 @@ test('WR-01 (integration): a successful password change revokes the caller\'s pr
     assert.strictEqual(res.status, 200, 'the password change itself must succeed for the correct current password');
 
     assert.strictEqual(
-      sessionsDb.findSession(conn, oldToken), null,
+      sessionsDb.findSession(runtimeConn, oldToken), null,
       'a DIFFERENT prior session for this user must be revoked by a successful password change (WR-01)'
     );
 
@@ -352,11 +363,11 @@ test('WR-01 (integration): a successful password change revokes the caller\'s pr
     const newTokenMatch = setCookieHeader.match(/ma_session=([^;]+)/);
     assert.ok(newTokenMatch, 'change-password must issue a fresh session cookie for the current caller');
     assert.ok(
-      sessionsDb.findSession(conn, newTokenMatch[1]),
+      sessionsDb.findSession(runtimeConn, newTokenMatch[1]),
       'the freshly issued session for the CURRENT caller must be valid — the caller is not logged out by their own change'
     );
   } finally {
-    sessionsDb.deleteSession(conn, oldToken);
+    sessionsDb.deleteSession(runtimeConn, oldToken);
     server.close();
   }
 });
@@ -364,7 +375,7 @@ test('WR-01 (integration): a successful password change revokes the caller\'s pr
 // --- WR-02: change-password must throttle repeated attempts like login ----
 
 test('WR-02 (integration): repeated change-password attempts are throttled (429) after 8 tries/minute, mirroring /api/auth/login', async () => {
-  const token = sessionsDb.createSession(conn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -379,7 +390,7 @@ test('WR-02 (integration): repeated change-password attempts are throttled (429)
     }
     assert.strictEqual(lastStatus, 429, 'the 9th attempt within a minute must be throttled (429), mirroring the login throttle');
   } finally {
-    sessionsDb.deleteSession(conn, token);
+    sessionsDb.deleteSession(runtimeConn, token);
     server.close();
   }
 });
@@ -390,7 +401,8 @@ test('AUTH-04 (D-02): an isOpenMode request is not gated on role/session at all 
   const server = app.listen(0);
   try {
     const { port } = server.address();
-    // No cookie, no X-Admin-Token at all — under DEMO_OPEN the gate sets
+    // No cookie, no X-Admin-Token at all — under DEMO_OPEN an unbound
+    // request always resolves to demo.db (D-01), so the gate sets
     // req.portalUser = null and returns next() BEFORE the role check ever
     // runs, so even a write route must not 401 or 403 here.
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody/revoke-sessions`, { method: 'POST' });

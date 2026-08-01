@@ -24,17 +24,103 @@
 //
 // Concrete algorithm per 01-RESEARCH.md "Code Examples" (readDb/writeDb
 // reimplementation) and 01-PATTERNS.md ("server.js — readDb()/writeDb() rewrite").
+//
+// ISO-03 (Phase 3): this module now also generalizes "one connection" into
+// "one connection per resolved database", with ZERO changes to any of the
+// ~90 existing readDb()/writeDb() call sites. A `requestDbStorage`
+// AsyncLocalStorage carries the CURRENT request's bound connection through
+// whatever async call chain the request takes; `requireDb()` consults it
+// FIRST and falls back to the pre-existing module singleton `db` only when
+// there is no active request context (server startup, migration scripts,
+// every pre-Phase-3 test that calls initDb()/readDb() directly) — that
+// fallback is load-bearing, not defensive padding (03-RESEARCH.md Pattern 1).
+// `getOrOpenConnection()` is the resolver's (and controlStore's) shared
+// connection cache, delegating the actual open to db/dbFiles.js's
+// `openDbFile()` so there is exactly one pragma contract in the codebase —
+// initDb() itself now goes through the SAME cache/open path, not a second
+// independent one, so the module singleton and a cache lookup for the same
+// path are always the SAME underlying handle.
 
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const { ARRAY_COLLECTIONS, SINGLETON_KEYS } = require('./collections');
+const { openDbFile } = require('./dbFiles');
 
 const DEFAULT_DB_PATH = path.join(__dirname, '..', 'data', 'ma-portal.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 let db = null;
 let dbPath = null;
+
+// dbFilePath (resolved absolute) -> better-sqlite3 Database. Shared by
+// initDb() (module singleton), db/resolver.js (per-request deal/demo/control
+// binding) and db/controlStore.js (its own lazy control.db/runtime.db
+// opens) — ONE cache, so two callers resolving the SAME path always get the
+// SAME open handle (no duplicate connections to one file). No eviction
+// policy this phase (03-RESEARCH.md Open Question 2) — handles live for the
+// process lifetime, same as today's singleton.
+const connectionCache = new Map();
+
+/**
+ * Open-or-reuse a connection to `dbFilePath`, applying `schemaPath`'s schema
+ * idempotently on first open (db/dbFiles.js's openDbFile() — the single
+ * pragma contract for every SQLite file this app opens). Safe to call
+ * repeatedly with the same path; always returns the SAME handle.
+ */
+function getOrOpenConnection(dbFilePath, schemaPath) {
+  const key = path.resolve(dbFilePath);
+  const cached = connectionCache.get(key);
+  if (cached) return cached;
+  const conn = openDbFile(dbFilePath, schemaPath);
+  connectionCache.set(key, conn);
+  return conn;
+}
+
+/**
+ * AsyncLocalStorage carrying the CURRENT request's bound database context:
+ * `{ conn, kind, dealId, dbPath }` (db/resolver.js sets this once per
+ * request, before any route handler runs). `undefined` outside any
+ * runWithDb()/requestDbStorage.run() context — server startup, migration
+ * scripts, and every test that calls readDb()/writeDb() directly all see
+ * `undefined` here and fall back to the module singleton below, unchanged.
+ */
+const requestDbStorage = new AsyncLocalStorage();
+
+/** Wrap `fn` so every readDb()/writeDb()/requireDb() call made during its
+ * execution (including across awaits) resolves `context.conn` instead of the
+ * module singleton. `context` is the same shape readDb()'s `__dbContext`
+ * stamp and db/resolver.js's `req.dealContext` use: `{ conn, kind, dealId,
+ * dbPath }`. */
+function runWithDb(context, fn) {
+  return requestDbStorage.run(context, fn);
+}
+
+/** The current request's bound database context, or `null` outside any
+ * runWithDb() context — exported for db/auditHook.js (a later plan) and for
+ * tests that want to assert the ALS binding directly without going through
+ * readDb(). */
+function currentDbContext() {
+  return requestDbStorage.getStore() || null;
+}
+
+/** Test-only teardown: close every cached connection (module singleton
+ * included) and clear the cache. Every existing test that wants a fully
+ * isolated db/store.js module instance already does
+ * `delete require.cache[require.resolve('../db/store.js')]` instead (module
+ * state, including this Map, is per-require-cache-entry) — this export
+ * exists for tests that instead want to close connections WITHOUT a module
+ * reset (e.g. a test that opens several temp deal files and wants them all
+ * closed at teardown without invalidating other still-referenced modules'
+ * bindings to db/store.js). */
+function closeAllConnections() {
+  for (const conn of connectionCache.values()) {
+    try { conn.close(); } catch (e) { /* ignore */ }
+  }
+  connectionCache.clear();
+  db = null;
+  dbPath = null;
+}
 
 /**
  * The item's own stable identity used as the SQLite row's primary key. Every
@@ -59,37 +145,35 @@ function projectIdOf(item) {
 
 /**
  * Open (or re-open) the SQLite database at `dbFilePath` (defaulting to
- * data/ma-portal.db), set the required pragmas, and ensure the schema exists.
- * Safe to call multiple times (e.g. once at server startup, or once per test
- * file against a fresh temp path) — CREATE TABLE IF NOT EXISTS makes repeated
- * calls against the same file idempotent.
+ * data/ma-portal.db — the legacy pre-Phase-3 default, retained only as a
+ * fallback for any caller that still invokes initDb() with no argument; the
+ * live app itself always passes an explicit path since Phase 3's cutover,
+ * see server.js startup), set the required pragmas, and ensure the schema
+ * exists. Safe to call multiple times (e.g. once at server startup, or once
+ * per test file against a fresh temp path) — CREATE TABLE IF NOT EXISTS
+ * makes repeated calls against the same file idempotent. Delegates the
+ * actual open to getOrOpenConnection() (the SAME cache db/resolver.js and
+ * db/controlStore.js use) so the module singleton is never a second,
+ * independent connection to a file another caller already has open.
  */
 function initDb(dbFilePath) {
   const target = dbFilePath || DEFAULT_DB_PATH;
   if (db && dbPath === target) return db;
-  if (db) { try { db.close(); } catch (e) { /* ignore */ } }
-
-  const dir = path.dirname(target);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-  db = new Database(target);
+  db = getOrOpenConnection(target, SCHEMA_PATH);
   dbPath = target;
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  // No-op today: schema.sql defines no FOREIGN KEY constraints (project_id is
-  // deliberately just an indexed metadata column, per schema.sql's own
-  // comment). Kept set now so a future phase that adds real FK constraints
-  // gets enforcement for free without anyone remembering to flip this on.
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
-
-  const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
-  db.exec(schema);
-
   return db;
 }
 
+/**
+ * Resolve the connection THIS call should use: the current request's
+ * AsyncLocalStorage-bound connection if one exists (db/resolver.js's
+ * dealResolverMiddleware set it), otherwise the module singleton opened by
+ * initDb() — UNCHANGED fallback behavior for server startup, migration
+ * scripts and every pre-Phase-3 test (03-RESEARCH.md Pattern 1).
+ */
 function requireDb() {
+  const scoped = requestDbStorage.getStore();
+  if (scoped && scoped.conn) return scoped.conn;
   if (!db) throw new Error('db/store.js: initDb() must be called before readDb()/writeDb()');
   return db;
 }
@@ -131,6 +215,17 @@ function readDb() {
   // and Object.keys(db) never exposes it — dozens of endpoints serialize the
   // read-model object straight to API clients.
   Object.defineProperty(out, '__snapshot', { value: snapshot, enumerable: false, configurable: true });
+
+  // ISO-03: which physical database this read actually came from, stamped
+  // the same non-enumerable way as __snapshot so a later plan's audit hook
+  // (db/auditHook.js, Plan 05) can tell which database a write is landing in
+  // without a second AsyncLocalStorage lookup of its own. `null` outside any
+  // request context (server startup, migration scripts, pre-Phase-3 tests).
+  const scoped = requestDbStorage.getStore();
+  const dbContext = scoped
+    ? { kind: scoped.kind, dealId: scoped.dealId, dbPath: scoped.dbPath }
+    : { kind: null, dealId: null, dbPath };
+  Object.defineProperty(out, '__dbContext', { value: dbContext, enumerable: false, configurable: true });
   return out;
 }
 
@@ -225,4 +320,8 @@ function writeDb(data) {
   return true; // preserves existing callers' truthy-return expectation
 }
 
-module.exports = { initDb, readDb, writeDb, idOf, projectIdOf, DEFAULT_DB_PATH, getConnection };
+module.exports = {
+  initDb, readDb, writeDb, idOf, projectIdOf, DEFAULT_DB_PATH, getConnection,
+  // ISO-03 (Phase 3): request-scoped connection resolution.
+  requestDbStorage, getOrOpenConnection, runWithDb, currentDbContext, closeAllConnections,
+};

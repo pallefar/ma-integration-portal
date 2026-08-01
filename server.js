@@ -6,6 +6,12 @@ const crypto = require('crypto');
 const compression = require('compression');
 const aiService = require('./aiService');
 const ragService = require('./ragService');
+// ISO-01/02/03 (Phase 3): the deal-resolver, its control.db/runtime.db
+// accessor, and the shared database-path/schema-path constants — see the
+// consolidated /api gate below for how these three modules plug together.
+const dbFiles = require('./db/dbFiles');
+const controlStore = require('./db/controlStore');
+const resolver = require('./db/resolver');
 
 
 const app = express();
@@ -14,11 +20,21 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}
 // db.json (D-01): the live persistence layer is SQLite (db/store.js) as of
 // Phase 1. db.json itself is retained on disk purely as a frozen, read-only
 // point-in-time snapshot from migration time — no code path below reads or
-// writes it anymore, and it is NOT kept in sync with the live database, so it
-// will progressively drift from data/ma-portal.db as the app receives writes.
-// It exists only as a fixture for the migration test suite (see
-// test/migration-roundtrip.test.js, test/concurrent-write.test.js) and as a
-// historical reference; treat data/ma-portal.db as the sole source of truth.
+// writes it anymore. It exists only as a fixture for the migration test
+// suite (see test/migration-roundtrip.test.js, test/concurrent-write.test.js)
+// and as a historical reference.
+//
+// ISO-01/02/03 (Phase 3): the single-file store this comment used to name is
+// itself now retired. The live app reads and writes exclusively through FOUR
+// physical SQLite files (db/dbFiles.js is the single source of truth for
+// every path): control.db (accounts + the deal registry, committed,
+// near-static), demo.db (the showcase, committed), runtime.db (sessions +
+// secrets, gitignored) and one deals/<id>.db per real acquisition
+// (gitignored). Which file any given request reads/writes is decided ONCE,
+// per request, by db/resolver.js's dealResolverMiddleware — see the
+// consolidated /api gate below. The pre-split single file this app used
+// before this phase is archived read-only (chmod 444), retained not
+// deleted, per the same precedent Phase 1 set for db.json above.
 
 // WR-04: req.ip (used for the new sessions.ip audit column and the login
 // throttle) resolves to the DIRECT peer address by default — under this
@@ -155,14 +171,15 @@ function hashPassword(password, saltHex) {
 }
 
 // isOpenMode(req) is the ONE seam that decides whether this request may skip
-// the session gate entirely (D-02, the demo showcase). Kept as a named
-// function — not an inlined boolean — specifically so Phase 3's deal-resolver
-// can extend it to `process.env.DEMO_OPEN === '1' && req.isDemo` (D-03) so a
-// real-deal database is NEVER open regardless of this flag, while the demo.db
-// path stays frictionless. Do not hard-code assumptions elsewhere that would
-// block that extension.
+// the session gate entirely (D-02, the demo showcase). D-03 (Phase 3):
+// `req.isDemo` is set by db/resolver.js's dealResolverMiddleware BEFORE this
+// function is ever consulted (the consolidated gate below resolves the
+// database first, then checks isOpenMode) — so a session bound to a REAL
+// deal is NEVER open, regardless of this env flag. Only an unauthenticated
+// request (which always resolves to demo.db, since it carries no deal
+// binding) or a session explicitly bound to demo can ever pass this check.
 function isOpenMode(req) {
-  return process.env.DEMO_OPEN === '1';
+  return process.env.DEMO_OPEN === '1' && req.isDemo === true;
 }
 
 // The only /api paths reachable without a session — auth bootstrapping itself
@@ -247,64 +264,110 @@ function roleAllowedForWrite(role, path, method) {
   return allowed.includes(role);
 }
 
+// ISO-02: the demo-only showcase mechanics (time-travel day-scaling, the
+// XP/merit-award/lesson-completion endpoints that drive points/badges/
+// leaderboards) — gated ONCE here in the consolidated gate, in the exact
+// same boundary-safe `{ prefix, exact?, methods? }` shape ROLE_WRITE_POLICY
+// already uses, never as scattered per-handler `if (!req.isDemo)` checks
+// (03-RESEARCH.md's own named anti-pattern — the same shape ISO-03 is
+// replacing for the demoMode flag). A refused call leaves the resolved
+// deal's stored data byte-identical — see test/demo-only-gating.test.js.
+const DEMO_ONLY_PREFIXES = [
+  { prefix: '/api/settings/time-travel', exact: true, methods: ['POST'] },
+  { prefix: '/api/employees/award-merit', exact: true, methods: ['POST'] },
+  { prefix: '/api/employees/complete-lesson', exact: true, methods: ['POST'] },
+  { prefix: '/api/employees/uncomplete-lesson', exact: true, methods: ['POST'] },
+];
+function isDemoOnlyPath(fullPath, method) {
+  return DEMO_ONLY_PREFIXES.some(r => {
+    const pathMatches = r.exact ? fullPath === r.prefix : pathMatchesPrefix(fullPath, r.prefix);
+    if (!pathMatches) return false;
+    if (r.methods && !r.methods.includes(method)) return false;
+    return true;
+  });
+}
+
 // ONE consolidated /api gate (replaces the two overlapping middlewares this
 // codebase previously ran — a write/admin-token gate and a separate session
 // gate). Every /api/* route now goes through exactly this path:
-//   (a) the 3 public auth-bootstrap paths pass straight through;
-//   (b) DEMO_OPEN mode sets req.portalUser = null (explicit, not undefined —
-//       AUTH-04) and passes through, keeping the demo showcase frictionless;
-//   (c) an X-Admin-Token bearer resolves to a stable, ATTRIBUTED break-glass
+//   (a) the 3 public auth-bootstrap paths pass straight through — BEFORE
+//       identity resolution or the deal-resolver run at all (login/logout
+//       have no session yet to resolve a deal binding from; /auth/me
+//       resolves its own session + open-mode check inline, see its handler,
+//       since it must stay reachable with zero session and never 401 here);
+//   (b) an X-Admin-Token bearer resolves to a stable, ATTRIBUTED break-glass
 //       identity (D-11) — {username:'admin-token', role:'admin'} — never an
 //       anonymous bypass, so Phase 3's audit log can attribute its actions;
-//   (d) otherwise, a valid, unexpired sessions-table row is REQUIRED — a miss
-//       401s with `authRequired: true` on every remaining route, reads
-//       included (AUTH-01's fail-closed default, D-01), never trusting any
-//       client-supplied identity claim;
-//   (e) req.portalUser = { username, role, sessionId } is set from (c) or (d)
-//       alone — the server-side session lookup or the attributed token
-//       identity, never a client-supplied header/body/cookie field (AUTH-04);
-//   (f) writes only: the caller's role is checked against ROLE_WRITE_POLICY
-//       (AUTH-02) — a mismatch 403s before the route handler ever runs.
+//   (c) otherwise, a valid, unexpired sessions-table row (looked up against
+//       runtime.db, D-07) resolves req.portalUser — a MISS leaves it
+//       unresolved (null) here, it does NOT 401 yet, because DEMO_OPEN may
+//       still rescue an anonymous demo request once its deal binding (none)
+//       is known;
+//   (d) db/resolver.js's dealResolverMiddleware runs NEXT — this is the
+//       bootstrapping inversion 03-PATTERNS.md flags: it must run BEFORE the
+//       open-mode check below, because isOpenMode(req) now depends on
+//       req.isDemo. It sets req.dealContext/req.isDemo and binds the
+//       resolved connection for the whole downstream chain (ISO-01/03). A
+//       failed deal bind (missing/archived/non-member) short-circuits here
+//       with its own status, never falling back to demo (Pitfall 3);
+//   (e) NOW isOpenMode(req) is evaluated — true only when DEMO_OPEN=1 AND
+//       this request resolved to demo.db (D-03) — sets req.portalUser = null
+//       (explicit, not undefined — AUTH-04) and passes through;
+//   (f) otherwise, a still-unresolved req.portalUser 401s with
+//       `authRequired: true` (AUTH-01's fail-closed default, D-01), never
+//       trusting any client-supplied identity claim;
+//   (g) ISO-02: a demo-only path refused for a non-demo resolved database
+//       403s here, before the role check — see DEMO_ONLY_PREFIXES above;
+//   (h) writes (+ every /api/admin/* method): the caller's role is checked
+//       against ROLE_WRITE_POLICY (AUTH-02) — a mismatch 403s before the
+//       route handler ever runs.
 app.use('/api', (req, res, next) => {
   if (PUBLIC_API_PATHS.has(req.path)) return next();
-
-  if (isOpenMode(req)) { req.portalUser = null; return next(); }
 
   const suppliedToken = req.get('X-Admin-Token') || '';
   if (ADMIN_TOKEN && suppliedToken && timingSafeEqualStr(suppliedToken, ADMIN_TOKEN)) {
     // D-11: attributed break-glass identity, not anonymous — Phase 3's audit
     // log (AUD-01) can attribute every action taken via this token to a
-    // stable, named identity instead of a null/undefined actor.
-    req.portalUser = { username: 'admin-token', role: 'admin', sessionId: null };
+    // stable, named identity instead of a null/undefined actor. Never
+    // deal-bound (dealId: null) — a break-glass token has no session row to
+    // persist a deal selection on.
+    req.portalUser = { username: 'admin-token', role: 'admin', sessionId: null, dealId: null };
   } else {
     const cookieToken = readSessionCookie(req);
-    const sess = cookieToken ? sessions.findSession(getConnection(), cookieToken) : null;
-    if (!sess) return res.status(401).json({ error: 'Login required.', authRequired: true });
-    req.portalUser = sess; // { username, role, sessionId } — AUTH-04
+    const sess = cookieToken ? sessions.findSession(getRuntimeConnection(), cookieToken) : null;
+    req.portalUser = sess; // may be null here — see step (c) above
   }
 
-  const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
-  // NOTE: req.path is mount-relative inside `app.use('/api', ...)` (e.g.
-  // '/pulses', not '/api/pulses') — ROLE_WRITE_POLICY's prefixes are written
-  // as full '/api/...' paths (matching this file's route registrations
-  // 1:1), so req.baseUrl ('/api') + req.path reconstructs the full path
-  // roleAllowedForWrite expects. Passing bare req.path here would silently
-  // never match any ROLE_WRITE_POLICY prefix, falling every write through to
-  // DEFAULT_WRITE_ROLES regardless of path — verified against a live request
-  // during this task's own testing.
-  const fullPath = req.baseUrl + req.path;
-  // CR-02: /api/admin/* must require the admin role for EVERY method, not
-  // just writes — before this phase, admin-prefixed routes (e.g.
-  // GET /api/admin/download-zip) were gated regardless of method. The
-  // consolidated gate had narrowed that role check to writes only, silently
-  // opening every admin-prefixed GET (source/db archive download, etc.) to
-  // any authenticated non-admin session. Reads elsewhere stay gated on
-  // session-existence alone (D-05) — this carve-out is admin-prefix-only.
-  const requiresRoleCheck = isWrite || pathMatchesPrefix(fullPath, '/api/admin');
-  if (requiresRoleCheck && !roleAllowedForWrite(req.portalUser.role, fullPath, req.method)) {
-    return res.status(403).json({ error: 'Your role cannot perform this action.' });
-  }
-  next();
+  resolver.dealResolverMiddleware(req, res, () => {
+    if (isOpenMode(req)) { req.portalUser = null; return next(); }
+
+    if (!req.portalUser) return res.status(401).json({ error: 'Login required.', authRequired: true });
+
+    // NOTE: req.path is mount-relative inside the consolidated /api gate above
+    // (e.g. '/pulses', not '/api/pulses') — ROLE_WRITE_POLICY's/DEMO_ONLY_PREFIXES'
+    // prefixes are written as full '/api/...' paths (matching this file's
+    // route registrations 1:1), so req.baseUrl ('/api') + req.path
+    // reconstructs the full path both lookups expect.
+    const fullPath = req.baseUrl + req.path;
+
+    if (isDemoOnlyPath(fullPath, req.method) && !req.isDemo) {
+      return res.status(403).json({ error: 'This showcase-only feature is unavailable inside a real deal.' });
+    }
+
+    const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+    // CR-02: /api/admin/* must require the admin role for EVERY method, not
+    // just writes — before this phase, admin-prefixed routes (e.g.
+    // GET /api/admin/download-zip) were gated regardless of method. The
+    // consolidated gate had narrowed that role check to writes only, silently
+    // opening every admin-prefixed GET (source/db archive download, etc.) to
+    // any authenticated non-admin session. Reads elsewhere stay gated on
+    // session-existence alone (D-05) — this carve-out is admin-prefix-only.
+    const requiresRoleCheck = isWrite || pathMatchesPrefix(fullPath, '/api/admin');
+    if (requiresRoleCheck && !roleAllowedForWrite(req.portalUser.role, fullPath, req.method)) {
+      return res.status(403).json({ error: 'Your role cannot perform this action.' });
+    }
+    next();
+  });
 });
 
 // True when the deployment is locked down at all (i.e. NOT demo-open) — used
@@ -340,8 +403,11 @@ app.post('/api/auth/login', (req, res) => {
   if (loginThrottled(req.ip || req.socket.remoteAddress || '?')) {
     return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
   }
-  const db = readDb();
-  const user = (db.users || []).find(u => u.username === String(username || '').trim().toLowerCase());
+  // ISO-01 (Task 2 cutover): accounts moved OUT of the request-bound
+  // readDb()/writeDb() model into control.db, reached only through
+  // db/controlStore.js — a deal-bound request can never read/write the
+  // account store through its own connection (T-03-16).
+  const user = controlStore.findUser(String(username || '').trim().toLowerCase());
   // Always run scrypt (dummy salt for unknown users) so response time never
   // reveals whether the username exists.
   const computed = hashPassword(password || '', user && user.salt ? user.salt : DUMMY_SALT);
@@ -351,9 +417,11 @@ app.post('/api/auth/login', (req, res) => {
   }
   // Opportunistic cleanup, not a security mechanism — piggyback on the
   // low-frequency login path rather than adding an interval timer (this
-  // codebase has none).
-  sessions.pruneExpiredSessions(getConnection());
-  const token = sessions.createSession(getConnection(), {
+  // codebase has none). Sessions live in runtime.db (D-07), not the
+  // request-bound connection (this route bypasses the resolver entirely —
+  // PUBLIC_API_PATHS).
+  sessions.pruneExpiredSessions(getRuntimeConnection());
+  const token = sessions.createSession(getRuntimeConnection(), {
     username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
     userAgent: req.get('user-agent'), ip: req.ip,
   });
@@ -373,20 +441,26 @@ app.post('/api/auth/logout', (req, res) => {
   // D-07: logout deletes the session row immediately — revocation is real,
   // not a wait for the cookie to expire.
   const token = readSessionCookie(req);
-  if (token) sessions.deleteSession(getConnection(), token);
+  if (token) sessions.deleteSession(getRuntimeConnection(), token);
   res.setHeader('Set-Cookie', 'ma_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
   res.json({ success: true });
 });
 
 app.get('/api/auth/me', (req, res) => {
   // Stays on PUBLIC_API_PATHS by design — this is the client's "am I logged
-  // in" probe and must be reachable without a session already existing.
-  if (isOpenMode(req)) return res.json({ authEnabled: false, user: null });
+  // in" probe and must be reachable without a session already existing, so
+  // it never goes through db/resolver.js's dealResolverMiddleware (that only
+  // runs for gated routes). It therefore resolves its OWN session here and
+  // applies the D-03 open-mode rule inline: DEMO_OPEN=1 only exempts a
+  // request that would resolve to demo.db — i.e. no session, or a session
+  // with no deal binding — a session bound to a REAL deal is never open,
+  // mirroring isOpenMode(req)'s rule without needing the resolver to have run.
   const cookieToken = readSessionCookie(req);
-  const sess = cookieToken ? sessions.findSession(getConnection(), cookieToken) : null;
+  const sess = cookieToken ? sessions.findSession(getRuntimeConnection(), cookieToken) : null;
+  const wouldResolveDemo = !sess || !sess.dealId;
+  if (process.env.DEMO_OPEN === '1' && wouldResolveDemo) return res.json({ authEnabled: false, user: null });
   if (!sess) return res.json({ authEnabled: true, user: null });
-  const db = readDb();
-  const user = (db.users || []).find(u => u.username === sess.username);
+  const user = controlStore.findUser(sess.username);
   res.json({ authEnabled: true, user: user ? { username: user.username, name: user.name || user.username, role: user.role } : { username: sess.username, role: sess.role } });
 });
 
@@ -413,17 +487,14 @@ app.post('/api/auth/change-password', (req, res) => {
   if (typeof newPassword !== 'string' || newPassword.length < 8) {
     return res.status(400).json({ error: 'New password must be at least 8 characters.' });
   }
-  const db = readDb();
-  const user = (db.users || []).find(u => u.username === req.portalUser.username);
+  const user = controlStore.findUser(req.portalUser.username);
   if (!user) return res.status(404).json({ error: 'User not found.' });
   const computed = hashPassword(currentPassword || '', user.salt);
   if (!user.hash || !timingSafeEqualStr(computed, user.hash)) {
     return res.status(401).json({ error: 'Current password is incorrect.' });
   }
   const newSalt = crypto.randomBytes(16).toString('hex');
-  user.salt = newSalt;
-  user.hash = hashPassword(newPassword, newSalt);
-  writeDb(db);
+  controlStore.updateUser(user.username, { salt: newSalt, hash: hashPassword(newPassword, newSalt) });
   // WR-01: rotating a credential must revoke every OTHER outstanding session
   // for this user (db/sessions.js's own docstring calls this "Admin
   // offboarding action", but the same primitive applies here) — otherwise a
@@ -431,8 +502,8 @@ app.post('/api/auth/change-password', (req, res) => {
   // to SESSION_TTL_MS after the password that would have invalidated it is
   // changed. Re-issue a fresh session for the CURRENT caller only, so they
   // are not logged out by their own password change.
-  sessions.deleteAllSessionsForUser(getConnection(), user.username);
-  const newToken = sessions.createSession(getConnection(), {
+  sessions.deleteAllSessionsForUser(getRuntimeConnection(), user.username);
+  const newToken = sessions.createSession(getRuntimeConnection(), {
     username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
     userAgent: req.get('user-agent'), ip: req.ip,
   });
@@ -452,19 +523,37 @@ app.get('/healthz', (req, res) => {
 // Helper functions for database I/O
 // SQLite-backed (better-sqlite3, WAL mode) via db/store.js. readDb()/writeDb(data)
 // keep their exact whole-object signatures (D-03) so every one of the ~90 endpoint
-// call sites below (`const db = readDb(); ...; writeDb(db);`) is unchanged. No
-// in-memory mtime cache: better-sqlite3 reads are sub-millisecond and in-process,
-// so the store is the single source of truth on every call (RESEARCH.md Pitfall 3).
-// db.json is retained on disk only as a frozen, read-only pre-migration
-// archive (see the note near the top of this file) — no live code path
-// below reads or writes it.
-const { initDb, readDb, writeDb, getConnection } = require('./db/store');
+// call sites below (`const db = readDb(); ...; writeDb(db);`) is unchanged — they
+// now resolve whichever database db/resolver.js bound THIS request to (ISO-03),
+// via db/store.js's AsyncLocalStorage. No in-memory mtime cache: better-sqlite3
+// reads are sub-millisecond and in-process, so the store is the single source of
+// truth on every call (RESEARCH.md Pitfall 3). db.json is retained on disk only
+// as a frozen, read-only pre-migration archive — no live code path reads/writes it.
+const { initDb, readDb, writeDb, getOrOpenConnection } = require('./db/store');
 const sessions = require('./db/sessions');
-initDb(); // opens (or creates) data/ma-portal.db and ensures the schema exists
+
+// ISO-01 (Phase 3 cutover): open the three live stores through the SAME
+// connection cache the resolver/controlStore use — never a second,
+// independent open of the same file. The module singleton (initDb) stays
+// pointed at demo.db so any code path that runs OUTSIDE a request context
+// (this startup block itself, a CLI script) still has a sane default —
+// unchanged fallback behavior for requireDb() (03-RESEARCH.md Pattern 1).
+initDb(dbFiles.DEMO_DB_PATH);
+getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+
+/** Sessions (Phase 2, AUTH-03) live in runtime.db (D-07), not the
+ * request-bound demo/deal connection — a session must be resolvable BEFORE
+ * db/resolver.js has bound anything, and a deal-bound request must never be
+ * able to read the account/session store through its own connection. */
+function getRuntimeConnection() {
+  return getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+}
+
 // Startup sweep of expired session rows — a table-bloat cleanup, NOT a
 // security mechanism (findSession() already treats a past expires_at as an
 // immediate miss regardless of whether the row has been physically deleted).
-sessions.pruneExpiredSessions(getConnection());
+sessions.pruneExpiredSessions(getRuntimeConnection());
 
 // Collision-resistant id: time-sortable base36 timestamp + random suffix. Two
 // creates in the same millisecond used to mint identical `prefix_<Date.now()>`
@@ -553,9 +642,10 @@ app.post('/api/rag/upload', async (req, res) => {
 
     console.log(`Extracted ${pdfText.length} characters. Invoking AI Insight cognitive review...`);
 
-    // Get current settings to retrieve the active Gemini API Key
-    const db = readDb();
-    const apiKey = db.settings.geminiApiKey || '';
+    // Get the active Gemini API Key. ISO-01 (Task 2 cutover): the key is a
+    // secret field — it lives in runtime.db's secretSettings singleton
+    // (db/controlStore.js), never the request-bound demo/deal settings row.
+    const apiKey = controlStore.getSecretSettings().geminiApiKey || '';
 
     // Invoke AI Insight cognitive review
     const review = await aiService.reviewPdfContent({ pdfText, fileName, apiKey });
@@ -769,14 +859,20 @@ app.post('/api/dashboard/reorder-widgets', (req, res) => {
 // GET Settings
 app.get('/api/settings', (req, res) => {
   const db = readDb();
+  // ISO-01 (Task 2 cutover): geminiApiKey is a secret field — it lives in
+  // runtime.db's secretSettings singleton (db/controlStore.js), never the
+  // request-bound demo/deal settings row. Merge it in HERE, temporarily, so
+  // publicSettings()'s existing hasGeminiApiKey-flag-then-strip logic below
+  // keeps working unchanged — the real value still never reaches the client.
+  const secretGeminiApiKey = controlStore.getSecretSettings().geminiApiKey;
   if (db.settings && db.settings.demoMode === false) {
     // Merge base settings under custom overrides so custom mode still exposes
     // shared fields (targetCompany, roleVisibility, ...) instead of a sparse object.
-    const custom = { ...(db.settings || {}), ...(db.customSettings || {}), demoMode: false };
+    const custom = { ...(db.settings || {}), ...(db.customSettings || {}), demoMode: false, geminiApiKey: secretGeminiApiKey };
     custom.timeTravelDay = custom.timeTravelDay !== undefined ? custom.timeTravelDay : (db.settings.timeTravelDay || 30);
     res.json(publicSettings(custom));
   } else {
-    res.json(publicSettings(db.settings || {}));
+    res.json(publicSettings({ ...(db.settings || {}), geminiApiKey: secretGeminiApiKey }));
   }
 });
 
@@ -784,7 +880,7 @@ app.get('/api/settings', (req, res) => {
 app.post('/api/settings', (req, res) => {
   const db = readDb();
   db.settings = db.settings || {};
-  
+
   if (req.body.demoMode !== undefined) {
     db.settings.demoMode = req.body.demoMode === true || req.body.demoMode === 'true';
     if (db.settings.demoMode === false && !db.customSettings) {
@@ -797,11 +893,28 @@ app.post('/api/settings', (req, res) => {
   // Copy incoming keys, but NEVER overwrite a stored API key with a blank value —
   // the client sends the field empty when it hasn't been re-entered (the real key
   // is no longer sent to the browser), so a blank means "leave it unchanged".
+  // ISO-01 (Task 2 cutover): a submitted value for either secret field
+  // (geminiApiKey, databaseConfig.connectionDetails) is persisted through
+  // db/controlStore.js's setSecretSettings() — runtime.db, never the
+  // request-bound demo/deal settings row — while every other field continues
+  // straight to `target` exactly as before.
   const applySettings = (target) => {
+    const secretPatch = {};
     Object.keys(req.body).forEach(key => {
-      if (key === 'geminiApiKey' && !String(req.body[key] || '').trim()) return;
+      if (key === 'geminiApiKey') {
+        if (String(req.body[key] || '').trim()) secretPatch.geminiApiKey = req.body[key];
+        return;
+      }
+      if (key === 'databaseConfig' && req.body[key] && typeof req.body[key] === 'object' && req.body[key].connectionDetails !== undefined) {
+        secretPatch['databaseConfig.connectionDetails'] = req.body[key].connectionDetails;
+        const rest = { ...req.body[key] };
+        delete rest.connectionDetails;
+        target[key] = rest;
+        return;
+      }
       target[key] = req.body[key];
     });
+    if (Object.keys(secretPatch).length) controlStore.setSecretSettings(secretPatch);
   };
 
   if (db.settings.demoMode === false) {
@@ -812,7 +925,8 @@ app.post('/api/settings', (req, res) => {
   }
 
   writeDb(db);
-  res.json({ success: true, settings: publicSettings(db.settings.demoMode === false ? db.customSettings : db.settings) });
+  const responseTarget = db.settings.demoMode === false ? db.customSettings : db.settings;
+  res.json({ success: true, settings: publicSettings({ ...responseTarget, geminiApiKey: controlStore.getSecretSettings().geminiApiKey }) });
 });
 
 // POST Reset Custom M&A Wizard state
@@ -1641,7 +1755,7 @@ app.post('/api/admin/migrate-db', (req, res) => {
 // this handler ever runs. This is deliberately the minimum viable offboarding
 // primitive — NOT the deferred full user-CRUD.
 app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
-  sessions.deleteAllSessionsForUser(getConnection(), req.params.username);
+  sessions.deleteAllSessionsForUser(getRuntimeConnection(), req.params.username);
   res.json({ success: true });
 });
 
@@ -1653,13 +1767,10 @@ app.get('/api/ai/insight', async (req, res) => {
   }
 
   try {
-    const db = readDb();
-    
-    // Check if we are running in Custom M&A Mode or Demo Mode
-    const isCustom = db.settings && db.settings.demoMode === false;
-    const apiKey = isCustom ? 
-      ((db.customSettings && db.customSettings.geminiApiKey) || db.settings.geminiApiKey || '') : 
-      (db.settings.geminiApiKey || '');
+    // ISO-01 (Task 2 cutover): the key is a secret field — one shared
+    // runtime.db value regardless of demo/custom lane (a lane-specific
+    // override never existed in runtime.db's secretSettings singleton).
+    const apiKey = controlStore.getSecretSettings().geminiApiKey || '';
 
     // Invoke RAG-enabled AI insight service
     const aiService = require('./aiService');
@@ -1777,7 +1888,9 @@ app.post('/api/assessment', async (req, res) => {
       scores,
       responses,
       questions: db.questions,
-      apiKey: (isCustom ? (db.customSettings.geminiApiKey || db.settings.geminiApiKey) : db.settings.geminiApiKey)
+      // ISO-01 (Task 2 cutover): the key is a secret field, sourced from
+      // runtime.db's secretSettings singleton regardless of demo/custom lane.
+      apiKey: controlStore.getSecretSettings().geminiApiKey || ''
     });
   } catch (error) {
     console.error("AI Plan generation failed, falling back to local engine:", error);
@@ -1818,19 +1931,25 @@ app.get('/api/assessment/latest', (req, res) => {
   const targetCompany = isCustom ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || "NewCo Ltd.") : (db.settings.targetCompany || "NewCo Ltd.");
   
   if (!assessments || assessments.length === 0) {
+    // ISO-02: the day-scaling curve is a demo showcase device — a deal-bound
+    // request with no real assessment yet gets a flat, unscaled placeholder
+    // instead of a fabricated demo-arc score.
+    const scores = req.isDemo ? getScaledScores(null, day) : { culture: 3.2, talent: 3.5, value: 3.0 };
     const mockAssessment = {
       id: 'mock_assess',
       timestamp: new Date().toISOString(),
       targetCompany: targetCompany,
       responses: {},
-      scores: getScaledScores(null, day),
-      aiPlan: aiService.generateLocalFallbackPlan(targetCompany, getScaledScores(null, day))
+      scores,
+      aiPlan: aiService.generateLocalFallbackPlan(targetCompany, scores)
     };
     return res.json({ success: true, assessment: mockAssessment });
   }
   // Get the most recent assessment
   const latest = { ...assessments[assessments.length - 1] };
-  latest.scores = getScaledScores(latest.scores, day);
+  // ISO-02: only demo.db's stored scores get the showcase day-scaling curve
+  // applied — a deal's real assessment scores are returned exactly as stored.
+  latest.scores = req.isDemo ? getScaledScores(latest.scores, day) : latest.scores;
   res.json({ success: true, assessment: latest });
 });
 
@@ -2536,8 +2655,10 @@ app.get('/api/employees', (req, res) => {
   // Demo mode keeps the time-machine simulation (Day 1 = fresh org, Day 100 = fully
   // certified) so the org-wide ramp reads consistently. Custom mode shows REAL stored
   // progress so live lesson completions and +50 merit awards actually appear on the
-  // leaderboard / dashboard roster / signage.
-  const result = isCustom ? employeesList : scaleEmployeesForDay(employeesList, day, getCatalogLessonIds(db));
+  // leaderboard / dashboard roster / signage. ISO-02: the showcase scaling must ALSO
+  // never apply outside the resolved demo database — a deal-bound request always sees
+  // its own stored rows unscaled, routed through the single req.isDemo predicate.
+  const result = (isCustom || !req.isDemo) ? employeesList : scaleEmployeesForDay(employeesList, day, getCatalogLessonIds(db));
   res.json(result);
 });
 
@@ -2899,7 +3020,9 @@ app.get('/api/pulses', (req, res) => {
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
   const day = (isCustom ? db.customSettings.timeTravelDay : db.settings.timeTravelDay) || db.settings.timeTravelDay || 30;
-  const scaled = getPulsesForDay(day);
+  // ISO-02: the seeded showcase pulse library must never inject fabricated
+  // feedback into a deal-bound response — only demo.db gets the library.
+  const scaled = req.isDemo ? getPulsesForDay(day) : [];
   // Append stored pulses (seeded + live submissions from the employee portal)
   // so POSTed feedback actually surfaces on the dashboard change curve.
   const stored = (db.pulses || []).filter(p => !scaled.some(s => s.id === p.id));
@@ -3294,3 +3417,8 @@ module.exports = app;
 // ROLE_WRITE_POLICY capability check directly, without needing to boot the
 // HTTP server for the pure-function cases (AUTH-02).
 module.exports.roleAllowedForWrite = roleAllowedForWrite;
+// Exposed alongside app for the same reason (ISO-02): lets a test unit-check
+// isDemoOnlyPath()/DEMO_ONLY_PREFIXES directly against the live route
+// inventory without booting the HTTP server for every case.
+module.exports.isDemoOnlyPath = isDemoOnlyPath;
+module.exports.DEMO_ONLY_PREFIXES = DEMO_ONLY_PREFIXES;

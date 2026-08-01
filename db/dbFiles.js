@@ -23,11 +23,20 @@ const Database = require('better-sqlite3');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 
 // --- Database file paths -----------------------------------------------
-const CONTROL_DB_PATH = path.join(DATA_DIR, 'control.db');
-const RUNTIME_DB_PATH = path.join(DATA_DIR, 'runtime.db');
-const AUDIT_DB_PATH = path.join(DATA_DIR, 'audit.db');
-const DEMO_DB_PATH = path.join(DATA_DIR, 'demo.db');
-const DEALS_DIR = path.join(DATA_DIR, 'deals');
+// Each path is overridable via an env var (unset in every real deployment —
+// production always resolves the real data/ paths below). This is what lets
+// a test boot the REAL requireable app (`require('../server.js')`) against
+// isolated temp control/runtime/demo/deal files instead of the live,
+// committed data/*.db — the exact need Plan 03's own read_first calls out
+// ("booting the requireable app against temp control/runtime/demo/deal
+// files"), without threading a path parameter through every module that
+// resolves one of these constants at require time (server.js, db/store.js,
+// db/resolver.js, db/controlStore.js, db/dealSeed.js, the split script).
+const CONTROL_DB_PATH = process.env.MA_CONTROL_DB_PATH || path.join(DATA_DIR, 'control.db');
+const RUNTIME_DB_PATH = process.env.MA_RUNTIME_DB_PATH || path.join(DATA_DIR, 'runtime.db');
+const AUDIT_DB_PATH = process.env.MA_AUDIT_DB_PATH || path.join(DATA_DIR, 'audit.db');
+const DEMO_DB_PATH = process.env.MA_DEMO_DB_PATH || path.join(DATA_DIR, 'demo.db');
+const DEALS_DIR = process.env.MA_DEALS_DIR || path.join(DATA_DIR, 'deals');
 
 // --- Schema file paths ---------------------------------------------------
 const CONTROL_SCHEMA_PATH = path.join(__dirname, 'control-schema.sql');
