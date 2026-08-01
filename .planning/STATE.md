@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: Deal Isolation, Audit Log & Write Validation
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-08-01T08:39:13.197Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-08-01T09:06:27.460Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 03 (Deal Isolation, Audit Log & Write Validation) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-01 — Phase 03 execution started
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [████████░░] 75%
 | Phase 03 P01 | 17min | 3 tasks | 10 files |
 | Phase 03 P02 | 35min | 3 tasks | 7 files |
 | Phase 03 P03 | 65min | 3 tasks | 16 files |
+| Phase 03 P04 | 50min | 3 tasks | 28 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 3 Plan 02: db/dealSeed.js uses allowlist-direction copy (DEAL_SEED_COLLECTIONS) not a denylist, so future collections added in Phase 4-7 never silently leak demo data into a new real deal
 - [Phase ?]: Phase 3 Plan 03: consolidated /api gate rewired end-to-end (session-bound resolver, control/runtime/demo cutover, DEMO_ONLY_PREFIXES hard-gate) landed as one integrated server.js diff across Task 1's commit since the gate could not be split incrementally without a non-booting intermediate state; Tasks 2-3 contributed their remaining distinct files
 - [Phase ?]: Phase 3 Plan 03: accounts (users) removed from db/collections.js ARRAY_COLLECTIONS and db/schema.sql entirely, reachable only via new db/controlStore.js — a deal-bound request's own connection can structurally never read/write the account store
+- [Phase ?]: Phase 3 Plan 04: deal registry control plane (6 routes) built on Plan 03's resolver/controlStore; db/store.js gained closeConnection() and db/sessions.js gained releaseSessionsForDeal() (outside the plan's declared file scope but required by its own acceptance criteria); CONTROL_PLANE_PATHS widened to /api/admin/deals* so an admin's own stale binding can never lock them out of archive/delete
+- [Phase ?]: Phase 3 Plan 04: header deal switcher (public/js/deal-switcher.js) loaded app-wide via transitions.js's existing dynamic-script bootstrap; admin.html pageAccess widened to allow hrbp client-side (D-02's create-deal form has no other page to live on); GET /api/auth/me extended with dealId
+- [Phase ?]: Phase 3 Plan 04: Task 3's browser-only human-check verification was not run in this session (no browser automation tool available) — verified every automatable angle instead (live curl+direct-SQL E2E round trip, source-level XSS/wiring checks, 86/86 regression); a human should complete the plan's 7-step browser check before D-04 is fully closed
 
 ### Pending Todos
 
@@ -110,6 +114,7 @@ None yet.
 - ⚠️ [Release-cut] Phase 1 Windows/Linux bundle boots + Phase 1 formal close (`/gsd-verify-work 1`) still deferred; 01-VERIFICATION.md remains untracked.
 - ⚠️ [Phase 3] Phase 2 left the `isOpenMode(req)` seam and `sessions.ip` (TRUST_PROXY opt-in) for Phase 3 to bind to the deal-resolver (`DEMO_OPEN && req.isDemo`) and the audit log respectively.
 - ⚠️ [Traceability] phase.complete warned: HOST-01..03 / HARD-01..03 (v2-deferred) appear in REQUIREMENTS.md body but not its Traceability table.
+- [Phase 3 Plan 04] D-04 deal switcher browser human-check (visual distinctness, click-through create/select/switch-back, zero console errors, employee-sees-no-chrome) not yet run — deferred, no browser tool available to the executor; run the plan's own 7-step human-check before closing D-04.
 
 ## Deferred Items
 
@@ -122,6 +127,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-01T08:39:13.188Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-08-01T09:06:27.452Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None

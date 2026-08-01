@@ -84,7 +84,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A write with a malformed payload (wrong type, missing required field, over a length limit) is rejected with a clear error, on every write endpoint.
   5. Free-text and HTML-bearing fields round-trip through storage and render without executing injected script.
 
-**Plans**: 3/6 plans executed
+**Plans**: 4/6 plans executed
 
 **Wave 1**
 
@@ -100,7 +100,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03-04-PLAN.md — deal registry API, membership + destructive-guarded archive/delete, and the header deal switcher (ISO-01, ISO-03)
+- [x] 03-04-PLAN.md — deal registry API, membership + destructive-guarded archive/delete, and the header deal switcher (ISO-01, ISO-03)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -175,7 +175,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 |-------|-----------------|--------|-----------|
 | 1. Schema & Migration | 3/3 | In Progress|  |
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
-| 3. Deal Isolation, Audit Log & Write Validation | 3/6 | In Progress|  |
+| 3. Deal Isolation, Audit Log & Write Validation | 4/6 | In Progress|  |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
