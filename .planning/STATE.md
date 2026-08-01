@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: Deal Isolation, Audit Log & Write Validation
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-08-01T07:32:23.392Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-08-01T08:39:13.197Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 12
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 03 (Deal Isolation, Audit Log & Write Validation) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-08-01 — Phase 03 execution started
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [███████░░░] 67%
 | Phase 02 P03 | 6min | 2 tasks | 3 files |
 | Phase 03 P01 | 17min | 3 tasks | 10 files |
 | Phase 03 P02 | 35min | 3 tasks | 7 files |
+| Phase 03 P03 | 65min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 3 Plan 02: D-05 checkpoint approved as-specified — control/demo/runtime classification stands; ISO-03 retires only the flag+shadow-array real-vs-demo switch, demo's own Projects/Custom-M&A switching survives inside demo.db as a showcase feature
 - [Phase ?]: Phase 3 Plan 02: split-db-into-control-demo-deals.js run for real against data/ma-portal.db, producing committed data/control.db + data/demo.db (D-07) and gitignored data/runtime.db; source file byte length/mtime confirmed unchanged
 - [Phase ?]: Phase 3 Plan 02: db/dealSeed.js uses allowlist-direction copy (DEAL_SEED_COLLECTIONS) not a denylist, so future collections added in Phase 4-7 never silently leak demo data into a new real deal
+- [Phase ?]: Phase 3 Plan 03: consolidated /api gate rewired end-to-end (session-bound resolver, control/runtime/demo cutover, DEMO_ONLY_PREFIXES hard-gate) landed as one integrated server.js diff across Task 1's commit since the gate could not be split incrementally without a non-booting intermediate state; Tasks 2-3 contributed their remaining distinct files
+- [Phase ?]: Phase 3 Plan 03: accounts (users) removed from db/collections.js ARRAY_COLLECTIONS and db/schema.sql entirely, reachable only via new db/controlStore.js — a deal-bound request's own connection can structurally never read/write the account store
 
 ### Pending Todos
 
@@ -119,6 +122,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-01T07:32:23.384Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-08-01T08:39:13.188Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
