@@ -6,9 +6,9 @@ current_phase: 03
 current_phase_name: Deal Isolation, Audit Log & Write Validation
 status: executing
 stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-08-01T09:06:27.460Z"
+last_updated: "2026-08-01T09:24:07.999Z"
 last_activity: 2026-08-01
-last_activity_desc: Phase 03 execution started
+last_activity_desc: "Completed quick task 260801-fj5: Hide Post-Merger splash screen (guarded, reversible)"
 progress:
   total_phases: 3
   completed_phases: 2
@@ -121,6 +121,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260801-fj5 | Hide Post-Merger splash screen via guarded early return (keep code) | 2026-08-01 | f2a0484 | [260801-fj5-hide-post-merger-splash-screen-via-guard](./quick/260801-fj5-hide-post-merger-splash-screen-via-guard/) |
+| 2 | Fix infinite reload loop (admin role hidden by demo roleVisibility) — flicker on / after mandatory auth | 2026-08-01 | 13d6cb9 | — |
 
 ## Deferred Items
 
