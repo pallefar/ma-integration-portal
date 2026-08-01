@@ -15,15 +15,24 @@ const dbFiles = require('./dbFiles');
 const controlStore = require('./controlStore');
 const { getOrOpenConnection, runWithDb } = require('./store');
 
-// The deal-management control-plane surface (list/select/create a deal, a
-// later plan's job) is deliberately resolved to control.db regardless of the
-// session's CURRENT deal binding. Without this escape hatch, a session bound
-// to a deal that was archived or deleted underneath it would be refused on
-// EVERY route — including the one route that would let it rebind — locking
-// the user out of the whole app.
+// The deal-management control-plane surface (list/select/create/archive/
+// delete a deal, edit its membership — Plan 04) is deliberately resolved to
+// control.db regardless of the session's CURRENT deal binding. Without this
+// escape hatch, a session bound to a deal that was archived or deleted
+// underneath it would be refused on EVERY route — including the one route
+// that would let it rebind — locking the user out of the whole app. This
+// covers BOTH `/api/deals*` (create/list/select/members) AND
+// `/api/admin/deals*` (archive/delete) — the second family matters because
+// ADMIN is always a member of every deal (isDealMember()), so an admin's OWN
+// session can be bound to some unrelated, since-archived deal at the moment
+// they try to archive/delete a DIFFERENT one; without this, that stale
+// binding would 404 the admin out of the very endpoint meant to fix it.
 const CONTROL_PLANE_PATHS = new Set(['/api/deals']);
 function isControlPlanePath(fullPath) {
-  return CONTROL_PLANE_PATHS.has(fullPath) || fullPath.startsWith('/api/deals/');
+  return CONTROL_PLANE_PATHS.has(fullPath)
+    || fullPath.startsWith('/api/deals/')
+    || fullPath === '/api/admin/deals'
+    || fullPath.startsWith('/api/admin/deals/');
 }
 
 /** Thrown by resolveDatabase() when a session's deal binding cannot be

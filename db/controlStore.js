@@ -15,8 +15,20 @@
 // connection can never be used to read or write the account store or the
 // deal registry, even by a future bug in a deal-scoped endpoint (T-03-16).
 
-const { getOrOpenConnection } = require('./store');
+const fs = require('fs');
+const crypto = require('crypto');
+const { getOrOpenConnection, closeConnection } = require('./store');
 const dbFiles = require('./dbFiles');
+
+// Deal ids are minted with the SAME `${prefix}_${Date.now().toString(36)}
+// ${randomHex}` convention server.js's own newId() uses (server.js:561-563).
+// Duplicated here (not imported from server.js) to avoid a circular
+// require — server.js already requires this module at load time, so this
+// module cannot require server.js back. db/dbFiles.js's DEAL_ID_RE
+// (`/^deal_[a-z0-9]+$/i`) accepts exactly this shape.
+function newId(prefix) {
+  return prefix + '_' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
+}
 
 function controlConn() {
   return getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
@@ -100,6 +112,88 @@ function isDealMember(dealId, user) {
   return Array.isArray(deal.members) && deal.members.includes(user.username);
 }
 
+/**
+ * D-02/ISO-01: create a new deal registry row (control.db ONLY — this
+ * function never touches the deal's own database file; server.js's route
+ * handler provisions that separately via db/dealSeed.js's
+ * createDealDatabase(), and rolls this row back if provisioning throws, so a
+ * registry row can never point at a file that does not exist, T-03-23).
+ * The creator is ALWAYS added to `members` if absent — an Integration Lead
+ * who creates a deal and is then locked out of it by their own omission is a
+ * bug, not a policy (D-03's "admin is always a member" is a separate,
+ * additional rule enforced by isDealMember() above, not by this function).
+ */
+function createDeal({ name, targetCompany, members, createdBy }) {
+  const id = newId('deal');
+  const memberSet = new Set((members || []).map(String));
+  if (createdBy) memberSet.add(createdBy);
+  const conn = controlConn();
+  const seqRow = conn.prepare('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM deals').get();
+  const data = {
+    id, name, targetCompany, members: Array.from(memberSet),
+    status: 'active', createdBy: createdBy || null, createdAt: new Date().toISOString(),
+  };
+  conn.prepare('INSERT INTO deals (id, project_id, seq, status, data) VALUES (?, NULL, ?, ?, ?)')
+    .run(id, seqRow.nextSeq, data.status, JSON.stringify(data));
+  return data;
+}
+
+/** D-03: replace a deal's members[] allowlist wholesale. Throws (does not
+ * silently no-op) if the deal does not exist — mirrors updateUser()'s "not
+ * an upsert" contract above. Does NOT release any removed member's session
+ * binding — that is server.js route handler's job (it has req/sessions
+ * access this module deliberately does not, see this file's header). */
+function updateDealMembers(dealId, members) {
+  const deal = getDeal(dealId);
+  if (!deal) throw new Error(`db/controlStore.js: updateDealMembers() found no deal '${dealId}'`);
+  const updated = { ...deal, members: Array.from(new Set((members || []).map(String))) };
+  controlConn().prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
+  return updated;
+}
+
+/** D-02: archive a deal — flips BOTH the `status` metadata column and
+ * `data.status` (db/resolver.js's resolveDatabase() checks `deal.status ===
+ * 'archived'` against the JSON blob, not the metadata column, so both must
+ * agree). Leaves the deal's own database file on disk completely untouched —
+ * archival is reversible-in-spirit (the file survives), unlike deleteDeal()
+ * below. Throws if the deal does not exist. */
+function archiveDeal(dealId) {
+  const deal = getDeal(dealId);
+  if (!deal) throw new Error(`db/controlStore.js: archiveDeal() found no deal '${dealId}'`);
+  const updated = { ...deal, status: 'archived' };
+  controlConn().prepare('UPDATE deals SET status = ?, data = ? WHERE id = ?').run('archived', JSON.stringify(updated), dealId);
+  return updated;
+}
+
+/**
+ * D-02/AUD-02: irreversibly delete a deal — removes ONLY its control.db
+ * registry row and its own database file (plus WAL/SHM sidecars). This
+ * function holds NO reference to audit.db anywhere in its body — AUD-02
+ * ("the audit trail survives deletion of the deal it describes") holds by
+ * construction because this code path has no way to reach the audit store
+ * even by accident (asserted by a source-grep in test/deal-lifecycle.test.js
+ * that `AUDIT_DB_PATH` never appears in this file).
+ *
+ * The file path is resolved ONLY through dbFiles.dealDbPath() — the single
+ * sanctioned path-builder that validates the id shape before ever touching
+ * the filesystem (T-03-03) — never a re-derived string. Before unlinking,
+ * evicts any cached connection db/store.js's shared connection cache may
+ * still be holding open for this exact file (closeConnection()): on Windows
+ * an open file cannot be unlinked at all, and even on POSIX an unlinked-but-
+ * still-open handle is a latent bug this delete path must not leave behind.
+ */
+function deleteDeal(dealId) {
+  const deal = getDeal(dealId);
+  if (!deal) throw new Error(`db/controlStore.js: deleteDeal() found no deal '${dealId}'`);
+  controlConn().prepare('DELETE FROM deals WHERE id = ?').run(dealId);
+  const targetPath = dbFiles.dealDbPath(dealId);
+  closeConnection(targetPath);
+  for (const ext of ['', '-wal', '-shm']) {
+    try { fs.unlinkSync(targetPath + ext); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  return true;
+}
+
 // --- app_state singletons ---------------------------------------------------
 
 /** control.db's single `controlSettings` singleton (deployment-level config,
@@ -164,6 +258,7 @@ function setSecretSettings(patch) {
 module.exports = {
   findUser, listUsers, updateUser,
   getDeal, listDeals, listDealsForUser, isDealMember,
+  createDeal, updateDealMembers, archiveDeal, deleteDeal,
   getControlSettings, setControlSettings,
   getSecretSettings, setSecretSettings,
 };

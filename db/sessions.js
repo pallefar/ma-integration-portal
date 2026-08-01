@@ -89,6 +89,28 @@ function bindSessionDeal(conn, token, dealId) {
   return info.changes > 0;
 }
 
+/**
+ * D-02 (Plan 04): release every session currently bound to `dealId` back to
+ * `null` (which db/resolver.js treats as "resolves to demo.db") — called
+ * when a deal is archived/deleted (no `username`, releases EVERY session
+ * bound to it) or when one specific member's access is revoked (`username`
+ * scopes the release to that one user's own sessions only). A session's
+ * deal binding must never outlive the deal it points to, or that member's
+ * own access after removal — an unbound session simply resolves to demo on
+ * its very next request, it is never left pointing at a missing/forbidden
+ * deal (Pitfall 3's bind-time-refusal guarantee would otherwise turn this
+ * into a lockout instead of a graceful fallback). No-op (0 rows affected) if
+ * no session currently matches — mirrors this module's other no-op-on-miss
+ * functions.
+ */
+function releaseSessionsForDeal(conn, dealId, username) {
+  if (username) {
+    conn.prepare(`UPDATE sessions SET deal_id = NULL WHERE deal_id = ? AND username = ?`).run(dealId, username);
+  } else {
+    conn.prepare(`UPDATE sessions SET deal_id = NULL WHERE deal_id = ?`).run(dealId);
+  }
+}
+
 /** Logout: delete the session row immediately — revocation is real, not a wait-for-expiry (D-07). */
 function deleteSession(conn, token) {
   if (!token) return;
@@ -119,5 +141,5 @@ function pruneExpiredSessions(conn) {
 
 module.exports = {
   createSession, findSession, deleteSession, deleteAllSessionsForUser, pruneExpiredSessions,
-  newSessionToken, hashToken, bindSessionDeal,
+  newSessionToken, hashToken, bindSessionDeal, releaseSessionsForDeal,
 };

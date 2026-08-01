@@ -123,6 +123,26 @@ function closeAllConnections() {
 }
 
 /**
+ * Close and evict the cached connection for ONE `dbFilePath`, if any is
+ * currently open — a narrower sibling of closeAllConnections() above (which
+ * is test-only teardown for the whole cache). This IS load-bearing in
+ * production: db/controlStore.js's deleteDeal() (Plan 04, D-02) must call
+ * this before unlinking a deal's database file — better-sqlite3 holds an OS
+ * file handle for the process lifetime once opened, and on Windows an open
+ * file cannot be unlinked at all; on POSIX it would otherwise leave a
+ * dangling handle to a now-deleted inode. A no-op (returns false) if no
+ * connection was ever cached for this path.
+ */
+function closeConnection(dbFilePath) {
+  const key = path.resolve(dbFilePath);
+  const cached = connectionCache.get(key);
+  if (!cached) return false;
+  try { cached.close(); } catch (e) { /* ignore */ }
+  connectionCache.delete(key);
+  return true;
+}
+
+/**
  * The item's own stable identity used as the SQLite row's primary key. Every
  * collection except `users` already carries an `id` field (newId()-minted,
  * never re-minted here). `users` items have no `id` field — they are keyed by
@@ -324,4 +344,5 @@ module.exports = {
   initDb, readDb, writeDb, idOf, projectIdOf, DEFAULT_DB_PATH, getConnection,
   // ISO-03 (Phase 3): request-scoped connection resolution.
   requestDbStorage, getOrOpenConnection, runWithDb, currentDbContext, closeAllConnections,
+  closeConnection,
 };

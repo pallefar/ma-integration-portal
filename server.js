@@ -12,6 +12,11 @@ const ragService = require('./ragService');
 const dbFiles = require('./db/dbFiles');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
+const { createDealDatabase } = require('./db/dealSeed');
+// VAL-01 (first instance): validators/deals.js — see its own header for why
+// zod's z.object() default strip-unknown behavior closes D-13 with no extra
+// call needed.
+const dealValidators = require('./validators/deals');
 
 
 const app = express();
@@ -244,6 +249,21 @@ const ROLE_WRITE_POLICY = [
   { prefix: '/api/assessment', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/assessment-instances', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/auth/change-password', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // D-09: every role may change their OWN password
+
+  // D-01/D-03 (Phase 3): ANY authenticated role may select a deal they are a
+  // member of — this is how an employee/pmo member switches INTO a deal
+  // they already belong to, not how deals get created. Placed BEFORE the
+  // broader '/api/deals' entry below (roleAllowedForWrite() takes the FIRST
+  // matching rule) since 'exact: true' + boundary-safe matching would
+  // otherwise never get a chance to override the broader prefix's roles.
+  { prefix: '/api/deals/select', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
+  // D-02: deal creation is admin + hrbp (Integration Lead) only. This same
+  // prefix also covers POST /api/deals/:id/members (membership edits) —
+  // ROLE_WRITE_POLICY's flat-prefix matcher has no wildcard for a fixed
+  // suffix after a dynamic :id segment, so the members route additionally
+  // enforces admin-only INLINE in its own handler (isAdminRequest(req)) on
+  // top of this coarser admin+hrbp gate; see that route's own comment.
+  { prefix: '/api/deals', roles: ['admin', 'hrbp'] },
 
   // Everything else under /api that accepts writes today (projects, employees
   // roster CRUD, integration-tasks, raid, synergies, departments, processes,
@@ -561,6 +581,126 @@ sessions.pruneExpiredSessions(getRuntimeConnection());
 function newId(prefix) {
   return prefix + '_' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
 }
+
+// =====================================================================
+// Deal registry (ISO-01/D-01/D-02/D-03) — the control-plane surface on top
+// of Plan 03's resolver. Every route below is a CONTROL_PLANE_PATH
+// (db/resolver.js), so req.dealContext.kind is ALWAYS 'control' here — these
+// handlers talk to db/controlStore.js exclusively, NEVER readDb()/writeDb()
+// (control.db does not carry the ARRAY_COLLECTIONS schema demo.db/a deal
+// file does; readDb() against it would simply fail to find those tables).
+// Deliberately separate from the demo `/api/projects` section elsewhere in
+// this file (D-04) — a real deal is not a "project", it is an isolated
+// database with its own membership/lifecycle.
+// =====================================================================
+
+app.post('/api/deals', dealValidators.validateBody(dealValidators.CreateDealSchema), (req, res) => {
+  const { name, targetCompany, members } = req.body;
+  const deal = controlStore.createDeal({ name, targetCompany, members, createdBy: req.portalUser.username });
+  try {
+    // T-03-23: provision the deal's own database file AFTER the registry row
+    // exists, matching an existing id — if this throws, the registry row is
+    // rolled back below so a half-created deal is never left selectable.
+    createDealDatabase(deal.id, { name, targetCompany });
+  } catch (e) {
+    console.error(`Error provisioning database for deal ${deal.id}, rolling back registry row:`, e);
+    try { controlStore.deleteDeal(deal.id); }
+    catch (rollbackErr) { console.error(`Error rolling back deal registry row ${deal.id} after provisioning failure:`, rollbackErr); }
+    return res.status(500).json({ error: 'Failed to provision the new deal database.' });
+  }
+  res.json({ success: true, deal });
+});
+
+// D-01: any authenticated role may select a deal it is a member of (not just
+// admin/hrbp — an employee/pmo deal member must be able to switch INTO a
+// deal they already belong to). `dealId: null` is the explicit
+// return-to-demo signal. A refusal (missing/archived/non-member) is a
+// uniform 403 in every case — a distinct 404-for-missing vs 403-for-
+// non-member would let a caller enumerate which deal ids exist purely from
+// the status code, exactly what T-03-17 forbids for a pre-announcement
+// target's very existence.
+app.post('/api/deals/select', dealValidators.validateBody(dealValidators.SelectDealSchema), (req, res) => {
+  if (!req.portalUser.sessionId) {
+    // The D-11 attributed break-glass identity (X-Admin-Token) has no
+    // sessions-table row to persist a deal selection onto.
+    return res.status(400).json({ error: 'Deal selection requires a signed-in session.' });
+  }
+  const { dealId } = req.body;
+  const rawToken = readSessionCookie(req);
+  if (dealId === null) {
+    sessions.bindSessionDeal(getRuntimeConnection(), rawToken, null);
+    return res.json({ success: true, deal: null });
+  }
+  const deal = controlStore.getDeal(dealId);
+  if (!deal || deal.status === 'archived' || !controlStore.isDealMember(dealId, req.portalUser)) {
+    return res.status(403).json({ error: 'You are not a member of that deal.' });
+  }
+  sessions.bindSessionDeal(getRuntimeConnection(), rawToken, dealId);
+  res.json({ success: true, deal });
+});
+
+// D-03: never the full registry for a non-admin — listDealsForUser() itself
+// filters to deals the caller is a member of (admin sees every active deal).
+app.get('/api/deals', (req, res) => {
+  res.json(controlStore.listDealsForUser(req.portalUser));
+});
+
+// D-03: membership edits are admin-only. ROLE_WRITE_POLICY's flat prefix
+// table has no wildcard for "admin+hrbp on /api/deals in general, but
+// admin-only on this one dynamic-:id-segment route" — the broader
+// '/api/deals' policy entry above lets an hrbp session past the gate, so
+// this handler narrows to admin-only itself via the same isAdminRequest()
+// guard several existing admin-only reads already use in this file.
+app.post('/api/deals/:id/members', dealValidators.validateBody(dealValidators.DealMembersSchema), (req, res) => {
+  if (!isAdminRequest(req)) return res.status(403).json({ error: 'Only admin can manage deal membership.' });
+  const dealId = req.params.id;
+  const existing = controlStore.getDeal(dealId);
+  if (!existing) return res.status(404).json({ error: 'Deal not found.' });
+  const before = new Set(existing.members || []);
+  const updated = controlStore.updateDealMembers(dealId, req.body.members);
+  const after = new Set(updated.members || []);
+  // A member removed from the allowlist must also lose their CURRENT
+  // binding to this deal — otherwise their already-selected session keeps
+  // reading/writing this deal's file until it happens to expire.
+  for (const username of before) {
+    if (!after.has(username)) sessions.releaseSessionsForDeal(getRuntimeConnection(), dealId, username);
+  }
+  res.json({ success: true, deal: updated });
+});
+
+// D-02: archive/delete are admin-only, inherited with ZERO new
+// ROLE_WRITE_POLICY entry from the existing `{ prefix: '/api/admin', roles:
+// ['admin'] }` rule (matches migrate-db/revoke-sessions's own precedent).
+// Both require the deal's OWN id as an explicit confirmation value in the
+// body — a mismatch is a 400 and neither the registry row, the file, nor
+// any session binding is touched, so a mis-clicked or replayed request can
+// never destroy a live acquisition workspace.
+app.post('/api/admin/deals/:id/archive', dealValidators.validateBody(dealValidators.DeleteConfirmSchema), (req, res) => {
+  const dealId = req.params.id;
+  if (req.body.confirm !== dealId) {
+    return res.status(400).json({ error: 'Confirmation value must exactly match the deal id.' });
+  }
+  const deal = controlStore.getDeal(dealId);
+  if (!deal) return res.status(404).json({ error: 'Deal not found.' });
+  const updated = controlStore.archiveDeal(dealId);
+  // Every session currently bound to this deal is released back to demo —
+  // an archived deal must never be left silently readable/writable by a
+  // session that selected it before the archive.
+  sessions.releaseSessionsForDeal(getRuntimeConnection(), dealId);
+  res.json({ success: true, deal: updated });
+});
+
+app.delete('/api/admin/deals/:id', dealValidators.validateBody(dealValidators.DeleteConfirmSchema), (req, res) => {
+  const dealId = req.params.id;
+  if (req.body.confirm !== dealId) {
+    return res.status(400).json({ error: 'Confirmation value must exactly match the deal id.' });
+  }
+  const deal = controlStore.getDeal(dealId);
+  if (!deal) return res.status(404).json({ error: 'Deal not found.' });
+  sessions.releaseSessionsForDeal(getRuntimeConnection(), dealId);
+  controlStore.deleteDeal(dealId); // AUD-02: registry row + file only — never touches audit.db (db/controlStore.js's own header)
+  res.json({ success: true });
+});
 
 // Strip server-only secrets from any settings object before returning it to a
 // client. The real API key / DB connection string must never leave the server;
