@@ -24,7 +24,7 @@
 ### Foundation — Deal Isolation & Audit (F2)
 
 - [x] **ISO-01**: Real-deal data is stored in a separate SQLite file per deal (`deals/<id>.db`), physically separate from demo data (`demo.db`) and shared control data (`control.db`)
-- [ ] **ISO-02**: Demo-only mechanics (time-travel day-scaling, XP/leaderboards, gamification) cannot read or mutate any real-deal database
+- [x] **ISO-02**: Demo-only mechanics (time-travel day-scaling, XP/leaderboards, gamification) cannot read or mutate any real-deal database
 - [ ] **ISO-03**: A request is resolved to exactly one deal (or demo) database before any handler touches data, replacing the current `demoMode`-flag + shadow-array project-switch mechanism
 - [ ] **AUD-01**: Every write to deal data is recorded in an append-only audit log capturing who, what, when, and before/after values
 - [x] **AUD-02**: The audit log survives deletion of the deal it describes
@@ -111,7 +111,7 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | AUTH-03 | Phase 2: Mandatory Auth & Roles | Complete |
 | AUTH-04 | Phase 2: Mandatory Auth & Roles | Complete |
 | ISO-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
-| ISO-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| ISO-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | ISO-03 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
 | AUD-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
 | AUD-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |

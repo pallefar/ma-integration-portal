@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: Deal Isolation, Audit Log & Write Validation
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-08-01T06:55:46.981Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-08-01T07:32:23.392Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 12
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 03 (Deal Isolation, Audit Log & Write Validation) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-08-01 — Phase 03 execution started
 
-Progress: [██████░░░░] 58%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [██████░░░░] 58%
 | Phase 02 P02 | 26min | 2 tasks | 6 files |
 | Phase 02 P03 | 6min | 2 tasks | 3 files |
 | Phase 03 P01 | 17min | 3 tasks | 10 files |
+| Phase 03 P02 | 35min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,9 @@ Recent decisions affecting current work:
 - [Phase ?]: zod approved through blocking-human Package Legitimacy Gate (colinhacks/zod, 986M downloads/month, no postinstall script, MIT, 4.4.3=latest); pinned flat like better-sqlite3
 - [Phase ?]: Phase 3 Plan 01: control.db/runtime.db/audit.db exclusion lists (.gitignore + admin download-zip) landed before any of those files can exist (D-07/T-03-01), matching the Phase 1 .db precedent
 - [Phase ?]: Phase 3 Plan 01: secret-bearing settings fields (geminiApiKey, databaseConfig.connectionDetails) placed in gitignored runtime.db's app_state rather than the committed control.db
+- [Phase ?]: Phase 3 Plan 02: D-05 checkpoint approved as-specified — control/demo/runtime classification stands; ISO-03 retires only the flag+shadow-array real-vs-demo switch, demo's own Projects/Custom-M&A switching survives inside demo.db as a showcase feature
+- [Phase ?]: Phase 3 Plan 02: split-db-into-control-demo-deals.js run for real against data/ma-portal.db, producing committed data/control.db + data/demo.db (D-07) and gitignored data/runtime.db; source file byte length/mtime confirmed unchanged
+- [Phase ?]: Phase 3 Plan 02: db/dealSeed.js uses allowlist-direction copy (DEAL_SEED_COLLECTIONS) not a denylist, so future collections added in Phase 4-7 never silently leak demo data into a new real deal
 
 ### Pending Todos
 
@@ -115,6 +119,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-01T06:55:46.973Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-08-01T07:32:23.384Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
