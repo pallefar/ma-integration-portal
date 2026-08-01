@@ -106,6 +106,7 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - **Compatibility**: The demonstration showcase must survive intact — demo mode is a maintained deliverable, not legacy. Both modes ship from one codebase.
 - **Dependencies**: No TE IT dependency this milestone — no SSO, no HRIS integration. The app must remain independently runnable.
 - **Timeline**: No fixed date. Quality over speed; foundation-first sequencing is comfortable.
+- **Release policy**: Every completed milestone ends with a GitHub release — confirm push with the user (commits are local-only until then), tag the version, rebuild the 3 turnkey zips (any-OS / Windows / macOS via `git archive --prefix=ma-integration-portal/` + portable Node reused from prior release assets), and `gh release create --latest`. Milestone close (`/gsd-complete-milestone`) is not done until the release is cut. The deferred Phase-1 Windows/Linux bundle-boot checks and `/gsd-verify-work 1` close-out happen at this release cut.
 
 ## Key Decisions
 
