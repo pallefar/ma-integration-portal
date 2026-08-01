@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 3
+current_phase: 03
 current_phase_name: Deal Isolation, Audit Log & Write Validation
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-08-01T06:32:09.231Z"
-last_activity: 2026-07-31
-last_activity_desc: Phase 2 complete, transitioned to Phase 3
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-08-01T06:55:46.981Z"
+last_activity: 2026-08-01
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 12
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 ## Current Position
 
-Phase: 3 — Deal Isolation, Audit Log & Write Validation
-Plan: Not started
+Phase: 03 (Deal Isolation, Audit Log & Write Validation) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-07-31 — Phase 2 complete, transitioned to Phase 3
+Last activity: 2026-08-01 — Phase 03 execution started
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 58%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [██████████] 100%
 | Phase 02 P01 | 22min | 2 tasks | 6 files |
 | Phase 02 P02 | 26min | 2 tasks | 6 files |
 | Phase 02 P03 | 6min | 2 tasks | 3 files |
+| Phase 03 P01 | 17min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase ?]: employee-demo (D-12) seeded into both db.json and the live data/ma-portal.db SQLite store, since db.json is a frozen fixture and SQLite is the actual source of truth since Phase 1
 - [Phase ?]: X-Admin-Token (D-11) resolves req.portalUser through the same code path as session cookies, feeding the identical ROLE_WRITE_POLICY check rather than an early-return bypass
 - [Phase ?]: Phase 2 Plan 3: Merged the authRequired-redirect logic into the existing admin-token window.fetch wrapper (single coherent wrapper) rather than a standalone second IIFE, per the plan's acceptance criterion that window.fetch not be reassigned via two independent stacked patches
+- [Phase ?]: zod approved through blocking-human Package Legitimacy Gate (colinhacks/zod, 986M downloads/month, no postinstall script, MIT, 4.4.3=latest); pinned flat like better-sqlite3
+- [Phase ?]: Phase 3 Plan 01: control.db/runtime.db/audit.db exclusion lists (.gitignore + admin download-zip) landed before any of those files can exist (D-07/T-03-01), matching the Phase 1 .db precedent
+- [Phase ?]: Phase 3 Plan 01: secret-bearing settings fields (geminiApiKey, databaseConfig.connectionDetails) placed in gitignored runtime.db's app_state rather than the committed control.db
 
 ### Pending Todos
 
@@ -111,6 +115,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-31T19:44:31.551Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-deal-isolation-audit-log-write-validation/03-CONTEXT.md
+Last session: 2026-08-01T06:55:46.973Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None

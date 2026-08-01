@@ -23,15 +23,15 @@
 
 ### Foundation — Deal Isolation & Audit (F2)
 
-- [ ] **ISO-01**: Real-deal data is stored in a separate SQLite file per deal (`deals/<id>.db`), physically separate from demo data (`demo.db`) and shared control data (`control.db`)
+- [x] **ISO-01**: Real-deal data is stored in a separate SQLite file per deal (`deals/<id>.db`), physically separate from demo data (`demo.db`) and shared control data (`control.db`)
 - [ ] **ISO-02**: Demo-only mechanics (time-travel day-scaling, XP/leaderboards, gamification) cannot read or mutate any real-deal database
 - [ ] **ISO-03**: A request is resolved to exactly one deal (or demo) database before any handler touches data, replacing the current `demoMode`-flag + shadow-array project-switch mechanism
 - [ ] **AUD-01**: Every write to deal data is recorded in an append-only audit log capturing who, what, when, and before/after values
-- [ ] **AUD-02**: The audit log survives deletion of the deal it describes
+- [x] **AUD-02**: The audit log survives deletion of the deal it describes
 
 ### Foundation — Validation (F3)
 
-- [ ] **VAL-01**: Every write endpoint validates its input against a schema (type, required fields, length limits) and rejects malformed requests with a clear error
+- [x] **VAL-01**: Every write endpoint validates its input against a schema (type, required fields, length limits) and rejects malformed requests with a clear error
 - [ ] **VAL-02**: Free-text and HTML-bearing fields are sanitized before storage or render, closing the documented XSS gaps
 
 ### Due Diligence Workspace
@@ -110,12 +110,12 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | AUTH-02 | Phase 2: Mandatory Auth & Roles | Complete |
 | AUTH-03 | Phase 2: Mandatory Auth & Roles | Complete |
 | AUTH-04 | Phase 2: Mandatory Auth & Roles | Complete |
-| ISO-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| ISO-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | ISO-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
 | ISO-03 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
 | AUD-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
-| AUD-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
-| VAL-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| AUD-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
+| VAL-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | VAL-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
 | DD-01 | Phase 4: Due Diligence Workspace | Pending |
 | DD-02 | Phase 4: Due Diligence Workspace | Pending |

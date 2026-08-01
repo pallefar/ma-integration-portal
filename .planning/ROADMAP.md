@@ -84,11 +84,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A write with a malformed payload (wrong type, missing required field, over a length limit) is rejected with a clear error, on every write endpoint.
   5. Free-text and HTML-bearing fields round-trip through storage and render without executing injected script.
 
-**Plans**: 6 plans
+**Plans**: 1/6 plans executed
 
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — zod package-legitimacy gate + pinned install, runtime/audit/deal `.db` leak pre-emption in git and download-zip, and the control/runtime/audit schemas (ISO-01, AUD-02, VAL-01)
+- [x] 03-01-PLAN.md — zod package-legitimacy gate + pinned install, runtime/audit/deal `.db` leak pre-emption in git and download-zip, and the control/runtime/audit schemas (ISO-01, AUD-02, VAL-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -175,7 +175,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 |-------|-----------------|--------|-----------|
 | 1. Schema & Migration | 3/3 | In Progress|  |
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
-| 3. Deal Isolation, Audit Log & Write Validation | 0/6 | Planned | - |
+| 3. Deal Isolation, Audit Log & Write Validation | 1/6 | In Progress|  |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
