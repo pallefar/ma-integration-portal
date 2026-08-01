@@ -67,4 +67,46 @@ if (SINGLETON_KEYS.length !== 5) {
   throw new Error(`db/collections.js: expected 5 singleton keys, got ${SINGLETON_KEYS.length}`);
 }
 
-module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS };
+// ISO-01 / D-05: single source of truth for which physical database file
+// (control.db | demo.db | runtime.db) owns each collection/singleton once
+// db.json's single blob-per-row store is physically split
+// (scripts/split-db-into-control-demo-deals.js, Phase 3 Plan 02). `users` is
+// the only array collection routed to control.db — the app-managed account
+// registry belongs alongside the new deal registry, not the demo store.
+// Every OTHER array collection routes to demo.db, INCLUDING all nine
+// `custom*` shadow-lane collections (D-05: they were always showcase data,
+// so a new real deal starts with zero demo-derived rows by construction, not
+// by filtering) — and all five singleton keys route to demo.db too. No
+// collection routes directly to 'runtime' here: runtime.db instead receives
+// two individual FIELD PATHS lifted out of the demo `settings` singleton
+// (see SECRET_SETTINGS_FIELDS below), never a whole collection.
+//
+// The completeness assertion below (same style as the two above) guarantees
+// a collection added in a later phase cannot silently go unclassified —
+// ARRAY_COLLECTIONS/SINGLETON_KEYS grow, this map MUST grow with them or the
+// module fails to load.
+const COLLECTION_TARGETS = {};
+for (const key of ARRAY_COLLECTIONS) {
+  COLLECTION_TARGETS[key] = key === 'users' ? 'control' : 'demo';
+}
+for (const key of SINGLETON_KEYS) {
+  COLLECTION_TARGETS[key] = 'demo';
+}
+
+const VALID_SPLIT_TARGETS = new Set(['control', 'demo', 'runtime']);
+const unclassified = [...ARRAY_COLLECTIONS, ...SINGLETON_KEYS].filter(
+  (key) => !VALID_SPLIT_TARGETS.has(COLLECTION_TARGETS[key])
+);
+if (unclassified.length) {
+  throw new Error(`db/collections.js: COLLECTION_TARGETS is missing/invalid for: ${unclassified.join(', ')}`);
+}
+
+// ISO-01 / D-07: the two credential-bearing settings field PATHS (dotted,
+// for nested lookup) lifted out of the demo `settings` singleton into
+// runtime.db's gitignored `secretSettings` app_state row when the store is
+// split — never left in, or copied into, the COMMITTED control.db or
+// demo.db. Mirrors server.js's existing publicSettings() strip-list, which
+// already keeps these two fields out of every API response.
+const SECRET_SETTINGS_FIELDS = ['geminiApiKey', 'databaseConfig.connectionDetails'];
+
+module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS };
