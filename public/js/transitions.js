@@ -236,8 +236,15 @@ function getTeodorDuckSvg(size = '100%', extraClasses = '') {
 // Make it available globally for other scripts (e.g. dashboard.js, pmo.js)
 window.getTeodorDuckSvg = getTeodorDuckSvg;
 
+// Splash is demo theatre hidden per 2026-08-01 request; implementation below is
+// deliberately kept intact — flip this to false to restore it.
+const SPLASH_SCREEN_DISABLED = true;
 // --- Post-Merger Splash Screen Injection ---
 function triggerPostMergerSplashScreen() {
+  if (SPLASH_SCREEN_DISABLED) {
+    return;
+  }
+
   const path = window.location.pathname;
   const isPmoPage = path === '/' || path.endsWith('/index.html') || path.endsWith('/pmo.html');
   if (!isPmoPage) {
