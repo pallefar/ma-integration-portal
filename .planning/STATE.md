@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 Phase: 03 (Deal Isolation, Audit Log & Write Validation) — EXECUTING
 Plan: 5 of 6
 Status: Ready to execute
-Last activity: 2026-08-01 — Phase 03 execution started
+Last activity: 2026-08-01 — Completed quick task 260801-fj5: Hide Post-Merger splash screen (guarded, reversible)
 
 Progress: [████████░░] 83%
 
@@ -114,7 +114,13 @@ None yet.
 - ⚠️ [Release-cut] Phase 1 Windows/Linux bundle boots + Phase 1 formal close (`/gsd-verify-work 1`) still deferred; 01-VERIFICATION.md remains untracked.
 - ⚠️ [Phase 3] Phase 2 left the `isOpenMode(req)` seam and `sessions.ip` (TRUST_PROXY opt-in) for Phase 3 to bind to the deal-resolver (`DEMO_OPEN && req.isDemo`) and the audit log respectively.
 - ⚠️ [Traceability] phase.complete warned: HOST-01..03 / HARD-01..03 (v2-deferred) appear in REQUIREMENTS.md body but not its Traceability table.
-- [Phase 3 Plan 04] D-04 deal switcher browser human-check (visual distinctness, click-through create/select/switch-back, zero console errors, employee-sees-no-chrome) not yet run — deferred, no browser tool available to the executor; run the plan's own 7-step human-check before closing D-04.
+- [Phase 3 Plan 04] D-04 deal switcher browser human-check PARTIALLY closed by orchestrator via Playwright (2026-08-01, :3335 admin session): switcher pill renders + visually distinct, dropdown lists Demo showcase + "+ New real deal", create-deal modal opens with isolation notice, ZERO console errors. Still open for /gsd-verify-work 3: in-browser create→select→switch-back round-trip + employee-sees-no-chrome check.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260801-fj5 | Hide Post-Merger splash screen via guarded early return (keep code) | 2026-08-01 | f2a0484 | [260801-fj5-hide-post-merger-splash-screen-via-guard](./quick/260801-fj5-hide-post-merger-splash-screen-via-guard/) |
 
 ## Deferred Items
 
