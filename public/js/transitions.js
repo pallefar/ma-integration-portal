@@ -1571,12 +1571,17 @@ document.addEventListener('DOMContentLoaded', () => {
             sbEl.insertBefore(al, footEl);
           }
         }
-        // If the persisted demo role is hidden (and no page URL pins a role), fall back to the first visible role
+        // If the persisted demo role is hidden (and no page URL pins a role), fall back to the first visible role.
+        // A server-verified login role is exempt: the auth handshake rewrites active_demo_role on every
+        // load, so falling back here would reload forever. The sessionStorage latch caps the fallback at
+        // one reload per tab as a backstop for the race where this resolves before /api/auth/me does.
         const isRolePage = /(admin|pmo|dashboard|supporting|employee)\.html/.test(window.location.pathname);
         const persistedRole = localStorage.getItem('active_demo_role') || 'admin';
-        if (!isRolePage && rv[persistedRole] === false) {
+        const serverRole = window.__portalUser && window.__portalUser.role;
+        if (!isRolePage && rv[persistedRole] === false && serverRole !== persistedRole) {
           const fallback = ['hrbp', 'employee', 'pmo', 'supporting', 'admin'].find(r => rv[r] !== false);
-          if (fallback && fallback !== persistedRole) {
+          if (fallback && fallback !== persistedRole && !sessionStorage.getItem('role_visibility_fallback_done')) {
+            sessionStorage.setItem('role_visibility_fallback_done', '1');
             localStorage.setItem('active_demo_role', fallback);
             window.location.reload();
           }
