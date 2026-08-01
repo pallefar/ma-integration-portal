@@ -84,7 +84,31 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A write with a malformed payload (wrong type, missing required field, over a length limit) is rejected with a clear error, on every write endpoint.
   5. Free-text and HTML-bearing fields round-trip through storage and render without executing injected script.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — zod package-legitimacy gate + pinned install, runtime/audit/deal `.db` leak pre-emption in git and download-zip, and the control/runtime/audit schemas (ISO-01, AUD-02, VAL-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — one-way split gate, the control/demo/runtime fan-out migration with a `--verify` union-parity check, and the template-only deal seeder (ISO-01, ISO-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md — session-bound deal resolver (tracer), cutover to the split stores, and demo-only mechanic hard-gating (ISO-01, ISO-02, ISO-03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-04-PLAN.md — deal registry API, membership + destructive-guarded archive/delete, and the header deal switcher (ISO-01, ISO-03)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 03-05-PLAN.md — store-layer audit hook into a separate append-only audit.db, control-plane security events, and the admin audit viewer (AUD-01, AUD-02)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 03-06-PLAN.md — zod validation pipeline across every registered write route plus write-time HTML sanitization (VAL-01, VAL-02)
 
 ### Phase 4: Due Diligence Workspace
 
@@ -151,7 +175,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 |-------|-----------------|--------|-----------|
 | 1. Schema & Migration | 3/3 | In Progress|  |
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
-| 3. Deal Isolation, Audit Log & Write Validation | 0/TBD | Not started | - |
+| 3. Deal Isolation, Audit Log & Write Validation | 0/6 | Planned | - |
 | 4. Due Diligence Workspace | 0/TBD | Not started | - |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
