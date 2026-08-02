@@ -385,3 +385,32 @@ test('write-validation (h): the same schema rejects the same payload identically
     server.close();
   }
 });
+
+// CR-02 (code review 03-REVIEW.md): DEMO_OPEN=1's isOpenMode() short-circuit
+// in server.js's consolidated /api gate must bypass auth/authz ONLY — it
+// must NOT also skip validationMiddleware (VAL-01/VAL-02). Before the fix,
+// this exact payload against POST /api/i18n returned 200 success with zero
+// session under DEMO_OPEN=1; the same payload under normal auth mode has
+// always 400'd (proven by the demoRes/dealRes assertions above, D-14).
+test('write-validation (i) / CR-02: DEMO_OPEN=1 still 400s a malformed write payload — the validation pipeline is not part of the auth bypass', async () => {
+  const originalDemoOpen = process.env.DEMO_OPEN;
+  process.env.DEMO_OPEN = '1';
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    // No cookie at all — under DEMO_OPEN an unbound request resolves to
+    // demo.db and req.portalUser is null, never consulted (AUTH-04).
+    const res = await fetch(`http://127.0.0.1:${port}/api/i18n`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lang: 123, key: null, value: { x: 1 }, junk: 'field' }),
+    });
+    assert.strictEqual(res.status, 400, 'a malformed payload must still be rejected by validationMiddleware even under DEMO_OPEN=1');
+    const body = await res.json();
+    assert.strictEqual(typeof body.error, 'string');
+  } finally {
+    if (originalDemoOpen === undefined) delete process.env.DEMO_OPEN;
+    else process.env.DEMO_OPEN = originalDemoOpen;
+    server.close();
+  }
+});
