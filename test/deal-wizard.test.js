@@ -916,3 +916,36 @@ test('deal-wizard (v): the pending array\'s owner field is visible to the assign
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 04-REVIEW.md IN-03: on the instanceId completion path, respondentName is
+// stamped from the session, never taken from the request body.
+// ---------------------------------------------------------------------------
+
+test('deal-wizard (w): completing a pending instance by id stamps respondentName from the session, ignoring a fabricated request-body value (IN-03)', async () => {
+  const deal = createTestDeal('deal_ww', { members: ['karen', 'pmo'] });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const assignRes = await fetch(`${base}/api/assessment-instances/assign`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateId: TPL_TARGET, owner: 'pmo', dueDate: '2026-09-01' }),
+    });
+    const { instance: pending } = await assignRes.json();
+
+    const completeRes = await fetch(`${base}/api/assessment-instances`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instanceId: pending.id, templateId: TPL_TARGET, respondentName: 'Someone Else', responses: { q_tg_gov1: 4 } }),
+    });
+    assert.strictEqual(completeRes.status, 200);
+    const { instance: completed } = await completeRes.json();
+    assert.strictEqual(completed.respondentName, 'pmo', 'respondentName must be stamped from the session identity, never the caller-supplied value');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});

@@ -2616,7 +2616,16 @@ app.post('/api/assessment-instances', (req, res) => {
     }
     pending.rater = (template.raterModes || ['self']).includes(rater) ? rater : (pending.rater || 'self');
     pending.respondentRole = String(respondentRole || '').slice(0, 60);
-    pending.respondentName = String(respondentName || '').slice(0, 120);
+    // IN-03: on this instanceId completion path specifically, respondentName
+    // is stamped from the verified session identity above, never taken from
+    // the request body — otherwise the legitimate owner (just verified) could
+    // still complete their own assigned row while claiming to be a different
+    // teammate, corrupting the record of who actually closed out the
+    // obligation. req.portalUser is null only in anonymous DEMO_OPEN mode, in
+    // which case the caller-supplied value is kept exactly as before (no real
+    // identity exists to stamp instead). The non-instanceId (ad-hoc
+    // self-service) submission path below is left untouched.
+    pending.respondentName = req.portalUser ? req.portalUser.username : String(respondentName || '').slice(0, 120);
     pending.responses = responses;
     Object.assign(pending, scoresBlock);
     pending.status = 'submitted';
