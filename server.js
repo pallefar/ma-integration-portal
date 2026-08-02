@@ -401,7 +401,15 @@ app.use('/api', (req, res, next) => {
   }
 
   resolver.dealResolverMiddleware(req, res, () => {
-    if (isOpenMode(req)) { req.portalUser = null; return next(); }
+    // CR-02: DEMO_OPEN=1 documents itself as disabling auth/authz only — it
+    // must NOT also bypass VAL-01/VAL-02 shape-validation and sanitization,
+    // which apply regardless of who (or whether anyone) is signed in.
+    // validationMiddleware is a no-op for non-write methods, so this short
+    // circuit still returns immediately for open-mode reads.
+    if (isOpenMode(req)) {
+      req.portalUser = null;
+      return validators.validationMiddleware(req, res, next);
+    }
 
     if (!req.portalUser) return res.status(401).json({ error: 'Login required.', authRequired: true });
 
