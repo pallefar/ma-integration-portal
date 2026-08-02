@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: Deal Isolation, Audit Log & Write Validation
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-08-01T09:24:07.999Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-08-02T03:18:32.293Z"
 last_activity: 2026-08-01
 last_activity_desc: "Completed quick task 260801-fj5: Hide Post-Merger splash screen (guarded, reversible)"
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 03 (Deal Isolation, Audit Log & Write Validation) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-08-01 — Completed quick task 260801-fj5: Hide Post-Merger splash screen (guarded, reversible)
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [████████░░] 83%
 | Phase 03 P02 | 35min | 3 tasks | 7 files |
 | Phase 03 P03 | 65min | 3 tasks | 16 files |
 | Phase 03 P04 | 50min | 3 tasks | 28 files |
+| Phase 03 P05 | ~70min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 3 Plan 04: deal registry control plane (6 routes) built on Plan 03's resolver/controlStore; db/store.js gained closeConnection() and db/sessions.js gained releaseSessionsForDeal() (outside the plan's declared file scope but required by its own acceptance criteria); CONTROL_PLANE_PATHS widened to /api/admin/deals* so an admin's own stale binding can never lock them out of archive/delete
 - [Phase ?]: Phase 3 Plan 04: header deal switcher (public/js/deal-switcher.js) loaded app-wide via transitions.js's existing dynamic-script bootstrap; admin.html pageAccess widened to allow hrbp client-side (D-02's create-deal form has no other page to live on); GET /api/auth/me extended with dealId
 - [Phase ?]: Phase 3 Plan 04: Task 3's browser-only human-check verification was not run in this session (no browser automation tool available) — verified every automatable angle instead (live curl+direct-SQL E2E round trip, source-level XSS/wiring checks, 86/86 regression); a human should complete the plan's 7-step browser check before D-04 is fully closed
+- [Phase ?]: Phase 3 Plan 05: D-09 checkpoint approved as-specified — dedicated gitignored/zip-excluded data/audit.db, store-layer writeDb() hook (not cross-database triggers), best-effort post-commit semantics with loud audit-write-failure surfacing, tamper-evidence deferred to shared-host milestone
+- [Phase ?]: Phase 3 Plan 05: db/resolver.js's bound context extended with actor/request derived from req.portalUser at bind time — the audit hook reads it via AsyncLocalStorage with zero new writeDb() parameter across ~90 call sites; an audited write with no resolved actor throws rather than logging anonymously (D-11), except the one legitimate DEMO_OPEN=1 open-mode bypass on session-revoke-all, which mirrors D-08's demo-writes-unaudited rule instead of crashing
+- [Phase ?]: Phase 3 Plan 05: security events recorded directly from server.js via db/auditHook.js's recordSecurityEvent(), never through db/controlStore.js, so that module's zero-reference-to-audit.db guarantee (AUD-02) is never put at risk; CONTROL_PLANE_PATHS widened to /api/admin/audit mirroring Plan 04's admin-lockout-prevention precedent for /api/admin/deals*
 
 ### Pending Todos
 
@@ -115,6 +119,7 @@ None yet.
 - ⚠️ [Phase 3] Phase 2 left the `isOpenMode(req)` seam and `sessions.ip` (TRUST_PROXY opt-in) for Phase 3 to bind to the deal-resolver (`DEMO_OPEN && req.isDemo`) and the audit log respectively.
 - ⚠️ [Traceability] phase.complete warned: HOST-01..03 / HARD-01..03 (v2-deferred) appear in REQUIREMENTS.md body but not its Traceability table.
 - [Phase 3 Plan 04] D-04 deal switcher browser human-check PARTIALLY closed by orchestrator via Playwright (2026-08-01, :3335 admin session): switcher pill renders + visually distinct, dropdown lists Demo showcase + "+ New real deal", create-deal modal opens with isolation notice, ZERO console errors. Still open for /gsd-verify-work 3: in-browser create→select→switch-back round-trip + employee-sees-no-chrome check.
+- [Phase 3 Plan 05] D-10 admin Audit Log tab browser rendering/click-through NOT run in this session (no browser automation tool available) — every automatable angle (HTTP filter/attribution tests, source-level textContent-only XSS check, full regression suite) was verified. A human should confirm the tab renders and filters correctly before /gsd-verify-work 3.
 
 ### Quick Tasks Completed
 
@@ -134,6 +139,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-01T09:06:27.452Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-08-02T03:18:32.282Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
