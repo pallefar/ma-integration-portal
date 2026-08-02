@@ -123,7 +123,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user without need-to-know for a functional area cannot read that area's DD requests or findings via a direct API call, even with a valid session — filtering happens server-side, and the denial itself is audited.
   4. A DD item can carry a reference link and access-grant record pointing at TE's existing VDR, without the app storing the document itself.
 
-**Plans**: 8/8 plans executed
+**Plans**: 8/10 plans executed (2 gap-closure plans added from UAT)
 
 Plans:
 
@@ -158,6 +158,14 @@ Plans:
 **Wave 8** *(blocked on Wave 7)*
 
 - [x] 04-08-PLAN.md — deal home (setup checklist, readiness completion, DD progress with overdue rollup) + in-app owner nudges (DD-01, DD-02, WIZ-01)
+
+**Wave 9** *(gap closure — UAT G-04-10, blocked on Wave 8)*
+
+- [ ] 04-09-PLAN.md — the setup route marks completion without stamping a skipped step; Finish no longer records DD kickoff as done (WIZ-01, G-04-10)
+
+**Wave 10** *(gap closure — UAT G-04-8, blocked on Wave 9)*
+
+- [ ] 04-10-PLAN.md — the wizard resumes an unfinished deal instead of creating a duplicate, with a server-side duplicate guard (WIZ-01, G-04-8)
 
 ### Phase 5: Synergy Value Capture
 
