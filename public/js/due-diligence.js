@@ -23,7 +23,11 @@
   var STATUSES = ['open', 'requested', 'received', 'reviewed', 'closed'];
   var STATUS_LABELS = { open: 'Open', requested: 'Requested', received: 'Received', reviewed: 'Reviewed', closed: 'Closed' };
 
-  var state = { areas: [], itemsByArea: {}, checklistStatus: '' };
+  // DD-02/DD-03: findings register + one-click conversion.
+  var SEVERITIES = ['low', 'medium', 'high', 'critical'];
+  var SEVERITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
+
+  var state = { areas: [], itemsByArea: {}, checklistStatus: '', findingsByArea: {} };
 
   function el(tag, opts) {
     var node = document.createElement(tag);
@@ -39,7 +43,12 @@
       return Promise.all(state.areas.map(function (a) {
         return fetch('/api/dd/request-items?area=' + encodeURIComponent(a.id))
           .then(function (r) { return r.json(); })
-          .then(function (items) { state.itemsByArea[a.id] = Array.isArray(items) ? items : []; });
+          .then(function (items) { state.itemsByArea[a.id] = Array.isArray(items) ? items : []; })
+          .then(function () {
+            return fetch('/api/dd/findings?area=' + encodeURIComponent(a.id))
+              .then(function (r) { return r.json(); })
+              .then(function (findings) { state.findingsByArea[a.id] = Array.isArray(findings) ? findings : []; });
+          });
       }));
     });
   }
@@ -132,6 +141,116 @@
     return row;
   }
 
+  function updateFinding(id, patch) {
+    var body = Object.assign({ id: id }, patch);
+    return fetch('/api/dd/findings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); }).then(refresh);
+  }
+
+  // DD-03/D-12: one-click conversion. After a successful conversion, refresh()
+  // re-renders the finding with its linked ids as short read-only labels and
+  // the corresponding button disabled — a repeat click on an already-disabled
+  // button is impossible from the UI, and the server itself treats a repeat
+  // POST as a dedup no-op regardless.
+  function convertFinding(id, toTask, toRaid) {
+    return fetch('/api/dd/findings/' + encodeURIComponent(id) + '/convert', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toTask: toTask, toRaid: toRaid })
+    }).then(function (r) { return r.json(); }).then(refresh);
+  }
+
+  function renderFinding(finding) {
+    var row = el('div', { className: 'dd-finding' });
+    var main = el('div', { className: 'dd-finding-main' });
+    main.appendChild(el('div', { className: 'dd-finding-title', text: finding.title }));
+
+    var meta = el('div', { className: 'dd-finding-meta' });
+
+    var sevSel = document.createElement('select');
+    SEVERITIES.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = SEVERITY_LABELS[s] || s;
+      if (finding.severity === s) opt.selected = true;
+      sevSel.appendChild(opt);
+    });
+    sevSel.addEventListener('change', function () { updateFinding(finding.id, { severity: sevSel.value }); });
+    meta.appendChild(sevSel);
+
+    var ownerInput = document.createElement('input');
+    ownerInput.type = 'text';
+    ownerInput.placeholder = 'Owner';
+    ownerInput.value = finding.owner || '';
+    ownerInput.addEventListener('change', function () { updateFinding(finding.id, { owner: ownerInput.value }); });
+    meta.appendChild(ownerInput);
+
+    var statusSel = document.createElement('select');
+    ['open', 'mitigating', 'closed'].forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+      if (finding.status === s) opt.selected = true;
+      statusSel.appendChild(opt);
+    });
+    statusSel.addEventListener('change', function () { updateFinding(finding.id, { status: statusSel.value }); });
+    meta.appendChild(statusSel);
+
+    main.appendChild(meta);
+    row.appendChild(main);
+
+    var hasTask = !!(finding.linkedTaskIds && finding.linkedTaskIds.length);
+    var hasRaid = !!(finding.linkedRaidIds && finding.linkedRaidIds.length);
+
+    var convertRow = el('div', { className: 'dd-finding-convert' });
+
+    var taskBtn = el('button', { className: 'btn btn-secondary', text: 'Create Day-1 task' });
+    taskBtn.type = 'button';
+    taskBtn.disabled = hasTask;
+    taskBtn.addEventListener('click', function () { convertFinding(finding.id, true, false); });
+    convertRow.appendChild(taskBtn);
+
+    var raidBtn = el('button', { className: 'btn btn-secondary', text: 'Create RAID entry' });
+    raidBtn.type = 'button';
+    raidBtn.disabled = hasRaid;
+    raidBtn.addEventListener('click', function () { convertFinding(finding.id, false, true); });
+    convertRow.appendChild(raidBtn);
+
+    if (hasTask) {
+      (finding.linkedTaskIds || []).forEach(function (id) {
+        convertRow.appendChild(el('span', { className: 'dd-finding-linked', text: 'Task created' }));
+      });
+    }
+    if (hasRaid) {
+      (finding.linkedRaidIds || []).forEach(function (id) {
+        convertRow.appendChild(el('span', { className: 'dd-finding-linked', text: 'RAID entry created' }));
+      });
+    }
+
+    row.appendChild(convertRow);
+    return row;
+  }
+
+  function renderFindingAddForm(area) {
+    var form = el('div', { className: 'dd-finding-add' });
+    var titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.placeholder = 'Finding title…';
+    form.appendChild(titleInput);
+    var addBtn = el('button', { className: 'btn btn-primary', text: 'Add finding' });
+    addBtn.type = 'button';
+    addBtn.addEventListener('click', function () {
+      var title = titleInput.value.trim();
+      if (!title) return;
+      fetch('/api/dd/findings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area: area.id, title: title })
+      }).then(function () { titleInput.value = ''; return refresh(); });
+    });
+    form.appendChild(addBtn);
+    return form;
+  }
+
   function renderAddForm(area) {
     var form = el('div', { className: 'dd-add' });
     var textInput = document.createElement('input');
@@ -185,6 +304,18 @@
         items.forEach(function (item) { section.appendChild(renderItem(item)); });
       }
       section.appendChild(renderAddForm(area));
+
+      var findingsSection = el('div', { className: 'dd-findings' });
+      findingsSection.appendChild(el('h3', { className: 'dd-findings-title', text: 'Findings' }));
+      var findings = state.findingsByArea[area.id] || [];
+      if (!findings.length) {
+        findingsSection.appendChild(el('div', { className: 'dd-empty', text: 'No findings yet.' }));
+      } else {
+        findings.forEach(function (finding) { findingsSection.appendChild(renderFinding(finding)); });
+      }
+      findingsSection.appendChild(renderFindingAddForm(area));
+      section.appendChild(findingsSection);
+
       container.appendChild(section);
     });
   }

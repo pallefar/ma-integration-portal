@@ -91,6 +91,18 @@ const DdFindingUpsertSchema = z.object({
 registerSchema('POST', '/api/dd/findings', DdFindingUpsertSchema);
 registerSchema('DELETE', '/api/dd/findings/:id', EmptyBodySchema);
 
+/** POST /api/dd/findings/:id/convert — D-12: two optional booleans, with a
+ * refine forbidding the no-op call (both false/absent). */
+const DdFindingConvertSchema = z.object({
+  toTask: z.boolean().optional(),
+  toRaid: z.boolean().optional(),
+}).refine((data) => data.toTask === true || data.toRaid === true, {
+  message: 'At least one of toTask or toRaid must be true.',
+  path: ['toTask'],
+});
+
+registerSchema('POST', '/api/dd/findings/:id/convert', DdFindingConvertSchema);
+
 module.exports = {
   DdRequestItemUpsertSchema,
   DD_STATUSES,
@@ -98,4 +110,5 @@ module.exports = {
   DdFindingUpsertSchema,
   DD_FINDING_SEVERITIES,
   DD_FINDING_STATUSES,
+  DdFindingConvertSchema,
 };

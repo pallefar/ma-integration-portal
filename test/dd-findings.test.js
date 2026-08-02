@@ -351,3 +351,205 @@ test('dd-findings (j): an existing RAID entry created before this change still r
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Task 3: one-click conversion — bidirectional references and source dedup.
+// ---------------------------------------------------------------------------
+
+const DD_AREA_WORKSTREAM = {
+  legal: 'ws_legal', financial: 'ws_finance', tax: 'ws_finance', hr: 'ws_hr',
+  it: 'ws_it', commercial: 'ws_sales', operations: 'ws_ops', complianceEsg: 'ws_legal',
+};
+
+test('dd-findings (k): converting a critical finding to both a task and a RAID entry preserves severity, sets the workstream from the mapping, and links both directions', async () => {
+  const deal = freshDeal('deal_ddfk');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/findings`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', title: 'A critical legal finding', severity: 'critical', owner: 'Karen' }),
+    });
+    const { finding } = await createRes.json();
+
+    const convertRes = await fetch(`${base}/api/dd/findings/${finding.id}/convert`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toTask: true, toRaid: true }),
+    });
+    assert.strictEqual(convertRes.status, 200);
+    const result = await convertRes.json();
+    assert.strictEqual(result.success, true);
+    assert.ok(result.task, 'a task must be created');
+    assert.ok(result.raid, 'a RAID entry must be created');
+    assert.strictEqual(result.raid.severity, 'critical', 'the RAID entry\'s severity must still be critical — no downgrade anywhere on the path');
+    assert.strictEqual(result.task.workstreamId, DD_AREA_WORKSTREAM.legal);
+    assert.strictEqual(result.raid.workstreamId, DD_AREA_WORKSTREAM.legal);
+    assert.strictEqual(result.task.source, 'dd-finding:' + finding.id);
+    assert.strictEqual(result.raid.source, 'dd-finding:' + finding.id);
+    assert.strictEqual(result.finding.linkedTaskIds.length, 1);
+    assert.strictEqual(result.finding.linkedTaskIds[0], result.task.id);
+    assert.strictEqual(result.finding.linkedRaidIds.length, 1);
+    assert.strictEqual(result.finding.linkedRaidIds[0], result.raid.id);
+
+    // Read the RAID entry back through GET /api/raid to prove the severity
+    // survived a real round trip, not just the convert response.
+    const raidList = await (await fetch(`${base}/api/raid`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    const raidReadBack = raidList.find((r) => r.id === result.raid.id);
+    assert.ok(raidReadBack);
+    assert.strictEqual(raidReadBack.severity, 'critical');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-findings (l): the created task\'s and entry\'s workstream ids match DD_AREA_WORKSTREAM for each of the eight areas', async () => {
+  const deal = freshDeal('deal_ddfl', { memberGrants: {} });
+  // hrbp/admin see every area; use karen (hrbp) to convert across all 8.
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    for (const area of Object.keys(DD_AREA_WORKSTREAM)) {
+      const createRes = await fetch(`${base}/api/dd/findings`, {
+        method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area, title: `Finding for ${area}`, severity: 'medium' }),
+      });
+      const { finding } = await createRes.json();
+
+      const convertRes = await fetch(`${base}/api/dd/findings/${finding.id}/convert`, {
+        method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toTask: true, toRaid: true }),
+      });
+      const result = await convertRes.json();
+      assert.strictEqual(result.task.workstreamId, DD_AREA_WORKSTREAM[area], `area ${area} must map to ${DD_AREA_WORKSTREAM[area]} on the task`);
+      assert.strictEqual(result.raid.workstreamId, DD_AREA_WORKSTREAM[area], `area ${area} must map to ${DD_AREA_WORKSTREAM[area]} on the RAID entry`);
+    }
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-findings (m): converting the same finding a second time creates nothing new and returns the same ids; lane lengths stay unchanged', async () => {
+  const deal = freshDeal('deal_ddfm');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/findings`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'it', title: 'A finding converted twice', severity: 'high' }),
+    });
+    const { finding } = await createRes.json();
+
+    const first = await (await fetch(`${base}/api/dd/findings/${finding.id}/convert`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toTask: true, toRaid: true }),
+    })).json();
+
+    const tasksAfterFirst = await (await fetch(`${base}/api/integration-tasks`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    const raidAfterFirst = await (await fetch(`${base}/api/raid`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+
+    const second = await (await fetch(`${base}/api/dd/findings/${finding.id}/convert`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toTask: true, toRaid: true }),
+    })).json();
+
+    assert.strictEqual(second.task.id, first.task.id, 're-converting must return the SAME task id, never a new one');
+    assert.strictEqual(second.raid.id, first.raid.id, 're-converting must return the SAME RAID entry id, never a new one');
+    assert.strictEqual(second.finding.linkedTaskIds.length, 1, 're-converting must not duplicate the linked task id');
+    assert.strictEqual(second.finding.linkedRaidIds.length, 1, 're-converting must not duplicate the linked RAID id');
+
+    const tasksAfterSecond = await (await fetch(`${base}/api/integration-tasks`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    const raidAfterSecond = await (await fetch(`${base}/api/raid`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    assert.strictEqual(tasksAfterSecond.length, tasksAfterFirst.length, 'the task lane length must be unchanged by a repeat conversion');
+    assert.strictEqual(raidAfterSecond.length, raidAfterFirst.length, 'the RAID lane length must be unchanged by a repeat conversion');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-findings (n): a conversion requested with both flags false is rejected with a 400', async () => {
+  const deal = freshDeal('deal_ddfn');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/findings`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'operations', title: 'Neither-flag finding', severity: 'low' }),
+    });
+    const { finding } = await createRes.json();
+
+    const res = await fetch(`${base}/api/dd/findings/${finding.id}/convert`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toTask: false, toRaid: false }),
+    });
+    assert.strictEqual(res.status, 400, 'a conversion requesting neither target must be rejected');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-findings (o): a member uncleared for the finding\'s area gets the uniform 403 and one dd-access-denied row; no task and no RAID entry are created', async () => {
+  const deal = freshDeal('deal_ddfo', { memberGrants: { pmo: { ddAreas: ['financial'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/findings`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', title: 'A legal finding pmo cannot convert', severity: 'high' }),
+    });
+    const { finding } = await createRes.json();
+
+    const before = deniedRows(deal.id).length;
+    const res = await fetch(`${base}/api/dd/findings/${finding.id}/convert`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toTask: true, toRaid: true }),
+    });
+    assert.strictEqual(res.status, 403, 'an uncleared conversion attempt must be refused with the uniform 403');
+
+    const rows = deniedRows(deal.id);
+    assert.strictEqual(rows.length, before + 1, 'the refused conversion attempt must be audited');
+
+    const tasks = await (await fetch(`${base}/api/integration-tasks`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    const raidEntries = await (await fetch(`${base}/api/raid`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    assert.strictEqual(tasks.length, 0, 'a refused conversion must create no task');
+    assert.strictEqual(raidEntries.length, 0, 'a refused conversion must create no RAID entry');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});

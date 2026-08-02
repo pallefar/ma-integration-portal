@@ -157,6 +157,9 @@ const RaidUpsertSchema = z.object({
   workstreamId: z.string().trim().max(60).optional(),
   status: z.enum(RAID_STATUSES).optional(),
   notes: z.string().trim().max(TEXT_MAX).optional(),
+  // D-12: the reverse half of a bidirectional DD-finding<->RAID link — see
+  // server.js's POST /api/dd/findings/:id/convert.
+  source: z.string().trim().max(160).optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Entry title is required.',
   path: ['title'],

@@ -2894,6 +2894,11 @@ app.post('/api/raid', (req, res) => {
     workstreamId: String(b.workstreamId || 'ws_imo').slice(0, 60),
     status: RAID_STATUSES.includes(b.status) ? b.status : 'open',
     notes: String(b.notes || '').slice(0, 600),
+    // D-12: the reverse half of a bidirectional finding<->RAID link — a
+    // manually-created entry carries an empty source; POST
+    // /api/dd/findings/:id/convert (below) sets 'dd-finding:<findingId>'.
+    // Bounded the same way the task shape's own `source` field is (160).
+    source: String(b.source || '').slice(0, 160),
     createdAt: new Date().toISOString()
   };
   lane.push(item);
@@ -3221,6 +3226,94 @@ app.post('/api/dd/findings', (req, res) => {
   lane.push(finding);
   writeDb(db);
   res.status(201).json({ success: true, finding });
+});
+
+// D-25: which workstream a converted finding's Day-1 task/RAID entry lands
+// under — one hard-coded mapping, shaped exactly like REMEDIATION_WS above,
+// not a per-conversion choice. `tax` folds into the finance workstream
+// because no dedicated tax workstream exists (mirrors REMEDIATION_WS's own
+// fold-in reasoning). `complianceEsg` folds into the legal workstream
+// because that workstream's own label already reads as legal and
+// compliance.
+const DD_AREA_WORKSTREAM = {
+  legal: 'ws_legal', financial: 'ws_finance', tax: 'ws_finance', hr: 'ws_hr',
+  it: 'ws_it', commercial: 'ws_sales', operations: 'ws_ops', complianceEsg: 'ws_legal',
+};
+
+// One-click DD-02/DD-03/D-12 conversion: turns a finding into a pre-filled
+// Day-1 task and/or RAID entry, bidirectionally linked and deduped by a
+// stable 'dd-finding:<findingId>' source string so re-clicking is a no-op.
+// A NEW route — deliberately not calling/extending
+// POST /api/integration-tasks/from-remediation (that route takes an
+// assessmentTemplateId and derives its work from dimension scores; there is
+// no finding-shaped input path into it). Only the PATTERN is reused: dedup
+// by source, pre-filled fields, one write at the end.
+app.post('/api/dd/findings/:id/convert', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const findingsLane = ddFindingsLane(db);
+  const finding = findingsLane.find((f) => f.id === req.params.id);
+  // Clearance is asserted BEFORE any field of the finding is read or
+  // returned — the convert route must never become a side channel that
+  // confirms a finding exists in an area the caller cannot see.
+  if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+
+  const source = 'dd-finding:' + finding.id;
+  const workstreamId = DD_AREA_WORKSTREAM[finding.area] || 'ws_imo';
+  let mutated = false;
+  let task = null;
+  let raidEntry = null;
+
+  if (b.toTask) {
+    const tLane = taskLane(db);
+    task = tLane.find((t) => t.source === source) || null;
+    if (!task) {
+      task = {
+        id: newId('task'),
+        title: finding.title,
+        workstreamId,
+        phase: 'day1',
+        owner: finding.owner || '',
+        due: '',
+        status: 'todo',
+        source,
+        createdAt: new Date().toISOString(),
+      };
+      tLane.push(task);
+      mutated = true;
+    }
+    if (!finding.linkedTaskIds.includes(task.id)) { finding.linkedTaskIds.push(task.id); mutated = true; }
+  }
+
+  if (b.toRaid) {
+    const rLane = raidLane(db);
+    raidEntry = rLane.find((r) => r.source === source) || null;
+    if (!raidEntry) {
+      raidEntry = {
+        id: newId('raid'),
+        type: 'risk',
+        title: finding.title,
+        // D-11/T-04-24: copied VERBATIM — no mapping table, no clamping.
+        // finding.severity is already one of DD_FINDING_SEVERITIES' four
+        // values, and RAID_LEVELS (server.js, above) now carries the same
+        // four values (Task 2), so this can never fall through to a default.
+        severity: finding.severity,
+        owner: finding.owner || '',
+        workstreamId,
+        status: 'open',
+        notes: finding.notes || '',
+        source,
+        createdAt: new Date().toISOString(),
+      };
+      rLane.push(raidEntry);
+      mutated = true;
+    }
+    if (!finding.linkedRaidIds.includes(raidEntry.id)) { finding.linkedRaidIds.push(raidEntry.id); mutated = true; }
+  }
+
+  if (mutated) writeDb(db);
+  res.json({ success: true, task, raid: raidEntry, finding });
 });
 
 // =====================================================================
