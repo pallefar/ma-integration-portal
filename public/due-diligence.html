@@ -28,6 +28,18 @@
     .dd-add input[type="text"]{ flex:1; min-width:200px; }
     .dd-checklist-status{ margin-bottom:1rem; }
     .dd-checklist-status-line{ font-size:.78rem; color:var(--text-dim); margin-top:.5rem; }
+    .dd-vdr-editor{ display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; margin-top:.4rem; font-size:.75rem; }
+    .dd-vdr-editor input{ padding:.3rem .55rem; border:1.5px solid var(--border-color); border-radius:7px; font-family:inherit; font-size:.75rem; }
+    .dd-vdr-current{ display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; }
+    .dd-vdr-folder{ color:var(--text-dim); font-size:.72rem; }
+    .dd-vdr-list{ margin-top:1rem; }
+    .dd-vdr-list-title{ font-size:.85rem; font-weight:800; color:var(--te-dark-teal); margin:0 0 .4rem; }
+    .dd-vdr-row{ font-size:.78rem; padding:.3rem 0; border-bottom:1px dashed var(--border-color); }
+    .dd-vdr-item{ color:var(--text-dim); }
+    .dd-vdr-grant{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.75rem 1rem; margin-bottom:1rem; display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+    .dd-vdr-grant-title{ width:100%; font-size:.9rem; font-weight:800; color:var(--te-dark-teal); margin:0 0 .3rem; }
+    .dd-vdr-grant input{ padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; }
+    .dd-vdr-grant-status{ width:100%; font-size:.76rem; color:var(--text-dim); margin-top:.4rem; }
   </style>
 </head>
 <body>
@@ -52,12 +64,13 @@
           <h1>Due Diligence</h1>
           <p>Request items tracked by functional area — you see only the areas you are cleared for.</p>
         </div>
+        <div id="dd-vdr-grant"></div>
         <div id="dd-checklist-status" class="dd-checklist-status"></div>
         <div id="dd-areas"></div>
       </div>
     </main>
   </div>
 
-  <script src="/js/due-diligence.js?v=1784600003"></script>
+  <script src="/js/due-diligence.js?v=1784700002"></script>
 </body>
 </html>

@@ -27,7 +27,15 @@
   var SEVERITIES = ['low', 'medium', 'high', 'critical'];
   var SEVERITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
 
-  var state = { areas: [], itemsByArea: {}, checklistStatus: '', findingsByArea: {} };
+  // DD-05/D-17/D-18: data-room reference editor + area aggregate + the
+  // audited access-grant form. `role`/`dealId` are populated from
+  // GET /api/auth/me before the first render (see the DOMContentLoaded
+  // handler at the bottom of this file) — the grant form is visible only to
+  // admin/hrbp (the same audience D-02 gives area grants to).
+  var state = {
+    areas: [], itemsByArea: {}, checklistStatus: '', findingsByArea: {},
+    vdrLinksByArea: {}, role: '', dealId: null, vdrGrantStatus: '',
+  };
 
   function el(tag, opts) {
     var node = document.createElement(tag);
@@ -40,7 +48,7 @@
   function load() {
     return fetch('/api/dd/areas').then(function (r) { return r.json(); }).then(function (areas) {
       state.areas = Array.isArray(areas) ? areas : [];
-      return Promise.all(state.areas.map(function (a) {
+      var perArea = state.areas.map(function (a) {
         return fetch('/api/dd/request-items?area=' + encodeURIComponent(a.id))
           .then(function (r) { return r.json(); })
           .then(function (items) { state.itemsByArea[a.id] = Array.isArray(items) ? items : []; })
@@ -49,7 +57,14 @@
               .then(function (r) { return r.json(); })
               .then(function (findings) { state.findingsByArea[a.id] = Array.isArray(findings) ? findings : []; });
           });
-      }));
+      });
+      // D-17: ONE aggregate fetch, not per-area — GET /api/dd/vdr-links
+      // already groups server-side by cleared area.
+      var vdrAgg = fetch('/api/dd/vdr-links').then(function (r) { return r.json(); }).then(function (agg) {
+        state.vdrLinksByArea = {};
+        (agg && agg.areas ? agg.areas : []).forEach(function (a) { state.vdrLinksByArea[a.area] = a.links || []; });
+      });
+      return Promise.all(perArea.concat([vdrAgg]));
     });
   }
 
@@ -137,8 +152,81 @@
     controls.appendChild(blockedLabel);
 
     main.appendChild(controls);
+    main.appendChild(renderVdrLinkEditor(item));
     row.appendChild(main);
     return row;
+  }
+
+  // DD-05/D-17: `vdrLink` is set/cleared through the SAME upsert route every
+  // other item field already uses — never a second route. An explicit
+  // `vdrLink: null` clears it.
+  function updateVdrLink(itemId, vdrLink) {
+    return fetch('/api/dd/request-items', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: itemId, vdrLink: vdrLink })
+    }).then(function (r) { return r.json(); }).then(refresh);
+  }
+
+  // T-04-27: re-checks the URL scheme at RENDER time — never trusts a stored
+  // value blindly — following public/js/transitions.js's openHtmlSlide
+  // scheme-guard precedent (a stored value could predate a validation
+  // change). Returns null (render as inert text) for anything not http(s).
+  function safeVdrUrl(url) {
+    try {
+      var u = new URL(url, window.location.origin);
+      if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+    } catch (e) { /* fall through to null */ }
+    return null;
+  }
+
+  function renderVdrLinkEditor(item) {
+    var wrap = el('div', { className: 'dd-vdr-editor' });
+    var link = item.vdrLink;
+    if (link) {
+      var current = el('div', { className: 'dd-vdr-current' });
+      var safe = safeVdrUrl(link.url);
+      if (safe) {
+        var a = document.createElement('a');
+        a.href = safe;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = link.label || link.folderRef || link.url;
+        current.appendChild(a);
+      } else {
+        // Renders as inert text — the stored scheme failed the render-time
+        // re-check, so it must never become a live link (T-04-27).
+        current.appendChild(el('span', { text: link.label || link.folderRef || link.url }));
+      }
+      current.appendChild(el('span', { className: 'dd-vdr-folder', text: ' (' + link.folderRef + ')' }));
+      var clearBtn = el('button', { className: 'btn btn-tertiary', text: 'Clear' });
+      clearBtn.type = 'button';
+      clearBtn.addEventListener('click', function () { updateVdrLink(item.id, null); });
+      current.appendChild(clearBtn);
+      wrap.appendChild(current);
+    } else {
+      var urlInput = document.createElement('input');
+      urlInput.type = 'text';
+      urlInput.placeholder = 'Data room URL (https://…)';
+      var folderInput = document.createElement('input');
+      folderInput.type = 'text';
+      folderInput.placeholder = 'Folder / index reference';
+      var labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.placeholder = 'Label (optional)';
+      var saveBtn = el('button', { className: 'btn btn-tertiary', text: 'Save data room link' });
+      saveBtn.type = 'button';
+      saveBtn.addEventListener('click', function () {
+        var url = urlInput.value.trim();
+        var folderRef = folderInput.value.trim();
+        if (!url || !folderRef) return;
+        updateVdrLink(item.id, { url: url, folderRef: folderRef, label: labelInput.value.trim() });
+      });
+      wrap.appendChild(urlInput);
+      wrap.appendChild(folderInput);
+      wrap.appendChild(labelInput);
+      wrap.appendChild(saveBtn);
+    }
+    return wrap;
   }
 
   function updateFinding(id, patch) {
@@ -271,7 +359,99 @@
     return form;
   }
 
+  // D-17: the per-area aggregate of every item's data-room reference, from
+  // the SAME GET /api/dd/vdr-links response load() already fetched once —
+  // this function only reads state.vdrLinksByArea, it never re-fetches.
+  function renderVdrLinksList(area) {
+    var section = el('div', { className: 'dd-vdr-list' });
+    section.appendChild(el('h3', { className: 'dd-vdr-list-title', text: 'Data room references' }));
+    var links = state.vdrLinksByArea[area.id] || [];
+    if (!links.length) {
+      section.appendChild(el('div', { className: 'dd-empty', text: 'No data room references yet.' }));
+      return section;
+    }
+    links.forEach(function (link) {
+      var row = el('div', { className: 'dd-vdr-row' });
+      var safe = safeVdrUrl(link.url);
+      if (safe) {
+        var a = document.createElement('a');
+        a.href = safe;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = link.label || link.folderRef;
+        row.appendChild(a);
+      } else {
+        row.appendChild(el('span', { text: link.label || link.folderRef }));
+      }
+      row.appendChild(el('span', { className: 'dd-vdr-folder', text: ' — ' + link.folderRef }));
+      row.appendChild(el('span', { className: 'dd-vdr-item', text: ' (' + link.text + ')' }));
+      section.appendChild(row);
+    });
+    return section;
+  }
+
+  // D-18: the workspace-header access-grant form. Visible only to admin/hrbp
+  // (the same audience D-02 gives area grants to) — every other role never
+  // even sees the container populated. The confirmation line deliberately
+  // says the grant was RECORDED IN THE AUDIT LOG, not that access has been
+  // PROVISIONED — this app records the decision; the data room itself grants
+  // the access.
+  function recordVdrGrant(username, vdrRef, note) {
+    if (!state.dealId) {
+      state.vdrGrantStatus = 'No active deal is selected.';
+      return render();
+    }
+    return fetch('/api/deals/' + encodeURIComponent(state.dealId) + '/vdr-grants', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, vdrRef: vdrRef, note: note })
+    }).then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+      .then(function (result) {
+        state.vdrGrantStatus = result.ok
+          ? 'Recorded in the audit log: ' + username + ' granted access to ' + vdrRef + '.'
+          : ((result.body && result.body.error) || 'Failed to record the grant.');
+        render();
+      });
+  }
+
+  function renderVdrGrantForm() {
+    var container = document.getElementById('dd-vdr-grant');
+    if (!container) return;
+    container.textContent = '';
+    if (state.role !== 'admin' && state.role !== 'hrbp') return;
+
+    var wrap = el('div', { className: 'dd-vdr-grant' });
+    wrap.appendChild(el('h3', { className: 'dd-vdr-grant-title', text: 'Record data-room access grant' }));
+
+    var usernameInput = document.createElement('input');
+    usernameInput.type = 'text';
+    usernameInput.placeholder = 'Username';
+    var vdrRefInput = document.createElement('input');
+    vdrRefInput.type = 'text';
+    vdrRefInput.placeholder = 'Data room area / folder reference';
+    var noteInput = document.createElement('input');
+    noteInput.type = 'text';
+    noteInput.placeholder = 'Note (optional)';
+    var submitBtn = el('button', { className: 'btn btn-secondary', text: 'Record grant' });
+    submitBtn.type = 'button';
+    submitBtn.addEventListener('click', function () {
+      var username = usernameInput.value.trim();
+      var vdrRef = vdrRefInput.value.trim();
+      if (!username || !vdrRef) return;
+      recordVdrGrant(username, vdrRef, noteInput.value.trim());
+    });
+
+    wrap.appendChild(usernameInput);
+    wrap.appendChild(vdrRefInput);
+    wrap.appendChild(noteInput);
+    wrap.appendChild(submitBtn);
+    if (state.vdrGrantStatus) {
+      wrap.appendChild(el('div', { className: 'dd-vdr-grant-status', text: state.vdrGrantStatus }));
+    }
+    container.appendChild(wrap);
+  }
+
   function render() {
+    renderVdrGrantForm();
     var statusContainer = document.getElementById('dd-checklist-status');
     if (statusContainer) {
       statusContainer.textContent = '';
@@ -316,11 +496,21 @@
       findingsSection.appendChild(renderFindingAddForm(area));
       section.appendChild(findingsSection);
 
+      section.appendChild(renderVdrLinksList(area));
+
       container.appendChild(section);
     });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    load().then(render);
+    // D-18: resolve the caller's role + current deal id ONCE, before the
+    // first render, so the access-grant form's visibility gate and its
+    // target deal id are both known up front — mirrors
+    // public/js/deal-switcher.js's own GET /api/auth/me bootstrap.
+    fetch('/api/auth/me').then(function (r) { return r.json(); }).then(function (me) {
+      state.role = (me && me.user && me.user.role) || '';
+      state.dealId = (me && me.dealId) || null;
+    }).catch(function () { /* best-effort — the grant form simply stays hidden */ })
+      .then(function () { return load().then(render); });
   });
 })();

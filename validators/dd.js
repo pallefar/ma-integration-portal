@@ -24,13 +24,41 @@ const DUE_DATE_MAX = 10; // 'YYYY-MM-DD'
 // D-14: the five-value request-item lifecycle.
 const DD_STATUSES = ['open', 'requested', 'received', 'reviewed', 'closed'];
 
+// DD-05/D-17: at most ONE data-room reference per item — never an array,
+// never merged. `url`/`folderRef` are TE's own virtual-data-room pointer
+// (a URL plus the data room's own folder or index identifier); `label` is a
+// short optional human caption. Deliberately does NOT declare `updatedAt`/
+// `updatedBy` — z.object(shape) strips unknown keys by default (D-13), so a
+// caller-supplied value for either is dropped before the handler ever sees
+// it; both are stamped server-side (server.js). `url` is constrained to an
+// ABSOLUTE http/https URL: the bare `.url()` check alone accepts any URL
+// scheme (including `javascript:`/`data:`), so the explicit .refine() below
+// closes that gap — a data-room reference that is not a web URL is a
+// mistake or an injection attempt, never valid input (T-04-27).
+const VDR_URL_MAX = 2000;
+const VDR_FOLDER_REF_MAX = 200;
+const VDR_LABEL_MAX = 200;
+
+const VdrLinkSchema = z.object({
+  url: z.string().trim().min(1, 'Data room URL is required.').max(VDR_URL_MAX)
+    .url('Data room URL must be a valid absolute URL.')
+    .refine((val) => {
+      try { const u = new URL(val); return u.protocol === 'http:' || u.protocol === 'https:'; }
+      catch (e) { return false; }
+    }, { message: 'Data room URL must use http or https.' }),
+  folderRef: z.string().trim().min(1, 'Data room folder reference is required.').max(VDR_FOLDER_REF_MAX),
+  label: z.string().trim().max(VDR_LABEL_MAX).optional(),
+}).nullable().optional();
+
 /** POST /api/dd/request-items — upsert-by-id. `text` and `area` are both
  * required on CREATE (no `id`); both become optional on UPDATE (`id`
  * present), enforced by the two refine()s below — mirroring
  * validators/workstream.js's TaskUpsertSchema.refine() shape. `area`, when
  * present on an update, additionally requires clearance for the NEW area —
  * that check is the route handler's job (db/accessPolicy.js), not this
- * schema's; this schema only proves the value is one of the eight valid ids. */
+ * schema's; this schema only proves the value is one of the eight valid ids.
+ * `vdrLink` (DD-05/D-17) folds in here rather than a second route — an
+ * explicit `null` clears the reference; an absent key leaves it untouched. */
 const DdRequestItemUpsertSchema = z.object({
   id: z.string().trim().min(1).max(ID_MAX).optional(),
   text: z.string().trim().min(1, 'Request item text is required.').max(TEXT_MAX).optional(),
@@ -41,6 +69,7 @@ const DdRequestItemUpsertSchema = z.object({
   blocked: z.boolean().optional(),
   notes: z.string().trim().max(NOTES_MAX).optional(),
   source: z.string().trim().max(SOURCE_MAX).optional(),
+  vdrLink: VdrLinkSchema,
 }).refine((data) => data.id || (data.text && data.text.trim()), {
   message: 'Request item text is required.',
   path: ['text'],
@@ -106,6 +135,7 @@ registerSchema('POST', '/api/dd/findings/:id/convert', DdFindingConvertSchema);
 module.exports = {
   DdRequestItemUpsertSchema,
   DD_STATUSES,
+  VdrLinkSchema,
   InstantiateDdRequestsSchema,
   DdFindingUpsertSchema,
   DD_FINDING_SEVERITIES,

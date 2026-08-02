@@ -2938,6 +2938,27 @@ function publicDdItem(item) {
   return Object.assign({}, item, { overdue: computeOverdue(item) });
 }
 
+// DD-05/D-17: applies `vdrLink` from the upsert body onto `item`, called on
+// BOTH the create and update paths below. Absent key -> item's own value is
+// left untouched. Explicit `vdrLink: null` -> cleared. A non-null value
+// REPLACES the stored value wholesale (never merged, never appended) — an
+// item carries at most ONE data-room reference, so posting the same
+// reference twice leaves exactly one. `updatedAt`/`updatedBy` are stamped
+// HERE, server-side, never read from the body — validators/dd.js's
+// VdrLinkSchema does not even declare those two keys, so a caller-supplied
+// value for either is already stripped before this function runs (T-04-31).
+function applyVdrLink(item, b, req) {
+  if (!('vdrLink' in b)) return;
+  if (b.vdrLink === null) { item.vdrLink = null; return; }
+  item.vdrLink = {
+    url: b.vdrLink.url,
+    folderRef: b.vdrLink.folderRef,
+    label: b.vdrLink.label || '',
+    updatedAt: new Date().toISOString(),
+    updatedBy: req.portalUser.username,
+  };
+}
+
 // D-16: every DD_AREAS entry the caller is cleared for (never the full
 // fixed list) — the page (public/js/due-diligence.js) renders only what
 // this route returns and holds no client-side area list of its own.
@@ -3050,6 +3071,7 @@ app.post('/api/dd/request-items', (req, res) => {
     if (b.blocked !== undefined) item.blocked = !!b.blocked;
     if (b.notes !== undefined) item.notes = String(b.notes || '').slice(0, 2000);
     if (b.area !== undefined) item.area = b.area;
+    applyVdrLink(item, b, req);
     writeDb(db);
     return res.json({ success: true, item: publicDdItem(item) });
   }
@@ -3069,9 +3091,40 @@ app.post('/api/dd/request-items', (req, res) => {
     createdAt: new Date().toISOString(),
     createdBy: req.portalUser.username,
   };
+  applyVdrLink(item, b, req);
   lane.push(item);
   writeDb(db);
   res.status(201).json({ success: true, item: publicDdItem(item) });
+});
+
+// DD-05/D-17: the area-level aggregate of every item's data-room reference —
+// "who has seen what part of the data room" in one place, without the app
+// ever holding a document of its own. Reuses filterByAreaGrant() on the
+// SAME clean-room discipline every other DD list route already applies
+// (T-04-28): an uncleared area's items are dropped BEFORE grouping, so an
+// aggregate can never leak an uncleared item's reference. An area with no
+// referenced item is OMITTED entirely (never returned with an empty
+// `links` array) — mirroring GET /api/dd/areas's own D-16 shape, so absence
+// carries no signal about whether the caller is cleared for it.
+app.get('/api/dd/vdr-links', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const lane = ddRequestLane(db);
+  const withLinks = lane.filter((item) => item.vdrLink);
+  const visible = accessPolicy.filterByAreaGrant(withLinks, deal, req.portalUser);
+  const byArea = new Map();
+  visible.forEach((item) => {
+    if (!byArea.has(item.area)) byArea.set(item.area, []);
+    byArea.get(item.area).push({
+      itemId: item.id, text: item.text, url: item.vdrLink.url, folderRef: item.vdrLink.folderRef,
+      label: item.vdrLink.label || '', updatedAt: item.vdrLink.updatedAt, updatedBy: item.vdrLink.updatedBy,
+    });
+  });
+  const areaFilter = req.query.area;
+  const areas = accessPolicy.DD_AREAS
+    .filter((a) => byArea.has(a.id) && (!areaFilter || a.id === areaFilter))
+    .map((a) => ({ area: a.id, label: a.label, links: byArea.get(a.id) }));
+  res.json({ areas });
 });
 
 // D-13: the standard DD request checklist, seeded into every new deal via
