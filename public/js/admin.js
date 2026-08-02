@@ -2609,10 +2609,11 @@ document.addEventListener('DOMContentLoaded', () => {
       wrap.appendChild(empty);
       return;
     }
-    // Most-recent-first for readability; the API itself stays ordered by
-    // ascending autoincrement id (db/auditHook.js's queryAudit(), D-11's
-    // specified stable readback order for equal timestamps).
-    rows.slice().reverse().forEach((row) => {
+    // WR-01: the API itself now returns rows most-recent-first (db/auditHook.js's
+    // queryAudit() orders DESC by autoincrement id) — render in the order
+    // received rather than reversing, which would put the oldest row of each
+    // page first and contradict this viewer's own default/pagination intent.
+    rows.forEach((row) => {
       const item = document.createElement('div');
       item.className = 'cms-row';
       item.style.cssText = 'flex-direction:column; align-items:stretch; gap:0.35rem;';

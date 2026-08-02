@@ -175,7 +175,9 @@ test('audit-security-events (b): a break-glass admin-token request produces an e
     assert.strictEqual(res.status, 200, 'a valid X-Admin-Token must be accepted');
     const after = auditHook.queryAudit({ actor: 'admin-token', limit: 500 });
     assert.strictEqual(after.length, before + 1, 'exactly one admin-token-use row must be added per token-authenticated request');
-    const last = after[after.length - 1];
+    // WR-01: queryAudit() now orders DESC (most-recent-first), so the row
+    // just added is at index 0, not the end.
+    const last = after[0];
     assert.strictEqual(last.action, 'admin-token-use');
     assert.strictEqual(last.actor_username, 'admin-token', 'the row must be attributed to the stable token identity, never a null/anonymous actor');
     assert.strictEqual(last.actor_role, 'admin');
@@ -209,7 +211,7 @@ test('audit-security-events (c): the audit viewer route is 403 for hrbp/pmo/empl
   }
 });
 
-test('audit-security-events (d): the deal filter, user filter and date-range filter each narrow the result set correctly, ordered by id', async () => {
+test('audit-security-events (d): the deal filter, user filter and date-range filter each narrow the result set correctly, ordered by id descending', async () => {
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -236,9 +238,11 @@ test('audit-security-events (d): the deal filter, user filter and date-range fil
     const userFilterRows = await (await fetch(`${base}/api/admin/audit?user=admin`, { headers: { Cookie: cookieHeader(adminToken) } })).json();
     assert.ok(userFilterRows.length > 0);
     assert.ok(userFilterRows.every((r) => r.actor_username === 'admin'), 'the user filter must exclude every OTHER actor\'s rows');
+    // WR-01: queryAudit() orders DESCENDING (most-recent-first) so the
+    // viewer's default page surfaces recent activity, not ancient history.
     const idsInReturnedOrder = userFilterRows.map((r) => r.id);
-    const idsAscending = [...idsInReturnedOrder].sort((a, b) => a - b);
-    assert.deepStrictEqual(idsInReturnedOrder, idsAscending, 'results must already be ordered by ascending autoincrement id');
+    const idsDescending = [...idsInReturnedOrder].sort((a, b) => b - a);
+    assert.deepStrictEqual(idsInReturnedOrder, idsDescending, 'results must already be ordered by descending (most-recent-first) autoincrement id');
 
     // date-range filter — a `from` set in the future must exclude every existing row
     const futureFrom = new Date(Date.now() + 60_000).toISOString();

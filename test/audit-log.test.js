@@ -202,11 +202,50 @@ test('audit-log (e) ordering: rows from one write batch share a timestamp and re
   assert.strictEqual(first.length, 3);
   const tsSet = new Set(first.map((r) => r.ts));
   assert.strictEqual(tsSet.size, 1, 'rows from one write batch must share exactly one timestamp');
-  const idsInIdOrder = [...first].sort((a, b) => a.id - b.id).map((r) => r.id);
-  assert.deepStrictEqual(first.map((r) => r.id), idsInIdOrder, 'queryAudit must already return rows in ascending autoincrement-id order');
+  // WR-01: queryAudit() orders DESCENDING (most-recent-first) so the default,
+  // offset=0 page an admin sees first is the newest activity, not the oldest.
+  const idsInIdOrder = [...first].sort((a, b) => b.id - a.id).map((r) => r.id);
+  assert.deepStrictEqual(first.map((r) => r.id), idsInIdOrder, 'queryAudit must return rows in descending (most-recent-first) autoincrement-id order');
 
   const second = auditHook.queryAudit({ dealId }).filter((r) => ids.includes(r.row_id));
   assert.deepStrictEqual(second.map((r) => r.id), first.map((r) => r.id), 'repeated queries must return the SAME stable order');
+});
+
+test('audit-log (e2) WR-01: the default first page (limit, no offset) surfaces the MOST RECENT rows, not the oldest', () => {
+  // Ten writes, each to its OWN freshly-registered deal (empty alerts array),
+  // so every write is genuinely-new-row-only (exactly one insert delta, no
+  // "already in this write's own snapshot -> unconditional update" deltas
+  // from revisiting earlier rows in a shared array — see writeDb()'s own
+  // per-item merge rule doc comment in db/store.js). A unique actor
+  // ('pageuser', used nowhere else in this file) isolates this test's rows
+  // without needing a before/after baseline subtraction.
+  const ids = [];
+  for (let i = 0; i < 10; i++) {
+    const dealId = registerDeal('Audit Page Deal ' + i, 'pageuser');
+    const id = randId('page' + i);
+    ids.push(id);
+    runAsDeal(dealId, 'pageuser', 'hrbp', () => {
+      const db = store.readDb();
+      db.alerts = db.alerts.concat([{ id, title: 'page test ' + i, severity: 'low' }]);
+      store.writeDb(db);
+    });
+  }
+
+  const allRows = auditHook.queryAudit({ actor: 'pageuser', limit: 500 });
+  assert.strictEqual(allRows.length, 10, 'each of the 10 writes must produce exactly one audit row (no accidental update-noise from a shared array)');
+  const allIdsDescending = [...allRows].sort((a, b) => b.id - a.id).map((r) => r.id);
+  const highestFiveIds = allIdsDescending.slice(0, 5);
+  const lowestFiveIds = allIdsDescending.slice(5);
+
+  // A small "first page" (offset=0) must contain the highest-id (most
+  // recent) rows first, matching allIdsDescending exactly — proving the API
+  // itself, not just a client-side reverse(), now returns most-recent-first
+  // (the pre-fix bug: ASC ordering meant offset=0 returned the OLDEST rows).
+  const firstPage = auditHook.queryAudit({ actor: 'pageuser', limit: 5 });
+  assert.deepStrictEqual(firstPage.map((r) => r.id), highestFiveIds, 'the default (offset=0) page must contain the most recent rows, not the oldest');
+
+  const secondPage = auditHook.queryAudit({ actor: 'pageuser', limit: 5, offset: 5 });
+  assert.deepStrictEqual(secondPage.map((r) => r.id), lowestFiveIds, 'increasing the offset ("Older →") must move toward OLDER rows');
 });
 
 test('audit-log (f): the same mutations performed against demo.db produce zero audit rows (D-08)', () => {

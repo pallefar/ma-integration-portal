@@ -141,11 +141,18 @@ function recordSecurityEvent({ actor, action, dealId, subject, before, after, re
 }
 
 /**
- * D-10: the admin audit viewer's read path. Always ordered by the
- * autoincrement id — the schema's own header names this as the specified,
- * stable readback order for rows that share a timestamp. `limit` is clamped
- * to a sane default (100) and a hard maximum (500) so a caller can never
- * force an unbounded table scan through this endpoint.
+ * D-10: the admin audit viewer's read path. Ordered by the autoincrement id
+ * DESCENDING — offset=0 (the tab's default, initial load) is the 50 MOST
+ * RECENT rows, which is what an admin investigating recent activity (the
+ * primary use case for a compliance/audit viewer) needs to see first (WR-01
+ * fix). Descending id is still the schema's specified stable readback order
+ * for rows that share a timestamp — only the direction changed, not the tie-
+ * break rule. `limit` is clamped to a sane default (100) and a hard maximum
+ * (500) so a caller can never force an unbounded table scan through this
+ * endpoint. Increasing `offset` moves toward OLDER rows (paginating "Older
+ * →"); decreasing it moves toward the most recent ("← Newer") — see
+ * public/js/admin.js's btn-audit-prev/btn-audit-next wiring, which is
+ * already written with this direction in mind.
  */
 function queryAudit({ dealId, actor, from, to, limit, offset } = {}) {
   const conn = getAuditConnection();
@@ -162,7 +169,7 @@ function queryAudit({ dealId, actor, from, to, limit, offset } = {}) {
   const parsedOffset = parseInt(offset, 10);
   const off = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
 
-  return conn.prepare(`SELECT * FROM audit_log ${where} ORDER BY id ASC LIMIT ? OFFSET ?`).all(...params, lim, off);
+  return conn.prepare(`SELECT * FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, lim, off);
 }
 
 module.exports = {
