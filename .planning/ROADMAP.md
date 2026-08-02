@@ -123,7 +123,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user without need-to-know for a functional area cannot read that area's DD requests or findings via a direct API call, even with a valid session — filtering happens server-side, and the denial itself is audited.
   4. A DD item can carry a reference link and access-grant record pointing at TE's existing VDR, without the app storing the document itself.
 
-**Plans**: 3/8 plans executed
+**Plans**: 4/8 plans executed
 
 Plans:
 
@@ -141,7 +141,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 04-04-PLAN.md — findings register, four-level RAID severity, one-click bidirectional conversion (DD-02, DD-03)
+- [x] 04-04-PLAN.md — findings register, four-level RAID severity, one-click bidirectional conversion (DD-02, DD-03)
 
 **Wave 5** *(blocked on Wave 4)*
 
@@ -211,7 +211,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 1. Schema & Migration | 3/3 | In Progress|  |
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
-| 4. Due Diligence Workspace | 3/8 | In Progress|  |
+| 4. Due Diligence Workspace | 4/8 | In Progress|  |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |
