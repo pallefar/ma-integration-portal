@@ -321,3 +321,27 @@ test('dd-workspace (h): a member cleared for legal is refused moving their own i
     server.close();
   }
 });
+
+test('dd-workspace (i): a caller-supplied `source` on create is stripped, never stored — it must not be able to collide with a future template dedup key (WR-02)', async () => {
+  const deal = freshDeal('deal_ddwki');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', text: 'Manually created item', source: 'ddtemplate:some-future-template:some-item' }),
+    });
+    assert.strictEqual(createRes.status, 201);
+    const { item } = await createRes.json();
+    assert.strictEqual(item.source, '', 'a caller-supplied source must be stripped by the schema and never stored, regardless of what the client sends');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

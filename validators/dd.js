@@ -17,7 +17,6 @@ const { DD_AREA_IDS } = require('../db/accessPolicy');
 const TEXT_MAX = 2000;
 const OWNER_MAX = 120;
 const NOTES_MAX = 2000;
-const SOURCE_MAX = 160;
 const ID_MAX = 120;
 const DUE_DATE_MAX = 10; // 'YYYY-MM-DD'
 
@@ -68,7 +67,15 @@ const DdRequestItemUpsertSchema = z.object({
   dueDate: z.string().trim().max(DUE_DATE_MAX).optional(),
   blocked: z.boolean().optional(),
   notes: z.string().trim().max(NOTES_MAX).optional(),
-  source: z.string().trim().max(SOURCE_MAX).optional(),
+  // WR-02 (04-REVIEW.md): `source` is deliberately NOT accepted on this
+  // public upsert schema — it is server.js's own dedup key for
+  // POST /api/dd/request-items/instantiate ('ddtemplate:<templateId>:<itemId>').
+  // A caller-supplied `source` on manual create could collide with a future
+  // template item's computed value, silently and permanently suppressing
+  // that checklist item from ever being instantiated (no error surfaced to
+  // the UI). z.object(shape) strips unknown keys by default (D-13), so
+  // dropping this field here is enough — server.js never reads a caller
+  // value for `source` on create, only the value it computes itself.
   vdrLink: VdrLinkSchema,
 }).refine((data) => data.id || (data.text && data.text.trim()), {
   message: 'Request item text is required.',
