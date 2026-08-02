@@ -161,7 +161,7 @@ Plans:
 
 **Wave 9** *(gap closure — UAT G-04-10, blocked on Wave 8)*
 
-- [ ] 04-09-PLAN.md — the setup route marks completion without stamping a skipped step; Finish no longer records DD kickoff as done (WIZ-01, G-04-10)
+- [x] 04-09-PLAN.md — the setup route marks completion without stamping a skipped step; Finish no longer records DD kickoff as done (WIZ-01, G-04-10)
 
 **Wave 10** *(gap closure — UAT G-04-8, blocked on Wave 9)*
 
@@ -219,7 +219,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 1. Schema & Migration | 3/3 | In Progress|  |
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
-| 4. Due Diligence Workspace | 8/8 | In Progress|  |
+| 4. Due Diligence Workspace | 9/10 | In Progress|  |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |

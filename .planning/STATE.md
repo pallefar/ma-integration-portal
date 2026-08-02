@@ -2,18 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 04
-current_phase_name: Due Diligence Workspace
 status: verifying
-stopped_at: Completed 04-08-PLAN.md — Phase 4 (Due Diligence Workspace) fully executed, all 8 plans done
-last_updated: "2026-08-02T09:56:10.451Z"
+stopped_at: Completed 04-09-PLAN.md (gap closure G-04-10)
+last_updated: "2026-08-02T18:39:36.334Z"
 last_activity: 2026-08-02
-last_activity_desc: Phase 04 execution started
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 20
-  completed_plans: 20
+  total_phases: 7
+  completed_phases: 3
+  total_plans: 22
+  completed_plans: 21
+  percent: 43
 ---
 
 # Project State
@@ -30,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 Phase: 04 (Due Diligence Workspace) — EXECUTING
 Plan: 8 of 8
 Status: Phase complete — ready for verification
-Last activity: 2026-08-02 — Phase 04 execution started
+Last activity: 2026-08-02
 
-Progress: [██████████] 100%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -79,6 +77,7 @@ Progress: [██████████] 100%
 | Phase 04 P06 | ~40min | 3 tasks | 6 files |
 | Phase 04 P07 | ~85min | 3 tasks | 22 files |
 | Phase 04 P08 | ~70min | 3 tasks | 8 files |
+| Phase 04 P09 | 18min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -140,6 +139,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 4 Plan 08] GET /api/dd/summary carries no explicit role gate (mirrors existing DD list routes) — every number is already scoped through filterByAreaGrant()/grantedAreas() before any tally runs
 - [Phase ?]: [Phase 4 Plan 08] public/js/dashboard.js's two pre-existing DOMContentLoaded handlers converted to named functions (initDemoDashboard()/initReadinessStrip()) via a minimal opening/closing-line-only edit, proven unchanged internally by git diff, so a deal-bound dispatcher could gate both without auditing ~2400 lines of demo rendering
 - [Phase ?]: [Phase 4 Plan 08, user decision at checkpoint] D-22 amended to match the actual Phase-3 resolver: an archived deal is a full freeze (no reads, no writes, no listing, for anyone) not read-only-with-retained-access as originally written; no code changed, decision text corrected
+- [Phase ?]: G-04-10 closed: DealSetupSchema's step made optional with a refine enforcing 'name a step, or mark completion with no step data'; the setup route's completion-only branch passes existing steps through unchanged instead of fabricating a stamp for a skipped step.
 
 ### Pending Todos
 
@@ -175,6 +175,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T09:56:10.438Z
-Stopped at: Completed 04-08-PLAN.md — Phase 4 (Due Diligence Workspace) fully executed, all 8 plans done
+Last session: 2026-08-02T18:39:36.321Z
+Stopped at: Completed 04-09-PLAN.md (gap closure G-04-10)
 Resume file: None
