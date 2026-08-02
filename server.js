@@ -40,6 +40,7 @@ require('./validators/people'); // ditto
 require('./validators/assessment'); // ditto
 require('./validators/settings'); // ditto
 require('./validators/dd'); // ditto
+const wizardValidators = require('./validators/wizard'); // provides DEAL_SETUP_STEPS below, plus its own registerSchema() side effect
 
 
 const app = express();
@@ -690,14 +691,32 @@ function requestMeta(req) {
 // database with its own membership/lifecycle.
 // =====================================================================
 
+// D-07/WIZ-01: validate-only — the wizard's first step gets ONE server-side
+// rule set (WizardBasicsSchema, validators/wizard.js, kept in exact sync
+// with CreateDealSchema's own basics fields below) rather than a duplicated
+// client-side copy. This handler deliberately persists nothing and records
+// nothing: the consolidated /api gate's validationMiddleware has already
+// parsed, stripped and bounded req.body by the time this handler runs, so
+// echoing it back IS the entire contract.
+app.post('/api/deals/wizard/basics', (req, res) => {
+  res.json({ success: true, basics: req.body });
+});
+
 // VAL-01: no per-route validateBody() call needed here — validators/deals.js
 // registers this route's schema into the shared WRITE_SCHEMAS registry, and
 // validators/index.js#validationMiddleware (mounted once in the consolidated
 // /api gate above) resolves+validates+sanitizes req.body generically for
 // every write route in the app, including this one.
 app.post('/api/deals', (req, res) => {
-  const { name, targetCompany, members } = req.body;
-  const deal = controlStore.createDeal({ name, targetCompany, members, createdBy: req.portalUser.username });
+  const { name, targetCompany, members, dealType, signingDate, expectedClose, day1Date, dealSizeM, currency } = req.body;
+  // D-05/WIZ-01: the wizard's optional basics fields (dealType/signingDate/
+  // expectedClose/day1Date/dealSizeM/currency) ride the SAME create call as
+  // name/targetCompany/members — createDeal() also stamps the `setup`
+  // skeleton whose basics/team steps are already done by this very call.
+  const deal = controlStore.createDeal({
+    name, targetCompany, members, createdBy: req.portalUser.username,
+    dealType, signingDate, expectedClose, day1Date, dealSizeM, currency,
+  });
   try {
     // T-03-23: provision the deal's own database file AFTER the registry row
     // exists, matching an existing id — if this throws, the registry row is
@@ -775,6 +794,38 @@ app.post('/api/deals/:id/members', (req, res) => {
   auditHook.recordSecurityEvent({
     actor: req.portalUser, action: 'deal-members-update', dealId, subject: dealId,
     before: Array.from(before), after: Array.from(after), request: requestMeta(req),
+  });
+  res.json({ success: true, deal: updated });
+});
+
+// D-05/WIZ-01: records progress through the wizard's remaining setup steps
+// (basics/team are already stamped by the create route above) — diligence
+// is usable the moment the deal exists (D-09), so this route is TRACKING,
+// never gating: no other route in this app ever checks `deal.setup.complete`
+// before allowing work. `complete` flips true once every one of the six
+// declared steps is stamped, OR the caller passes `complete: true`
+// explicitly (an operator choice to mark the wizard "done enough").
+// Inherits the SAME broader '/api/deals' ROLE_WRITE_POLICY entry (admin +
+// hrbp) the clean-room/vdr grant routes below already use — this is deal
+// CONFIGURATION state, the same audience D-02 gives deal creation itself.
+app.post('/api/deals/:id/setup', (req, res) => {
+  const dealId = req.params.id;
+  const existing = controlStore.getDeal(dealId);
+  if (!existing) return res.status(404).json({ error: 'Deal not found.' });
+  const { step, data, complete } = req.body;
+  const beforeSteps = (existing.setup && existing.setup.steps) || {};
+  const beforeStepValue = beforeSteps[step] != null ? beforeSteps[step] : null;
+  const stampedValue = { at: new Date().toISOString(), by: req.portalUser.username, ...(data !== undefined ? { data } : {}) };
+  const newSteps = { ...beforeSteps, [step]: stampedValue };
+  const allStamped = wizardValidators.DEAL_SETUP_STEPS.every((s) => newSteps[s] != null);
+  const newComplete = complete === true || allStamped;
+  const updated = controlStore.updateDealSetup(dealId, { steps: newSteps, complete: newComplete });
+  // D-08/T-04-37: setup progress is deal-configuration state, not routine
+  // content — recording it keeps the trail able to answer when a deal
+  // actually became fully set up, and by whom each step was completed.
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'deal-setup-update', dealId, subject: step,
+    before: beforeStepValue, after: stampedValue, request: requestMeta(req),
   });
   res.json({ success: true, deal: updated });
 });

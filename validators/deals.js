@@ -34,6 +34,16 @@ const DEAL_ID_MAX = 120; // generous bound over newId('deal')'s actual length; D
 // resolution is ever attempted downstream.
 const DEAL_ID_PATTERN = /^deal_[a-z0-9]+$/i;
 
+// WIZ-01/D-05: the wizard's six optional "basics" fields — bounds MUST stay
+// identical to validators/wizard.js's WizardBasicsSchema (that module's own
+// header names this the reason its schema exists at all: D-07's "one rule
+// set, never two"). `dealSizeM` accepts a number or a bounded numeric
+// string, matching the union style validators/workstream.js's synergy
+// schema already uses for its own money fields (targetM/realizedM).
+const DEAL_TYPES = ['acquisition', 'jv', 'merger'];
+const DATE_MAX = 10; // 'YYYY-MM-DD'
+const CURRENCY_MAX = 10;
+
 /** POST /api/deals — D-02 (admin/hrbp only, enforced by ROLE_WRITE_POLICY,
  * not here) create-deal body. `members` defaults to an empty array — the
  * creator is always added server-side (db/controlStore.js's createDeal()),
@@ -42,6 +52,12 @@ const CreateDealSchema = z.object({
   name: z.string().trim().min(1, 'Deal name is required.').max(NAME_MAX, `Deal name must be ${NAME_MAX} characters or fewer.`),
   targetCompany: z.string().trim().min(1, 'Target company is required.').max(NAME_MAX, `Target company must be ${NAME_MAX} characters or fewer.`),
   members: z.array(z.string().trim().min(1).max(USERNAME_MAX)).default([]),
+  dealType: z.enum(DEAL_TYPES).optional(),
+  signingDate: z.string().trim().max(DATE_MAX).optional(),
+  expectedClose: z.string().trim().max(DATE_MAX).optional(),
+  day1Date: z.string().trim().max(DATE_MAX).optional(),
+  dealSizeM: z.union([z.number(), z.string().max(20)]).optional(),
+  currency: z.string().trim().max(CURRENCY_MAX).optional(),
 });
 
 /** POST /api/deals/select — D-01. `dealId: null` is the explicit

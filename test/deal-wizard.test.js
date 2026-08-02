@@ -368,3 +368,239 @@ test('deal-wizard (g): a submission with no instanceId still creates a new row e
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Task 2: create-early deal setup state on the deal record
+// ---------------------------------------------------------------------------
+
+test('deal-wizard (h): creating a deal through the basics-plus-team payload returns the basics fields and a setup skeleton with basics/team stamped and the rest null', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const res = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Project Falcon', targetCompany: 'Falcon Target', members: ['pmo'],
+        dealType: 'acquisition', signingDate: '2026-09-01', expectedClose: '2026-11-01',
+        day1Date: '2026-11-02', dealSizeM: 42.5, currency: 'EUR',
+      }),
+    });
+    assert.strictEqual(res.status, 200);
+    const { deal } = await res.json();
+    assert.strictEqual(deal.dealType, 'acquisition');
+    assert.strictEqual(deal.signingDate, '2026-09-01');
+    assert.strictEqual(deal.expectedClose, '2026-11-01');
+    assert.strictEqual(deal.day1Date, '2026-11-02');
+    assert.strictEqual(deal.dealSizeM, 42.5);
+    assert.strictEqual(deal.currency, 'EUR');
+    assert.ok(deal.setup, 'the deal record must carry a setup skeleton');
+    assert.ok(deal.setup.steps.basics, 'basics must already be stamped by the create route');
+    assert.ok(deal.setup.steps.team, 'team must already be stamped by the create route');
+    assert.strictEqual(deal.setup.steps.basics.by, 'karen');
+    ['assessments', 'scope', 'timeline', 'ddKickoff'].forEach((step) => {
+      assert.strictEqual(deal.setup.steps[step], null, `${step} must start null — only basics/team are done at create time`);
+    });
+    assert.strictEqual(deal.setup.complete, false, 'setup cannot be complete with four steps still outstanding');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (i): a create missing a required basics field is refused with a 400 and creates neither a registry row nor a deal database file', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const beforeCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    const dealsDir = process.env.MA_DEALS_DIR;
+    const beforeFiles = fs.existsSync(dealsDir) ? new Set(fs.readdirSync(dealsDir)) : new Set();
+
+    const res = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetCompany: 'No Name Co' }), // name omitted
+    });
+    assert.strictEqual(res.status, 400);
+
+    const afterCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    assert.strictEqual(afterCount, beforeCount, 'a refused create must leave no registry row');
+    const afterFiles = fs.existsSync(dealsDir) ? new Set(fs.readdirSync(dealsDir)) : new Set();
+    assert.deepStrictEqual(afterFiles, beforeFiles, 'a refused create must leave no new deal database file');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (j): the basics validate-only route returns 200 for a valid payload and 400 for an invalid one, creating nothing in either case', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const beforeCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+
+    const okRes = await fetch(`${base}/api/deals/wizard/basics`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Osprey', targetCompany: 'Osprey Target', dealType: 'acquisition' }),
+    });
+    assert.strictEqual(okRes.status, 200);
+    const okBody = await okRes.json();
+    assert.strictEqual(okBody.basics.name, 'Project Osprey');
+
+    const badRes = await fetch(`${base}/api/deals/wizard/basics`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetCompany: 'Osprey Target' }), // name omitted
+    });
+    assert.strictEqual(badRes.status, 400);
+
+    const afterCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    assert.strictEqual(afterCount, beforeCount, 'the validate-only route must persist nothing for either a valid or an invalid payload');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (k): posting a setup step stamps only that step and leaves the others untouched', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Kestrel', targetCompany: 'Kestrel Target' }),
+    });
+    const { deal } = await createRes.json();
+
+    const setupRes = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'scope', data: { workstreams: ['ws_hr', 'ws_it'] } }),
+    });
+    assert.strictEqual(setupRes.status, 200);
+    const { deal: updated } = await setupRes.json();
+    assert.ok(updated.setup.steps.scope, 'scope must now be stamped');
+    assert.strictEqual(updated.setup.steps.scope.by, 'karen');
+    ['assessments', 'timeline', 'ddKickoff'].forEach((step) => {
+      assert.strictEqual(updated.setup.steps[step], null, `${step} must remain untouched by a scope-only post`);
+    });
+    assert.ok(updated.setup.steps.basics, 'basics (stamped at create time) must survive untouched');
+    assert.strictEqual(updated.setup.complete, false, 'three steps are still outstanding');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (l): posting an unknown step name is refused with a 400', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Merlin', targetCompany: 'Merlin Target' }),
+    });
+    const { deal } = await createRes.json();
+
+    const res = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'not-a-real-step' }),
+    });
+    assert.strictEqual(res.status, 400);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (m): the deal becomes complete once every mandatory step is stamped', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Harrier', targetCompany: 'Harrier Target' }),
+    });
+    const { deal } = await createRes.json();
+
+    let lastBody;
+    for (const step of ['assessments', 'scope', 'timeline', 'ddKickoff']) {
+      const res = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+        method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step }),
+      });
+      lastBody = await res.json();
+    }
+    assert.strictEqual(lastBody.deal.setup.complete, true, 'the deal must report setup complete once all six steps are stamped');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (n): a pmo session is refused both new wizard routes', async () => {
+  const pmoToken = newSession('pmo', 'pmo');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const basicsRes = await fetch(`${base}/api/deals/wizard/basics`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project X', targetCompany: 'X Co' }),
+    });
+    assert.strictEqual(basicsRes.status, 403, 'pmo must be refused the basics validate-only route');
+
+    const deal = createTestDeal('deal_wn', { members: ['karen', 'pmo'] });
+    const setupRes = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'scope' }),
+    });
+    assert.strictEqual(setupRes.status, 403, 'pmo must be refused the setup route');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (o): a failed database provisioning rolls back the registry row — never an orphaned entry pointing at a missing file', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  const dealsDir = process.env.MA_DEALS_DIR;
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const beforeCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+
+    fs.chmodSync(dealsDir, 0o555); // read+execute only — createDealDatabase()'s file creation must throw
+    let res;
+    try {
+      res = await fetch(`${base}/api/deals`, {
+        method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Project Rollback', targetCompany: 'Rollback Co' }),
+      });
+    } finally {
+      fs.chmodSync(dealsDir, 0o755); // restore before any later test in this file provisions a deal
+    }
+    assert.strictEqual(res.status, 500, 'a provisioning failure must surface as a 500, never a silently half-created deal');
+
+    const afterCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    assert.strictEqual(afterCount, beforeCount, 'the registry row must be rolled back — no orphaned deal row survives a failed provisioning');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

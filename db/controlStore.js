@@ -116,8 +116,15 @@ function isDealMember(dealId, user) {
   return Array.isArray(deal.members) && deal.members.includes(user.username);
 }
 
+// WIZ-01/D-05: the six wizard setup steps, in the wizard's own order —
+// duplicated (not imported) in validators/wizard.js's DEAL_SETUP_STEPS and
+// server.js's own reference to that export; db/controlStore.js stays free of
+// any dependency on the validators/ layer (mirrors this module's existing
+// "no reference to the audit store" isolation rule above).
+const DEAL_SETUP_STEPS = ['basics', 'team', 'assessments', 'scope', 'timeline', 'ddKickoff'];
+
 /**
- * D-02/ISO-01: create a new deal registry row (control.db ONLY — this
+ * D-02/ISO-01/D-05: create a new deal registry row (control.db ONLY — this
  * function never touches the deal's own database file; server.js's route
  * handler provisions that separately via db/dealSeed.js's
  * createDealDatabase(), and rolls this row back if provisioning throws, so a
@@ -126,20 +133,62 @@ function isDealMember(dealId, user) {
  * who creates a deal and is then locked out of it by their own omission is a
  * bug, not a policy (D-03's "admin is always a member" is a separate,
  * additional rule enforced by isDealMember() above, not by this function).
+ *
+ * D-05: also accepts the wizard's six optional basics fields (stored as
+ * `null` when omitted, never left as a missing key — a stable, always-present
+ * shape is easier for any later reader than a conditionally-present one) and
+ * stamps a `setup` skeleton: `basics`/`team` are ALREADY done (this route IS
+ * those two steps), the remaining four start `null` — an incomplete-but-
+ * usable deal, never a rollback, is the whole point of create-early.
  */
-function createDeal({ name, targetCompany, members, createdBy }) {
+function createDeal({ name, targetCompany, members, createdBy, dealType, signingDate, expectedClose, day1Date, dealSizeM, currency }) {
   const id = newId('deal');
   const memberSet = new Set((members || []).map(String));
   if (createdBy) memberSet.add(createdBy);
   const conn = controlConn();
   const seqRow = conn.prepare('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM deals').get();
+  const now = new Date().toISOString();
+  const stamp = { at: now, by: createdBy || null };
+  const setup = {
+    steps: {
+      basics: stamp, team: stamp,
+      assessments: null, scope: null, timeline: null, ddKickoff: null,
+    },
+    complete: false,
+  };
   const data = {
     id, name, targetCompany, members: Array.from(memberSet),
-    status: 'active', createdBy: createdBy || null, createdAt: new Date().toISOString(),
+    status: 'active', createdBy: createdBy || null, createdAt: now,
+    dealType: dealType || null,
+    signingDate: signingDate || null,
+    expectedClose: expectedClose || null,
+    day1Date: day1Date || null,
+    dealSizeM: (dealSizeM === undefined || dealSizeM === null || dealSizeM === '') ? null : dealSizeM,
+    currency: currency || null,
+    setup,
   };
   conn.prepare('INSERT INTO deals (id, project_id, seq, status, data) VALUES (?, NULL, ?, ?, ?)')
     .run(id, seqRow.nextSeq, data.status, JSON.stringify(data));
   return data;
+}
+
+/**
+ * WIZ-01/D-05: merge `patch` onto `deal.setup` (a SHALLOW merge into the
+ * `setup` sub-object, not a deep merge into `setup.steps` — the caller
+ * (server.js's POST /api/deals/:id/setup handler) computes the fully-merged
+ * `steps` object itself and passes it as one patch key, exactly like
+ * setDealMemberGrants() above computes the full ddAreas array before
+ * calling in). Mirrors updateDealMembers()'s exact read-modify-write and
+ * throw-when-missing contract: spreads the EXISTING deal object first, so
+ * `members`, `memberGrants`, `status` and every other field survive
+ * untouched — only `setup` is ever touched by this function.
+ */
+function updateDealSetup(dealId, patch) {
+  const deal = getDeal(dealId);
+  if (!deal) throw new Error(`db/controlStore.js: updateDealSetup() found no deal '${dealId}'`);
+  const updated = { ...deal, setup: { ...(deal.setup || {}), ...(patch || {}) } };
+  controlConn().prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
+  return updated;
 }
 
 /** D-03: replace a deal's members[] allowlist wholesale. Throws (does not
@@ -298,6 +347,7 @@ module.exports = {
   getDeal, listDeals, listDealsForUser, isDealMember,
   createDeal, updateDealMembers, archiveDeal, deleteDeal,
   setDealMemberGrants, getDealMemberGrants,
+  updateDealSetup, DEAL_SETUP_STEPS,
   getControlSettings, setControlSettings,
   getSecretSettings, setSecretSettings,
 };
