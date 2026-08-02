@@ -165,6 +165,15 @@
     // convenience gate only — every write route the wizard calls is
     // independently role-checked server-side regardless of this map.
     'deal-wizard.html': ['admin', 'hrbp']
+    // IN-02 (04-REVIEW.md): 'due-diligence.html' has NO entry here —
+    // deliberately, not by oversight. DD area access is per-deal-member
+    // clearance (deal.memberGrants[username].ddAreas), not role-based, so a
+    // pmo/employee deal member legitimately granted an area must be able to
+    // reach this page; a role-based restriction here would block them. The
+    // real gate is server-side: every /api/dd/* route runs
+    // db/accessPolicy.js's filterByAreaGrant()/assertAreaGrant() regardless
+    // of which role loaded this page, so an uncleared visitor sees an empty
+    // workspace, never someone else's DD content.
   };
 
   let isAllowed = true;
