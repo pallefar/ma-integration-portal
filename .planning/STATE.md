@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 4
+current_phase: 04
 current_phase_name: Due Diligence Workspace
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-08-02T06:32:48.437Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-08-02T07:23:19.108Z"
 last_activity: 2026-08-02
-last_activity_desc: Phase 03 complete, transitioned to Phase 4
+last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 20
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 03 — Deal Isolation, Audit Log & Write Validation
+**Current focus:** Phase 04 — Due Diligence Workspace
 
 ## Current Position
 
-Phase: 4 — Due Diligence Workspace
-Plan: Not started
+Phase: 04 (Due Diligence Workspace) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-08-02 — Phase 03 complete, transitioned to Phase 4
+Last activity: 2026-08-02 — Phase 04 execution started
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 65%
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [██████████] 100%
 | Phase 03 P04 | 50min | 3 tasks | 28 files |
 | Phase 03 P05 | ~70min | 3 tasks | 9 files |
 | Phase 03 P06 | ~2h | 3 tasks | 16 files |
+| Phase 04 P01 | 45min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 3 Plan 06: Tasks 1+2 landed in one commit (c0f9a6c) — the generic fail-closed validationMiddleware could not be mounted incrementally without breaking every pre-existing test exercising a not-yet-scheduled write route, matching Plan 03's own consolidated-gate precedent; Task 3 (HTML tagging, 0cf5a0f) was independent
 - [Phase ?]: Phase 3 Plan 06: WRITE_SCHEMAS keyed on Express route-TEMPLATE strings (not runtime paths) with a boundary-safe regex matcher, so one resolveSchema() serves both request-time lookup and the coverage check reading the live route inventory's own ':id'-style templates
 - [Phase ?]: Phase 3 Plan 06: htmlField() tagging kept deliberately narrow — only lesson.body, the richtext page-layout block's data.html, and the legacy page.body — verified against actual client-side render paths rather than tagging every plausibly-markup field, since sanitizing an untagged plain-text field would itself be a data-integrity bug
+- [Phase ?]: Phase 4 Plan 01: grantedAreas() checks deal truthiness before the admin/hrbp role shortcut (coordinator-requested hardening) — closes a latent fail-open with zero behavior change for any real caller
+- [Phase ?]: Phase 4 Plan 01: an unknown item id and an uncleared-area item share one refusal path (assertAreaGrant with areaId: null, never granted to any role) — the DD-04 uniform-403 anti-enumeration property is structural, not a second branch
+- [Phase ?]: Phase 4 Plan 01: db/accessPolicy.js holds zero audit dependency by design — every dd-access-denied event is recorded from server.js's refuseDdArea() choke point, mirroring db/controlStore.js's AUD-02 isolation precedent
 
 ### Pending Todos
 
@@ -144,6 +148,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T05:20:46.726Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-due-diligence-workspace/04-CONTEXT.md
+Last session: 2026-08-02T07:23:19.095Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None

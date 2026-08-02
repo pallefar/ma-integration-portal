@@ -36,10 +36,10 @@
 
 ### Due Diligence Workspace
 
-- [ ] **DD-01**: The IL can create and manage DD request lists organized by functional area, each item with an owner, status and due date
+- [x] **DD-01**: The IL can create and manage DD request lists organized by functional area, each item with an owner, status and due date
 - [ ] **DD-02**: The IL can record DD findings, each with severity, functional area and owner
 - [ ] **DD-03**: A DD finding can be converted into a Day-1 integration task and/or a RAID entry, reusing the existing remediation linkage (`from-remediation`)
-- [ ] **DD-04**: DD content is clean-room restricted — only users with need-to-know for a functional area can read its request items and findings, enforced server-side (not just hidden in the UI), with access decisions audited
+- [x] **DD-04**: DD content is clean-room restricted — only users with need-to-know for a functional area can read its request items and findings, enforced server-side (not just hidden in the UI), with access decisions audited
 - [ ] **DD-05**: DD document exchange links out to TE's existing VDR; the app records the reference and access grant, and does not store the documents themselves
 - [ ] **WIZ-01**: A new deal is created through a guided setup wizard — deal basics, member allowlist, readiness-assessment kickoff (acquirer, target and IL instances, each with an owner and due date), workstream scope and timeline markers — with the deal created after the mandatory core so remaining steps resume later from a deal-home setup checklist, and every wizard write flowing through the existing validation and audit pipeline *(added 2026-08-02 from the user's new-deal-wizard request; see `.planning/todos/pending/new-deal-setup-wizard.md`)*
 
@@ -118,10 +118,10 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | AUD-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | VAL-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | VAL-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
-| DD-01 | Phase 4: Due Diligence Workspace | Pending |
+| DD-01 | Phase 4: Due Diligence Workspace | Complete |
 | DD-02 | Phase 4: Due Diligence Workspace | Pending |
 | DD-03 | Phase 4: Due Diligence Workspace | Pending |
-| DD-04 | Phase 4: Due Diligence Workspace | Pending |
+| DD-04 | Phase 4: Due Diligence Workspace | Complete |
 | DD-05 | Phase 4: Due Diligence Workspace | Pending |
 | WIZ-01 | Phase 4: Due Diligence Workspace | Pending |
 | SYN-01 | Phase 5: Synergy Value Capture | Pending |
