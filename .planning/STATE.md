@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: Due Diligence Workspace
 status: executing
-stopped_at: Completed 04-06-PLAN.md
-last_updated: "2026-08-02T08:57:44.249Z"
+stopped_at: Completed 04-07-PLAN.md
+last_updated: "2026-08-02T09:27:20.906Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 04 (Due Diligence Workspace) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-08-02 — Phase 04 execution started
 
-Progress: [█████████░] 90%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ Progress: [█████████░] 90%
 | Phase 04 P04 | ~55min | 3 tasks | 6 files |
 | Phase 04 P05 | 35min | 2 tasks | 6 files |
 | Phase 04 P06 | ~40min | 3 tasks | 6 files |
+| Phase 04 P07 | ~85min | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -133,6 +134,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 4 Plan 6: WIZARD_ASSESSMENT_SUBJECTS uses subject 'integration-leader' (verified against seeded template data), not the plan text's literal 'il'
 - [Phase ?]: Phase 4 Plan 6: latestAssessInstanceFor() filters strictly on status==='submitted' — a pending row can never feed a score/band/compatibility calc
 - [Phase ?]: Phase 4 Plan 6: createDeal() stamps a setup skeleton at creation time (basics/team already done); updateDealSetup() does a shallow merge into deal.setup mirroring setDealMemberGrants()'s caller-computes/store-persists shape
+- [Phase ?]: [Phase 4 Plan 07] Every error show-path in deal-wizard.js cleared display to '' instead of an explicit visible value, silently swallowing every server-rejected step's message (found via live UAT, fixed with VISIBLE_ERROR_DISPLAY='block' + a regression test)
+- [Phase ?]: [Phase 4 Plan 07] The new-deal setup wizard (WIZ-01) is the ONLY path into real-deal creation — the Phase-3 minimal create-deal modal (openCreateDealForm) is retired entirely, not left dormant
 
 ### Pending Todos
 
@@ -147,6 +150,7 @@ None yet.
 - ⚠️ [Traceability] phase.complete warned: HOST-01..03 / HARD-01..03 (v2-deferred) appear in REQUIREMENTS.md body but not its Traceability table.
 - [Phase 3 Plan 04] D-04 deal switcher browser human-check PARTIALLY closed by orchestrator via Playwright (2026-08-01, :3335 admin session): switcher pill renders + visually distinct, dropdown lists Demo showcase + "+ New real deal", create-deal modal opens with isolation notice, ZERO console errors. Still open for /gsd-verify-work 3: in-browser create→select→switch-back round-trip + employee-sees-no-chrome check.
 - [Phase 3 Plan 05] D-10 admin Audit Log tab browser check CLOSED by orchestrator via Playwright (2026-08-02, :3337 admin login): tab renders under Compliance group, 50 entries with timestamp/op/collection#id/actor(role)/deal + collapsible before-after, actor filter returns only matching rows, pagination present, zero console errors.
+- [Phase 4 Plan 07, out of scope] public/js/transitions.js's pageAccess gate races the login-role handshake on the first navigation after a browser's active role changes (pre-existing, app-wide, not introduced by this plan) — every write route is independently role-checked server-side regardless (confirmed live: pmo session got 403 from POST /api/deals/wizard/basics); a future phase should consider hardening the handshake ordering
 
 ### Quick Tasks Completed
 
@@ -166,6 +170,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T08:57:44.240Z
-Stopped at: Completed 04-06-PLAN.md
+Last session: 2026-08-02T09:27:20.891Z
+Stopped at: Completed 04-07-PLAN.md
 Resume file: None
