@@ -23,6 +23,11 @@
     .wiz-review-block h4{ margin:0 0 0.4rem; color:var(--te-dark-teal); font-size:0.85rem; text-transform:uppercase; letter-spacing:0.04em; }
     .wiz-review-block p{ margin:0.15rem 0; font-size:0.84rem; color:var(--text-secondary); }
     .wiz-checklist-item{ display:flex; justify-content:space-between; align-items:center; gap:0.75rem; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem; margin-bottom:0.5rem; }
+    /* G-04-8: a status notice (not an error) shown when the wizard resumes
+       the session's own unfinished deal instead of restarting it — the
+       teal-tinted register .wiz-need-to-know already uses, never the red
+       error styling. */
+    .wiz-resume-notice{ display:none; align-items:center; gap:1rem; font-size:0.82rem; color:var(--text-secondary); background:rgba(36,76,90,0.05); border:1px solid rgba(36,76,90,0.15); border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.25rem; line-height:1.5; }
   </style>
 </head>
 <body>
@@ -63,6 +68,13 @@
             <div id="wizard-step5-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
             <div id="wizard-step6-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
             <div id="wizard-step7-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
+          </div>
+
+          <!-- G-04-8: shown only when the wizard adopts the session's own
+               unfinished deal on entry, in place of restarting at Step 1. -->
+          <div class="wiz-resume-notice" id="wiz-resume-notice">
+            <span id="wiz-resume-text"></span>
+            <button type="button" class="btn btn-secondary" id="wiz-resume-restart">Start a different deal instead</button>
           </div>
 
           <!-- Step 1: Basics -->
@@ -259,6 +271,6 @@
     </main>
   </div>
 
-  <script src="/js/deal-wizard.js?v=1784800001"></script>
+  <script src="/js/deal-wizard.js?v=1784800002"></script>
 </body>
 </html>

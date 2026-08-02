@@ -77,6 +77,9 @@ const ENDPOINTS = [
   { method: 'POST', path: '/api/integration-tasks/instantiate' },
   { method: 'GET', path: '/api/dd/request-templates' },
   { method: 'POST', path: '/api/dd/request-items/instantiate' },
+  // G-04-8: the resume-on-entry bootstrap's two reads.
+  { method: 'GET', path: '/api/auth/me' },
+  { method: 'GET', path: '/api/assessment-status' },
 ];
 
 function sourceReferencesEndpoint(src, routePath) {
@@ -169,6 +172,27 @@ test('deal-wizard-page: the Finish control marks the setup complete without stam
     /\/api\/deals\/'\s*\+\s*state\.dealId\s*\+\s*'\/setup',\s*\{\s*complete:\s*true\s*\}/,
     'the Finish control\'s setup post must carry only `{ complete: true }`, never a `step` name'
   );
+});
+
+// ---------------------------------------------------------------------------
+// 3d. G-04-8: the wizard must declare a resume notice and its escape hatch —
+//     re-entering the wizard while the session's bound deal is unfinished
+//     must be able to tell the operator what it is resuming, and to offer a
+//     genuine way to abandon the resume and start a different deal.
+// ---------------------------------------------------------------------------
+test('deal-wizard-page: the wizard declares a resume notice and a restart control', () => {
+  assert.ok(wizardHtml.includes('id="wiz-resume-notice"'), 'the resume notice container must be declared');
+  assert.ok(wizardHtml.includes('id="wiz-resume-text"'), 'the resume notice text span must be declared');
+  assert.ok(wizardHtml.includes('id="wiz-resume-restart"'), 'the resume escape-hatch control must be declared');
+});
+
+// ---------------------------------------------------------------------------
+// 3e. G-04-8: Back from step 3 to step 2 followed by Next is a second
+//     duplicate-create path (no reload required) — the create call must be
+//     guarded once this wizard session already has a deal.
+// ---------------------------------------------------------------------------
+test('deal-wizard-page: the create call is guarded by an already-created-deal check', () => {
+  assert.match(wizardJs, /if\s*\(state\.deal\)\s*\{/, 'the wizard-form-2 submit handler must guard the create call with `if (state.deal) {`');
 });
 
 // ---------------------------------------------------------------------------

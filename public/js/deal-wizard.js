@@ -20,16 +20,42 @@
   'use strict';
 
   // Module-scoped wizard state: the collected basics payload (step 1), the
-  // created deal id (stamped at step 2 — D-05), which readiness-assessment
-  // template ids have already been assigned (resume-safe across a retry so
-  // a partial failure never re-assigns and duplicates one that succeeded),
-  // and the fetched template list (for the review step's count).
+  // created deal id (stamped at step 2 — D-05), the last-known full deal
+  // record (G-04-8's resume cursor — `deal` and `dealId` are ALWAYS set
+  // together, never one alone), which readiness-assessment template ids
+  // have already been assigned (resume-safe across a retry so a partial
+  // failure never re-assigns and duplicates one that succeeded), and the
+  // fetched template list (for the review step's count).
   var state = {
     basics: {},
     dealId: null,
+    deal: null,
     assignedTemplateIds: {},
     templates: [],
   };
+
+  // G-04-8: which wizard step number a deal's own `setup.steps` id maps to,
+  // in wizard order. This is a FOURTH copy of the step list — validators/
+  // wizard.js, db/controlStore.js and public/js/deal-home.js each already
+  // keep their own — matching this codebase's documented convention that no
+  // module is shared between client and server code (no invented sharing
+  // mechanism here either).
+  var WIZARD_STEP_FOR_SETUP_STEP = {
+    basics: 1, team: 2, assessments: 3, scope: 4, timeline: 5, ddKickoff: 6,
+  };
+
+  // G-04-8: the wizard step number of the first setup step that is still
+  // null/absent on `deal`, or 7 (the review step) when none is outstanding.
+  // Read defensively — a deal with no `setup` object at all (shouldn't
+  // happen post-create, but never trust it) means everything is outstanding.
+  function firstOutstandingWizardStep(deal) {
+    var steps = (deal && deal.setup && deal.setup.steps) || {};
+    var order = ['basics', 'team', 'assessments', 'scope', 'timeline', 'ddKickoff'];
+    for (var i = 0; i < order.length; i++) {
+      if (steps[order[i]] == null) return WIZARD_STEP_FOR_SETUP_STEP[order[i]];
+    }
+    return 7;
+  }
 
   var WORKSTREAM_LABELS = {
     ws_imo: 'IMO', ws_hr: 'HR', ws_it: 'IT', ws_finance: 'Finance',
@@ -177,6 +203,47 @@
   }
 
   // ---------------------------------------------------------------------
+  // G-04-8: resume-cursor helpers. `enterWizardStep()` is the single entry
+  // path used whenever the wizard JUMPS to a step it did not walk to
+  // (resume-on-entry, and the already-created-deal guard below) — it
+  // always primes the assigned-assessment set and the template list first,
+  // then runs the target step's own loader, then switches. The existing
+  // per-step Next/Skip handlers are untouched: they already load what their
+  // own next step needs.
+  // ---------------------------------------------------------------------
+  function primeAssignedFromStatus() {
+    // GET /api/assessment-status does not dedup on the assign route (POST
+    // /api/assessment-instances/assign creates a SECOND pending instance for
+    // a template that already has one) — so a resume landing on step 3 must
+    // pre-mark every template that is already satisfied or already has a
+    // pending row, or it would create the very class of duplicate this plan
+    // exists to eliminate. assignNext() (step 3, below) already skips any
+    // template id marked here before it reads that row's inputs.
+    return getJson('/api/assessment-status').then(function (res) {
+      var bySubject = (res.ok && res.data && res.data.bySubject) || {};
+      Object.keys(bySubject).forEach(function (subject) {
+        var entry = bySubject[subject];
+        if (entry && entry.templateId && (entry.satisfied || (entry.pending && entry.pending.length))) {
+          state.assignedTemplateIds[entry.templateId] = true;
+        }
+      });
+    }, function () { /* best-effort — a failed fetch marks nothing */ });
+  }
+
+  function enterWizardStep(n) {
+    return primeAssignedFromStatus().then(function () {
+      return loadAssessmentTemplates();
+    }).then(function () {
+      if (n === 4) return loadChecklistTemplates();
+      if (n === 6) return loadDdTemplates();
+      if (n === 7) { renderReview(); return; }
+      return;
+    }).then(function () {
+      switchWizStep(n);
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Step 1: Basics — Next round-trips POST /api/deals/wizard/basics (the
   // wizard's own validate-only echo route, D-07); the payload only becomes
   // module state (used by step 2's actual create call) once the server
@@ -234,17 +301,31 @@
     var stepEl = qs('wizard-step-2');
     clearStepBanner(stepEl);
     clearFieldErrors();
+    // G-04-8: Back from step 3 to step 2 followed by Next must NOT re-post
+    // /api/deals — a second duplicate-create path that needs no reload at
+    // all. Once this wizard session already has a deal, re-entering step 2
+    // can only ever resume it, never create a second one.
+    if (state.deal) {
+      enterWizardStep(firstOutstandingWizardStep(state.deal));
+      return;
+    }
     var members = qs('wiz-members').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     var payload = Object.assign({}, state.basics, { members: members });
     var btn = qs('wiz-next-2');
     setBusy(btn, true);
     postJson('/api/deals', payload).then(function (res) {
       if (!res.ok) { setBusy(btn, false); renderErrors(res.data && res.data.error, stepEl); return; }
+      // G-04-8: `state.deal`/`state.dealId` are always set together — a
+      // server-returned `resumed` deal (Task 1's dedup guard) routes through
+      // the SAME cursor a fresh create does, just landing on whatever step
+      // that deal actually left off at instead of always step 3.
+      state.deal = res.data.deal;
       state.dealId = res.data.deal.id;
       return postJson('/api/deals/select', { dealId: state.dealId }).then(function (selectRes) {
         setBusy(btn, false);
         if (!selectRes.ok) { renderErrors(selectRes.data && selectRes.data.error, stepEl); return; }
-        loadAssessmentTemplates().then(function () { switchWizStep(3); });
+        if (res.data.resumed) showResumeNotice(state.deal);
+        enterWizardStep(firstOutstandingWizardStep(state.deal));
       });
     });
   });
@@ -274,6 +355,19 @@
         title.className = 'wiz-assess-title';
         title.textContent = tpl.title || tpl.subject || tpl.id; // textContent only — a template title may echo deal-specific naming
         row.appendChild(title);
+
+        // G-04-8: a resumed wizard must not show empty REQUIRED owner/
+        // due-date inputs for an assessment that already has a pending or
+        // satisfied instance — assignNext() below already skips this id
+        // before it ever reads a row's inputs, so this is display-only.
+        if (state.assignedTemplateIds[tpl.id]) {
+          var doneStatus = document.createElement('span');
+          doneStatus.className = 'wiz-assess-field';
+          doneStatus.textContent = 'Already assigned — will not be reassigned.';
+          row.appendChild(doneStatus);
+          list.appendChild(row);
+          return;
+        }
 
         var ownerWrap = document.createElement('div');
         ownerWrap.className = 'wiz-assess-field';
@@ -585,6 +679,73 @@
     });
   });
 
+  // ---------------------------------------------------------------------
+  // G-04-8: resume-on-entry. On page load, adopt the session's own bound
+  // deal when its setup is unfinished, instead of restarting the wizard at
+  // Step 1 and re-posting /api/deals (the duplicate-deal bug this plan
+  // exists to eliminate). Deliberately NOT gated on the deal's `complete`
+  // flag: after G-04-10 an operator can legitimately finish the wizard with
+  // steps still outstanding, and the deal home's "Setup incomplete — resume
+  // setup" link points at exactly that case — gating on `complete` would
+  // send that operator back to Step 1 and re-create the deal, the very bug
+  // being fixed.
+  // ---------------------------------------------------------------------
+  function showResumeNotice(deal) {
+    var notice = qs('wiz-resume-notice');
+    var text = qs('wiz-resume-text');
+    if (!notice || !text) return;
+    text.textContent = 'Resuming setup for ' + (deal.name || '') + ' (' + (deal.targetCompany || '') + ') — completed steps are skipped.';
+    notice.style.display = 'flex';
+    var back3 = qs('wiz-back-3');
+    // Steps 1-2 are already recorded and are not re-walked in resume mode;
+    // membership edits live in the admin console, not this wizard.
+    if (back3) back3.style.display = 'none';
+  }
+
+  function hideResumeNotice() {
+    var notice = qs('wiz-resume-notice');
+    if (notice) notice.style.display = 'none';
+    var back3 = qs('wiz-back-3');
+    if (back3) back3.style.display = 'inline-block';
+  }
+
+  var resumeRestartBtn = qs('wiz-resume-restart');
+  if (resumeRestartBtn) {
+    resumeRestartBtn.addEventListener('click', function () {
+      // The escape hatch: abandon the resumed deal and start a genuinely
+      // different one — this is what keeps a perpetually-unfinished deal
+      // from making a second deal uncreatable.
+      state.basics = {};
+      state.deal = null;
+      state.dealId = null;
+      state.assignedTemplateIds = {};
+      state.templates = [];
+      hideResumeNotice();
+      switchWizStep(1);
+    });
+  }
+
+  function resumeBootstrap() {
+    return getJson('/api/auth/me').then(function (meRes) {
+      var dealId = meRes.ok && meRes.data ? meRes.data.dealId : null;
+      if (!dealId) return; // no bound deal — nothing to resume
+      return getJson('/api/deals').then(function (dealsRes) {
+        var deals = (dealsRes.ok && Array.isArray(dealsRes.data)) ? dealsRes.data : [];
+        var matches = deals.filter(function (d) { return d.id === dealId; });
+        var deal = matches.length ? matches[0] : null;
+        if (!deal) return; // the bound deal is not one this session can see — stay on step 1
+        var step = firstOutstandingWizardStep(deal);
+        if (step === 7) return; // nothing outstanding — not a resume case
+        state.deal = deal;
+        state.dealId = deal.id;
+        state.basics = { name: deal.name, targetCompany: deal.targetCompany };
+        showResumeNotice(deal);
+        return enterWizardStep(step);
+      });
+    }, function () { /* best-effort — a failed fetch leaves the operator on step 1, mirroring deal-home.js's own fetch handling */ });
+  }
+
   renderWorkstreamCheckboxes();
   switchWizStep(1);
+  resumeBootstrap();
 })();
