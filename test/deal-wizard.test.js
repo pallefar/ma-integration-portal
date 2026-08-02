@@ -71,15 +71,22 @@ fixtureUsers.forEach((user, i) => {
 // A synthetic "demo-shaped" template source database — real-shaped enough
 // (subject/dimensions/questions matching the real seeded templates' own
 // ids/structure) for scoreAssessmentInstance() to compute a real score, and
-// real DD-request/checklist templates for Task 3's instantiate walk.
+// real DD-request/checklist templates for Task 3's instantiate walk. Built
+// directly AT dbFiles.DEMO_DB_PATH (this suite's temp demo.db) rather than a
+// separate file, so that db/dealSeed.js's createDealDatabase() default
+// templateSourcePath (used by the REAL POST /api/deals route, unmodified —
+// Task 3 exercises that exact route, not a test-only bypass) resolves to
+// this exact content. Safe because every session in this suite is
+// deal-bound (isOpenMode() never true, DEMO_OPEN is unset) — this path is
+// NEVER opened for a write by any request path this suite exercises, only
+// read by createDealDatabase()'s own readonly template-copy pass.
 // ---------------------------------------------------------------------------
 const TPL_ACQUIRER = 'atpl_company_acquirer';
 const TPL_TARGET = 'atpl_company_target';
 const TPL_IL = 'atpl_il_readiness';
 
-const TEMPLATE_SOURCE_PATH = path.join(TMP_DIR, 'template-source.db');
 (function buildTemplateSource() {
-  const db = new Database(TEMPLATE_SOURCE_PATH);
+  const db = new Database(dbFiles.DEMO_DB_PATH);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
@@ -141,12 +148,14 @@ function freshDeal(id, overrides) {
   };
 }
 /** Register a control.db registry row AND provision that deal's own database
- * file, seeded from the synthetic template source above — the combination
- * every real POST /api/deals call also performs (registry row + file). */
+ * file, seeded from the synthetic demo.db above via createDealDatabase()'s
+ * OWN default templateSourcePath — the combination every real POST
+ * /api/deals call also performs (registry row + file), used directly by
+ * Task 1/2's per-scenario setup. */
 function createTestDeal(id, overrides) {
   const deal = freshDeal(id, overrides);
   registerDeal(deal);
-  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany, templateSourcePath: TEMPLATE_SOURCE_PATH });
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   return deal;
 }
 function cookieHeader(token) { return `ma_session=${token}`; }
@@ -599,6 +608,194 @@ test('deal-wizard (o): a failed database provisioning rolls back the registry ro
 
     const afterCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
     assert.strictEqual(afterCount, beforeCount, 'the registry row must be rolled back — no orphaned deal row survives a failed provisioning');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Task 3: the full create-early, resume-later flow proven end to end
+// ---------------------------------------------------------------------------
+
+test('deal-wizard (p): the full ordered wizard walk ends with setup complete and three pending readiness assessments outstanding', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const headers = { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' };
+
+    // Step 1: validate the basics payload through the validate-only route.
+    const basicsRes = await fetch(`${base}/api/deals/wizard/basics`, {
+      method: 'POST', headers, body: JSON.stringify({ name: 'Project Talon', targetCompany: 'Talon Target', dealType: 'acquisition' }),
+    });
+    assert.strictEqual(basicsRes.status, 200);
+
+    // Step 2: create the deal with basics + team.
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers, body: JSON.stringify({ name: 'Project Talon', targetCompany: 'Talon Target', members: ['pmo'], dealType: 'acquisition' }),
+    });
+    assert.strictEqual(createRes.status, 200);
+    const { deal } = await createRes.json();
+
+    // Step 3: bind the session to the new deal.
+    const selectRes = await fetch(`${base}/api/deals/select`, { method: 'POST', headers, body: JSON.stringify({ dealId: deal.id }) });
+    assert.strictEqual(selectRes.status, 200);
+
+    // Step 4: the new deal's own database already carries the seeded
+    // assessment templates and the seeded DD request template.
+    const templates = await (await fetch(`${base}/api/assessment-templates`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    assert.strictEqual(templates.length, 3, 'the new deal must inherit all three seeded assessment templates');
+    const ddTemplates = await (await fetch(`${base}/api/dd/request-templates`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    assert.ok(ddTemplates.length >= 1, 'the new deal must inherit the seeded DD request template');
+
+    // Step 5: assign all three readiness assessments, each with a distinct owner/due date.
+    for (const [templateId, owner, dueDate] of [
+      [TPL_ACQUIRER, 'karen', '2026-09-01'],
+      [TPL_TARGET, 'pmo', '2026-09-05'],
+      [TPL_IL, 'karen', '2026-09-10'],
+    ]) {
+      const res = await fetch(`${base}/api/assessment-instances/assign`, { method: 'POST', headers, body: JSON.stringify({ templateId, owner, dueDate }) });
+      assert.strictEqual(res.status, 201);
+    }
+
+    // Step 6: the status rollup now reports three pending, zero satisfied.
+    const statusAfterAssign = await (await fetch(`${base}/api/assessment-status`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    const subjects = ['acquirer-org', 'target-org', 'integration-leader'];
+    subjects.forEach((s) => {
+      assert.strictEqual(statusAfterAssign.bySubject[s].satisfied, false);
+      assert.strictEqual(statusAfterAssign.bySubject[s].pending.length, 1);
+    });
+
+    // Step 7: stamp the assessments setup step.
+    await fetch(`${base}/api/deals/${deal.id}/setup`, { method: 'POST', headers, body: JSON.stringify({ step: 'assessments' }) });
+
+    // Step 8: instantiate the integration checklist and the DD request checklist.
+    const taskInstRes = await fetch(`${base}/api/integration-tasks/instantiate`, { method: 'POST', headers, body: JSON.stringify({ checklistTemplateId: 'cktpl_wiz' }) });
+    assert.strictEqual(taskInstRes.status, 200);
+    const taskInstBody = await taskInstRes.json();
+    assert.strictEqual(taskInstBody.created, 1);
+    const ddInstRes = await fetch(`${base}/api/dd/request-items/instantiate`, { method: 'POST', headers, body: JSON.stringify({ templateId: 'ddtpl_wiz' }) });
+    assert.strictEqual(ddInstRes.status, 200);
+    const ddInstBody = await ddInstRes.json();
+    assert.strictEqual(ddInstBody.created, 1);
+
+    // Step 9: stamp scope, timeline and DD-kickoff.
+    let lastSetup;
+    for (const step of ['scope', 'timeline', 'ddKickoff']) {
+      const res = await fetch(`${base}/api/deals/${deal.id}/setup`, { method: 'POST', headers, body: JSON.stringify({ step }) });
+      lastSetup = await res.json();
+    }
+
+    // The walk ends with setup complete.
+    assert.strictEqual(lastSetup.deal.setup.complete, true, 'the deal must report setup complete once the whole wizard walk finishes');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (q): D-09 — with three assessments still pending, DD request/finding/convert all succeed; nothing is blocked on an unfinished assessment', async () => {
+  const deal = createTestDeal('deal_wq');
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const headers = { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' };
+
+    for (const [templateId, owner, dueDate] of [
+      [TPL_ACQUIRER, 'karen', '2026-09-01'], [TPL_TARGET, 'karen', '2026-09-05'], [TPL_IL, 'karen', '2026-09-10'],
+    ]) {
+      await fetch(`${base}/api/assessment-instances/assign`, { method: 'POST', headers, body: JSON.stringify({ templateId, owner, dueDate }) });
+    }
+    const status = await (await fetch(`${base}/api/assessment-status`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    assert.strictEqual(status.bySubject['acquirer-org'].satisfied, false);
+    assert.strictEqual(status.bySubject['target-org'].satisfied, false);
+    assert.strictEqual(status.bySubject['integration-leader'].satisfied, false);
+
+    const itemRes = await fetch(`${base}/api/dd/request-items`, { method: 'POST', headers, body: JSON.stringify({ area: 'legal', text: 'Cap table review' }) });
+    assert.strictEqual(itemRes.status, 201, 'creating a DD request item must not be blocked by outstanding assessments');
+
+    const findingRes = await fetch(`${base}/api/dd/findings`, { method: 'POST', headers, body: JSON.stringify({ area: 'legal', title: 'Missing IP assignment' }) });
+    assert.strictEqual(findingRes.status, 201, 'creating a DD finding must not be blocked by outstanding assessments');
+    const { finding } = await findingRes.json();
+
+    const convertRes = await fetch(`${base}/api/dd/findings/${finding.id}/convert`, { method: 'POST', headers, body: JSON.stringify({ toTask: true, toRaid: true }) });
+    assert.strictEqual(convertRes.status, 200, 'converting a finding must not be blocked by outstanding assessments');
+    const convertBody = await convertRes.json();
+    assert.ok(convertBody.task);
+    assert.ok(convertBody.raid);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (r): a second session for the same user resumes a skipped setup step without recreating the deal', async () => {
+  const firstToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(firstToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Resume', targetCompany: 'Resume Target' }), // mandatory core only
+    });
+    const { deal } = await createRes.json();
+    const beforeDealCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+
+    // A brand-new session for the SAME user — simulating a later login,
+    // not a continuation of the same browser tab.
+    const secondToken = newSession('karen', 'hrbp');
+    try {
+      bindDeal(secondToken, deal.id);
+      const res = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+        method: 'POST', headers: { Cookie: cookieHeader(secondToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'timeline' }),
+      });
+      assert.strictEqual(res.status, 200, 'a fresh session for the same user must be able to resume a skipped setup step');
+      const body = await res.json();
+      assert.ok(body.deal.setup.steps.timeline, 'the previously-skipped step must now be stamped');
+      assert.strictEqual(body.deal.id, deal.id, 'the SAME deal must be resumed, never a second one created');
+
+      const afterDealCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+      assert.strictEqual(afterDealCount, beforeDealCount, 'resuming setup must never create a second deal registry row');
+    } finally {
+      sessionsDb.deleteSession(runtimeConn, secondToken);
+    }
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, firstToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (s): the status rollup subject order is acquirer, target, Integration Lead regardless of assignment order', async () => {
+  const deal = createTestDeal('deal_ws');
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const headers = { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' };
+
+    // Assign in REVERSE subject order: IL, then target, then acquirer.
+    for (const [templateId, owner, dueDate] of [
+      [TPL_IL, 'karen', '2026-09-10'], [TPL_TARGET, 'karen', '2026-09-05'], [TPL_ACQUIRER, 'karen', '2026-09-01'],
+    ]) {
+      await fetch(`${base}/api/assessment-instances/assign`, { method: 'POST', headers, body: JSON.stringify({ templateId, owner, dueDate }) });
+    }
+
+    const status = await (await fetch(`${base}/api/assessment-status`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    assert.deepStrictEqual(
+      Object.keys(status.bySubject),
+      ['acquirer-org', 'target-org', 'integration-leader'],
+      'the report order must come from the declared list, never from assignment order'
+    );
   } finally {
     sessionsDb.deleteSession(runtimeConn, karenToken);
     server.close();
