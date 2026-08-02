@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: Due Diligence Workspace
 status: executing
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-08-02T08:21:28.642Z"
+stopped_at: Completed 04-05-PLAN.md
+last_updated: "2026-08-02T08:35:43.482Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 04 (Due Diligence Workspace) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-08-02 — Phase 04 execution started
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Progress: [████████░░] 80%
 | Phase 04 P02 | 40min | 3 tasks | 6 files |
 | Phase 04 P03 | 50min | 3 tasks | 9 files |
 | Phase 04 P04 | ~55min | 3 tasks | 6 files |
+| Phase 04 P05 | 35min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -125,6 +126,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 4 Plan 03: GET /api/dd/request-templates is deliberately unfiltered by accessPolicy (a template carries no MNPI); only the instantiate route, which creates real area-scoped items, is clearance-gated
 - [Phase ?]: Phase 4 Plan 03: a SQLite write against a git-committed WAL-mode *.db file must PRAGMA wal_checkpoint(TRUNCATE) before close, or the write lands only in the gitignored -wal sidecar and the tracked file stays byte-unchanged
 - [Phase ?]: DD findings register (DD-02) + one-click conversion to Day-1 task/RAID entry (DD-03): RAID_LEVELS extended to four levels in both independent copies (server.js + validators/workstream.js) with an anti-drift test; DD_AREA_WORKSTREAM (D-25) hard-coded mapping; conversion is a NEW route (not from-remediation), clearance-checked before read, dedup by dd-finding:<id> source, bidirectional linkedTaskIds/linkedRaidIds <-> source
+- [Phase ?]: Phase 4 Plan 05: vdrLink folds into the existing POST /api/dd/request-items upsert route (not a dedicated route) — the item's clean-room area guard already covers the reference with zero new access-control code
+- [Phase ?]: Phase 4 Plan 05: zod's z.string().url() alone accepts javascript: URLs (verified live against zod@4.4.3) — an explicit .refine() on the parsed protocol is what actually restricts vdrLink.url to http/https
+- [Phase ?]: Phase 4 Plan 05: a data-room access grant (POST /api/deals/:id/vdr-grants) is written ONLY as a recordSecurityEvent — no separate collection, so the append-only audit log IS the compliance record and survives deletion of the deal it describes
 
 ### Pending Todos
 
@@ -158,6 +162,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T08:21:28.630Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-08-02T08:35:43.461Z
+Stopped at: Completed 04-05-PLAN.md
 Resume file: None
