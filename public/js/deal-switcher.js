@@ -1,7 +1,14 @@
-// D-04: the header deal switcher + minimal create-deal modal — deliberately
-// visually distinct from the demo Projects/Custom-M&A switcher
-// (#demo-mode-switcher-container in admin.html/pmo.html) so the two modes
-// can never be confused at a glance (03-CONTEXT.md "## Specific Ideas").
+// D-04: the header deal switcher — deliberately visually distinct from the
+// demo Projects/Custom-M&A switcher (#demo-mode-switcher-container in
+// admin.html/pmo.html) so the two modes can never be confused at a glance
+// (03-CONTEXT.md "## Specific Ideas").
+//
+// WIZ-01 (Phase 4 Plan 07): the create affordance below NAVIGATES to the
+// full-page guided setup wizard (/deal-wizard.html) rather than opening a
+// modal — that wizard supersedes the Phase-3 minimal create-deal form
+// (D-06). This is the ONLY path into deal creation: the admin console's own
+// "+ New Deal" button (public/js/admin.js) navigates the same way, so a
+// real deal can never come into existence outside the guided flow.
 //
 // Loaded dynamically, once, app-wide by public/js/transitions.js (the SAME
 // pattern that file already uses for inline-edit.js/banners.js — see its
@@ -33,127 +40,6 @@
 
   function surfaceError(message) {
     window.alert(message || 'Something went wrong. Please try again.');
-  }
-
-  // --- Create-deal modal (D-04's "minimal create-deal form"), shared by the
-  // header switcher's own affordance and the admin console's Deals tab. ---
-  function openCreateDealForm(onCreated) {
-    const existing = document.getElementById('deal-create-overlay');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'deal-create-overlay';
-    overlay.className = 'deal-modal-overlay';
-
-    const modal = document.createElement('div');
-    modal.className = 'deal-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-
-    const title = document.createElement('h3');
-    title.className = 'deal-modal-title';
-    title.textContent = 'New real deal';
-    modal.appendChild(title);
-
-    const sub = document.createElement('p');
-    sub.className = 'deal-modal-sub';
-    sub.textContent = 'Creates an isolated workspace, separate from the demo showcase.';
-    modal.appendChild(sub);
-
-    const form = document.createElement('form');
-    form.className = 'deal-modal-form';
-
-    const nameField = document.createElement('label');
-    nameField.className = 'deal-modal-field';
-    const nameLabel = document.createElement('span');
-    nameLabel.textContent = 'Deal name';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.required = true;
-    nameInput.maxLength = 200;
-    nameInput.placeholder = 'e.g. Project Alpha';
-    nameField.appendChild(nameLabel);
-    nameField.appendChild(nameInput);
-
-    const targetField = document.createElement('label');
-    targetField.className = 'deal-modal-field';
-    const targetLabel = document.createElement('span');
-    targetLabel.textContent = 'Target company';
-    const targetInput = document.createElement('input');
-    targetInput.type = 'text';
-    targetInput.required = true;
-    targetInput.maxLength = 200;
-    targetInput.placeholder = 'e.g. NextGen Sensors Ltd.';
-    targetField.appendChild(targetLabel);
-    targetField.appendChild(targetInput);
-
-    const membersField = document.createElement('label');
-    membersField.className = 'deal-modal-field';
-    const membersLabel = document.createElement('span');
-    membersLabel.textContent = 'Members (comma-separated usernames)';
-    const membersInput = document.createElement('input');
-    membersInput.type = 'text';
-    membersInput.placeholder = 'karen, pmo';
-    membersField.appendChild(membersLabel);
-    membersField.appendChild(membersInput);
-
-    const errorEl = document.createElement('p');
-    errorEl.className = 'deal-modal-error';
-    errorEl.style.display = 'none';
-
-    const actions = document.createElement('div');
-    actions.className = 'deal-modal-actions';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'btn btn-secondary';
-    cancelBtn.textContent = 'Cancel';
-    const submitBtn = document.createElement('button');
-    submitBtn.type = 'submit';
-    submitBtn.className = 'btn btn-primary';
-    submitBtn.textContent = 'Create deal';
-    actions.appendChild(cancelBtn);
-    actions.appendChild(submitBtn);
-
-    form.appendChild(nameField);
-    form.appendChild(targetField);
-    form.appendChild(membersField);
-    form.appendChild(errorEl);
-    form.appendChild(actions);
-    modal.appendChild(form);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    const close = () => overlay.remove();
-    cancelBtn.addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      errorEl.style.display = 'none';
-      submitBtn.disabled = true;
-      const members = membersInput.value.split(',').map((s) => s.trim()).filter(Boolean);
-      fetch('/api/deals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nameInput.value, targetCompany: targetInput.value, members }),
-      }).then((res) => res.json().then((body) => ({ ok: res.ok, body })))
-        .then(({ ok, body }) => {
-          if (!ok) {
-            errorEl.textContent = body.error || 'Failed to create deal.';
-            errorEl.style.display = '';
-            submitBtn.disabled = false;
-            return;
-          }
-          close();
-          if (typeof onCreated === 'function') onCreated(body.deal);
-          renderDealSwitcher();
-        })
-        .catch(() => {
-          errorEl.textContent = 'Network error — please try again.';
-          errorEl.style.display = '';
-          submitBtn.disabled = false;
-        });
-    });
   }
 
   function selectDeal(dealId) {
@@ -216,7 +102,9 @@
       createItem.type = 'button';
       createItem.className = 'deal-switcher-menu-item deal-switcher-menu-item-create';
       createItem.textContent = '+ New real deal';
-      createItem.addEventListener('click', () => { menu.remove(); openCreateDealForm(); });
+      // WIZ-01: navigates to the guided setup wizard rather than opening a
+      // modal (D-06) — the wizard is the ONLY path into deal creation.
+      createItem.addEventListener('click', () => { menu.remove(); window.location.href = '/deal-wizard.html'; });
       menu.appendChild(createItem);
     }
 
@@ -301,7 +189,6 @@
   }
 
   window.renderDealSwitcher = renderDealSwitcher;
-  window.openCreateDealForm = openCreateDealForm;
 
   renderDealSwitcher();
 })();

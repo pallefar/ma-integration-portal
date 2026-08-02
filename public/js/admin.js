@@ -2566,10 +2566,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const btnNewDeal = document.getElementById('btn-new-deal');
   if (btnNewDeal) {
-    btnNewDeal.addEventListener('click', () => {
-      if (typeof window.openCreateDealForm === 'function') window.openCreateDealForm(loadDeals);
-      else alert('Deal creation is still loading — please try again in a moment.');
-    });
+    // WIZ-01: navigates to the guided setup wizard — the ONLY path into
+    // deal creation (D-06). Mirrors public/js/deal-switcher.js's own create
+    // affordance exactly, so there is never a second, unguided path.
+    btnNewDeal.addEventListener('click', () => { window.location.href = '/deal-wizard.html'; });
   }
 
   // window.__portalUser (transitions.js's real-login handshake) resolves
