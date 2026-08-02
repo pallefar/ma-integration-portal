@@ -245,3 +245,28 @@ test('deal-resolver: source exports the documented AsyncLocalStorage/resolver su
   assert.strictEqual(typeof resolver.DealAccessError, 'function');
   assert.ok(resolver.CONTROL_PLANE_PATHS instanceof Set);
 });
+
+test('deal-resolver WR-03: isControlPlanePath() covers revoke-sessions and download-zip, mirroring the /api/admin/audit precedent', () => {
+  assert.strictEqual(resolver.isControlPlanePath('/api/admin/users/somebody/revoke-sessions'), true, 'revoke-sessions must be treated as control-plane — it never touches the resolved deal database');
+  assert.strictEqual(resolver.isControlPlanePath('/api/admin/download-zip'), true, 'download-zip must be treated as control-plane — it touches the filesystem directly, never readDb()/writeDb()');
+  // Precedent + unrelated admin paths still behave as before.
+  assert.strictEqual(resolver.isControlPlanePath('/api/admin/audit'), true);
+  assert.strictEqual(resolver.isControlPlanePath('/api/admin/migrate-db'), false, 'a route that DOES call readDb()/writeDb() must still be gated on the resolved deal binding');
+});
+
+test('deal-resolver WR-03 (integration): an admin session bound to an archived deal can still reach revoke-sessions instead of 403ing on the stale binding', async () => {
+  const adminToken = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
+  sessionsDb.bindSessionDeal(runtimeConn, adminToken, 'deal_archived1'); // archived — would 403 for any non-control-plane route (WR-02)
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody-real/revoke-sessions`, {
+      method: 'POST',
+      headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
+    });
+    assert.strictEqual(res.status, 200, 'revoke-sessions must stay reachable regardless of the admin\'s own stale deal binding (WR-03)');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});

@@ -405,7 +405,19 @@ test('AUTH-04 (D-02): an isOpenMode request is not gated on role/session at all 
     // request always resolves to demo.db (D-01), so the gate sets
     // req.portalUser = null and returns next() BEFORE the role check ever
     // runs, so even a write route must not 401 or 403 here.
-    const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody/revoke-sessions`, { method: 'POST' });
+    //
+    // WR-03: /api/admin/users/:username/revoke-sessions is now a
+    // CONTROL_PLANE_PATH (resolves to control.db, never demo.db regardless
+    // of DEMO_OPEN — mirroring the existing /api/admin/audit precedent), so
+    // it is no longer a valid probe for "DEMO_OPEN resolves to demo and
+    // bypasses auth" — use /api/admin/migrate-db instead, an ordinary
+    // (non-control-plane) admin write route. A valid body is required since
+    // CR-02's fix means validationMiddleware now runs even under DEMO_OPEN.
+    const res = await fetch(`http://127.0.0.1:${port}/api/admin/migrate-db`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'postgres' }),
+    });
     assert.notStrictEqual(res.status, 401, 'DEMO_OPEN must bypass the session requirement entirely');
     assert.notStrictEqual(res.status, 403, 'DEMO_OPEN must bypass the role check entirely (req.portalUser is null, not consulted)');
     assert.strictEqual(res.status, 200, 'the route must actually execute under DEMO_OPEN with no session at all');

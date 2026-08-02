@@ -34,12 +34,23 @@ const { getOrOpenConnection, runWithDb } = require('./store');
 // req.dealContext at all; it talks to audit.db directly via
 // db/auditHook.js's queryAudit()), so a missing/archived stale binding must
 // never lock the admin out of the one place they can inspect the trail.
-const CONTROL_PLANE_PATHS = new Set(['/api/deals', '/api/admin/audit']);
+//
+// WR-03: `/api/admin/users/:username/revoke-sessions` (operates on
+// runtime.db's sessions table only) and `/api/admin/download-zip` (touches
+// the filesystem directly) join this set for the SAME reason — neither
+// route calls readDb()/writeDb() against the resolved deal database at all,
+// so gating them behind a bind-time deal check is pure incidental coupling.
+// Without this, a calling admin whose OWN session happens to be bound to a
+// deal that has since been archived/deleted would get a confusing (and, per
+// WR-02, anti-enumeration-forbidden) refusal from an action unrelated to
+// any deal.
+const CONTROL_PLANE_PATHS = new Set(['/api/deals', '/api/admin/audit', '/api/admin/download-zip']);
 function isControlPlanePath(fullPath) {
   return CONTROL_PLANE_PATHS.has(fullPath)
     || fullPath.startsWith('/api/deals/')
     || fullPath === '/api/admin/deals'
-    || fullPath.startsWith('/api/admin/deals/');
+    || fullPath.startsWith('/api/admin/deals/')
+    || fullPath.startsWith('/api/admin/users/');
 }
 
 /** Thrown by resolveDatabase() when a session's deal binding cannot be
