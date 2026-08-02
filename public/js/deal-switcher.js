@@ -270,9 +270,18 @@
       stateLabel.textContent = currentDealId ? 'Real deal' : 'Demo';
       trigger.appendChild(stateLabel);
 
+      // IN-01: currentDealId can be truthy while currentDeal is undefined —
+      // the session's server-side binding points at a deal that is archived
+      // (excluded from listDealsForUser()'s active-only filter) or one the
+      // caller lost membership to since their last page load. Falling back
+      // to 'Demo showcase' in that case produced a self-contradictory
+      // "Real deal / Demo showcase" chip; a neutral "deal no longer
+      // available" label keeps the "Real deal" state badge honest instead.
+      // Purely cosmetic — the server independently re-enforces membership on
+      // every actual API call (db/resolver.js).
       const nameLabel = document.createElement('span');
       nameLabel.className = 'deal-switcher-name';
-      nameLabel.textContent = currentDeal ? currentDeal.name : 'Demo showcase';
+      nameLabel.textContent = currentDeal ? currentDeal.name : (currentDealId ? 'Deal no longer available' : 'Demo showcase');
       trigger.appendChild(nameLabel);
 
       const chevron = document.createElement('span');
