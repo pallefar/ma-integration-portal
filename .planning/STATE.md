@@ -4,16 +4,16 @@ milestone: v2.0.1
 milestone_name: milestone
 current_phase: 04
 current_phase_name: Due Diligence Workspace
-status: executing
-stopped_at: Completed 04-07-PLAN.md
-last_updated: "2026-08-02T09:27:20.906Z"
+status: verifying
+stopped_at: Completed 04-08-PLAN.md — Phase 4 (Due Diligence Workspace) fully executed, all 8 plans done
+last_updated: "2026-08-02T09:56:10.451Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 Phase: 04 (Due Diligence Workspace) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-02 — Phase 04 execution started
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Progress: [██████████] 95%
 | Phase 04 P05 | 35min | 2 tasks | 6 files |
 | Phase 04 P06 | ~40min | 3 tasks | 6 files |
 | Phase 04 P07 | ~85min | 3 tasks | 22 files |
+| Phase 04 P08 | ~70min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 4 Plan 6: createDeal() stamps a setup skeleton at creation time (basics/team already done); updateDealSetup() does a shallow merge into deal.setup mirroring setDealMemberGrants()'s caller-computes/store-persists shape
 - [Phase ?]: [Phase 4 Plan 07] Every error show-path in deal-wizard.js cleared display to '' instead of an explicit visible value, silently swallowing every server-rejected step's message (found via live UAT, fixed with VISIBLE_ERROR_DISPLAY='block' + a regression test)
 - [Phase ?]: [Phase 4 Plan 07] The new-deal setup wizard (WIZ-01) is the ONLY path into real-deal creation — the Phase-3 minimal create-deal modal (openCreateDealForm) is retired entirely, not left dormant
+- [Phase ?]: [Phase 4 Plan 08] GET /api/dd/summary carries no explicit role gate (mirrors existing DD list routes) — every number is already scoped through filterByAreaGrant()/grantedAreas() before any tally runs
+- [Phase ?]: [Phase 4 Plan 08] public/js/dashboard.js's two pre-existing DOMContentLoaded handlers converted to named functions (initDemoDashboard()/initReadinessStrip()) via a minimal opening/closing-line-only edit, proven unchanged internally by git diff, so a deal-bound dispatcher could gate both without auditing ~2400 lines of demo rendering
+- [Phase ?]: [Phase 4 Plan 08, user decision at checkpoint] D-22 amended to match the actual Phase-3 resolver: an archived deal is a full freeze (no reads, no writes, no listing, for anyone) not read-only-with-retained-access as originally written; no code changed, decision text corrected
 
 ### Pending Todos
 
@@ -151,6 +155,7 @@ None yet.
 - [Phase 3 Plan 04] D-04 deal switcher browser human-check PARTIALLY closed by orchestrator via Playwright (2026-08-01, :3335 admin session): switcher pill renders + visually distinct, dropdown lists Demo showcase + "+ New real deal", create-deal modal opens with isolation notice, ZERO console errors. Still open for /gsd-verify-work 3: in-browser create→select→switch-back round-trip + employee-sees-no-chrome check.
 - [Phase 3 Plan 05] D-10 admin Audit Log tab browser check CLOSED by orchestrator via Playwright (2026-08-02, :3337 admin login): tab renders under Compliance group, 50 entries with timestamp/op/collection#id/actor(role)/deal + collapsible before-after, actor filter returns only matching rows, pagination present, zero console errors.
 - [Phase 4 Plan 07, out of scope] public/js/transitions.js's pageAccess gate races the login-role handshake on the first navigation after a browser's active role changes (pre-existing, app-wide, not introduced by this plan) — every write route is independently role-checked server-side regardless (confirmed live: pmo session got 403 from POST /api/deals/wizard/basics); a future phase should consider hardening the handshake ordering
+- [Phase 4, deferred by user decision] Post-close read-only access for archived deals is NOT implemented — an archived deal is a full freeze today (no reads/writes/listing for anyone, per db/resolver.js's uniform 403 + listDealsForUser()'s exclusion filter). If a real deal ever needs retained-member read access after archiving, it requires: (1) resolveDatabase() distinguishing GET from write for an archived deal's bind, (2) listDealsForUser() including archived deals for a retained member with a status flag, (3) not force-releasing every session at archive time. Captured in 04-CONTEXT.md's amended D-22, not scheduled.
 
 ### Quick Tasks Completed
 
@@ -170,6 +175,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T09:27:20.891Z
-Stopped at: Completed 04-07-PLAN.md
+Last session: 2026-08-02T09:56:10.438Z
+Stopped at: Completed 04-08-PLAN.md — Phase 4 (Due Diligence Workspace) fully executed, all 8 plans done
 Resume file: None
