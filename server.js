@@ -3396,10 +3396,21 @@ app.delete('/api/communications/:id', (req, res) => {
 
 // HTML Email Compiler Helper Function
 function compileHtmlEmail({ sender, senderRole, recipientName, recipientEmail, subject, template, body }) {
-  // Escape every caller-supplied field before it is interpolated into this HTML
-  // document — the result is written to public/sent_emails/<id>.html and served
-  // statically, so unescaped values are a stored-XSS vector. (\n -> <br> in the
-  // body still works because escaping leaves newlines intact.)
+  // VAL-02/D-15: the app-wide stored-XSS control, as of this phase, is
+  // three layers rather than one: (1) at WRITE time, every schema field a
+  // reviewer has confirmed is genuinely rendered as markup is sanitized by
+  // lib/sanitizeHtml.js via validators/index.js's htmlField()/
+  // applySanitization() — see the tagged-field inventory comment in
+  // validators/index.js for the full list (currently: lesson body, the
+  // richtext page-layout block, and the legacy page body); (2) at RENDER
+  // time, public/js/page-layout.js's own sanitize() call stays in place
+  // unchanged as defence in depth (D-15); (3) every OTHER field — including
+  // every field in THIS email compiler — is plain text, never tagged
+  // HTML-bearing, and is defended here the same way it always has been: by
+  // escaping it before interpolation, since the result is written to
+  // public/sent_emails/<id>.html and served statically, so an unescaped
+  // value here would be a stored-XSS vector. (\n -> <br> in the body still
+  // works because escaping leaves newlines intact.)
   const escEmail = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   sender = escEmail(sender);
   senderRole = escEmail(senderRole);

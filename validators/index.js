@@ -75,6 +75,31 @@ function validateBody(schema) {
 // ---------------------------------------------------------------------------
 const HTML_TAGGED = new WeakSet();
 
+// ---------------------------------------------------------------------------
+// TAGGED-FIELD INVENTORY (VAL-02/D-15) — every field passed to htmlField()
+// anywhere in this codebase, so a reviewer can see the full HTML-bearing
+// write surface in one place instead of hunting through each validators/*.js
+// module. Update this list whenever a new htmlField() call is added.
+//
+//   validators/cms.js LessonSchema.body
+//     — public/js/employee.js's openLessonModal() renders `l.body` raw into
+//       innerHTML; `title`/`description` on the same schema are plain text
+//       (rendered via cmsEsc()) and are NOT tagged.
+//   validators/cms.js PageBlockDataSchema.html
+//     — the `richtext` layout block's content; public/js/page-layout.js's
+//       REGISTRY renders ONLY this one field raw (`sanitize(L(d.html))`);
+//       every other block-data field (title/subtitle/heading/items/text/
+//       button/cta/href/ctaHref) is rendered via esc() and is NOT tagged.
+//   validators/cms.js PageUpsertSchema.body
+//     — the legacy CMS page body; page-layout.js's fallback ladder renders
+//       it raw (`sanitize(body)`) when a page has no `layout` blocks yet.
+//
+// Every field NOT in this list is stored as the plain string it was parsed
+// as, deliberately unsanitized — mangling a plain-text field (a target
+// company name with an ampersand, a finding note with an angle bracket)
+// would itself be a data-integrity bug (D-15).
+// ---------------------------------------------------------------------------
+
 /** Tag `schema` as HTML-bearing (D-15). Returns the SAME schema instance. */
 function htmlField(schema) {
   HTML_TAGGED.add(schema);
@@ -158,6 +183,27 @@ function sanitizeValue(schema, value, forceHtml) {
     const out = {};
     Object.keys(value).forEach((k) => { out[k] = sanitizeValue(vt, value[k], tagged); });
     return out;
+  }
+
+  if (type === 'union') {
+    // A CMS text field is commonly `z.union([string, i18n-record])`
+    // (validators/cms.js's i18nOrString()) — pick the union MEMBER whose
+    // own declared shape matches the value's ACTUAL runtime shape (the
+    // member zod itself would have matched during parsing) and recurse
+    // into it, rather than treating the whole union as an opaque leaf
+    // (which would collapse an i18n object down to a single '').
+    const options = base._def.options || [];
+    let candidate;
+    if (typeof value === 'string') {
+      candidate = options.find((o) => (unwrapToBase(o)._def || {}).type === 'string');
+    } else if (Array.isArray(value)) {
+      candidate = options.find((o) => (unwrapToBase(o)._def || {}).type === 'array');
+    } else if (value !== null && typeof value === 'object') {
+      candidate = options.find((o) => ['record', 'object'].includes((unwrapToBase(o)._def || {}).type));
+    }
+    if (candidate) return sanitizeValue(candidate, value, tagged);
+    // No member matches the runtime shape (e.g. value is null/undefined/a
+    // number) — fall through to the leaf handling below.
   }
 
   // Leaf (string/number/boolean/union/enum/...).

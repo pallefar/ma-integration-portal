@@ -54,7 +54,11 @@ const LessonSchema = z.object({
   id: z.string().max(ID_MAX).optional(),
   title: i18nOrString(NAME_MAX).optional(),
   description: i18nOrString(TEXT_MAX).optional(),
-  body: i18nOrString(HTML_MAX).optional(),
+  // VAL-02/D-15: public/js/employee.js's openLessonModal() renders
+  // `l.body` RAW into innerHTML (`cmsLabel(l.body, lang) || ...`) — the one
+  // genuinely HTML-bearing lesson field. `title`/`description` are always
+  // rendered through cmsEsc() (plain text) and stay untagged.
+  body: htmlField(i18nOrString(HTML_MAX)).optional(),
   xp: z.number().optional(),
   dimension: z.string().max(60).optional(),
   playbookLink: z.string().max(2000).optional(),
@@ -163,7 +167,13 @@ registerSchema('POST', '/api/menus', MenusUpdateSchema);
 // as (via esc(), never raw innerHTML).
 // ---------------------------------------------------------------------------
 const PageBlockDataSchema = z.object({
-  html: i18nOrString(HTML_MAX).optional(),
+  // VAL-02/D-15: public/js/page-layout.js's REGISTRY renders ONLY the
+  // richtext block's `data.html` raw (`sanitize(L(d.html))` — the
+  // client-side render-time discipline this write-time control adds a
+  // second gate ahead of); hero/cards/cta's title/subtitle/heading/items/
+  // text/button/cta/href/ctaHref are all rendered via esc() and stay
+  // untagged plain text.
+  html: htmlField(i18nOrString(HTML_MAX)).optional(),
   title: i18nOrString(NAME_MAX).optional(),
   subtitle: i18nOrString(600).optional(),
   cta: i18nOrString(120).optional(),
@@ -185,7 +195,10 @@ const PageUpsertSchema = z.object({
   id: z.string().max(ID_MAX).optional(),
   slug: z.string().trim().max(160).optional(),
   title: i18nOrString(NAME_MAX).optional(),
-  body: i18nOrString(HTML_MAX).optional(),
+  // VAL-02/D-15: the legacy CMS body — public/js/page-layout.js's fallback
+  // ladder renders it raw (`sanitize(body)`) when a page has no `layout`
+  // blocks yet. Tagged the same way `data.html` is above.
+  body: htmlField(i18nOrString(HTML_MAX)).optional(),
   layout: z.array(PageLayoutBlockSchema).max(200).optional(),
   published: z.boolean().optional(),
 });
