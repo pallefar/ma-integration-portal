@@ -123,7 +123,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user without need-to-know for a functional area cannot read that area's DD requests or findings via a direct API call, even with a valid session — filtering happens server-side, and the denial itself is audited.
   4. A DD item can carry a reference link and access-grant record pointing at TE's existing VDR, without the app storing the document itself.
 
-**Plans**: 8/10 plans executed (2 gap-closure plans added from UAT)
+**Plans**: 10/10 plans executed
 
 Plans:
 
@@ -165,7 +165,7 @@ Plans:
 
 **Wave 10** *(gap closure — UAT G-04-8, blocked on Wave 9)*
 
-- [ ] 04-10-PLAN.md — the wizard resumes an unfinished deal instead of creating a duplicate, with a server-side duplicate guard (WIZ-01, G-04-8)
+- [x] 04-10-PLAN.md — the wizard resumes an unfinished deal instead of creating a duplicate, with a server-side duplicate guard (WIZ-01, G-04-8)
 
 ### Phase 5: Synergy Value Capture
 
@@ -219,7 +219,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 1. Schema & Migration | 3/3 | In Progress|  |
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
-| 4. Due Diligence Workspace | 9/10 | In Progress|  |
+| 4. Due Diligence Workspace | 10/10 | In Progress|  |
 | 5. Synergy Value Capture | 0/TBD | Not started | - |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |
