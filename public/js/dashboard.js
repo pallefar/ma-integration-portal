@@ -3,7 +3,41 @@
  * Controls tab navigation, visual gauge rendering, API integration, and markdown formatting.
  */
 
+// D-19: the deal-bound branch. When the signed-in session is bound to a
+// real deal, this IS the deal home — the demo showcase below (and the
+// readiness strip further down) never runs at all, including its own
+// /api/assessment-status fetch, so a deal-bound session performs none of
+// today's demo network calls. When there is no bound deal, this falls
+// straight through to the existing demo initializers, UNCHANGED, in the
+// same order they already ran in before this branch existed (they are now
+// named functions — initDemoDashboard()/initReadinessStrip() — but their
+// bodies are untouched). All new deal-bound rendering lives in the
+// separate public/js/deal-home.js module (window.renderDealHome()) — this
+// file only decides which world it is in and delegates.
 document.addEventListener('DOMContentLoaded', () => {
+  fetch('/api/auth/me').then((r) => r.json()).then((identity) => {
+    if (identity && identity.dealId) {
+      const dealHome = document.getElementById('deal-home');
+      const mainViewEl = document.getElementById('dashboard-main-view');
+      const emptyStateEl = document.getElementById('dashboard-empty-state');
+      if (mainViewEl) mainViewEl.style.display = 'none';
+      if (emptyStateEl) emptyStateEl.style.display = 'none';
+      if (dealHome) dealHome.style.display = 'block';
+      if (window.renderDealHome) window.renderDealHome(identity.dealId);
+      return;
+    }
+    initDemoDashboard();
+    initReadinessStrip();
+  }).catch(() => {
+    // Best-effort — an identity-fetch failure must never leave the page
+    // blank; fall back to the demo showcase exactly like every other
+    // best-effort /api/auth/me caller in this codebase.
+    initDemoDashboard();
+    initReadinessStrip();
+  });
+});
+
+function initDemoDashboard() {
   const mainView = document.getElementById('dashboard-main-view');
   const emptyState = document.getElementById('dashboard-empty-state');
   const targetNameEl = document.getElementById('dashboard-target-name');
@@ -2344,14 +2378,17 @@ document.addEventListener('DOMContentLoaded', () => {
   loadChangeCurve();
   initWelcomeKitCustomizer();
   loadHrbpCommunications();
-});
+}
 
 
 // ===== Readiness Assessment strip + phase gate (Assessment Suite v2) =====
 // Reads the single /api/assessment-status rollup: renders a readiness strip on
 // the KPI tab and locks the 100-Day Roadmap tab while required assessments for
 // gate `dashboard.phase.plan` are missing. All logic stays in this block.
-document.addEventListener('DOMContentLoaded', () => {
+// D-19: now a named function (initReadinessStrip()) called only on the
+// demo-showcase path by the deal-bound dispatcher at the top of this file —
+// its own /api/assessment-status fetch never runs for a deal-bound session.
+function initReadinessStrip() {
   const bandCol = (s) => s >= 80 ? '#3f7a37' : s >= 60 ? '#C77700' : '#C0392B';
   fetch('/api/assessment-status').then(r => r.json()).then(st => {
     if (!st || !st.success) return;
@@ -2408,4 +2445,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.applyPortalI18n) window.applyPortalI18n();
   }).catch(e => console.error('Assessment readiness strip failed:', e));
-});
+}

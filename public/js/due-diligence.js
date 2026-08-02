@@ -502,6 +502,69 @@
     });
   }
 
+  // D-21: the owner nudge — badge + dismissible banner for open/overdue
+  // rows assigned to the SIGNED-IN caller, sourced from GET /api/dd/summary's
+  // already-clearance-scoped `mine` counts (Task 1). Names counts only —
+  // never an area, an item title or another person — because a banner is
+  // legible to anyone standing near the screen, not only the signed-in
+  // user. Raised through the SAME shared banner mechanism (transitions.js's
+  // window.makeBannerDismissible) every other injected banner in this
+  // codebase already uses, with its session-scoped (not local-storage)
+  // dismissal-key convention — a dismissal does not persist forever, so a
+  // still-overdue item is nudged again in a fresh session. In-app only:
+  // nothing here sends anything anywhere (D-21).
+  function renderOwnerNudge(mine) {
+    if (!mine) return;
+    var total = (mine.openItems || 0) + (mine.openFindings || 0);
+    var overdue = mine.overdueItems || 0;
+    if (total <= 0) return;
+
+    var titleEl = document.querySelector('.dd-hero h1');
+    if (titleEl && !document.getElementById('dd-nudge-badge')) {
+      var badge = document.createElement('span');
+      badge.id = 'dd-nudge-badge';
+      // Inline styling only (no CSS file touched by this plan) — matches
+      // this codebase's existing pattern for a JS-injected badge/pill (see
+      // public/js/dashboard.js's readiness-strip band colors).
+      badge.style.cssText = 'display:inline-block;margin-left:.6rem;font-size:.68rem;font-weight:800;padding:.15rem .55rem;border-radius:999px;background:#C77700;color:#fff;vertical-align:middle;';
+      badge.textContent = String(total);
+      titleEl.appendChild(badge);
+    }
+
+    if (document.getElementById('dd-nudge-banner')) return;
+    try {
+      if (sessionStorage.getItem('dd_nudge_dismissed') === 'true') return;
+    } catch (e) { /* sessionStorage unavailable — fall through and still show it */ }
+
+    var main = document.querySelector('.main-content') || document.querySelector('main');
+    if (!main) return;
+
+    var banner = document.createElement('div');
+    banner.id = 'dd-nudge-banner';
+    banner.className = 'page-banner page-banner--warning';
+    banner.setAttribute('role', 'status');
+    var body = document.createElement('div');
+    body.className = 'page-banner-body';
+    var msg = document.createElement('span');
+    msg.className = 'page-banner-msg';
+    var text = 'You have ' + total + (total === 1 ? ' open due-diligence item assigned to you' : ' open due-diligence items assigned to you');
+    if (overdue > 0) text += ', ' + overdue + ' overdue';
+    text += '.';
+    msg.textContent = text;
+    body.appendChild(msg);
+    banner.appendChild(body);
+    main.insertBefore(banner, main.firstChild);
+    if (typeof window.makeBannerDismissible === 'function') {
+      window.makeBannerDismissible(banner, 'dd_nudge_dismissed', 'session');
+    }
+  }
+
+  function loadOwnerNudge() {
+    return fetch('/api/dd/summary').then(function (r) { return r.json(); }).then(function (summary) {
+      renderOwnerNudge(summary && summary.mine);
+    }).catch(function () { /* best-effort — the nudge simply stays absent */ });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // D-18: resolve the caller's role + current deal id ONCE, before the
     // first render, so the access-grant form's visibility gate and its
@@ -511,6 +574,7 @@
       state.role = (me && me.user && me.user.role) || '';
       state.dealId = (me && me.dealId) || null;
     }).catch(function () { /* best-effort — the grant form simply stays hidden */ })
-      .then(function () { return load().then(render); });
+      .then(function () { return load().then(render); })
+      .then(function () { return loadOwnerNudge(); });
   });
 })();

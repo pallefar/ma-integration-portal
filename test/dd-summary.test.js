@@ -326,3 +326,37 @@ test('dd-summary (h): a deal with no items and no findings returns zeroed struct
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------
+// Task 2 (04-08): source-level wiring assertions for the deal home
+// (public/js/deal-home.js), the dashboard deal-bound branch
+// (public/js/dashboard.js) and the owner nudge (public/js/due-diligence.js).
+// No HTTP calls, no database — pure source inspection, mirroring
+// test/deal-wizard-page.test.js's own established style for this codebase.
+// ---------------------------------------------------------------------
+const dealHomeJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'deal-home.js'), 'utf8');
+const dashboardJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'dashboard.js'), 'utf8');
+const dueDiligenceJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'due-diligence.js'), 'utf8');
+
+test('dd-summary (source): the deal-home module fetches the rollup routes', () => {
+  assert.ok(dealHomeJs.includes("fetch('/api/dd/summary')"), 'deal-home.js must fetch the DD rollup route');
+  assert.ok(dealHomeJs.includes("fetch('/api/assessment-status')"), 'deal-home.js must fetch the readiness rollup route');
+});
+
+test('dd-summary (source): the deal-home module contains no markup-assignment sink', () => {
+  assert.strictEqual((dealHomeJs.match(/innerHTML/g) || []).length, 0, 'deal-home.js must never assign innerHTML');
+});
+
+test('dd-summary (source): the deal-home module contains no reference to the audit route (D-20 — no activity feed)', () => {
+  assert.strictEqual((dealHomeJs.match(/\/api\/admin\/audit/g) || []).length, 0, 'deal-home.js must never reference the audit route');
+});
+
+test('dd-summary (source): the dashboard script\'s deal-bound branch delegates to renderDealHome rather than rendering', () => {
+  assert.ok(dashboardJs.includes('window.renderDealHome'), 'dashboard.js must call window.renderDealHome() for the deal-bound path');
+  assert.ok(dashboardJs.includes('identity.dealId'), 'dashboard.js must branch on the bound deal id from GET /api/auth/me');
+});
+
+test('dd-summary (source): the due-diligence script raises the owner nudge through the shared banner mechanism', () => {
+  assert.ok(dueDiligenceJs.includes('makeBannerDismissible'), 'the nudge must be raised through window.makeBannerDismissible, not a bespoke dismiss mechanism');
+  assert.ok(dueDiligenceJs.includes('summary.mine') || dueDiligenceJs.includes('summary && summary.mine'), 'the nudge must be sourced from GET /api/dd/summary\'s mine counts');
+});
