@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - Due Diligence</title>
+  <meta name="description" content="Due Diligence workspace — request items tracked by functional area, visible only to the areas you are cleared for.">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/css/style.css?v=1784600001">
+  <script src="/js/transitions.js?v=1784600003"></script>
+  <style>
+    .dd-wrap{ max-width:1100px; margin:0 auto; }
+    .dd-hero{ margin-bottom:1.25rem; }
+    .dd-hero h1{ font-size:1.9rem; color:var(--te-dark-teal); margin:0 0 .35rem; }
+    .dd-hero p{ color:var(--text-secondary); max-width:820px; line-height:1.55; margin:0; }
+    .dd-area{ margin-bottom:1.75rem; }
+    .dd-area-head{ display:flex; align-items:center; gap:.6rem; margin-bottom:.6rem; }
+    .dd-area-title{ font-size:1.05rem; font-weight:800; color:var(--te-dark-teal); margin:0; }
+    .dd-area-count{ font-size:.72rem; font-weight:800; color:var(--text-dim); }
+    .dd-item{ display:flex; align-items:flex-start; gap:.75rem; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.65rem .9rem; margin-bottom:.5rem; }
+    .dd-item--overdue{ border-color:#C0392B; box-shadow:inset 0 0 0 1px rgba(192,57,43,.35); }
+    .dd-item-main{ flex:1; min-width:0; }
+    .dd-item-text{ font-size:.86rem; font-weight:600; color:var(--text-primary); line-height:1.4; }
+    .dd-item-meta{ font-size:.7rem; color:var(--text-dim); display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.2rem; }
+    .dd-empty{ font-size:.8rem; color:var(--text-dim); font-style:italic; padding:.4rem 0; }
+    .dd-add{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; background:var(--card-bg,#fff); border:1px dashed var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-top:.6rem; }
+    .dd-add input, .dd-add select{ padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; }
+    .dd-add input[type="text"]{ flex:1; min-width:200px; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <img class="brand-logo-svg" src="/te-logo.png" alt="TE Connectivity" style="height:36px;width:auto;display:block;">
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title"><span class="portal-badge">M&amp;A Integration</span></div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/" class="nav-link">Overview</a>
+        <a href="/dashboard.html" class="nav-link">Integration Leader Portal</a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="dd-wrap">
+        <div class="dd-hero">
+          <h1>Due Diligence</h1>
+          <p>Request items tracked by functional area — you see only the areas you are cleared for.</p>
+        </div>
+        <div id="dd-areas"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/due-diligence.js?v=1784600001"></script>
+</body>
+</html>

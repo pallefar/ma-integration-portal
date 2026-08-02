@@ -13,6 +13,9 @@ const dbFiles = require('./db/dbFiles');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
+// DD-04 (Phase 4 Plan 01): the clean-room need-to-know filter guarding every
+// due-diligence route below (see the /api/dd section for how it's used).
+const accessPolicy = require('./db/accessPolicy');
 // AUD-01/D-08 (Phase 3 Plan 05): the store-layer audit hook — db/store.js's
 // writeDb() dispatches to it automatically for every deal write; server.js
 // itself calls recordSecurityEvent() directly at each D-08 control-plane
@@ -36,6 +39,7 @@ require('./validators/cms'); // ditto
 require('./validators/people'); // ditto
 require('./validators/assessment'); // ditto
 require('./validators/settings'); // ditto
+require('./validators/dd'); // ditto
 
 
 const app = express();
@@ -296,6 +300,13 @@ const ROLE_WRITE_POLICY = [
   // enforces admin-only INLINE in its own handler (isAdminRequest(req)) on
   // top of this coarser admin+hrbp gate; see that route's own comment.
   { prefix: '/api/deals', roles: ['admin', 'hrbp'] },
+
+  // DD-04: the due-diligence write surface is stated explicitly rather than
+  // inherited from DEFAULT_WRITE_ROLES below — even though the two role sets
+  // happen to be identical today, an explicit entry means a future change to
+  // DEFAULT_WRITE_ROLES cannot silently widen who may write DD content.
+  // `employee` must never write DD content (MNPI).
+  { prefix: '/api/dd', roles: ['admin', 'hrbp', 'pmo'] },
 
   // Everything else under /api that accepts writes today (projects, employees
   // roster CRUD, integration-tasks, raid, synergies, departments, processes,
@@ -2797,6 +2808,90 @@ app.post('/api/raid', (req, res) => {
   lane.push(item);
   writeDb(db);
   res.status(201).json({ success: true, entry: item });
+});
+
+// =====================================================================
+// Due Diligence workspace (DD-01/DD-04) — request items scoped to one of
+// db/accessPolicy.js's eight fixed functional areas, guarded end-to-end by
+// that module's clean-room need-to-know filter. Every route here resolves
+// the caller's FULL deal object via controlStore.getDeal() (never just
+// req.dealContext, which carries only the id/kind) because accessPolicy
+// needs deal.memberGrants/deal.members to decide clearance.
+// =====================================================================
+
+// Flat lane helper, deliberately with NO demoMode/isCustom branch — copying
+// that branch from raidLane()/synergyLane() above would be dead code inside
+// a real deal's own database file (04-RESEARCH.md's named anti-pattern; this
+// collection is deal-DB-native, never demo-shadow-laned).
+function ddRequestLane(db) {
+  db.ddRequestItems = db.ddRequestItems || [];
+  return db.ddRequestItems;
+}
+
+// D-15: overdue is COMPUTED here at response time and never written into the
+// stored row — true when dueDate is a non-empty 'YYYY-MM-DD' string strictly
+// earlier than today's UTC date AND status is not 'closed'.
+const DD_DUE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function computeOverdue(item) {
+  if (!item || item.status === 'closed') return false;
+  const due = item.dueDate;
+  if (typeof due !== 'string' || !DD_DUE_DATE_RE.test(due)) return false;
+  return due < new Date().toISOString().slice(0, 10);
+}
+function publicDdItem(item) {
+  return Object.assign({}, item, { overdue: computeOverdue(item) });
+}
+
+// D-16: every DD_AREAS entry the caller is cleared for (never the full
+// fixed list) — the page (public/js/due-diligence.js) renders only what
+// this route returns and holds no client-side area list of its own.
+app.get('/api/dd/areas', (req, res) => {
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const granted = new Set(accessPolicy.grantedAreas(deal, req.portalUser));
+  res.json(accessPolicy.DD_AREAS.filter((a) => granted.has(a.id)));
+});
+
+// T-04-01: filterByAreaGrant() runs server-side on EVERY list response — an
+// uncleared area's items are omitted here, never filtered client-side.
+app.get('/api/dd/request-items', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const lane = ddRequestLane(db);
+  let visible = accessPolicy.filterByAreaGrant(lane, deal, req.portalUser);
+  if (req.query.area) visible = visible.filter((i) => i.area === req.query.area);
+  res.json(visible.map(publicDdItem));
+});
+
+// Task 1: the create half of the upsert only — the update-by-id half (and
+// the matching IDOR guard on a caller-supplied id) is added in Task 2.
+app.post('/api/dd/request-items', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const lane = ddRequestLane(db);
+  try {
+    accessPolicy.assertAreaGrant(deal, req.portalUser, b.area);
+  } catch (e) {
+    if (e instanceof accessPolicy.AreaAccessError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  const item = {
+    id: newId('ddreq'),
+    area: b.area,
+    text: String(b.text || '').trim().slice(0, 2000),
+    owner: String(b.owner || '').slice(0, 120),
+    status: 'open',
+    dueDate: String(b.dueDate || '').slice(0, 10),
+    blocked: false,
+    vdrLink: null,
+    notes: String(b.notes || '').slice(0, 2000),
+    source: String(b.source || '').slice(0, 160),
+    createdAt: new Date().toISOString(),
+    createdBy: req.portalUser.username,
+  };
+  lane.push(item);
+  writeDb(db);
+  res.status(201).json({ success: true, item: publicDdItem(item) });
 });
 
 // =====================================================================

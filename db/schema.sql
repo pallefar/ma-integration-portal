@@ -158,6 +158,34 @@ CREATE TABLE IF NOT EXISTS customSynergyInitiatives (
 );
 CREATE INDEX IF NOT EXISTS idx_customSynergyInitiatives_project ON customSynergyInitiatives(project_id);
 
+-- Phase 4 (Due Diligence Workspace, DD-01/DD-02/D-13): same blob-per-row
+-- shape as every table above — no normalized area/status/severity columns,
+-- per this file's own header rule. Guarded at the application layer by
+-- db/accessPolicy.js, never by a schema-level constraint.
+CREATE TABLE IF NOT EXISTS ddFindings (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  seq INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ddFindings_project ON ddFindings(project_id);
+
+CREATE TABLE IF NOT EXISTS ddRequestItems (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  seq INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ddRequestItems_project ON ddRequestItems(project_id);
+
+CREATE TABLE IF NOT EXISTS ddRequestTemplates (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  seq INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ddRequestTemplates_project ON ddRequestTemplates(project_id);
+
 CREATE TABLE IF NOT EXISTS departments (
   id TEXT PRIMARY KEY,
   project_id TEXT,

@@ -6,7 +6,13 @@
 // db/collections.js's ARRAY_COLLECTIONS (accounts moved to a control.db-native
 // table reached only through db/controlStore.js, never through this
 // migration's whole-object readDb()/writeDb() model) — so this migration
-// (and this test) now covers 37 of db.json's 38 keys by design, not by gap.
+// (and this test) covers 37 of db.json's 38 keys by design, not by gap.
+// Phase 4 Plan 01 then ADDS three new array collections (ddFindings,
+// ddRequestItems, ddRequestTemplates) that predate this frozen fixture and so
+// are absent from db.json entirely — the round-trip below still holds for
+// them (source[key] || [] resolves to an empty array, and the migration
+// creates their tables with zero rows), bringing the ground-truth inventory
+// to 40 (37 + 3 new, none of which existed in db.json to begin with).
 //
 // node:test — Node's built-in runner, zero new dependency (this repo has no
 // test framework installed before this phase). Run via `node --test` (bare —
@@ -36,7 +42,7 @@ function cleanupDbFile(dbPath) {
   }
 }
 
-test('migration-roundtrip: reconstructs all 38 collections with exact canonical-JSON equality and row-count parity', () => {
+test('migration-roundtrip: reconstructs all 40 collections with exact canonical-JSON equality and row-count parity', () => {
   const outPath = tempDbPath('roundtrip');
   try {
     const { source, resolvedOut } = runMigration(SOURCE_PATH, outPath);
@@ -49,8 +55,8 @@ test('migration-roundtrip: reconstructs all 38 collections with exact canonical-
 
     assert.strictEqual(
       ARRAY_COLLECTIONS.length + SINGLETON_KEYS.length,
-      37,
-      'the ground-truth inventory must cover exactly 37 top-level keys (38 minus `users`, moved to control.db in Phase 3 Task 2)'
+      40,
+      'the ground-truth inventory must cover exactly 40 top-level keys (38 minus `users` plus Phase 4\'s 3 new dd* collections)'
     );
 
     for (const key of ARRAY_COLLECTIONS) {

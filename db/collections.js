@@ -11,7 +11,7 @@
 // db/schema.sql, db/store.js, and scripts/migrate-db-json-to-sqlite.js all
 // import this file — do NOT duplicate the inventory anywhere else.
 
-// The 33 array-shaped top-level collections. Each gets its own SQLite table
+// The 35 array-shaped top-level collections. Each gets its own SQLite table
 // (see db/schema.sql): one JSON-blob-per-row, id/project_id extracted as
 // metadata columns for indexing, `data` column holding the untouched item.
 const ARRAY_COLLECTIONS = [
@@ -32,6 +32,12 @@ const ARRAY_COLLECTIONS = [
   'customIntegrationTasks',
   'customRaidEntries',
   'customSynergyInitiatives',
+  // Phase 4 (Due Diligence Workspace): the clean-room-guarded DD collections.
+  // Every read/write against these three goes through db/accessPolicy.js's
+  // filterByAreaGrant()/assertAreaGrant() — see server.js's /api/dd section.
+  'ddFindings',
+  'ddRequestItems',
+  'ddRequestTemplates',
   'departments',
   'employees',
   'hrbps',
@@ -59,8 +65,8 @@ const SINGLETON_KEYS = [
   'activeProjectId',
 ];
 
-if (ARRAY_COLLECTIONS.length !== 32) {
-  throw new Error(`db/collections.js: expected 32 array collections, got ${ARRAY_COLLECTIONS.length}`);
+if (ARRAY_COLLECTIONS.length !== 35) {
+  throw new Error(`db/collections.js: expected 35 array collections, got ${ARRAY_COLLECTIONS.length}`);
 }
 if (SINGLETON_KEYS.length !== 5) {
   throw new Error(`db/collections.js: expected 5 singleton keys, got ${SINGLETON_KEYS.length}`);
