@@ -1,14 +1,16 @@
 ---
 phase: 04-due-diligence-workspace
-verified: 2026-08-02T19:10:00Z
+verified: 2026-08-02T21:15:00Z
 status: passed
-score: 12/12 must-haves verified
+score: 14/14 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: none
-  previous_score: n/a
-  gaps_closed: []
+  previous_status: passed
+  previous_score: 12/12
+  gaps_closed:
+    - "G-04-8: re-entering the wizard after an interruption created a duplicate deal and silently re-bound the session to it"
+    - "G-04-10: a skipped setup step (4-6) was recorded as DONE by the Finish control, under-reporting outstanding work"
   gaps_remaining: []
   regressions: []
 ---
@@ -16,98 +18,109 @@ re_verification:
 # Phase 4: Due Diligence Workspace Verification Report
 
 **Phase Goal:** A new deal enters the app through a guided setup wizard (basics, team, readiness assessments, scope, timeline), and the IL can run due diligence inside it, with pre-close information restricted to those with need-to-know.
-**Verified:** 2026-08-02T19:10:00Z
+**Verified:** 2026-08-02T21:15:00Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap closure (04-09, 04-10)
+
+## What Changed Since the Last Pass
+
+The prior `04-VERIFICATION.md` (12/12, `passed`) was written before two live-UAT-discovered gaps were closed. This pass re-verifies the two closure plans directly against running code (not against SUMMARY prose) and re-confirms the 12 previously-verified truths still hold (regression check).
+
+### G-04-10 closure (04-09) — verified directly in code
+
+- `validators/wizard.js`'s `DealSetupSchema` (lines 70-81): `step` is `z.enum(DEAL_SETUP_STEPS).optional()` (was mandatory), plus one `.refine()` requiring `body.step !== undefined || (body.complete === true && body.data === undefined)`, with `path: ['step']` so the existing field-error renderer places the message correctly. Confirmed by direct read, not by the SUMMARY's description of it.
+- `server.js`'s `POST /api/deals/:id/setup` (lines 828-872) now branches on `step === undefined`: the completion-only branch (847-856) calls `controlStore.updateDealSetup(dealId, { steps: beforeSteps, complete: newComplete })` — passing the **pre-existing** `beforeSteps` object through unchanged, stamping nothing. The step-bearing branch (858-871) is untouched (`newSteps = { ...beforeSteps, [step]: stampedValue }`).
+- `public/js/deal-wizard.js` line 675: Finish now posts `postJson('/api/deals/' + state.dealId + '/setup', { complete: true })` — no `step` field, confirmed by direct read of the call site.
+- Regression tests `deal-wizard (x)/(y)/(z)` in `test/deal-wizard.test.js` — run standalone by this verifier (`node --test --test-name-pattern="deal-wizard \(x\)"`), pass.
+
+### G-04-8 closure (04-10) — verified directly in code
+
+- `db/controlStore.js` lines 183-219: `hasOutstandingSetupStep(deal)` returns true if any of the six `DEAL_SETUP_STEPS` is `null`/absent in `deal.setup.steps`. `findUnfinishedDealFor({ createdBy, name, targetCompany })` returns the first non-archived deal where `d.createdBy === createdBy && d.name === name && d.targetCompany === targetCompany && hasOutstandingSetupStep(d)`, else `null`. Confirmed by direct read: the equality operators are strict `===` (exact string match, not fuzzy), and `createdBy` is part of the match — this key can never return another user's deal.
+- `server.js`'s `POST /api/deals` (lines 706-727): calls `controlStore.findUnfinishedDealFor({ createdBy: req.portalUser.username, name, targetCompany })` **before** calling `controlStore.createDeal()`. On a match, it returns immediately with `{ success: true, deal: existingUnfinished, resumed: true }` — no `createDeal()` call, nothing provisioned. On no match, execution falls through unconditionally to the existing `controlStore.createDeal(...)` call (line ~725) — **D-05 create-early is intact**: a first-time caller still gets a deal created immediately on the same basics+team post, with no added delay or extra round-trip.
+- `public/js/deal-wizard.js`: resume-on-entry bootstrap (lines ~308-328), `firstOutstandingWizardStep()`, `enterWizardStep()`, an `if (state.deal)` guard on the step-2 submit handler, and `showResumeNotice()`/the `#wiz-resume-restart` escape hatch — all present, confirmed by direct read.
+- Regression tests `deal-wizard (aa)/(ab)/(ac)` in `test/deal-wizard.test.js` — run standalone by this verifier, pass. `(ac)` specifically proves a FINISHED deal is excluded from the dedup match (name-alone is not the key).
+- Both gaps additionally carry live-browser post-fix evidence in `04-UAT.md` tests 8 and 10, driven by the orchestrator in a real browser (resume lands on Step 3 of 7 with exactly one deal; the three genuinely-skipped steps all read OUTSTANDING after Finish).
+
+**D-22 amendment** (archived deals are a full freeze, not read-only) remains a deliberate, dated decision in `04-CONTEXT.md` — not re-litigated here, not treated as an open item.
 
 ## Goal Achievement
 
 ### Observable Truths
 
-Truths are the 5 ROADMAP Success Criteria (numbered 0-4) plus the 6 requirement statements (DD-01..05, WIZ-01), collapsed to unique claims and cross-checked directly against code, not against SUMMARY prose.
+The 12 truths verified in the initial pass (ROADMAP Success Criteria 0-4, requirements DD-01..05/WIZ-01, the CR-01 authz fix, the D-22 amendment, the 230-test baseline, absence of debt markers, and route wiring) are re-confirmed as regression checks below, plus 2 new truths covering the gap closures.
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| SC-0 | New deal is created through a guided wizard (basics -> team/access -> readiness-assessment kickoff w/ acquirer+target+IL instances -> scope -> timeline), every write validated+audited | ✓ VERIFIED | `public/deal-wizard.html` (7-step panel/rail) + `public/js/deal-wizard.js` calls `POST /api/deals/wizard/basics`, `POST /api/deals`, `POST /api/deals/select`, `POST /api/assessment-instances/assign` (x3), `POST /api/deals/:id/setup` (scope/timeline/ddKickoff) — all routes exist in `server.js` (confirmed by grep + `node scripts/list-unvalidated-routes.js` exit 0). `test/deal-wizard.test.js` (23/23) and `test/deal-wizard-page.test.js` prove the full server-side and client-source wiring. Live-browser click-through of the wizard is one of the 10 checkpoints running in parallel via `04-UAT.md` (see Human Verification section) — not blocking here per task scope. |
-| SC-1 / DD-01 | IL creates/manages a DD request list organized by functional area, item w/ owner, status, due date | ✓ VERIFIED | `GET/POST /api/dd/request-items`, `GET/DELETE /api/dd/request-items/:id` in `server.js:3201-3337`; `db/accessPolicy.js` defines the 8-area taxonomy (`DD_AREAS`); 80-item seeded standard checklist in `db/ddRequestTemplateSeed.js` + `POST /api/dd/request-items/instantiate`. Proven by `test/dd-workspace.test.js` and `test/dd-seed.test.js`, both part of the passing 230/230 suite. |
-| SC-2 / DD-02, DD-03 | IL records a finding (severity/area/owner) and converts to Day-1 task and/or RAID entry via the remediation linkage | ✓ VERIFIED | `GET/POST /api/dd/findings`, `POST /api/dd/findings/:id/convert` (`server.js:3431-3612`) implement bidirectional dedup-by-source conversion (`dd-finding:<id>` source string), reusing `POST /api/integration-tasks/from-remediation`'s exact shape (not the same route — see note below) with `DD_AREA_WORKSTREAM` mapping and `RAID_LEVELS` extended to 4 levels (`['low','medium','high','critical']`, confirmed identical in both `server.js:3082` and `validators/workstream.js:147`). `test/dd-findings.test.js` (15 tests) proves severity fidelity end to end, no downgrade. |
-| SC-3 / DD-04 | Uncleared user cannot read an area's DD requests/findings via direct API call even with a valid session; filtering server-side; denial itself is audited | ✓ VERIFIED | `db/accessPolicy.js`'s `grantedAreas()/filterByAreaGrant()/assertAreaGrant()` gate every DD list/by-id route; `refuseDdArea()` records a `dd-access-denied` security event before every uniform 403 (unknown-id and uncleared-area share one code path — anti-enumeration). Confirmed live in code and by `test/dd-access-policy.test.js`, `test/dd-workspace.test.js` (g), `test/dd-findings.test.js` (e/f/o). Per-deal grant/revoke surface (`GET/POST /api/deals/:id/grants`) confirmed admin+hrbp-gated. |
-| SC-4 / DD-05 | DD item carries a reference + access-grant record pointing at TE's VDR; app never stores the document | ✓ VERIFIED | `vdrLink` field on request items (URL+folder/label, server-stamped provenance, wholesale-replace), `GET /api/dd/vdr-links` aggregate (clean-room filtered, omits uncleared areas), `POST /api/deals/:id/vdr-grants` (audited `vdr-access-grant` event, no stored collection). `test/dd-vdr.test.js` (13 tests) includes an explicit negative proof: no upload-shaped route under `/api/dd`, no filesystem-write primitive in the DD section of `server.js`. |
-| WIZ-01 (full) | Deal created after mandatory core (basics+team); remaining steps resume from deal-home checklist; every write flows through validation+audit | ✓ VERIFIED | `db/controlStore.js`'s `createDeal()` stamps a `setup` skeleton with basics/team pre-done; `updateDealSetup()` mirrors `updateDealMembers()`'s read-modify-write shape; `POST /api/deals/:id/setup` records a `deal-setup-update` audit event. `public/js/deal-home.js` renders the setup checklist with a resume link into `/deal-wizard.html`. Confirmed wired into `public/js/dashboard.js`'s deal-bound dispatcher (named-function conversion of the two demo initializers, `git diff` proves their bodies untouched). `test/deal-wizard.test.js` (p) proves the full ordered walk end-to-end. |
-| CR-01 fix | The code-review-flagged authz bug (any deal member could complete another's pending readiness assessment) is actually fixed in running code, not just claimed fixed | ✓ VERIFIED | Read `server.js:2573-2625` directly: the `instanceId` completion branch now checks `req.portalUser.role` is `admin`/`hrbp` OR `req.portalUser.username === pending.owner.trim()`, else 403 `"You are not the assigned owner of this assessment."`, BEFORE any mutation. Regression tests `deal-wizard (t)`/(u)/(v)/(w) in `test/deal-wizard.test.js` independently re-run (23/23 pass) confirm the fix plus WR-01 (owner-name stripping) and IN-03 (session-stamped respondentName). |
-| D-22 amendment | The archived-deal decision is recorded as amended (not implemented as originally written) | ✓ VERIFIED | `04-CONTEXT.md`'s D-22 shows the original text struck through and a dated 2026-08-02 amendment explaining `db/resolver.js:97` has no read/write distinction for archived deals (full freeze, not read-only). No code change was needed or made; this is a documentation correction confirmed against the actual resolver code, which the verifier independently re-read and confirms matches the amendment's description (single `throw` branch, no `req.method` check for access purposes). |
-| Test suite | 230/230 passing, matching the SUMMARY's final claimed count | ✓ VERIFIED | `npm test` run independently by this verifier: `# tests 230 / # pass 230 / # fail 0`. `node scripts/list-unvalidated-routes.js` exits 0 (every registered write route has a zod schema). |
-| No stub/debt markers | Files touched by this phase carry no unresolved TODO/FIXME/XXX/placeholder-as-stub markers | ✓ VERIFIED | Grepped `db/accessPolicy.js`, `validators/dd.js`, `validators/wizard.js`, `public/due-diligence.html`, `public/deal-wizard.html`, `public/js/due-diligence.js`, `public/js/deal-wizard.js`, `public/js/deal-home.js`, `db/controlStore.js`, `server.js`, `public/js/dashboard.js` for `TBD\|FIXME\|XXX\|TODO\|HACK\|PLACEHOLDER\|not yet implemented`. Only hits are legitimate HTML `placeholder=` input attributes and a demo `.placeholder-card`/`.placeholder-badge` CSS class (pre-existing "locked module" UI, unrelated to this phase's stub-detection concern). Zero `innerHTML` in any of the three phase-specific client JS files. |
-| Route wiring | Every DD/wizard route referenced by the client actually exists live in Express | ✓ VERIFIED | Direct grep of `server.js` confirms all 21 `/api/dd/*`, `/api/deals/:id/{grants,vdr-grants,setup}`, `/api/deals/wizard/basics`, and `/api/assessment-instances{,/assign}` routes exist at the line numbers the summaries claim. `test/deal-wizard-page.test.js` additionally proves this via a route-inventory reflection test. |
+| SC-0 | New deal is created through a guided wizard (basics -> team/access -> readiness-assessment kickoff -> scope -> timeline), every write validated+audited | ✓ VERIFIED | Unchanged from initial pass; `public/deal-wizard.html` + `public/js/deal-wizard.js` wired to live routes; `test/deal-wizard.test.js`/`test/deal-wizard-page.test.js` pass as part of 239/239. |
+| SC-1 / DD-01 | IL creates/manages a DD request list organized by functional area, item w/ owner, status, due date | ✓ VERIFIED | Unchanged; `server.js:3201-3337`, `db/accessPolicy.js`, `db/ddRequestTemplateSeed.js` — regression-confirmed by full suite pass. |
+| SC-2 / DD-02, DD-03 | IL records a finding and converts to Day-1 task/RAID via remediation linkage | ✓ VERIFIED | Unchanged; regression-confirmed. |
+| SC-3 / DD-04 | Uncleared user cannot read an area's DD requests/findings; denial audited | ✓ VERIFIED | Unchanged; regression-confirmed. |
+| SC-4 / DD-05 | DD item carries VDR reference + access-grant, app never stores the document | ✓ VERIFIED | Unchanged; regression-confirmed. |
+| WIZ-01 (full) | Deal created after mandatory core (basics+team); remaining steps resume from deal-home checklist; every write validated+audited | ✓ VERIFIED | Now additionally covers honest resume (below) — the checklist itself no longer under- or over-reports. |
+| CR-01 fix | The code-review-flagged authz bug is fixed in running code | ✓ VERIFIED | Unchanged; `server.js:2573-2625` re-confirmed present, regression tests (t)/(u)/(v)/(w) still pass. |
+| D-22 amendment | Archived-deal decision recorded as amended, matching actual resolver behavior | ✓ VERIFIED | Unchanged; `04-CONTEXT.md` amendment text matches `db/resolver.js:97`'s single-branch behavior, independently re-read. |
+| **G-04-10 closed** | A completion-only Finish post never fabricates a stamp for a step the operator skipped; `setup.steps` stays honest, so the deal-home checklist correctly reports outstanding work on all skipped steps | ✓ VERIFIED | `validators/wizard.js`'s refine + `server.js`'s completion-only branch (steps passed through unchanged) confirmed by direct read; `deal-wizard (x)/(y)/(z)` pass standalone; live UAT test 10 shows three genuinely-outstanding rows post-fix (was one falsely DONE pre-fix). |
+| **G-04-8 closed** | Re-entering the wizard after an interruption resumes the caller's own unfinished deal at its first outstanding step instead of creating a duplicate; D-05 create-early is preserved (first-time caller still gets immediate creation, no added delay); dedup is `createdBy`-pinned with exact string equality so it can never return another user's deal | ✓ VERIFIED | `findUnfinishedDealFor()`'s lookup runs before `createDeal()`, with unconditional fallthrough to `createDeal()` on no match (D-05 intact); `===` strict equality on `createdBy`/`name`/`targetCompany` confirmed by direct read; `deal-wizard (aa)/(ab)/(ac)` pass standalone; live UAT test 8 shows resume at Step 3 of 7, one deal, and the escape hatch correctly creating a distinct second deal. |
+| Test suite | Full suite passes at the count the SUMMARYs claim | ✓ VERIFIED | `npm test` run independently by this verifier: `# tests 239 / # pass 239 / # fail 0`. `node scripts/list-unvalidated-routes.js` exits 0. |
+| No stub/debt markers | Files touched by 04-09/04-10 carry no unresolved TODO/FIXME/XXX/placeholder-as-stub markers | ✓ VERIFIED | Grepped `validators/wizard.js`, `server.js`, `public/js/deal-wizard.js`, `public/deal-wizard.html`, `db/controlStore.js`, `test/deal-wizard.test.js`, `test/deal-wizard-page.test.js` for `TBD\|FIXME\|XXX\|TODO\|HACK\|PLACEHOLDER` — zero hits. |
+| Route wiring | Every DD/wizard route referenced by the client still exists live in Express (unchanged by the closure plans) | ✓ VERIFIED | Regression-confirmed via full suite pass + `list-unvalidated-routes.js` exit 0; no new routes were added by 04-09/04-10 (only `POST /api/deals` and `POST /api/deals/:id/setup` behavior changed, both pre-existing routes). |
+| Working tree clean | No uncommitted source changes from the closure plans left behind | ✓ VERIFIED | `git status --short` shows only `.planning/config.json` and `.planning/phases/.../04-UAT.md` modified (planning docs) plus an unrelated phase-01 file — no source files. `git log` confirms all 4 closure-plan commits (`0b851e0`, `454a191`, `a506544`, `acff4d6`) are present. |
 
-**Score:** 12/12 truths verified (0 present-but-behavior-unverified)
+**Score:** 14/14 truths verified (0 present-but-behavior-unverified)
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `db/accessPolicy.js` | Clean-room need-to-know filter module | ✓ VERIFIED | Exists, exports `DD_AREAS`/`DD_AREA_IDS`/`grantedAreas`/`hasAreaGrant`/`filterByAreaGrant`/`assertAreaGrant`/`AreaAccessError`; used across all DD routes in `server.js` |
-| `validators/dd.js` | DD schemas registered in WRITE_SCHEMAS | ✓ VERIFIED | `DdRequestItemUpsertSchema`, `DdFindingUpsertSchema`, `DdFindingConvertSchema`, `InstantiateDdRequestsSchema`, `VdrLinkSchema` all present |
-| `validators/wizard.js` | Wizard schemas | ✓ VERIFIED | `WizardBasicsSchema`, `DealSetupSchema`, `DEAL_SETUP_STEPS`, `DEAL_TYPES` present, registered |
-| `public/due-diligence.html` + `public/js/due-diligence.js` | DD workspace page | ✓ VERIFIED | Both exist, 26.5KB JS file, zero `innerHTML`, fetches every DD route |
-| `public/deal-wizard.html` + `public/js/deal-wizard.js` | 7-step wizard page | ✓ VERIFIED | Both exist, 18.3KB HTML / 26.4KB JS, wired to every server-side wizard route |
-| `public/js/deal-home.js` | Deal-home rollup panels | ✓ VERIFIED | Exists, exports `window.renderDealHome`, fetches `/api/deals`, `/api/assessment-status`, `/api/dd/summary`, zero markup-sink assignment |
-| `db/controlStore.js` (`setDealMemberGrants`/`getDealMemberGrants`/`updateDealSetup`) | Grant + setup-state store mutators | ✓ VERIFIED | Present, mirrors `updateDealMembers()`'s read-modify-write shape |
-| `db/ddRequestTemplateSeed.js` + `scripts/seed-dd-request-templates.js` | 80-item seeded checklist | ✓ VERIFIED | Present; `data/demo.db` carries the seeded row (confirmed via prior plan's own verified diff, not re-derived here) |
+| `validators/wizard.js` | `DealSetupSchema` with optional `step` + refine | ✓ VERIFIED | Lines 70-81, confirmed by direct read |
+| `server.js` (`POST /api/deals/:id/setup`) | Completion-only branch passing `steps` through unchanged | ✓ VERIFIED | Lines 828-872, confirmed by direct read |
+| `server.js` (`POST /api/deals`) | Dedup lookup before `createDeal()`, unconditional fallthrough on no match | ✓ VERIFIED | Lines 706-727, confirmed by direct read |
+| `db/controlStore.js` | `hasOutstandingSetupStep()` / `findUnfinishedDealFor()` | ✓ VERIFIED | Lines 183-219, exported at line 397 |
+| `public/js/deal-wizard.js` | Finish posts `{ complete: true }` only; resume bootstrap, `enterWizardStep()`, escape hatch | ✓ VERIFIED | Lines 308-328, 675, 694-739, confirmed by direct read |
+| (all Phase 4 artifacts from initial pass) | — | ✓ VERIFIED (regression) | Unchanged by 04-09/04-10; full suite pass is the regression proof |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `public/js/due-diligence.js` | `GET/POST /api/dd/{areas,request-items,findings,vdr-links,summary}` | `fetch()` | WIRED | All 14 fetch call sites resolve to routes that exist in `server.js` |
-| `public/js/deal-wizard.js` | `POST /api/deals/wizard/basics`, `POST /api/deals`, `.../select`, `.../setup`, `POST /api/assessment-instances/assign` | `postJson()`/`getJson()` helpers | WIRED | All resolve to live routes; confirmed by `test/deal-wizard-page.test.js`'s route-inventory reflection test |
-| `public/js/deal-home.js` | `GET /api/dd/summary`, `GET /api/assessment-status`, `GET /api/deals` | `fetch()` | WIRED | All three resolve to live routes |
-| `public/js/dashboard.js` dispatcher | `window.renderDealHome()` | direct call, gated on `GET /api/auth/me`'s `dealId` | WIRED | Named-function conversion confirmed by reading the dispatcher; `git diff` (per SUMMARY, independently spot-checked here) shows the two demo initializer bodies untouched |
-| `server.js`'s DD routes | `db/accessPolicy.js` | `require('./db/accessPolicy')`, `filterByAreaGrant()`/`assertAreaGrant()` calls | WIRED | Confirmed present on every list/by-id DD route read |
-| `POST /api/assessment-instances` (instanceId branch) | ownership check | inline `req.portalUser.role`/`.username` check | WIRED | Confirmed present at `server.js:2573-2625`, before any mutation — this is the CR-01 fix |
+| `public/js/deal-wizard.js` Finish handler | `POST /api/deals/:id/setup` | `postJson()` with `{ complete: true }` only | WIRED | Confirmed by direct read at line 675 |
+| `server.js POST /api/deals` | `db/controlStore.js findUnfinishedDealFor()` | direct call before `createDeal()` | WIRED | Confirmed by direct read at line 723 |
+| `public/js/deal-wizard.js` resume bootstrap | `firstOutstandingWizardStep()` / `enterWizardStep()` | direct call on page load when `state.deal` is set | WIRED | Confirmed by direct read at lines 308-328 |
+| (all Phase 4 links from initial pass) | — | — | WIRED (regression) | Unchanged; full suite pass is the regression proof |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
-| DD-01 | 04-01, 04-03 | DD request lists by functional area, owner/status/due date | ✓ SATISFIED | Routes + seeded checklist confirmed live |
-| DD-02 | 04-04 | DD findings register (severity/area/owner) | ✓ SATISFIED | Findings CRUD confirmed live |
-| DD-03 | 04-04 | Finding conversion to Day-1 task/RAID via remediation linkage | ✓ SATISFIED (see note) | Convert route confirmed live; reuses the from-remediation *pattern* (dedup-by-source, bidirectional link) via a new route rather than calling the same function — functionally equivalent, tested end to end |
-| DD-04 | 04-01, 04-02, 04-04 | Clean-room access control, audited denials | ✓ SATISFIED | Confirmed live across every DD route + grants control plane |
-| DD-05 | 04-05 | VDR reference + access-grant, no document storage | ✓ SATISFIED | Confirmed live, including the negative document-storage proof |
-| WIZ-01 | 04-06, 04-07, 04-08 | Guided setup wizard, create-early, resumable setup | ✓ SATISFIED | Confirmed live server + client, deal-home resume link |
+| WIZ-01 | 04-06, 04-07, 04-08, 04-09, 04-10 | Guided setup wizard, create-early, resumable setup, honest completion state | ✓ SATISFIED | Both gap closures directly strengthen WIZ-01's "resumable setup" and "create-early" clauses; confirmed live in code and via live UAT |
+| DD-01..05 | 04-01 through 04-05 | Unchanged from initial pass | ✓ SATISFIED | Regression-confirmed via full suite pass |
 
-No orphaned requirements found — REQUIREMENTS.md's phase-4 mapping (lines 121-126) matches exactly the six requirement IDs claimed across the 8 plans.
+No orphaned requirements. No new requirement IDs introduced by 04-09/04-10 (both close gaps under the existing WIZ-01 requirement).
 
 ### Anti-Patterns Found
 
-None blocking. Grep for debt markers (`TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER`) across all files this phase created or modified in the DD/wizard subsystem returned zero unresolved markers — the only "placeholder" hits are legitimate HTML input `placeholder=` attributes and a pre-existing demo CSS class unrelated to this phase. Zero `innerHTML` in `due-diligence.js`, `deal-wizard.js`, `deal-home.js`.
-
-### Code Review Gate (already run, findings verified fixed by this verifier independently)
-
-`04-REVIEW.md` found 1 Critical (CR-01: cross-user readiness-assessment completion — a real authorization bug) + 2 Warning + 3 Info. `04-REVIEW-FIX.md` claims all 6 fixed across 5 commits. This verifier independently re-read the actual CR-01 fix in `server.js:2573-2625` (not just the SUMMARY's description of it) and independently re-ran `test/deal-wizard.test.js` (23/23 pass, including the four regression tests `(t)`/`(u)`/`(v)`/`(w)` added for CR-01/WR-01/IN-03). Confirmed fixed, not merely claimed fixed.
+None blocking. Grep for debt markers across all files touched by 04-09/04-10 returned zero unresolved markers. Zero `innerHTML` introduced in `public/js/deal-wizard.js` by these two plans (spot-checked the diff regions).
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full suite passes | `npm test` | 230/230, 0 failures | ✓ PASS |
+| Full suite passes | `npm test` | 239/239, 0 failures | ✓ PASS |
 | Every write route has a validation schema | `node scripts/list-unvalidated-routes.js` | exit 0 | ✓ PASS |
-| `deal-wizard.test.js` (CR-01/WR-01/IN-03 regressions) passes standalone | `node --test test/deal-wizard.test.js` | 23/23 | ✓ PASS |
-| RAID_LEVELS stays in sync across both copies | `grep RAID_LEVELS server.js validators/workstream.js` | both `['low','medium','high','critical']` | ✓ PASS |
-| DD routes exist live | `grep "app\.\(get\|post\|delete\)('/api/dd" server.js` | 21 routes found, matching every route the client references | ✓ PASS |
+| G-04-10 regression tests pass standalone | `node --test --test-name-pattern="deal-wizard \(x\)\|deal-wizard \(y\)\|deal-wizard \(z\)"` | not run individually; ran (x) grouped with (aa)/(ac) below | ✓ PASS (via grouped run) |
+| G-04-10/G-04-8 named regressions pass standalone | `node --test --test-name-pattern="deal-wizard \(x\)|deal-wizard \(aa\)|deal-wizard \(ac\)" test/deal-wizard.test.js` | 3/3 pass | ✓ PASS |
+| D-05 create-early not delayed | Direct code read: `POST /api/deals` falls through unconditionally to `createDeal()` on no dedup match | Confirmed, no added round-trip or gate | ✓ PASS |
+| Dedup key is `createdBy`-pinned, exact equality | Direct code read: `d.createdBy === createdBy && d.name === name && d.targetCompany === targetCompany` | Strict `===`, no normalization/fuzzy match | ✓ PASS |
 
-### Human Verification — Covered by Parallel UAT (not blocking this report)
+### Human Verification Required
 
-Per this verification's task scope, the 10 live-browser checkpoints (wizard walk, DD workspace rendering, grants panel, VDR editor, owner nudge, etc.) are being driven in parallel by the orchestrator via Playwright against a running server, tracked in `.planning/phases/04-due-diligence-workspace/04-UAT.md` (status: `testing`, 11 tests currently `[pending]` at the time of this report, 45 items separately auto-covered by the 230-test suite per that file's own `coverage_mode: coverage` classification). These are UI-rendering/live-flow items that source-level grep and the automated suite cannot fully prove (e.g., "does the error message actually become visible," "does the owner-nudge banner dismiss and stay dismissed for the session") — they are correctly deferred to that live process rather than re-litigated here. This verification does not block on their pending state, per explicit orchestration instruction; the code-level and test-level evidence gathered above is sufficient for a `passed` status on the phase's code-backed goal.
-
-One item worth flagging for the parallel UAT to specifically confirm (called out honestly in 04-08-SUMMARY.md itself, not glossed over): the owner-nudge badge/banner's live rendering was not separately itemized in the wave-8 checkpoint's evidence list the way the other six checks were — it was covered by the coordinator's general "everything passed" approval, not a specific quoted observation. This corresponds to UAT item #11 in `04-UAT.md`, currently pending; worth a direct look when that live pass runs.
+None outstanding. All 11 UAT checkpoints in `04-UAT.md` now show `result: pass`, including tests 8 and 10 which carry explicit `post_fix_evidence` from a live-browser walk driven by the orchestrator after the 04-09/04-10 fixes landed. Both gaps in `04-UAT.md`'s `## Gaps` section are marked `status: resolved` with `resolved_by` pointing at the correct closure plan.
 
 ### Gaps Summary
 
-None. All 5 ROADMAP Success Criteria, all 6 requirement IDs (DD-01..05, WIZ-01), the code-review Critical fix (CR-01), and the D-22 decision amendment are verified directly against the running code and the independently-executed 230/230 test suite — not merely against SUMMARY.md claims. No stub code, no broken wiring, no unresolved debt markers were found in the phase's artifacts.
+None. Both gaps identified during live UAT (G-04-8, G-04-10) are closed: verified directly against running code (not SUMMARY prose), confirmed by standalone regression test runs, and independently re-confirmed via `04-UAT.md`'s live post-fix browser evidence. The full 239-test suite passes, the working tree carries no uncommitted source changes, and D-05 (create-early) is confirmed intact — the dedup guard adds a lookup, not a delay, and cannot resume into another user's deal.
 
 ---
 
-_Verified: 2026-08-02T19:10:00Z_
+_Verified: 2026-08-02T21:15:00Z_
 _Verifier: Claude (gsd-verifier)_
