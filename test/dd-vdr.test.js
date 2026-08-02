@@ -326,3 +326,170 @@ test('dd-vdr (g): the aggregate route omits an area entirely when the caller lac
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Task 2: audited data-room access-grant records, and the document-storage
+// proof
+// ---------------------------------------------------------------------------
+
+test('dd-vdr (h): an IL records a grant and exactly one vdr-access-grant audit row appears, carrying the actor, deal id, subject and record', async () => {
+  const deal = freshDeal('deal_ddvrh');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const before = grantRows(deal.id).length;
+    const res = await fetch(`${base}/api/deals/${deal.id}/vdr-grants`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'pmo', vdrRef: 'Legal/CapTable', note: 'Diligence review' }),
+    });
+    assert.strictEqual(res.status, 200, 'an hrbp IL must be able to record a data-room access grant');
+    const body = await res.json();
+    assert.strictEqual(body.grant.username, 'pmo');
+    assert.strictEqual(body.grant.vdrRef, 'Legal/CapTable');
+    assert.strictEqual(body.grant.grantedBy, 'karen');
+
+    const rows = grantRows(deal.id);
+    assert.strictEqual(rows.length, before + 1, 'exactly one vdr-access-grant audit row must appear');
+    const row = rows[0];
+    assert.strictEqual(row.actor_username, 'karen', 'the audit row must identify the granter');
+    assert.strictEqual(row.deal_id, deal.id, 'the audit row must identify the deal');
+    assert.strictEqual(row.row_id, 'pmo', 'the subject/row_id column must identify the grantee');
+    const after = JSON.parse(row.after_json);
+    assert.strictEqual(after.username, 'pmo');
+    assert.strictEqual(after.vdrRef, 'Legal/CapTable');
+    assert.strictEqual(after.note, 'Diligence review');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-vdr (i): a pmo session is refused the access-grant route', async () => {
+  const deal = freshDeal('deal_ddvri');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const before = grantRows(deal.id).length;
+    const res = await fetch(`${base}/api/deals/${deal.id}/vdr-grants`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'pmo', vdrRef: 'Legal/CapTable' }),
+    });
+    assert.strictEqual(res.status, 403, 'a pmo session must be refused the access-grant route');
+    assert.strictEqual(grantRows(deal.id).length, before, 'a refused request must add no audit row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('dd-vdr (j): a username outside the deal\'s members is refused with a 400 and no audit row appears', async () => {
+  const deal = freshDeal('deal_ddvrj');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const before = grantRows(deal.id).length;
+    const res = await fetch(`${base}/api/deals/${deal.id}/vdr-grants`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'not-a-member', vdrRef: 'Legal/CapTable' }),
+    });
+    assert.strictEqual(res.status, 400, 'a username outside the deal\'s members must be refused');
+    assert.strictEqual(grantRows(deal.id).length, before, 'a refused grant naming a non-member must add no audit row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-vdr (k): two grants recorded back to back both persist as two distinct audit rows with distinct subjects', async () => {
+  const deal = freshDeal('deal_ddvrk', { members: ['karen', 'pmo', 'employee'] });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const before = grantRows(deal.id).length;
+    const [r1, r2] = await Promise.all([
+      fetch(`${base}/api/deals/${deal.id}/vdr-grants`, {
+        method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'pmo', vdrRef: 'Legal/CapTable' }),
+      }),
+      fetch(`${base}/api/deals/${deal.id}/vdr-grants`, {
+        method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'employee', vdrRef: 'HR/OrgChart' }),
+      }),
+    ]);
+    assert.strictEqual(r1.status, 200);
+    assert.strictEqual(r2.status, 200);
+
+    const rows = grantRows(deal.id);
+    assert.strictEqual(rows.length, before + 2, 'both grants must persist as two distinct audit rows; neither overwrites the other');
+    const subjects = rows.map((r) => r.row_id).sort();
+    assert.deepStrictEqual(subjects, ['employee', 'pmo'], 'the two rows must carry the two distinct subjects');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-vdr (l): the DD workspace never accepts, stores or serves a diligence document — no upload-shaped write route under the DD path prefix', async () => {
+  // Mirrors test/auth-route-inventory.test.js's own listApiRoutes()
+  // reflection exactly (T-04-26) — the SAME live route-inventory mechanism,
+  // not a second, divergent walking mechanism.
+  function listApiRoutes(expressApp) {
+    const out = [];
+    const stack = (expressApp._router && expressApp._router.stack) || [];
+    for (const layer of stack) {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods).filter((m) => layer.route.methods[m]);
+        for (const m of methods) {
+          if (layer.route.path.startsWith('/api')) {
+            out.push({ method: m.toUpperCase(), path: layer.route.path });
+          }
+        }
+      }
+    }
+    return out;
+  }
+  const ddRoutes = listApiRoutes(app).filter((r) => r.path.startsWith('/api/dd'));
+  assert.ok(ddRoutes.length > 0, 'the DD route inventory must not be empty — a 0-length list would make this test vacuously pass');
+  const uploadShaped = ddRoutes.filter((r) => /upload/i.test(r.path));
+  assert.deepStrictEqual(uploadShaped, [], 'no DD-prefixed route may be upload-shaped — the app must never accept a document itself');
+});
+
+test('dd-vdr (m): source inspection — the DD section of server.js performs no filesystem write', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const start = src.indexOf('// Due Diligence workspace (DD-01/DD-04)');
+  const end = src.indexOf('// In-app notifications — computed on demand');
+  assert.ok(start > -1 && end > start, 'the DD section start/end markers must be found in server.js — a renamed section header would silently vacuous this check');
+  const ddSection = src.slice(start, end);
+  // T-04-26: none of these filesystem/upload-handling primitives may appear
+  // anywhere in the DD section — the app stores a REFERENCE, never a file.
+  const forbidden = ['fs.writeFile', 'fs.createWriteStream', 'multer', 'req.files', 'formidable', 'busboy'];
+  forbidden.forEach((token) => {
+    assert.ok(!ddSection.includes(token), `the DD section of server.js must never contain "${token}" — that would mean it accepts/stores a file`);
+  });
+});

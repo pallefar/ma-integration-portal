@@ -72,6 +72,23 @@ const DealGrantsSchema = z.object({
   ddAreas: z.array(z.enum(DD_AREA_IDS)).max(DD_AREA_IDS.length),
 });
 
+const VDR_REF_MAX = 300;
+const VDR_NOTE_MAX = 500;
+
+/** POST /api/deals/:id/vdr-grants — DD-05/D-18. A structured, audited
+ * data-room access-grant record: who was granted access (`username`, must
+ * be a current deal member — enforced by the ROUTE HANDLER, which has the
+ * deal object this schema does not), which data-room area/folder
+ * (`vdrRef`, an operator-typed free-text reference into TE's own VDR, not
+ * a URL — the per-item vdrLink above already carries the URL), and an
+ * optional note. The record itself lives ONLY in the audit log — there is
+ * no separate collection this schema also validates. */
+const VdrGrantSchema = z.object({
+  username: z.string().trim().min(1, 'Username is required.').max(USERNAME_MAX),
+  vdrRef: z.string().trim().min(1, 'Data room reference is required.').max(VDR_REF_MAX),
+  note: z.string().trim().max(VDR_NOTE_MAX).optional(),
+});
+
 /** POST /api/admin/deals/:id/archive and DELETE /api/admin/deals/:id — D-02's
  * destructive guard: the caller must submit the deal's own id as an explicit
  * confirmation value. This schema only proves `confirm` is present and a
@@ -92,10 +109,11 @@ registerSchema('POST', '/api/deals', CreateDealSchema);
 registerSchema('POST', '/api/deals/select', SelectDealSchema);
 registerSchema('POST', '/api/deals/:id/members', DealMembersSchema);
 registerSchema('POST', '/api/deals/:id/grants', DealGrantsSchema);
+registerSchema('POST', '/api/deals/:id/vdr-grants', VdrGrantSchema);
 registerSchema('POST', '/api/admin/deals/:id/archive', DeleteConfirmSchema);
 registerSchema('DELETE', '/api/admin/deals/:id', DeleteConfirmSchema);
 
 module.exports = {
-  CreateDealSchema, SelectDealSchema, DealMembersSchema, DealGrantsSchema, DeleteConfirmSchema,
+  CreateDealSchema, SelectDealSchema, DealMembersSchema, DealGrantsSchema, VdrGrantSchema, DeleteConfirmSchema,
   validateBody, formatIssues, DEAL_ID_PATTERN,
 };

@@ -861,6 +861,38 @@ app.post('/api/deals/:id/grants', (req, res) => {
   res.json({ success: true, deal: updated });
 });
 
+// DD-05/D-18: a data-room ACCESS-GRANT record — who was given access to
+// which part of TE's own virtual data room, by whom, when, with an
+// optional note. Deliberately inherits the SAME broader '/api/deals'
+// ROLE_WRITE_POLICY entry (admin + hrbp) as the clean-room grants route
+// above, UNCHANGED — D-18 gives this to the same audience D-02 gives area
+// grants to. The record is written ONLY as a `vdr-access-grant`
+// recordSecurityEvent() — there is no separate collection for it to drift
+// out of sync with the trail, and the audit store is the one place in this
+// system that survives deletion of the deal it describes, which is exactly
+// the property an access-grant record most needs.
+app.post('/api/deals/:id/vdr-grants', (req, res) => {
+  const dealId = req.params.id;
+  const deal = controlStore.getDeal(dealId);
+  if (!deal) return res.status(404).json({ error: 'Deal not found.' });
+  const { username, vdrRef, note } = req.body;
+  // T-04-30: recording that someone OUTSIDE the deal was given data-room
+  // access would be a fabricated compliance record — refused outright,
+  // mirroring the clean-room grants route's own non-member refusal above.
+  if (!Array.isArray(deal.members) || !deal.members.includes(username)) {
+    return res.status(400).json({ error: 'username must be a current member of this deal.' });
+  }
+  const grant = {
+    username, vdrRef, note: note || '',
+    grantedBy: req.portalUser.username, grantedAt: new Date().toISOString(),
+  };
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'vdr-access-grant', dealId, subject: username,
+    before: null, after: grant, request: requestMeta(req),
+  });
+  res.json({ success: true, grant });
+});
+
 // D-02: archive/delete are admin-only, inherited with ZERO new
 // ROLE_WRITE_POLICY entry from the existing `{ prefix: '/api/admin', roles:
 // ['admin'] }` rule (matches migrate-db/revoke-sessions's own precedent).
