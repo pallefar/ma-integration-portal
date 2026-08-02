@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: Due Diligence Workspace
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-08-02T07:40:11.254Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-08-02T08:09:34.703Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 20
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 04 (Due Diligence Workspace) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-08-02 — Phase 04 execution started
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [███████░░░] 70%
 | Phase 03 P06 | ~2h | 3 tasks | 16 files |
 | Phase 04 P01 | 45min | 3 tasks | 10 files |
 | Phase 04 P02 | 40min | 3 tasks | 6 files |
+| Phase 04 P03 | 50min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 4 Plan 02: GET /api/deals/:id/grants narrowed inline to admin+hrbp (Rule 1/2 auto-fix) — ROLE_WRITE_POLICY only role-gates writes and /api/admin*-prefixed GETs; left unguarded, any authenticated role could have read any deal's membership + per-area clearance map by id
 - [Phase ?]: Phase 4 Plan 02: a grant naming a username absent from deal.members is refused (400, no memberGrants entry created) — clearance can never exist without membership
 - [Phase ?]: Phase 4 Plan 02: removing a member from deal.members intentionally leaves their memberGrants entry in place (not pruned) — safe by construction since grantedAreas() is only consulted after the bind-time membership check has already passed
+- [Phase ?]: Phase 4 Plan 03: Tax area's ownerHint folds into Finance (no dedicated Tax role in the interface contract's seven role strings), mirroring 04-RESEARCH.md's identical ws_finance fold-in
+- [Phase ?]: Phase 4 Plan 03: GET /api/dd/request-templates is deliberately unfiltered by accessPolicy (a template carries no MNPI); only the instantiate route, which creates real area-scoped items, is clearance-gated
+- [Phase ?]: Phase 4 Plan 03: a SQLite write against a git-committed WAL-mode *.db file must PRAGMA wal_checkpoint(TRUNCATE) before close, or the write lands only in the gitignored -wal sidecar and the tracked file stays byte-unchanged
 
 ### Pending Todos
 
@@ -152,6 +156,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T07:40:11.244Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-08-02T08:09:34.693Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
