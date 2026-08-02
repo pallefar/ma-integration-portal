@@ -29,18 +29,21 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - ✓ Server-verified login with roles (admin/hrbp/pmo/employee) — was opt-in (`PORTAL_AUTH=1`), now mandatory fail-closed by default — Phase 2
 - ✓ Zero-install turnkey distribution — any-OS, Windows and macOS bundles with portable Node — existing
 - ✓ Mandatory authentication with roles enforced on every write endpoint — fail-closed `/api` gate (reads included), SQLite-backed revocable sessions (tokens hashed at rest), coarse `ROLE_WRITE_POLICY` (boundary-safe + method-scoped), attributed `X-Admin-Token` break-glass, self password-change + first-run admin secret, client 401→login redirect, `DEMO_OPEN=1` demo escape hatch — Phase 2 (2026-07-31)
+- ✓ Deal isolation with physically split stores — session-bound AsyncLocalStorage resolver binds every `/api` request to exactly one SQLite file (`demo.db` or `deals/<id>.db`) with membership refused at bind time; `control.db` (users + deal registry, committed) / `runtime.db` (sessions + secrets, gitignored) / template-only deal seeding; demo mechanics hard-gated 403 from real deals; deal registry API + header switcher (admin/IL only) — Phase 3 (2026-08-02)
+- ✓ Append-only audit log — store-layer `writeDb()` hook writing attributed before/after JSON into a separate gitignored `audit.db` (UPDATE/DELETE rejected by schema triggers), D-08 control-plane security events, admin-only filterable viewer; trail survives deal deletion — Phase 3 (2026-08-02)
+- ✓ Write validation on every route — one zod pipeline over all ~65 write routes (strip-unknown, typed, length-bounded, value-free 400s, applies in demo-open mode too) + write-time HTML sanitization + a coverage test that fails the suite on any unvalidated new route — Phase 3 (2026-08-02)
 
 ### Active
 
 <!-- This milestone. Hypotheses until shipped and validated. Foundation first, then the four capability gaps. -->
 
-**Foundation (must land before real deal data)**
+**Foundation — VALIDATED (Phases 1–3 complete; real deal data can now land)**
 
-- [ ] Replace the `db.json` file store with SQLite in WAL mode, sized for concurrent users from day one even while running laptop-local
-- [ ] Eliminate the documented concurrent-write race that can silently lose a write
-- [ ] Add an audit log recording who changed what, when, with before/after values
-- [ ] Add schema validation on all write paths, with length and type limits
-- [ ] Separate real-deal data from demo data so the two never share a store, and make time-travel, XP/leaderboard and other showcase mechanics unreachable from real-deal mode
+- [x] Replace the `db.json` file store with SQLite in WAL mode, sized for concurrent users from day one even while running laptop-local — Validated in Phase 1
+- [x] Eliminate the documented concurrent-write race that can silently lose a write — Validated in Phase 1
+- [x] Add an audit log recording who changed what, when, with before/after values — Validated in Phase 3
+- [x] Add schema validation on all write paths, with length and type limits — Validated in Phase 3
+- [x] Separate real-deal data from demo data so the two never share a store, and make time-travel, XP/leaderboard and other showcase mechanics unreachable from real-deal mode — Validated in Phase 3
 
 **Due diligence workspace**
 
@@ -140,4 +143,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-31 after Phase 2 (Mandatory Auth & Roles)*
+*Last updated: 2026-08-02 after Phase 3 (Deal Isolation, Audit Log & Write Validation)*
