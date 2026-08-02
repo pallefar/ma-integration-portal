@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Schema & Migration** - Replace `db.json` with SQLite (WAL mode) via a re-runnable, verified migration
 - [x] **Phase 2: Mandatory Auth & Roles** - Promote `PORTAL_AUTH` to mandatory, with full route coverage and role enforcement (completed 2026-07-31)
 - [x] **Phase 3: Deal Isolation, Audit Log & Write Validation** - File-per-deal isolation from demo data, an audit trail on every write, and schema validation on every write (completed 2026-08-02)
-- [ ] **Phase 4: Due Diligence Workspace** - DD request lists, findings register, and server-side clean-room access control
+- [ ] **Phase 4: Due Diligence Workspace** - New-deal setup wizard (guided onboarding incl. readiness assessments), DD request lists, findings register, and server-side clean-room access control
 - [ ] **Phase 5: Synergy Value Capture** - Baseline, phasing, cost-to-achieve and confidence stage-gating on synergy initiatives
 - [ ] **Phase 6: Org Design & Talent Retention** - Organisation structure, redundancy decisions, and a flight-risk register
 - [ ] **Phase 7: IMO Reporting & Exports** - CSV/JSON data export and a generated steering-committee pack
@@ -112,11 +112,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 4: Due Diligence Workspace
 
-**Goal**: The IL can run due diligence inside the app, with pre-close information restricted to those with need-to-know.
+**Goal**: A new deal enters the app through a guided setup wizard (basics, team, readiness assessments, scope, timeline), and the IL can run due diligence inside it, with pre-close information restricted to those with need-to-know.
 **Depends on**: Phase 3
-**Requirements**: DD-01, DD-02, DD-03, DD-04, DD-05
+**Requirements**: DD-01, DD-02, DD-03, DD-04, DD-05, WIZ-01 (new-deal setup wizard — user request 2026-08-02, see .planning/todos/pending/new-deal-setup-wizard.md)
 **Success Criteria** (what must be TRUE):
 
+  0. Creating a new deal walks through the setup wizard — deal basics, member allowlist, readiness-assessment kickoff (acquirer + target + IL instances with owners/dates), workstream scope, and timeline markers — and every wizard write flows through the Phase-3 validation and audit pipeline.
   1. The IL can create and manage a DD request list organized by functional area, each item carrying an owner, status and due date.
   2. The IL can record a DD finding (severity, functional area, owner) and convert it into a Day-1 integration task and/or RAID entry via the existing remediation linkage (`from-remediation`).
   3. A user without need-to-know for a functional area cannot read that area's DD requests or findings via a direct API call, even with a valid session — filtering happens server-side, and the denial itself is audited.

@@ -1,10 +1,12 @@
 ---
 created: 2026-08-02
 source: user request (verbatim below), mid-Phase-3 close
-resolves_phase: TBD (user decision pending: fold into Phase 4 vs dedicated phase)
+resolves_phase: 4
 ---
 
 # New-deal setup wizard (guided deal onboarding incl. readiness assessment)
+
+**Placement decided 2026-08-02: folded into Phase 4 (user choice).** Tracked as WIZ-01 in ROADMAP Phase 4; raise at /gsd-discuss-phase 4.
 
 **User ask (verbatim, 2026-08-02):** "when a new deal is created, it should go through the new deal assemment of of the company so like a new deal setup, please ensure this is added and we have a wizard for new deals, think about what can be there from an app perspective"
 
