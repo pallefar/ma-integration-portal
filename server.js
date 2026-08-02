@@ -20,10 +20,22 @@ const { createDealDatabase } = require('./db/dealSeed');
 // revocation, deal lifecycle/membership), and queryAudit() backs the
 // admin-only GET /api/admin/audit viewer route.
 const auditHook = require('./db/auditHook');
-// VAL-01 (first instance): validators/deals.js — see its own header for why
-// zod's z.object() default strip-unknown behavior closes D-13 with no extra
-// call needed.
-const dealValidators = require('./validators/deals');
+// VAL-01/VAL-02 (Phase 3 Plan 06): validators/index.js is the shared,
+// generic, path-resolved validation pipeline (WRITE_SCHEMAS registry +
+// validationMiddleware) mounted once in the consolidated /api gate below.
+// Requiring each resource-group validator module HERE (at server.js's own
+// module load time, before any request can arrive) is what populates
+// WRITE_SCHEMAS — each module's own registerSchema() calls run as a require()
+// side effect. validators/deals.js (Plan 04, VAL-01's first instance) is
+// required for the same reason its schemas must be registered before this
+// module's own routes below can be reached.
+const validators = require('./validators/index');
+require('./validators/deals'); // require()d for its registerSchema() side effect only
+require('./validators/workstream'); // ditto
+require('./validators/cms'); // ditto
+require('./validators/people'); // ditto
+require('./validators/assessment'); // ditto
+require('./validators/settings'); // ditto
 
 
 const app = express();
@@ -108,6 +120,19 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// VAL-01: a malformed JSON body (including a bare top-level `null`, which
+// body-parser's strict mode rejects as invalid JSON — only object/array are
+// valid top-level JSON in strict mode) must 400, never fall through to the
+// generic 500 error handler at the bottom of this file. This keeps "a null
+// body" behaviourally identical to "an empty/missing body" for every write
+// route, matching the write-validation pipeline's own contract that a
+// malformed request never crashes.
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Malformed JSON in request body.' });
+  }
+  next(err);
+});
 
 // The app now starts on the M&A HR Integration Enablement overview (the executive
 // slide deck embedded as an app page). The role-based showcase stays at /index.html,
@@ -403,7 +428,13 @@ app.use('/api', (req, res, next) => {
     if (requiresRoleCheck && !roleAllowedForWrite(req.portalUser.role, fullPath, req.method)) {
       return res.status(403).json({ error: 'Your role cannot perform this action.' });
     }
-    next();
+    // VAL-01/VAL-02: shape-validate, strip unknown keys, and sanitize
+    // HTML-tagged fields — LAST in this gate, after identity resolution, the
+    // deal-resolver bind, the demo-only check and the role check, so a
+    // request that would be refused on any of those grounds never has its
+    // payload parsed at all. validators/index.js#validationMiddleware is a
+    // no-op for non-write methods (GET/HEAD/OPTIONS pass straight through).
+    validators.validationMiddleware(req, res, next);
   });
 });
 
@@ -531,10 +562,9 @@ app.post('/api/auth/change-password', (req, res) => {
   if (loginThrottled('change-password:' + req.portalUser.username)) {
     return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
   }
+  // VAL-01: the length/type check this line used to carry is now owned
+  // exclusively by validators/settings.js's ChangePasswordSchema.
   const { currentPassword, newPassword } = req.body || {};
-  if (typeof newPassword !== 'string' || newPassword.length < 8) {
-    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-  }
   const user = controlStore.findUser(req.portalUser.username);
   if (!user) return res.status(404).json({ error: 'User not found.' });
   const computed = hashPassword(currentPassword || '', user.salt);
@@ -641,7 +671,12 @@ function requestMeta(req) {
 // database with its own membership/lifecycle.
 // =====================================================================
 
-app.post('/api/deals', dealValidators.validateBody(dealValidators.CreateDealSchema), (req, res) => {
+// VAL-01: no per-route validateBody() call needed here — validators/deals.js
+// registers this route's schema into the shared WRITE_SCHEMAS registry, and
+// validators/index.js#validationMiddleware (mounted once in the consolidated
+// /api gate above) resolves+validates+sanitizes req.body generically for
+// every write route in the app, including this one.
+app.post('/api/deals', (req, res) => {
   const { name, targetCompany, members } = req.body;
   const deal = controlStore.createDeal({ name, targetCompany, members, createdBy: req.portalUser.username });
   try {
@@ -671,7 +706,7 @@ app.post('/api/deals', dealValidators.validateBody(dealValidators.CreateDealSche
 // non-member would let a caller enumerate which deal ids exist purely from
 // the status code, exactly what T-03-17 forbids for a pre-announcement
 // target's very existence.
-app.post('/api/deals/select', dealValidators.validateBody(dealValidators.SelectDealSchema), (req, res) => {
+app.post('/api/deals/select', (req, res) => {
   if (!req.portalUser.sessionId) {
     // The D-11 attributed break-glass identity (X-Admin-Token) has no
     // sessions-table row to persist a deal selection onto.
@@ -703,7 +738,7 @@ app.get('/api/deals', (req, res) => {
 // '/api/deals' policy entry above lets an hrbp session past the gate, so
 // this handler narrows to admin-only itself via the same isAdminRequest()
 // guard several existing admin-only reads already use in this file.
-app.post('/api/deals/:id/members', dealValidators.validateBody(dealValidators.DealMembersSchema), (req, res) => {
+app.post('/api/deals/:id/members', (req, res) => {
   if (!isAdminRequest(req)) return res.status(403).json({ error: 'Only admin can manage deal membership.' });
   const dealId = req.params.id;
   const existing = controlStore.getDeal(dealId);
@@ -732,7 +767,7 @@ app.post('/api/deals/:id/members', dealValidators.validateBody(dealValidators.De
 // body — a mismatch is a 400 and neither the registry row, the file, nor
 // any session binding is touched, so a mis-clicked or replayed request can
 // never destroy a live acquisition workspace.
-app.post('/api/admin/deals/:id/archive', dealValidators.validateBody(dealValidators.DeleteConfirmSchema), (req, res) => {
+app.post('/api/admin/deals/:id/archive', (req, res) => {
   const dealId = req.params.id;
   if (req.body.confirm !== dealId) {
     return res.status(400).json({ error: 'Confirmation value must exactly match the deal id.' });
@@ -754,7 +789,7 @@ app.post('/api/admin/deals/:id/archive', dealValidators.validateBody(dealValidat
   res.json({ success: true, deal: updated });
 });
 
-app.delete('/api/admin/deals/:id', dealValidators.validateBody(dealValidators.DeleteConfirmSchema), (req, res) => {
+app.delete('/api/admin/deals/:id', (req, res) => {
   const dealId = req.params.id;
   if (req.body.confirm !== dealId) {
     return res.status(400).json({ error: 'Confirmation value must exactly match the deal id.' });
@@ -854,10 +889,8 @@ app.get('/api/rag/search', (req, res) => {
 // POST AI Model RAG PDF Training Upload & AI Insight Review
 app.post('/api/rag/upload', async (req, res) => {
   try {
+    // VAL-01: presence is now owned exclusively by validators/settings.js's RagUploadSchema.
     const { fileName, fileData } = req.body;
-    if (!fileName || !fileData) {
-      return res.status(400).json({ success: false, error: 'Missing fileName or fileData' });
-    }
 
     console.log(`Processing RAG PDF upload request: "${fileName}"...`);
 
@@ -1027,11 +1060,8 @@ function getScaledScores(latestScores, day) {
 
 // POST Time Travel (Temporal Timeline Switch)
 app.post('/api/settings/time-travel', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/settings.js's TimeTravelSchema.
   const { day } = req.body;
-  if (day === undefined) {
-    return res.status(400).json({ error: 'Timeline day is required.' });
-  }
-  
   const parsedDay = parseInt(day) || 30;
   const db = readDb();
   db.settings = db.settings || {};
@@ -1046,11 +1076,8 @@ app.post('/api/settings/time-travel', (req, res) => {
 
 // POST Reorder Survey Questions
 app.post('/api/questions/reorder', (req, res) => {
+  // VAL-01: shape is now owned exclusively by validators/assessment.js's ReorderQuestionsSchema.
   const { questionIds } = req.body;
-  if (!Array.isArray(questionIds)) {
-    return res.status(400).json({ error: 'questionIds array is required.' });
-  }
-  
   const db = readDb();
   const questionsMap = {};
   db.questions.forEach(q => {
@@ -1078,11 +1105,8 @@ app.post('/api/questions/reorder', (req, res) => {
 
 // POST Reorder Dashboard Widgets
 app.post('/api/dashboard/reorder-widgets', (req, res) => {
+  // VAL-01: shape is now owned exclusively by validators/workstream.js's ReorderWidgetsSchema.
   const { layoutOrder } = req.body;
-  if (!Array.isArray(layoutOrder)) {
-    return res.status(400).json({ error: 'layoutOrder array is required.' });
-  }
-  
   const db = readDb();
   db.settings = db.settings || {};
   db.settings.dashboardLayoutOrder = layoutOrder;
@@ -1312,8 +1336,9 @@ app.get('/api/projects', (req, res) => {
 app.post('/api/projects', (req, res) => {
   const db = readDb();
   const b = req.body || {};
+  // VAL-01: "name or targetCompany required" is now owned exclusively by
+  // validators/settings.js's ProjectCreateSchema.refine().
   const name = String(b.name || b.targetCompany || '').trim();
-  if (!name) return res.status(400).json({ error: 'Project name / target company is required.' });
   const project = {
     id: newId('proj'), isDemo: false, name,
     targetCompany: String(b.targetCompany || name).trim(),
@@ -1388,22 +1413,22 @@ app.get('/api/departments', (req, res) => {
   res.json(readDb().departments || []);
 });
 
+// VAL-01: name-required is now enforced exclusively by
+// validators/workstream.js's DepartmentUpsertSchema (one rejection path) —
+// the ad hoc `if (!nameOk) return 400` checks this handler used to carry are
+// removed; by the time this handler runs, req.body is already
+// shape-validated, unknown-key-stripped and sanitized.
 app.post('/api/departments', (req, res) => {
   const db = readDb();
   db.departments = db.departments || [];
   const d = req.body || {};
-  const nameOk = d.name && String(d.name).trim();
   let stored;
   if (d.id) {
     const i = db.departments.findIndex(x => x.id === d.id);
     // Existing department: merge (partial updates like the lock toggle are allowed).
     if (i > -1) { db.departments[i] = { ...db.departments[i], ...d }; stored = db.departments[i]; }
-    else {
-      if (!nameOk) return res.status(400).json({ error: 'Department name is required.' });
-      db.departments.push(d); stored = d;
-    }
+    else { db.departments.push(d); stored = d; }
   } else {
-    if (!nameOk) return res.status(400).json({ error: 'Department name is required.' });
     stored = { locked: true, systems: [], trainings: [], ...d, id: newId('dept') };
     db.departments.push(stored);
   }
@@ -1429,22 +1454,19 @@ app.get('/api/processes', (req, res) => {
   res.json(readDb().processCatalog || []);
 });
 
+// VAL-01: name-required is now owned exclusively by
+// validators/workstream.js's ProcessUpsertSchema.
 app.post('/api/processes', (req, res) => {
   const db = readDb();
   db.processCatalog = db.processCatalog || [];
   const p = req.body || {};
-  const nameOk = p.name && String(p.name).trim();
   let stored;
   if (p.id) {
     const i = db.processCatalog.findIndex(x => x.id === p.id);
     // Existing process: merge (allows partial updates like a status change).
     if (i > -1) { db.processCatalog[i] = { ...db.processCatalog[i], ...p }; stored = db.processCatalog[i]; }
-    else {
-      if (!nameOk) return res.status(400).json({ error: 'Process name is required.' });
-      db.processCatalog.push(p); stored = p;
-    }
+    else { db.processCatalog.push(p); stored = p; }
   } else {
-    if (!nameOk) return res.status(400).json({ error: 'Process name is required.' });
     stored = { domain: '', approach: 'Harmonize', status: 'not-started', risk: 'Medium', phase: '', notes: '', sending: {}, receiving: {}, ...p, id: newId('proc') };
     db.processCatalog.push(stored);
   }
@@ -1471,8 +1493,8 @@ app.get('/api/slides', (req, res) => {
 app.post('/api/slides', (req, res) => {
   const db = readDb();
   db.slides = db.slides || [];
+  // VAL-01: url-required is now owned exclusively by validators/cms.js's SlideUpsertSchema.
   const s = req.body || {};
-  if (!s.url || !String(s.url).trim()) return res.status(400).json({ error: 'A slide link (url) is required.' });
   let stored;
   if (s.id) {
     const i = db.slides.findIndex(x => x.id === s.id);
@@ -1497,8 +1519,8 @@ app.delete('/api/slides/:id', (req, res) => {
 // and returned as a servable URL. Behind the same admin-write gate as other writes.
 app.post('/api/slides/upload', (req, res) => {
   const b = req.body || {};
+  // VAL-01: non-empty-content is now owned exclusively by validators/cms.js's SlideUploadSchema.
   const content = typeof b.content === 'string' ? b.content : '';
-  if (!content.trim()) return res.status(400).json({ error: 'No slide file content received.' });
   const base = String(b.filename || 'slide.html').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '');
   const safe = /\.html?$/i.test(base) ? base : base + '.html';
   const dir = path.join(__dirname, 'public', 'uploads', 'slides');
@@ -1523,6 +1545,7 @@ app.get('/api/courses', (req, res) => {
 });
 
 // Create or update a whole course (upsert by id)
+// VAL-01: title-required is now owned exclusively by validators/cms.js's CourseUpsertSchema.
 app.post('/api/courses', (req, res) => {
   const db = readDb();
   db.courses = db.courses || [];
@@ -1531,12 +1554,8 @@ app.post('/api/courses', (req, res) => {
   if (course.id) {
     const idx = db.courses.findIndex(c => c.id === course.id);
     if (idx >= 0) { db.courses[idx] = { ...db.courses[idx], ...course }; stored = db.courses[idx]; }
-    else {
-      if (!course.title) return res.status(400).json({ error: 'Course title is required.' });
-      db.courses.push(course); stored = course;
-    }
+    else { db.courses.push(course); stored = course; }
   } else {
-    if (!course.title) return res.status(400).json({ error: 'Course title is required.' });
     course.id = newId('course');
     course.modules = course.modules || [];
     db.courses.push(course);
@@ -1561,7 +1580,8 @@ app.post('/api/courses/:courseId/lessons', (req, res) => {
   const { moduleId, lesson } = req.body || {};
   const mod = (course.modules || []).find(m => m.id === moduleId);
   if (!mod) return res.status(404).json({ error: 'Module not found.' });
-  if (!lesson) return res.status(400).json({ error: 'Lesson payload required.' });
+  // VAL-01: lesson-payload-required is now owned by validators/cms.js's
+  // registered schema for this route (a required nested object).
   mod.lessons = mod.lessons || [];
   let stored;
   if (lesson.id) {
@@ -1731,8 +1751,8 @@ app.get('/api/media', (req, res) => {
 app.post('/api/media', (req, res) => {
   const db = readDb();
   db.media = db.media || [];
+  // VAL-01: presence is now owned exclusively by validators/cms.js's MediaUploadSchema.
   const { fileName, fileData, kind } = req.body || {};
-  if (!fileName || !fileData) return res.status(400).json({ error: 'fileName and fileData are required.' });
   try {
     const uploadDir = path.join(__dirname, 'public', 'uploads');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -1950,10 +1970,8 @@ function generateSqlSchema(provider, db) {
 
 // POST Migrate Database & Compile SQL Relational Schema
 app.post('/api/admin/migrate-db', (req, res) => {
+  // VAL-01: provider-required is now owned exclusively by validators/settings.js's MigrateDbSchema.
   const { provider, connectionDetails } = req.body;
-  if (!provider) {
-    return res.status(400).json({ error: 'Database provider is required.' });
-  }
 
   const db = readDb();
   
@@ -2045,11 +2063,9 @@ app.get('/api/questions', (req, res) => {
 
 // POST Question (Add New)
 app.post('/api/questions', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/assessment.js's QuestionCreateSchema.
   const { text, dimension, weight } = req.body;
-  if (!text || !dimension) {
-    return res.status(400).json({ error: 'Text and dimension are required.' });
-  }
-  
+
   const db = readDb();
   const newQuestion = {
     id: newId('q'),
@@ -2100,11 +2116,8 @@ app.delete('/api/questions/:id', (req, res) => {
 
 // POST Assessment (Submit responses and trigger AI Plan generation)
 app.post('/api/assessment', async (req, res) => {
+  // VAL-01: non-empty-responses is now owned exclusively by validators/assessment.js's AssessmentSubmitSchema.
   const { responses } = req.body; // e.g. { "q1": 4, "q2": 3 }
-  if (!responses || Object.keys(responses).length === 0) {
-    return res.status(400).json({ error: 'No survey responses provided.' });
-  }
-  
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
   const targetCompany = isCustom ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || "NewCo Ltd.") : (db.settings.targetCompany || "NewCo Ltd.");
@@ -2339,10 +2352,8 @@ app.get('/api/assessment-templates', (req, res) => {
 
 // POST a completed assessment — server computes every score (client sends raw answers only)
 app.post('/api/assessment-instances', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/assessment.js's AssessmentInstanceSchema.
   const { templateId, rater, respondentName, respondentRole, responses, retakeOf } = req.body || {};
-  if (!templateId || !responses || typeof responses !== 'object' || Object.keys(responses).length === 0) {
-    return res.status(400).json({ error: 'templateId and responses are required.' });
-  }
   const db = readDb();
   const template = (db.assessmentTemplates || []).find(t => t.id === templateId);
   if (!template) return res.status(404).json({ error: 'Assessment template not found.' });
@@ -2523,12 +2534,11 @@ app.post('/api/integration-tasks', (req, res) => {
     if (!task) return res.status(404).json({ error: 'Task not found.' });
     // Validate EVERYTHING before touching the object — readDb() hands back the
     // shared cache, so a mutation followed by a 400 would silently stick.
-    if (b.status !== undefined && !TASK_STATUSES.includes(b.status)) {
-      return res.status(400).json({ error: 'Invalid status.' });
-    }
-    if (b.phase !== undefined && !TASK_PHASES.includes(b.phase)) {
-      return res.status(400).json({ error: 'Invalid phase.' });
-    }
+    // VAL-01: status/phase enum membership is now owned exclusively by
+    // validators/workstream.js's TaskUpsertSchema (z.enum) — an out-of-enum
+    // value already 400ed before this handler ran. The empty-title-on-update
+    // check below is NOT covered by that schema (its own refine() only
+    // requires a title when `id` is absent) and stays here by design.
     if (b.title !== undefined && !String(b.title).trim()) {
       return res.status(400).json({ error: 'Task title cannot be empty.' });
     }
@@ -2543,8 +2553,9 @@ app.post('/api/integration-tasks', (req, res) => {
     writeDb(db);
     return res.json({ success: true, task });
   }
+  // VAL-01: title-required-on-create is now owned exclusively by
+  // validators/workstream.js's TaskUpsertSchema.refine().
   const title = String(b.title || '').trim();
-  if (!title) return res.status(400).json({ error: 'Task title is required.' });
   const task = {
     id: newId('task'),
     title: title.slice(0, 300),
@@ -2673,9 +2684,10 @@ app.post('/api/synergies', (req, res) => {
     const item = lane.find(s => s.id === b.id);
     if (!item) return res.status(404).json({ error: 'Initiative not found.' });
     // Validate before mutating the shared readDb() cache (see task update).
-    if (b.status !== undefined && !SYN_STATUSES.includes(b.status)) {
-      return res.status(400).json({ error: 'Invalid status.' });
-    }
+    // VAL-01: status enum membership is now owned exclusively by
+    // validators/workstream.js's SynergyUpsertSchema (z.enum); the
+    // empty-title-on-update check is NOT covered by that schema's refine()
+    // (which only requires a title when `id` is absent) and stays here.
     if (b.title !== undefined && !String(b.title).trim()) {
       return res.status(400).json({ error: 'Initiative title cannot be empty.' });
     }
@@ -2687,8 +2699,9 @@ app.post('/api/synergies', (req, res) => {
     writeDb(db);
     return res.json({ success: true, initiative: item });
   }
+  // VAL-01: title-required-on-create is now owned exclusively by
+  // validators/workstream.js's SynergyUpsertSchema.refine().
   const title = String(b.title || '').trim();
-  if (!title) return res.status(400).json({ error: 'Initiative title is required.' });
   const item = {
     id: newId('syn'),
     title: title.slice(0, 300),
@@ -2742,9 +2755,10 @@ app.post('/api/raid', (req, res) => {
     const item = lane.find(r => r.id === b.id);
     if (!item) return res.status(404).json({ error: 'Entry not found.' });
     // Validate before mutating the shared readDb() cache (see task update).
-    if (b.status !== undefined && !RAID_STATUSES.includes(b.status)) {
-      return res.status(400).json({ error: 'Invalid status.' });
-    }
+    // VAL-01: status enum membership is now owned exclusively by
+    // validators/workstream.js's RaidUpsertSchema (z.enum); the
+    // empty-title-on-update check stays here for the same reason noted on
+    // the tasks/synergies routes above.
     if (b.title !== undefined && !String(b.title).trim()) {
       return res.status(400).json({ error: 'Entry title cannot be empty.' });
     }
@@ -2756,8 +2770,9 @@ app.post('/api/raid', (req, res) => {
     writeDb(db);
     return res.json({ success: true, entry: item });
   }
+  // VAL-01: title-required-on-create is now owned exclusively by
+  // validators/workstream.js's RaidUpsertSchema.refine().
   const title = String(b.title || '').trim();
-  if (!title) return res.status(400).json({ error: 'Entry title is required.' });
   const item = {
     id: newId('raid'),
     type: RAID_TYPES.includes(b.type) ? b.type : 'risk',
@@ -2841,11 +2856,8 @@ app.get('/api/modules', (req, res) => {
 
 // POST Module (Add/Edit)
 app.post('/api/modules', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/workstream.js's ModuleUpsertSchema.
   const { id, title, dimension, urgency, minScore, maxScore, description, playbookLink, supportingTeams } = req.body;
-  if (!title || !dimension || !urgency || !description) {
-    return res.status(400).json({ error: 'Title, dimension, urgency, and description are required.' });
-  }
-
   const db = readDb();
   db.modules = db.modules || [];
 
@@ -2914,10 +2926,8 @@ app.get('/api/employees', (req, res) => {
 
 // POST Employee
 app.post('/api/employees', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's EmployeeUpsertSchema.
   const { id, name, role, department, company, lang, isLeader, leaderRole, buddyName, buddyEmail } = req.body;
-  if (!name || !role || !department) {
-    return res.status(400).json({ error: 'Name, role, and department are required.' });
-  }
 
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
@@ -3054,11 +3064,8 @@ app.get('/api/employees/get-or-create', (req, res) => {
 
 // POST Complete Lesson
 app.post('/api/employees/complete-lesson', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's CompleteLessonSchema.
   const { empId, lessonId } = req.body;
-  if (!empId || !lessonId) {
-    return res.status(400).json({ error: 'empId and lessonId are required.' });
-  }
-
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
   const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
@@ -3082,11 +3089,8 @@ app.post('/api/employees/complete-lesson', (req, res) => {
 
 // POST Uncomplete Lesson
 app.post('/api/employees/uncomplete-lesson', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's CompleteLessonSchema.
   const { empId, lessonId } = req.body;
-  if (!empId || !lessonId) {
-    return res.status(400).json({ error: 'empId and lessonId are required.' });
-  }
-
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
   const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
@@ -3110,11 +3114,8 @@ app.post('/api/employees/uncomplete-lesson', (req, res) => {
 
 // POST Award Merit Bonus (For Integration Leaders to award extra +50 XP points)
 app.post('/api/employees/award-merit', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's AwardMeritSchema.
   const { empId, points } = req.body;
-  if (!empId) {
-    return res.status(400).json({ error: 'empId is required.' });
-  }
-
   const meritPoints = parseInt(points) || 50;
 
   const db = readDb();
@@ -3147,11 +3148,8 @@ app.get('/api/hrbps', (req, res) => {
 
 // POST Integration Leader
 app.post('/api/hrbps', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's HrbpUpsertSchema.
   const { id, name, email, assignedTracks, supportingTeams, role } = req.body;
-  if (!name || !email) {
-    return res.status(400).json({ error: 'Name and email are required.' });
-  }
-
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
   
@@ -3214,11 +3212,8 @@ app.get('/api/alerts', (req, res) => {
 
 // POST Alert
 app.post('/api/alerts', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's AlertUpsertSchema.
   const { id, title, message, type } = req.body;
-  if (!title || !message || !type) {
-    return res.status(400).json({ error: 'Title, message, and type are required.' });
-  }
-
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
   
@@ -3281,11 +3276,8 @@ app.get('/api/pulses', (req, res) => {
 
 // POST Pulse
 app.post('/api/pulses', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's PulseCreateSchema.
   const { employeeName, rating, comment, type } = req.body;
-  if (!employeeName || !rating) {
-    return res.status(400).json({ error: 'Employee name and rating are required.' });
-  }
-
   const db = readDb();
   db.pulses = db.pulses || [];
 
@@ -3317,12 +3309,8 @@ app.get('/api/communications', (req, res) => {
 
 // POST Communication (Dispatches alert & compiles HTML email)
 app.post('/api/communications/send', (req, res) => {
+  // VAL-01: presence is now owned exclusively by validators/people.js's CommunicationSendSchema.
   const { sender, senderRole, recipientType, recipientId, recipientEmail, recipientName, subject, template, body } = req.body;
-  
-  if (!sender || !recipientEmail || !subject || !body) {
-    return res.status(400).json({ error: 'Sender, recipient email, subject, and body are required.' });
-  }
-
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
 

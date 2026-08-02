@@ -1,9 +1,16 @@
 // VAL-01 (first instance) / D-12 / D-13: zod schema validation for the
 // /api/deals control-plane routes — the first validator module this codebase
-// has (03-RESEARCH.md: "zero sanitize/schema-validation references in
-// server.js" before this phase). Plan 06 generalizes this exact
-// validateBody()/formatIssues() pipeline across the remaining ~60 write
-// endpoints, so its shape here is the reusable contract, not a one-off.
+// had (03-RESEARCH.md: "zero sanitize/schema-validation references in
+// server.js" before this phase). Plan 06 (validators/index.js) generalizes
+// this exact validateBody()/formatIssues() pipeline across the remaining
+// ~60 write endpoints and is now the CANONICAL home of that pipeline — this
+// module re-exports validateBody()/formatIssues() from there rather than
+// keeping its own copy, and registers its four schemas into the shared
+// WRITE_SCHEMAS registry so the generic, path-resolved
+// validators/index.js#validationMiddleware (mounted once in server.js's
+// consolidated /api gate) covers these routes exactly like every other
+// write route — server.js's per-route `dealValidators.validateBody(...)`
+// wiring is retired for the same reason (one rejection path, not two).
 //
 // zod 4.4.3 is the installed/pinned version (package.json) — schemas below
 // use z.object(shape), which STRIPS unknown keys by default in v4 (no
@@ -12,9 +19,11 @@
 // (verified against the installed version, not assumed from v3-era memory).
 
 const { z } = require('zod');
+const { formatIssues, validateBody, registerSchema } = require('./index');
 
 const NAME_MAX = 200;
 const USERNAME_MAX = 64;
+const DEAL_ID_MAX = 120; // generous bound over newId('deal')'s actual length; D-13/Task-2 "no unbounded string" — a regex alone does not cap length
 
 // db/dbFiles.js's DEAL_ID_RE, duplicated here (not required from dbFiles.js)
 // so this validator has no dependency on the storage layer — a schema module
@@ -37,7 +46,7 @@ const CreateDealSchema = z.object({
  * `null` is not — these are deliberately different states). */
 const SelectDealSchema = z.object({
   dealId: z.union([
-    z.string().regex(DEAL_ID_PATTERN, 'must be a valid deal id'),
+    z.string().max(DEAL_ID_MAX).regex(DEAL_ID_PATTERN, 'must be a valid deal id'),
     z.null(),
   ]),
 });
@@ -55,39 +64,21 @@ const DealMembersSchema = z.object({
  * non-empty string; the ROUTE HANDLER compares it against req.params.id,
  * since the schema itself has no access to the deal id being confirmed. */
 const DeleteConfirmSchema = z.object({
-  confirm: z.string().trim().min(1, 'A confirmation value is required.'),
+  confirm: z.string().trim().min(1, 'A confirmation value is required.').max(DEAL_ID_MAX),
 });
 
-/** Collapses a zod SafeParseError into ONE display string of
- * `path: message` segments — the existing single-string `{ error }` 400
- * shape every other endpoint in this codebase already uses (never an array).
- * Every message below is a zod built-in ("Too big: ...", "Invalid input:
- * expected string, received number", …) or one of the custom strings above —
- * none of them echo the submitted VALUE, only the field path and the rule it
- * broke, so a rejected field (which may carry MNPI, e.g. a target company
- * name) is never reflected back into a message that could be logged or
- * displayed out of context. */
-function formatIssues(error) {
-  return error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
-}
+// formatIssues()/validateBody() are now defined once in validators/index.js
+// and re-exported here unchanged — see this file's header comment.
 
-/** Express middleware factory: safeParse()s req.body against `schema`. On
- * failure, responds 400 with the existing `{ error: '...' }` shape (matching
- * server.js's ad hoc checks, e.g. "Department name is required."). On
- * success, REPLACES req.body with the parsed/stripped result — unknown keys
- * are already gone by the time the route handler runs (D-13), so a handler
- * that spreads `req.body` onto a stored record can never persist a field no
- * schema vetted. */
-function validateBody(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body || {});
-    if (!result.success) {
-      return res.status(400).json({ error: formatIssues(result.error) });
-    }
-    req.body = result.data;
-    next();
-  };
-}
+// Register every route this module owns into the shared WRITE_SCHEMAS
+// registry, so validators/index.js#validationMiddleware (the generic,
+// path-resolved gate-level middleware) covers them exactly like every other
+// write route in the app, with no per-route middleware needed in server.js.
+registerSchema('POST', '/api/deals', CreateDealSchema);
+registerSchema('POST', '/api/deals/select', SelectDealSchema);
+registerSchema('POST', '/api/deals/:id/members', DealMembersSchema);
+registerSchema('POST', '/api/admin/deals/:id/archive', DeleteConfirmSchema);
+registerSchema('DELETE', '/api/admin/deals/:id', DeleteConfirmSchema);
 
 module.exports = {
   CreateDealSchema, SelectDealSchema, DealMembersSchema, DeleteConfirmSchema,
