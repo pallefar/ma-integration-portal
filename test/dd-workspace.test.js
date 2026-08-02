@@ -345,3 +345,38 @@ test('dd-workspace (i): a caller-supplied `source` on create is stripped, never 
     server.close();
   }
 });
+
+test('dd-workspace (j): dueDate must be a valid calendar date — a syntactically-shaped-but-invalid date is refused with a 400, a real date and an empty (clearing) value both succeed (IN-01)', async () => {
+  const deal = freshDeal('deal_ddwkj');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const invalidRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', text: 'Bad due date item', dueDate: '2024-13-40' }),
+    });
+    assert.strictEqual(invalidRes.status, 400, 'a syntactically-shaped-but-invalid calendar date must be refused, not silently accepted');
+
+    const validRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', text: 'Good due date item', dueDate: '2024-02-29' }), // leap year — must be accepted
+    });
+    assert.strictEqual(validRes.status, 201, 'a real calendar date (including a leap-year Feb 29) must be accepted');
+    const { item } = await validRes.json();
+
+    const clearRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, dueDate: '' }),
+    });
+    assert.strictEqual(clearRes.status, 200, 'an empty string must still be accepted as "clear the due date"');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

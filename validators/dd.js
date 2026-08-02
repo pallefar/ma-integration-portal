@@ -20,6 +20,27 @@ const NOTES_MAX = 2000;
 const ID_MAX = 120;
 const DUE_DATE_MAX = 10; // 'YYYY-MM-DD'
 
+// IN-01 (04-REVIEW.md): `dueDate` was previously bounded by length only
+// (max 10 chars), which accepts syntactically-shaped-but-invalid dates like
+// '2024-13-40'. server.js's computeOverdue() guards its OWN read with a
+// shape-only regex (DD_DUE_DATE_RE) and silently treats a non-matching
+// string as never-overdue — so a malformed due date wouldn't crash anything,
+// but it would silently and permanently suppress the overdue flag with no
+// error surfaced anywhere. This schema-level check closes that at the
+// source: an empty string (clearing the due date, per due-diligence.js's
+// <input type="date"> UI) is still allowed; any non-empty value must be a
+// real YYYY-MM-DD calendar date, month/day range checked (including leap
+// years, via the Date.UTC(y, m, 0) "day 0 of next month" trick).
+const DUE_DATE_SHAPE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+function isValidCalendarDate(value) {
+  const m = DUE_DATE_SHAPE_RE.exec(value);
+  if (!m) return false;
+  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  if (month < 1 || month > 12) return false;
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day >= 1 && day <= daysInMonth;
+}
+
 // D-14: the five-value request-item lifecycle.
 const DD_STATUSES = ['open', 'requested', 'received', 'reviewed', 'closed'];
 
@@ -64,7 +85,10 @@ const DdRequestItemUpsertSchema = z.object({
   area: z.enum(DD_AREA_IDS).optional(),
   owner: z.string().trim().max(OWNER_MAX).optional(),
   status: z.enum(DD_STATUSES).optional(),
-  dueDate: z.string().trim().max(DUE_DATE_MAX).optional(),
+  dueDate: z.string().trim().max(DUE_DATE_MAX)
+    .refine((val) => val === '' || isValidCalendarDate(val), {
+      message: 'Due date must be a valid YYYY-MM-DD calendar date.',
+    }).optional(),
   blocked: z.boolean().optional(),
   notes: z.string().trim().max(NOTES_MAX).optional(),
   // WR-02 (04-REVIEW.md): `source` is deliberately NOT accepted on this
