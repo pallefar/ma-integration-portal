@@ -52,4 +52,14 @@ const DdRequestItemUpsertSchema = z.object({
 registerSchema('POST', '/api/dd/request-items', DdRequestItemUpsertSchema);
 registerSchema('DELETE', '/api/dd/request-items/:id', EmptyBodySchema);
 
-module.exports = { DdRequestItemUpsertSchema, DD_STATUSES };
+/** POST /api/dd/request-items/instantiate — D-13. A single bounded required
+ * `templateId`, mirroring validators/workstream.js's InstantiateTasksSchema
+ * shape. GET /api/dd/request-templates needs no registration — it is a read
+ * route with no body. */
+const InstantiateDdRequestsSchema = z.object({
+  templateId: z.string().trim().min(1, 'Template id is required.').max(ID_MAX),
+});
+
+registerSchema('POST', '/api/dd/request-items/instantiate', InstantiateDdRequestsSchema);
+
+module.exports = { DdRequestItemUpsertSchema, DD_STATUSES, InstantiateDdRequestsSchema };

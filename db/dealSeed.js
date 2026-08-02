@@ -18,11 +18,17 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const { dealDbPath, openDbFile, DEAL_SCHEMA_PATH, DEMO_DB_PATH } = require('./dbFiles');
 
-// The three row-shaped template collections D-06 names (checklist templates,
-// assessment templates, the sending->receiving process catalog). The i18n
-// singleton is copied alongside these (handled separately below, since it is
-// not row-shaped) — together these are the ONLY things a new deal inherits.
-const DEAL_SEED_COLLECTIONS = ['checklistTemplates', 'assessmentTemplates', 'processCatalog'];
+// The row-shaped template collections D-06 names (checklist templates,
+// assessment templates, the sending->receiving process catalog) plus D-13's
+// standard DD request checklist template. The i18n singleton is copied
+// alongside these (handled separately below, since it is not row-shaped) —
+// together these are the ONLY things a new deal inherits. `ddRequestTemplates`
+// is itself a TEMPLATE collection (a curated list an IL turns into live items
+// via POST /api/dd/request-items/instantiate) — it is never confused with the
+// live `ddRequestItems`/`ddFindings` collections, which are deliberately NOT
+// on this allowlist and so start empty in every new deal, same as
+// `integrationTasks`.
+const DEAL_SEED_COLLECTIONS = ['checklistTemplates', 'assessmentTemplates', 'processCatalog', 'ddRequestTemplates'];
 
 /**
  * Create a brand-new deal database at dealDbPath(dealId), seeded ONLY with

@@ -3060,6 +3060,56 @@ app.post('/api/dd/request-items', (req, res) => {
   res.status(201).json({ success: true, item: publicDdItem(item) });
 });
 
+// D-13: the standard DD request checklist, seeded into every new deal via
+// db/dealSeed.js's DEAL_SEED_COLLECTIONS allowlist. A template is a standard
+// list, not deal content — it carries no MNPI, so this list route is
+// unfiltered (no area-grant check), unlike GET /api/dd/request-items above.
+app.get('/api/dd/request-templates', (req, res) => {
+  res.json(readDb().ddRequestTemplates || []);
+});
+
+// Instantiate a DD request template: every item becomes a live request item
+// once (source-deduped), so re-running after the IL adds template items only
+// creates the new ones — mirrors POST /api/integration-tasks/instantiate's
+// exact shape (server.js's own precedent above). Unlike that route, each
+// item is ALSO gated by the caller's clearance (grantedAreas(), computed
+// once): an item in an uncleared area is skipped and counted, never created,
+// so a bulk instantiate can never materialise content the caller could not
+// have created one at a time (T-04-16).
+app.post('/api/dd/request-items/instantiate', (req, res) => {
+  const { templateId } = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const tpl = (db.ddRequestTemplates || []).find((t) => t.id === templateId);
+  if (!tpl) return res.status(404).json({ error: 'Template not found.' });
+  const granted = new Set(accessPolicy.grantedAreas(deal, req.portalUser));
+  const lane = ddRequestLane(db);
+  let created = 0;
+  let skipped = 0;
+  (tpl.items || []).forEach((tplItem) => {
+    if (!granted.has(tplItem.area)) { skipped++; return; }
+    const source = 'ddtemplate:' + tpl.id + ':' + tplItem.id;
+    if (lane.some((i) => i.source === source)) return;
+    lane.push({
+      id: newId('ddreq'),
+      area: tplItem.area,
+      text: tplItem.text || tplItem.id,
+      owner: tplItem.ownerHint || '',
+      status: 'open',
+      dueDate: '',
+      blocked: false,
+      vdrLink: null,
+      notes: '',
+      source,
+      createdAt: new Date().toISOString(),
+      createdBy: req.portalUser.username,
+    });
+    created++;
+  });
+  if (created) writeDb(db);
+  res.json({ success: true, created, skipped });
+});
+
 // =====================================================================
 // In-app notifications — computed on demand from live data (no stored
 // notification records to drift out of sync).

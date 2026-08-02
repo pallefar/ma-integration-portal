@@ -47,6 +47,17 @@ function buildSyntheticDemoSource(dbPath) {
   insertRow('checklistTemplates', 'ck_2', null, 1, { id: 'ck_2', workstream: 'ws_it', task: 'IT access checklist item' });
   insertRow('assessmentTemplates', 'at_1', null, 0, { id: 'at_1', dimension: 'culture' });
   insertRow('processCatalog', 'pc_1', null, 0, { id: 'pc_1', domain: 'HR', sendingProcess: 'Onboarding' });
+  // D-13: the standard DD request checklist template — a single row whose
+  // `data` blob carries the whole template object (same shape
+  // db/ddRequestTemplateSeed.js#DD_REQUEST_TEMPLATE produces), mirroring how
+  // checklistTemplates/assessmentTemplates/processCatalog are each one row
+  // per template above, not one row per item.
+  insertRow('ddRequestTemplates', 'ddtpl_synthetic', null, 0, {
+    id: 'ddtpl_synthetic',
+    name: 'Synthetic DD checklist',
+    version: 1,
+    items: [{ id: 'dd_legal_01', area: 'legal', text: 'Synthetic legal item', ownerHint: 'Legal' }],
+  });
 
   insertRow('employees', 'emp_1', 'proj_demo', 0, { id: 'emp_1', name: 'Demo Alice' });
   insertRow('projects', 'proj_demo', null, 0, { id: 'proj_demo', name: 'Demo Project' });
