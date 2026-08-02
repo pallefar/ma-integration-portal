@@ -67,9 +67,26 @@ const AssessmentInstanceSchema = z.object({
     message: 'templateId and responses are required.',
   }),
   retakeOf: z.string().trim().max(ID_MAX).optional(),
+  // D-24/WIZ-01: an optional bounded id completing a PENDING instance
+  // (assigned via POST /api/assessment-instances/assign below) in place —
+  // see server.js's own handler comment for the full completion contract.
+  instanceId: z.string().trim().max(ID_MAX).optional(),
 });
 registerSchema('POST', '/api/assessment-instances', AssessmentInstanceSchema);
 registerSchema('DELETE', '/api/assessment-instances/:id', EmptyBodySchema);
+
+// ---------------------------------------------------------------------------
+// POST /api/assessment-instances/assign (WIZ-01/D-24) — { templateId, owner,
+// dueDate }. Creates a PENDING instance carrying no answers and no score at
+// all — see server.js's handler for why the absence of a score field (not a
+// zero) is what marks a row as pending.
+// ---------------------------------------------------------------------------
+const AssignAssessmentSchema = z.object({
+  templateId: z.string().trim().min(1, 'templateId is required.').max(ID_MAX),
+  owner: z.string().trim().min(1, 'owner is required.').max(120),
+  dueDate: z.string().trim().min(1, 'dueDate is required.').max(10),
+});
+registerSchema('POST', '/api/assessment-instances/assign', AssignAssessmentSchema);
 
 module.exports = {
   QuestionCreateSchema,
@@ -77,4 +94,5 @@ module.exports = {
   ReorderQuestionsSchema,
   AssessmentSubmitSchema,
   AssessmentInstanceSchema,
+  AssignAssessmentSchema,
 };

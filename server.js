@@ -2466,6 +2466,10 @@ function latestAssessInstanceFor(visible, tplId, rater) {
   let latest = null;
   visible.forEach(i => {
     if (i.templateId !== tplId) return;
+    // D-24: a pending row (assigned but not yet taken) can never become the
+    // "latest" instance for a template — it carries no score, band or
+    // compatibility contribution to promote.
+    if (i.status !== 'submitted') return;
     if (rater && (i.rater || 'self') !== rater) return;
     if (!latest) { latest = i; return; }
     const byDay = (i.demoDay || 0) - (latest.demoDay || 0);
@@ -2484,14 +2488,74 @@ app.get('/api/assessment-templates', (req, res) => {
   res.json(list);
 });
 
+// D-24/WIZ-01: assign a readiness assessment BEFORE anyone has answered
+// anything — an owner and a due date, tracked as outstanding. Calls no
+// scorer and sets no score field at all: a pending row is identified by the
+// ABSENCE of a score, never by a zero that could be mistaken for a real
+// result (T-04-33). Pushed onto the SAME assessmentInstances lane
+// POST /api/assessment-instances below writes to — there is no separate
+// "pending assessments" collection for this to drift out of sync with
+// (D-24), which is what lets the completion path below promote this exact
+// row in place instead of creating a second one.
+app.post('/api/assessment-instances/assign', (req, res) => {
+  const { templateId, owner, dueDate } = req.body || {};
+  const db = readDb();
+  const template = (db.assessmentTemplates || []).find(t => t.id === templateId);
+  if (!template) return res.status(404).json({ error: 'Assessment template not found.' });
+  const instance = {
+    id: newId('ainst'),
+    templateId,
+    templateVersion: template.version || 1,
+    subject: template.subject || 'target-org',
+    rater: 'self',
+    owner: String(owner || '').slice(0, 120),
+    dueDate: String(dueDate || '').slice(0, 10),
+    status: 'pending',
+    timestamp: new Date().toISOString(),
+  };
+  assessLane(db).push(instance);
+  writeDb(db);
+  res.status(201).json({ success: true, instance: publicAssessInstance(instance) });
+});
+
 // POST a completed assessment — server computes every score (client sends raw answers only)
 app.post('/api/assessment-instances', (req, res) => {
   // VAL-01: presence is now owned exclusively by validators/assessment.js's AssessmentInstanceSchema.
-  const { templateId, rater, respondentName, respondentRole, responses, retakeOf } = req.body || {};
+  const { templateId, rater, respondentName, respondentRole, responses, retakeOf, instanceId } = req.body || {};
   const db = readDb();
   const template = (db.assessmentTemplates || []).find(t => t.id === templateId);
   if (!template) return res.status(404).json({ error: 'Assessment template not found.' });
   const scoresBlock = scoreAssessmentInstance(template, responses);
+
+  // D-24/T-04-32: an optional instanceId completes a PENDING row (created via
+  // POST /api/assessment-instances/assign above) IN PLACE — mutating that
+  // SAME row rather than pushing a second one, so one assignment can never
+  // become two instances in the collection. Refused with a 400 (not
+  // silently accepted) when the target row is not pending: a submitted,
+  // scored, compliance-relevant record must never be silently rewritten
+  // through this path — a retake uses the existing `retakeOf` field instead.
+  if (instanceId) {
+    const lane = assessLane(db);
+    const pending = lane.find(i => i.id === instanceId);
+    if (!pending) return res.status(404).json({ error: 'Assessment instance not found.' });
+    if (pending.status !== 'pending') {
+      return res.status(400).json({ error: 'This assessment instance is not pending completion.' });
+    }
+    pending.rater = (template.raterModes || ['self']).includes(rater) ? rater : (pending.rater || 'self');
+    pending.respondentRole = String(respondentRole || '').slice(0, 60);
+    pending.respondentName = String(respondentName || '').slice(0, 120);
+    pending.responses = responses;
+    Object.assign(pending, scoresBlock);
+    pending.status = 'submitted';
+    pending.timestamp = new Date().toISOString();
+    if (retakeOf) pending.retakeOf = retakeOf;
+    if (!(db.settings && db.settings.demoMode === false)) {
+      pending.demoDay = (db.settings && db.settings.timeTravelDay) || 30;
+    }
+    writeDb(db);
+    return res.json({ success: true, instance: publicAssessInstance(pending) });
+  }
+
   const instance = {
     id: newId('ainst'),
     templateId,
@@ -2554,6 +2618,20 @@ app.delete('/api/assessment-instances/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// WIZ-01: the declared subject order the rollup's own bySubject output is
+// reported in — acquirer, target, Integration Lead — so the report's order
+// comes from THIS list, never from template array order, insertion order or
+// instance timestamps. [security] Deviation from the plan's own interface
+// contract text (Rule 1 auto-fix): the contract's literal example used 'il'
+// as the third subject value, but every seeded IL readiness template
+// (db.json/data/demo.db's atpl_il_readiness, copied verbatim into every new
+// deal by db/dealSeed.js) actually carries subject: 'integration-leader' —
+// verified live against the installed data, not assumed from the plan text.
+// Using 'il' here would silently exclude the real IL template from the
+// declared-order pass below (it would fall through to the "any subject not
+// on the list" append-at-end branch instead of sorting third).
+const WIZARD_ASSESSMENT_SUBJECTS = ['acquirer-org', 'target-org', 'integration-leader'];
+
 // GET the readiness rollup — single source of truth for every gate point in the UI
 app.get('/api/assessment-status', (req, res) => {
   const db = readDb();
@@ -2562,6 +2640,7 @@ app.get('/api/assessment-status', (req, res) => {
   const required = [];
   const gatesSummary = {};
   const bySubject = {};
+  const entriesBySubject = {};
   // In any locked-down posture the status rollup carries scores/bands only —
   // no respondent names (leader ratings are personal data) — unless the
   // requester is an admin.
@@ -2573,19 +2652,40 @@ app.get('/api/assessment-status', (req, res) => {
   };
   templates.forEach(t => {
     const latest = latestAssessInstanceFor(visible, t.id, 'self');
+    // WIZ-01/D-24: every PENDING instance for this template — reported
+    // separately from `satisfied`/`latestInstance` (both derived from
+    // submitted instances only, above) so a pending assessment never reads
+    // as satisfied and never contributes a score. Ordered by due date, then
+    // id, for a stable report regardless of assignment order.
+    const pending = visible
+      .filter(i => i.templateId === t.id && i.status === 'pending')
+      .slice()
+      .sort((a, b) => {
+        const ad = String(a.dueDate || ''), bd = String(b.dueDate || '');
+        if (ad !== bd) return ad < bd ? -1 : 1;
+        return String(a.id) < String(b.id) ? -1 : 1;
+      })
+      .map(i => ({ id: i.id, owner: i.owner || '', dueDate: i.dueDate || '' }));
     const entry = {
       templateId: t.id, slug: t.slug, subject: t.subject,
       required: !!t.required, gates: t.gates || [],
       satisfied: !!latest,
-      latestInstance: statusInstance(latest)
+      latestInstance: statusInstance(latest),
+      pending
     };
-    bySubject[t.subject] = entry;
+    entriesBySubject[t.subject] = entry;
     if (t.required) required.push(entry);
     (t.gates || []).forEach(g => {
       gatesSummary[g] = gatesSummary[g] || { satisfied: true, blockedBy: [] };
       if (t.required && !latest) { gatesSummary[g].satisfied = false; gatesSummary[g].blockedBy.push(t.id); }
     });
   });
+  // Insert into bySubject in WIZARD_ASSESSMENT_SUBJECTS's declared order —
+  // any subject not on that list (none exist today) is appended afterward in
+  // its original template order rather than silently dropped.
+  const orderedSubjects = WIZARD_ASSESSMENT_SUBJECTS.filter(s => entriesBySubject[s]);
+  Object.keys(entriesBySubject).forEach(s => { if (!orderedSubjects.includes(s)) orderedSubjects.push(s); });
+  orderedSubjects.forEach(s => { bySubject[s] = entriesBySubject[s]; });
 
   // Compatibility per template pair (acquirer-org × target-org, joined on mirrorId).
   // Reported as two separate truths: per-company READINESS and profile ALIGNMENT
