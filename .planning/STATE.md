@@ -4,16 +4,16 @@ milestone: v2.0.1
 milestone_name: milestone
 current_phase: 03
 current_phase_name: Deal Isolation, Audit Log & Write Validation
-status: executing
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-08-02T03:18:32.293Z"
+status: verifying
+stopped_at: Completed 03-06-PLAN.md
+last_updated: "2026-08-02T03:53:11.461Z"
 last_activity: 2026-08-01
 last_activity_desc: "Completed quick task 260801-fj5: Hide Post-Merger splash screen (guarded, reversible)"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 Phase: 03 (Deal Isolation, Audit Log & Write Validation) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-01 — Completed quick task 260801-fj5: Hide Post-Merger splash screen (guarded, reversible)
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [█████████░] 92%
 | Phase 03 P03 | 65min | 3 tasks | 16 files |
 | Phase 03 P04 | 50min | 3 tasks | 28 files |
 | Phase 03 P05 | ~70min | 3 tasks | 9 files |
+| Phase 03 P06 | ~2h | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 3 Plan 05: D-09 checkpoint approved as-specified — dedicated gitignored/zip-excluded data/audit.db, store-layer writeDb() hook (not cross-database triggers), best-effort post-commit semantics with loud audit-write-failure surfacing, tamper-evidence deferred to shared-host milestone
 - [Phase ?]: Phase 3 Plan 05: db/resolver.js's bound context extended with actor/request derived from req.portalUser at bind time — the audit hook reads it via AsyncLocalStorage with zero new writeDb() parameter across ~90 call sites; an audited write with no resolved actor throws rather than logging anonymously (D-11), except the one legitimate DEMO_OPEN=1 open-mode bypass on session-revoke-all, which mirrors D-08's demo-writes-unaudited rule instead of crashing
 - [Phase ?]: Phase 3 Plan 05: security events recorded directly from server.js via db/auditHook.js's recordSecurityEvent(), never through db/controlStore.js, so that module's zero-reference-to-audit.db guarantee (AUD-02) is never put at risk; CONTROL_PLANE_PATHS widened to /api/admin/audit mirroring Plan 04's admin-lockout-prevention precedent for /api/admin/deals*
+- [Phase ?]: Phase 3 Plan 06: Tasks 1+2 landed in one commit (c0f9a6c) — the generic fail-closed validationMiddleware could not be mounted incrementally without breaking every pre-existing test exercising a not-yet-scheduled write route, matching Plan 03's own consolidated-gate precedent; Task 3 (HTML tagging, 0cf5a0f) was independent
+- [Phase ?]: Phase 3 Plan 06: WRITE_SCHEMAS keyed on Express route-TEMPLATE strings (not runtime paths) with a boundary-safe regex matcher, so one resolveSchema() serves both request-time lookup and the coverage check reading the live route inventory's own ':id'-style templates
+- [Phase ?]: Phase 3 Plan 06: htmlField() tagging kept deliberately narrow — only lesson.body, the richtext page-layout block's data.html, and the legacy page.body — verified against actual client-side render paths rather than tagging every plausibly-markup field, since sanitizing an untagged plain-text field would itself be a data-integrity bug
 
 ### Pending Todos
 
@@ -139,6 +143,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T03:18:32.282Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-08-02T03:53:11.452Z
+Stopped at: Completed 03-06-PLAN.md
 Resume file: None

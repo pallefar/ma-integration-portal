@@ -32,7 +32,7 @@
 ### Foundation — Validation (F3)
 
 - [x] **VAL-01**: Every write endpoint validates its input against a schema (type, required fields, length limits) and rejects malformed requests with a clear error
-- [ ] **VAL-02**: Free-text and HTML-bearing fields are sanitized before storage or render, closing the documented XSS gaps
+- [x] **VAL-02**: Free-text and HTML-bearing fields are sanitized before storage or render, closing the documented XSS gaps
 
 ### Due Diligence Workspace
 
@@ -116,7 +116,7 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | AUD-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | AUD-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | VAL-01 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
-| VAL-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Pending |
+| VAL-02 | Phase 3: Deal Isolation, Audit Log & Write Validation | Complete |
 | DD-01 | Phase 4: Due Diligence Workspace | Pending |
 | DD-02 | Phase 4: Due Diligence Workspace | Pending |
 | DD-03 | Phase 4: Due Diligence Workspace | Pending |
