@@ -62,4 +62,40 @@ const InstantiateDdRequestsSchema = z.object({
 
 registerSchema('POST', '/api/dd/request-items/instantiate', InstantiateDdRequestsSchema);
 
-module.exports = { DdRequestItemUpsertSchema, DD_STATUSES, InstantiateDdRequestsSchema };
+/** POST /api/dd/findings — upsert-by-id, same shape as
+ * DdRequestItemUpsertSchema above: `title`/`area` unconditionally-present-on
+ * -create, optional-on-update, enforced by two refine()s. D-26: `severity`
+ * is a FOUR-level enum, independent of validators/workstream.js's
+ * RAID_LEVELS until Plan 04's Task 2 extends that separate list to match —
+ * a finding's severity is copied verbatim into a converted RAID entry. */
+const DD_FINDING_SEVERITIES = ['low', 'medium', 'high', 'critical'];
+// The same three-value lifecycle RaidUpsertSchema's RAID_STATUSES already uses.
+const DD_FINDING_STATUSES = ['open', 'mitigating', 'closed'];
+
+const DdFindingUpsertSchema = z.object({
+  id: z.string().trim().min(1).max(ID_MAX).optional(),
+  title: z.string().trim().min(1, 'Finding title is required.').max(TEXT_MAX).optional(),
+  area: z.enum(DD_AREA_IDS).optional(),
+  severity: z.enum(DD_FINDING_SEVERITIES).optional(),
+  status: z.enum(DD_FINDING_STATUSES).optional(),
+  owner: z.string().trim().max(OWNER_MAX).optional(),
+  notes: z.string().trim().max(NOTES_MAX).optional(),
+}).refine((data) => data.id || (data.title && data.title.trim()), {
+  message: 'Finding title is required.',
+  path: ['title'],
+}).refine((data) => data.id || data.area, {
+  message: 'Finding area is required.',
+  path: ['area'],
+});
+
+registerSchema('POST', '/api/dd/findings', DdFindingUpsertSchema);
+registerSchema('DELETE', '/api/dd/findings/:id', EmptyBodySchema);
+
+module.exports = {
+  DdRequestItemUpsertSchema,
+  DD_STATUSES,
+  InstantiateDdRequestsSchema,
+  DdFindingUpsertSchema,
+  DD_FINDING_SEVERITIES,
+  DD_FINDING_STATUSES,
+};

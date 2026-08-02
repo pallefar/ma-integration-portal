@@ -3111,6 +3111,110 @@ app.post('/api/dd/request-items/instantiate', (req, res) => {
 });
 
 // =====================================================================
+// DD findings register (DD-02/DD-03) — the output of diligence. Same
+// eight-area clean-room discipline as request items above: list routes run
+// filterByAreaGrant() and record no denial; by-id routes assert clearance
+// against the row's OWN stored area and route every refusal through the
+// shared refuseDdArea()/ddAreaRefused() helpers defined above. A finding
+// converts into a Day-1 task and/or a RAID entry via
+// POST /api/dd/findings/:id/convert (DD_AREA_WORKSTREAM section, below the
+// findings routes) — this section only owns the finding row itself.
+// =====================================================================
+function ddFindingsLane(db) {
+  db.ddFindings = db.ddFindings || [];
+  return db.ddFindings;
+}
+
+// D-11/D-26: four severities. Deliberately independent of RAID_LEVELS
+// (server.js's RAID section, extended to match by this plan's Task 2) — a
+// finding's severity is copied VERBATIM into a converted RAID entry, never
+// mapped or clamped.
+const DD_FINDING_SEVERITIES = ['low', 'medium', 'high', 'critical'];
+// The same three-value lifecycle the RAID lane already uses.
+const DD_FINDING_STATUSES = ['open', 'mitigating', 'closed'];
+
+app.get('/api/dd/findings', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const lane = ddFindingsLane(db);
+  let visible = accessPolicy.filterByAreaGrant(lane, deal, req.portalUser);
+  if (req.query.area) visible = visible.filter((f) => f.area === req.query.area);
+  res.json(visible);
+});
+
+app.get('/api/dd/findings/:id', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const finding = ddFindingsLane(db).find((f) => f.id === req.params.id);
+  if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+  res.json(finding);
+});
+
+app.delete('/api/dd/findings/:id', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const lane = ddFindingsLane(db);
+  const finding = lane.find((f) => f.id === req.params.id);
+  if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+  db.ddFindings = lane.filter((f) => f.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// Upsert-by-id, mirroring POST /api/dd/request-items's shape exactly. On
+// UPDATE the guard runs against the finding's STORED area FIRST, before any
+// field is mutated (the read model hands back a shared cache, so a mutation
+// followed by a refusal would stick). A body that ALSO carries a different
+// `area` additionally requires clearance for that NEW area.
+app.post('/api/dd/findings', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const lane = ddFindingsLane(db);
+
+  if (b.id) {
+    const finding = lane.find((f) => f.id === b.id);
+    if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+    // VAL-01: title-required-when-id-absent is owned by the schema's own
+    // refine(); this empty-title-on-UPDATE guard stays here because the
+    // schema's refine only requires title when `id` is absent (see the
+    // identical comment on POST /api/dd/request-items above).
+    if (b.title !== undefined && !String(b.title).trim()) {
+      return res.status(400).json({ error: 'Finding title cannot be empty.' });
+    }
+    if (b.area !== undefined && b.area !== finding.area) {
+      if (ddAreaRefused(req, res, deal, b.area)) return;
+    }
+    if (b.title !== undefined) finding.title = String(b.title).trim().slice(0, 2000);
+    if (b.severity !== undefined && DD_FINDING_SEVERITIES.includes(b.severity)) finding.severity = b.severity;
+    if (b.status !== undefined && DD_FINDING_STATUSES.includes(b.status)) finding.status = b.status;
+    if (b.owner !== undefined) finding.owner = String(b.owner || '').slice(0, 120);
+    if (b.notes !== undefined) finding.notes = String(b.notes || '').slice(0, 2000);
+    if (b.area !== undefined) finding.area = b.area;
+    writeDb(db);
+    return res.json({ success: true, finding });
+  }
+
+  if (ddAreaRefused(req, res, deal, b.area)) return;
+  const finding = {
+    id: newId('ddfind'),
+    area: b.area,
+    title: String(b.title || '').trim().slice(0, 2000),
+    severity: DD_FINDING_SEVERITIES.includes(b.severity) ? b.severity : 'medium',
+    owner: String(b.owner || '').slice(0, 120),
+    status: 'open',
+    notes: String(b.notes || '').slice(0, 2000),
+    linkedTaskIds: [],
+    linkedRaidIds: [],
+    createdAt: new Date().toISOString(),
+    createdBy: req.portalUser.username,
+  };
+  lane.push(finding);
+  writeDb(db);
+  res.status(201).json({ success: true, finding });
+});
+
+// =====================================================================
 // In-app notifications — computed on demand from live data (no stored
 // notification records to drift out of sync).
 // =====================================================================
