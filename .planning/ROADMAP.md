@@ -123,7 +123,41 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user without need-to-know for a functional area cannot read that area's DD requests or findings via a direct API call, even with a valid session — filtering happens server-side, and the denial itself is audited.
   4. A DD item can carry a reference link and access-grant record pointing at TE's existing VDR, without the app storing the document itself.
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — DD data spine + clean-room need-to-know filter (tracer: an IL creates a Legal request item, an uncleared member sees nothing, the denial is audited) (DD-01, DD-04)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 04-02-PLAN.md — per-deal area grants control plane, admin grants editor, and the additive memberGrants regression proof (DD-04)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 04-03-PLAN.md — seeded 80-item standard DD request checklist + clearance-scoped instantiate (DD-01)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 04-04-PLAN.md — findings register, four-level RAID severity, one-click bidirectional conversion (DD-02, DD-03)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 04-05-PLAN.md — VDR link-outs per request item + audited data-room access-grant records, no document storage (DD-05)
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 04-06-PLAN.md — pending readiness-assessment instances + create-early wizard backend and setup state (WIZ-01)
+
+**Wave 7** *(blocked on Wave 6)*
+
+- [ ] 04-07-PLAN.md — full-page seven-step new-deal setup wizard, validate-on-advance, switcher repointed (WIZ-01)
+
+**Wave 8** *(blocked on Wave 7)*
+
+- [ ] 04-08-PLAN.md — deal home (setup checklist, readiness completion, DD progress with overdue rollup) + in-app owner nudges (DD-01, DD-02, WIZ-01)
 
 ### Phase 5: Synergy Value Capture
 
