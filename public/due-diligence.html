@@ -26,6 +26,8 @@
     .dd-add{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; background:var(--card-bg,#fff); border:1px dashed var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-top:.6rem; }
     .dd-add input, .dd-add select{ padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; }
     .dd-add input[type="text"]{ flex:1; min-width:200px; }
+    .dd-checklist-status{ margin-bottom:1rem; }
+    .dd-checklist-status-line{ font-size:.78rem; color:var(--text-dim); margin-top:.5rem; }
   </style>
 </head>
 <body>
@@ -50,11 +52,12 @@
           <h1>Due Diligence</h1>
           <p>Request items tracked by functional area — you see only the areas you are cleared for.</p>
         </div>
+        <div id="dd-checklist-status" class="dd-checklist-status"></div>
         <div id="dd-areas"></div>
       </div>
     </main>
   </div>
 
-  <script src="/js/due-diligence.js?v=1784600001"></script>
+  <script src="/js/due-diligence.js?v=1784600002"></script>
 </body>
 </html>

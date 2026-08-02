@@ -23,7 +23,7 @@
   var STATUSES = ['open', 'requested', 'received', 'reviewed', 'closed'];
   var STATUS_LABELS = { open: 'Open', requested: 'Requested', received: 'Received', reviewed: 'Reviewed', closed: 'Closed' };
 
-  var state = { areas: [], itemsByArea: {} };
+  var state = { areas: [], itemsByArea: {}, checklistStatus: '' };
 
   function el(tag, opts) {
     var node = document.createElement(tag);
@@ -45,6 +45,40 @@
   }
 
   function refresh() { return load().then(render); }
+
+  function totalItemCount() {
+    return Object.keys(state.itemsByArea).reduce(function (sum, key) {
+      return sum + state.itemsByArea[key].length;
+    }, 0);
+  }
+
+  // D-13: "Load standard checklist" — GET the seeded template(s), instantiate
+  // the first one, then re-render. `created`/`skipped` are surfaced as a
+  // short textContent-only status line; the skipped count is worded as
+  // "outside your clearance" and NEVER names or lists an uncleared area —
+  // naming one would leak exactly what the server-side filter hides (the
+  // same anti-enumeration property test/dd-workspace.test.js's uniform-403
+  // assertion locks in for the by-id case).
+  function loadStandardChecklist() {
+    return fetch('/api/dd/request-templates').then(function (r) { return r.json(); }).then(function (templates) {
+      var tpl = Array.isArray(templates) && templates.length ? templates[0] : null;
+      if (!tpl) {
+        state.checklistStatus = 'No standard checklist template is available for this deal.';
+        return render();
+      }
+      return fetch('/api/dd/request-items/instantiate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId: tpl.id })
+      }).then(function (r) { return r.json(); }).then(function (result) {
+        var created = (result && typeof result.created === 'number') ? result.created : 0;
+        var skipped = (result && typeof result.skipped === 'number') ? result.skipped : 0;
+        var msg = 'Loaded ' + created + ' request item' + (created === 1 ? '' : 's') + ' from the standard checklist.';
+        if (skipped) msg += ' ' + skipped + ' item' + (skipped === 1 ? '' : 's') + ' outside your clearance were not created.';
+        state.checklistStatus = msg;
+        return refresh();
+      });
+    });
+  }
 
   function updateItem(id, patch) {
     var body = Object.assign({ id: id }, patch);
@@ -119,6 +153,23 @@
   }
 
   function render() {
+    var statusContainer = document.getElementById('dd-checklist-status');
+    if (statusContainer) {
+      statusContainer.textContent = '';
+      // The control appears only while the workspace has zero request items
+      // across every cleared area — once any item exists (seeded or
+      // manually added), the caller has already started their own list.
+      if (totalItemCount() === 0) {
+        var loadBtn = el('button', { className: 'btn btn-secondary', text: 'Load standard checklist' });
+        loadBtn.type = 'button';
+        loadBtn.addEventListener('click', function () { loadStandardChecklist(); });
+        statusContainer.appendChild(loadBtn);
+      }
+      if (state.checklistStatus) {
+        statusContainer.appendChild(el('div', { className: 'dd-checklist-status-line', text: state.checklistStatus }));
+      }
+    }
+
     var container = document.getElementById('dd-areas');
     container.textContent = '';
     state.areas.forEach(function (area) {
