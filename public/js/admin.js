@@ -2524,26 +2524,39 @@ document.addEventListener('DOMContentLoaded', () => {
       main.appendChild(subEl);
       row.appendChild(main);
 
-      if (isAdmin) {
+      const isIL = currentRole() === 'hrbp';
+      if (isAdmin || isIL) {
         const actions = document.createElement('div');
         actions.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
 
-        const membersBtn = document.createElement('button');
-        membersBtn.type = 'button'; membersBtn.className = 'cms-mini'; membersBtn.textContent = 'Members';
-        membersBtn.addEventListener('click', () => editDealMembers(d));
-        actions.appendChild(membersBtn);
+        // DD-04/D-02: grants management is admin + hrbp (Integration Lead) —
+        // deliberately WIDER than the Members/Archive/Delete buttons below,
+        // which stay admin-only. Mirrors the server's own ROLE_WRITE_POLICY
+        // distinction between the members route (isAdminRequest() narrowed)
+        // and the grants route (left at the broader admin+hrbp policy).
+        const grantsBtn = document.createElement('button');
+        grantsBtn.type = 'button'; grantsBtn.className = 'cms-mini'; grantsBtn.textContent = 'Clean-room grants';
+        grantsBtn.addEventListener('click', () => openGrantsPanel(d));
+        actions.appendChild(grantsBtn);
 
-        if (d.status !== 'archived') {
-          const archiveBtn = document.createElement('button');
-          archiveBtn.type = 'button'; archiveBtn.className = 'cms-mini'; archiveBtn.textContent = 'Archive';
-          archiveBtn.addEventListener('click', () => confirmDestructiveDealAction(d, 'archive'));
-          actions.appendChild(archiveBtn);
+        if (isAdmin) {
+          const membersBtn = document.createElement('button');
+          membersBtn.type = 'button'; membersBtn.className = 'cms-mini'; membersBtn.textContent = 'Members';
+          membersBtn.addEventListener('click', () => editDealMembers(d));
+          actions.appendChild(membersBtn);
+
+          if (d.status !== 'archived') {
+            const archiveBtn = document.createElement('button');
+            archiveBtn.type = 'button'; archiveBtn.className = 'cms-mini'; archiveBtn.textContent = 'Archive';
+            archiveBtn.addEventListener('click', () => confirmDestructiveDealAction(d, 'archive'));
+            actions.appendChild(archiveBtn);
+          }
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button'; deleteBtn.className = 'cms-mini danger'; deleteBtn.textContent = '✕ Delete';
+          deleteBtn.addEventListener('click', () => confirmDestructiveDealAction(d, 'delete'));
+          actions.appendChild(deleteBtn);
         }
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button'; deleteBtn.className = 'cms-mini danger'; deleteBtn.textContent = '✕ Delete';
-        deleteBtn.addEventListener('click', () => confirmDestructiveDealAction(d, 'delete'));
-        actions.appendChild(deleteBtn);
 
         row.appendChild(actions);
       }
@@ -2570,6 +2583,165 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.__portalUser && tries < 40) { setTimeout(() => pollPortalUserForDeals(tries + 1), 250); return; }
     renderDeals();
   })();
+
+  // ---------- Clean-room grants (Phase 4 Plan 02, DD-04/D-02) ---------------
+  // Per-deal clearance editor for the due-diligence area taxonomy. The eight
+  // id/label pairs below MUST be kept in sync by hand with db/accessPolicy.js's
+  // DD_AREAS — that module is the sole source of truth; this is a static,
+  // no-build-step client script with no shared-module import mechanism, so a
+  // reviewer diffing this list against DD_AREAS is the only guard against
+  // drift. Every rendered value (usernames, area labels, server error
+  // strings) is set via textContent/DOM properties only — no markup-
+  // assignment sink anywhere in this section — mirroring the Real Deals
+  // panel's own MNPI discipline above.
+  const DD_AREA_LABELS = [
+    { id: 'legal', label: 'Legal' },
+    { id: 'financial', label: 'Financial' },
+    { id: 'tax', label: 'Tax' },
+    { id: 'hr', label: 'HR' },
+    { id: 'it', label: 'IT' },
+    { id: 'commercial', label: 'Commercial' },
+    { id: 'operations', label: 'Operations' },
+    { id: 'complianceEsg', label: 'Compliance/ESG' },
+  ];
+
+  function clearChildren(el) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+
+  function openGrantsPanel(deal) {
+    const existing = document.getElementById('grants-panel-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'grants-panel-overlay';
+    overlay.className = 'deal-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'deal-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+
+    const title = document.createElement('h3');
+    title.className = 'deal-modal-title';
+    title.textContent = 'Clean-room grants — ' + deal.name;
+    modal.appendChild(title);
+
+    const sub = document.createElement('p');
+    sub.className = 'deal-modal-sub';
+    sub.textContent = 'Grants control which due-diligence areas a member can read inside this deal. Admin and the Integration Lead (hrbp) always see every area regardless of their own grants — an empty grant list here does not lock either of them out.';
+    modal.appendChild(sub);
+
+    const errorEl = document.createElement('p');
+    errorEl.className = 'deal-modal-error';
+    errorEl.style.display = 'none';
+    modal.appendChild(errorEl);
+
+    const rowsWrap = document.createElement('div');
+    rowsWrap.style.cssText = 'display:flex;flex-direction:column;gap:0.75rem;max-height:50vh;overflow-y:auto;';
+    modal.appendChild(rowsWrap);
+
+    const actions = document.createElement('div');
+    actions.className = 'deal-modal-actions';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn btn-secondary';
+    closeBtn.textContent = 'Close';
+    actions.appendChild(closeBtn);
+    modal.appendChild(actions);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    function renderRows(members) {
+      clearChildren(rowsWrap);
+      if (!members.length) {
+        const empty = document.createElement('p');
+        empty.style.cssText = 'text-align:center;color:var(--text-dim);padding:1rem;';
+        empty.textContent = 'This deal has no members yet.';
+        rowsWrap.appendChild(empty);
+        return;
+      }
+      members.forEach((m) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'border:1px solid rgba(0,0,0,0.1);border-radius:8px;padding:0.6rem 0.75rem;display:flex;flex-direction:column;gap:0.4rem;';
+
+        const nameEl = document.createElement('div');
+        nameEl.style.cssText = 'font-weight:700;font-size:0.85rem;';
+        nameEl.textContent = m.username;
+        row.appendChild(nameEl);
+
+        const checksWrap = document.createElement('div');
+        checksWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.5rem;';
+        const checkboxes = [];
+        DD_AREA_LABELS.forEach((area) => {
+          const cbLabel = document.createElement('label');
+          cbLabel.style.cssText = 'display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = (m.ddAreas || []).includes(area.id);
+          cb.dataset.areaId = area.id;
+          checkboxes.push(cb);
+          const span = document.createElement('span');
+          span.textContent = area.label;
+          cbLabel.appendChild(cb);
+          cbLabel.appendChild(span);
+          checksWrap.appendChild(cbLabel);
+        });
+        row.appendChild(checksWrap);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'cms-mini';
+        saveBtn.textContent = 'Save';
+        saveBtn.addEventListener('click', () => {
+          errorEl.style.display = 'none';
+          saveBtn.disabled = true;
+          const ddAreas = checkboxes.filter((cb) => cb.checked).map((cb) => cb.dataset.areaId);
+          fetch('/api/deals/' + encodeURIComponent(deal.id) + '/grants', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: m.username, ddAreas }),
+          }).then((r) => r.json().then((body) => ({ ok: r.ok, body })))
+            .then(({ ok, body }) => {
+              saveBtn.disabled = false;
+              if (!ok) {
+                errorEl.textContent = body.error || 'Failed to update grants.';
+                errorEl.style.display = '';
+                return;
+              }
+              if (window.adminToast) window.adminToast('Grants updated for ' + m.username + '.');
+              loadGrants();
+            })
+            .catch(() => {
+              saveBtn.disabled = false;
+              errorEl.textContent = 'Network error — please try again.';
+              errorEl.style.display = '';
+            });
+        });
+        row.appendChild(saveBtn);
+
+        rowsWrap.appendChild(row);
+      });
+    }
+
+    function loadGrants() {
+      fetch('/api/deals/' + encodeURIComponent(deal.id) + '/grants')
+        .then((r) => r.json())
+        .then((body) => { renderRows(Array.isArray(body.members) ? body.members : []); })
+        .catch(() => {
+          clearChildren(rowsWrap);
+          const err = document.createElement('p');
+          err.style.cssText = 'text-align:center;color:#B91C1C;padding:1rem;';
+          err.textContent = 'Failed to load grants.';
+          rowsWrap.appendChild(err);
+        });
+    }
+    loadGrants();
+  }
 
   // ---------- Audit Log Viewer (Phase 3 Plan 05, D-10) ----------------------
   // Admin-only: the nav tab button itself stays hidden (see admin.html,
