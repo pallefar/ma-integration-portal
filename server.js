@@ -3552,6 +3552,91 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
   res.json({ success: true, task, raid: raidEntry, finding });
 });
 
+// D-15/DD-04: the clearance-scoped diligence rollup — one request answers
+// "where do I stand across every area I'm cleared for, and what's overdue"
+// without the caller (public/js/deal-home.js) assembling it themselves from
+// the list routes above. Deliberately unguarded by an explicit role check,
+// mirroring GET /api/dd/request-items/GET /api/dd/findings above: every
+// number this route returns is already scoped to the CALLER's own clearance
+// via filterByAreaGrant() BEFORE any tally runs, so any deal member — not
+// just admin/hrbp — can safely call it. This is a different shape of read
+// from GET /api/deals/:id/grants (narrowed to admin/hrbp above) because that
+// route returns EVERY member's clearance map for an arbitrary deal id,
+// unfiltered by the caller's own grant; this route only ever reports the
+// caller's own view.
+app.get('/api/dd/summary', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const grantedSet = new Set(accessPolicy.grantedAreas(deal, req.portalUser));
+
+  // T-04-45: filter BEFORE any tally is computed — an uncleared area's rows
+  // never reach the counting loops below, so the aggregate itself can carry
+  // no residue of an area the caller cannot see.
+  const items = accessPolicy.filterByAreaGrant(ddRequestLane(db), deal, req.portalUser);
+  const findings = accessPolicy.filterByAreaGrant(ddFindingsLane(db), deal, req.portalUser);
+
+  const emptyItemCounts = () => ({ total: 0, open: 0, requested: 0, received: 0, reviewed: 0, closed: 0, blocked: 0, overdue: 0 });
+  const emptyFindingCounts = () => ({ total: 0, low: 0, medium: 0, high: 0, critical: 0, open: 0 });
+
+  // D-16/T-04-46: seeded ONLY for areas the caller is granted, in DD_AREAS'
+  // declared order — an uncleared area gets no entry at all (never a zero
+  // row), so its absence carries no signal about whether it exists.
+  const byArea = new Map();
+  accessPolicy.DD_AREAS.forEach((a) => {
+    if (grantedSet.has(a.id)) byArea.set(a.id, { area: a.id, label: a.label, items: emptyItemCounts(), findings: emptyFindingCounts() });
+  });
+
+  items.forEach((item) => {
+    const bucket = byArea.get(item.area);
+    if (!bucket) return; // defensive; filterByAreaGrant() already guarantees this
+    bucket.items.total++;
+    if (bucket.items[item.status] !== undefined) bucket.items[item.status]++;
+    if (item.blocked) bucket.items.blocked++;
+    // D-15: reuses computeOverdue() (defined above in this section) — one
+    // implementation of "overdue", never a second copy that could disagree
+    // with the per-item value the list routes already attach.
+    if (computeOverdue(item)) bucket.items.overdue++;
+  });
+
+  findings.forEach((finding) => {
+    const bucket = byArea.get(finding.area);
+    if (!bucket) return;
+    bucket.findings.total++;
+    if (bucket.findings[finding.severity] !== undefined) bucket.findings[finding.severity]++;
+    if (finding.status === 'open') bucket.findings.open++;
+  });
+
+  const areas = accessPolicy.DD_AREAS.filter((a) => byArea.has(a.id)).map((a) => byArea.get(a.id));
+
+  // Sums ONLY the areas actually returned above (T-04-45) — never the
+  // deal's true totals, so the number a caller sees is the number they are
+  // entitled to.
+  const totals = areas.reduce((acc, a) => {
+    acc.items += a.items.total;
+    acc.overdue += a.items.overdue;
+    acc.findings += a.findings.total;
+    acc.criticalFindings += a.findings.critical;
+    return acc;
+  }, { items: 0, overdue: 0, findings: 0, criticalFindings: 0 });
+
+  // `mine` is derived from the SAME already-filtered `items`/`findings`
+  // arrays above — an uncleared area's own rows can never contribute to the
+  // caller's own "what do I owe" count either.
+  const myUsername = String((req.portalUser && req.portalUser.username) || '').trim();
+  const mine = { openItems: 0, overdueItems: 0, openFindings: 0 };
+  items.forEach((item) => {
+    if (String(item.owner || '').trim() !== myUsername) return;
+    if (item.status !== 'closed') mine.openItems++;
+    if (computeOverdue(item)) mine.overdueItems++;
+  });
+  findings.forEach((finding) => {
+    if (String(finding.owner || '').trim() !== myUsername) return;
+    if (finding.status === 'open') mine.openFindings++;
+  });
+
+  res.json({ areas, totals, mine });
+});
+
 // =====================================================================
 // In-app notifications — computed on demand from live data (no stored
 // notification records to drift out of sync).
