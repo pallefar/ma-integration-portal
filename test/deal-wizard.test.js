@@ -1052,3 +1052,113 @@ test('deal-wizard (z): a setup post carrying step data but no step name is refus
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// G-04-8: re-entering the wizard (by reload, second tab, or a hand-rolled
+// request) must RESUME the caller's own unfinished deal, never mint a
+// second, indistinguishable copy of it.
+// ---------------------------------------------------------------------------
+
+test('deal-wizard (aa): posting the identical basics-and-team payload twice returns the SAME deal and creates nothing the second time', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const headers = { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' };
+    const payload = { name: 'Project Gapcheck', targetCompany: 'Gapcheck Target' };
+
+    const firstRes = await fetch(`${base}/api/deals`, { method: 'POST', headers, body: JSON.stringify(payload) });
+    assert.strictEqual(firstRes.status, 200);
+    const firstBody = await firstRes.json();
+    assert.ok(!firstBody.resumed, 'the FIRST create must not carry a resumed flag — nothing existed yet to resume');
+
+    const dealsDir = process.env.MA_DEALS_DIR;
+    const beforeCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    const beforeFiles = fs.existsSync(dealsDir) ? new Set(fs.readdirSync(dealsDir)) : new Set();
+
+    const secondRes = await fetch(`${base}/api/deals`, { method: 'POST', headers, body: JSON.stringify(payload) });
+    assert.strictEqual(secondRes.status, 200);
+    const secondBody = await secondRes.json();
+    assert.strictEqual(secondBody.deal.id, firstBody.deal.id, 'the second post must return the SAME deal, never a second one');
+    assert.ok(secondBody.resumed, 'the second response must carry a truthy resumed flag the first does not');
+
+    const afterCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    assert.strictEqual(afterCount, beforeCount, 'the registry row count must be unchanged by the second post');
+    const afterFiles = fs.existsSync(dealsDir) ? new Set(fs.readdirSync(dealsDir)) : new Set();
+    assert.deepStrictEqual(afterFiles, beforeFiles, 'the deals-directory file count must be unchanged by the second post');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (ab): a create with a different deal name is still a genuinely new deal', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const headers = { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' };
+
+    const firstRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers, body: JSON.stringify({ name: 'Project Gapcheck Alpha', targetCompany: 'Gapcheck Alpha Target' }),
+    });
+    const { deal: firstDeal } = await firstRes.json();
+
+    const beforeCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+
+    const secondRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers, body: JSON.stringify({ name: 'Project Gapcheck Beta', targetCompany: 'Gapcheck Alpha Target' }),
+    });
+    assert.strictEqual(secondRes.status, 200);
+    const secondBody = await secondRes.json();
+    assert.notStrictEqual(secondBody.deal.id, firstDeal.id, 'a different deal name must never be folded into an unrelated deal — the guard must not be over-broad');
+    assert.ok(!secondBody.resumed, 'a genuinely new deal must not carry a resumed flag');
+
+    const afterCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    assert.strictEqual(afterCount, beforeCount + 1, 'a genuinely different deal name must still create a new registry row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (ac): once every setup step is stamped, an identical payload creates a new deal', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const headers = { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' };
+    const payload = { name: 'Project Gapcheck Finished', targetCompany: 'Gapcheck Finished Target' };
+
+    const firstRes = await fetch(`${base}/api/deals`, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const { deal: firstDeal } = await firstRes.json();
+
+    // Stamp the four remaining steps directly via controlStore, mirroring
+    // the setup route's own merge contract — the dedup key is an UNFINISHED
+    // setup, not the name alone, so a fully-stamped deal must never block a
+    // later, genuinely new create sharing its name.
+    ['assessments', 'scope', 'timeline', 'ddKickoff'].forEach((step) => {
+      const current = controlStore.getDeal(firstDeal.id);
+      controlStore.updateDealSetup(firstDeal.id, {
+        steps: { ...current.setup.steps, [step]: { at: new Date().toISOString(), by: 'karen' } },
+      });
+    });
+
+    const beforeCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+
+    const secondRes = await fetch(`${base}/api/deals`, { method: 'POST', headers, body: JSON.stringify(payload) });
+    assert.strictEqual(secondRes.status, 200);
+    const secondBody = await secondRes.json();
+    assert.notStrictEqual(secondBody.deal.id, firstDeal.id, 'a FINISHED deal must never be resumed by an identical later create');
+    assert.ok(!secondBody.resumed, 'a genuinely new deal (created after the first finished) must not carry a resumed flag');
+
+    const afterCount = controlConn.prepare('SELECT COUNT(*) AS c FROM deals').get().c;
+    assert.strictEqual(afterCount, beforeCount + 1, 'an identical payload after the first deal finished setup must create a new registry row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

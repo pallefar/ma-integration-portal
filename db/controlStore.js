@@ -173,6 +173,52 @@ function createDeal({ name, targetCompany, members, createdBy, dealType, signing
 }
 
 /**
+ * G-04-8: true when at least one of DEAL_SETUP_STEPS' six ids is `null` or
+ * absent in `deal.setup.steps` — mirrors public/js/deal-home.js's own
+ * `done = steps[step.id] != null` check for the setup checklist's
+ * Outstanding/Done rows, so "is this deal still mid-setup" reads the same
+ * everywhere. A deal with no `setup` object at all (a record predating the
+ * wizard) counts as fully outstanding, never as done-by-omission.
+ */
+function hasOutstandingSetupStep(deal) {
+  const steps = (deal && deal.setup && deal.setup.steps) || {};
+  return DEAL_SETUP_STEPS.some((id) => steps[id] == null);
+}
+
+/**
+ * G-04-8: the caller's own duplicate-create guard. Returns the first
+ * non-archived deal from `listDeals()` whose `createdBy` equals `createdBy`,
+ * whose `name` and `targetCompany` match EXACTLY, and whose setup is still
+ * outstanding (hasOutstandingSetupStep() above) — otherwise `null`. Used by
+ * `POST /api/deals` to resume an interrupted wizard instead of minting a
+ * second, indistinguishable copy of the same deal (live UAT test 8).
+ *
+ * Exact string equality is deliberate, not an oversight: the validation
+ * pipeline (validators/deals.js's CreateDealSchema) has already trimmed both
+ * `name` and `targetCompany` before this ever runs, so a genuine duplicate
+ * always matches byte-for-byte. A case or whitespace difference simply FAILS
+ * to match — the safe direction for MNPI data is an extra (harmless) deal,
+ * never a resume into a deal the operator did not intend (T-04-52). Pinning
+ * on `createdBy` for the same reason: this can never return another user's
+ * deal to a caller.
+ *
+ * A FINISHED deal (hasOutstandingSetupStep() false) is deliberately excluded
+ * — the dedup key is an unfinished setup, not the name alone, so an operator
+ * intentionally starting a second real deal that happens to share a name
+ * with a long-closed one is never blocked (see test (ac)).
+ */
+function findUnfinishedDealFor({ createdBy, name, targetCompany }) {
+  if (!createdBy) return null;
+  return listDeals().find((d) => (
+    d.status !== 'archived' &&
+    d.createdBy === createdBy &&
+    d.name === name &&
+    d.targetCompany === targetCompany &&
+    hasOutstandingSetupStep(d)
+  )) || null;
+}
+
+/**
  * WIZ-01/D-05: merge `patch` onto `deal.setup` (a SHALLOW merge into the
  * `setup` sub-object, not a deep merge into `setup.steps` — the caller
  * (server.js's POST /api/deals/:id/setup handler) computes the fully-merged
@@ -348,6 +394,7 @@ module.exports = {
   createDeal, updateDealMembers, archiveDeal, deleteDeal,
   setDealMemberGrants, getDealMemberGrants,
   updateDealSetup, DEAL_SETUP_STEPS,
+  hasOutstandingSetupStep, findUnfinishedDealFor,
   getControlSettings, setControlSettings,
   getSecretSettings, setSecretSettings,
 };

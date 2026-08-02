@@ -709,6 +709,23 @@ app.post('/api/deals/wizard/basics', (req, res) => {
 // every write route in the app, including this one.
 app.post('/api/deals', (req, res) => {
   const { name, targetCompany, members, dealType, signingDate, expectedClose, day1Date, dealSizeM, currency } = req.body;
+  // G-04-8: re-entering the wizard after an interruption must RESUME the
+  // caller's own unfinished deal, never mint a second, indistinguishable
+  // copy of it (live UAT test 8). public/js/deal-wizard.js's resume-on-entry
+  // bootstrap is the primary fix — this lookup is the server-side net it
+  // cannot be bypassed around: a stale cached script, a second browser tab,
+  // or a hand-rolled request all land here too. Nothing is created and no
+  // security event is recorded on a resumed return — that deal's original
+  // `deal-create` event already answers who created it and when, and this
+  // call changed nothing. D-05 create-early is untouched below: a caller
+  // with no matching unfinished deal still gets one created on the very
+  // first successful basics-and-team post.
+  const existingUnfinished = controlStore.findUnfinishedDealFor({
+    createdBy: req.portalUser.username, name, targetCompany,
+  });
+  if (existingUnfinished) {
+    return res.json({ success: true, deal: existingUnfinished, resumed: true });
+  }
   // D-05/WIZ-01: the wizard's optional basics fields (dealType/signingDate/
   // expectedClose/day1Date/dealSizeM/currency) ride the SAME create call as
   // name/targetCompany/members — createDeal() also stamps the `setup`
