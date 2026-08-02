@@ -2738,7 +2738,21 @@ app.get('/api/assessment-status', (req, res) => {
         if (ad !== bd) return ad < bd ? -1 : 1;
         return String(a.id) < String(b.id) ? -1 : 1;
       })
-      .map(i => ({ id: i.id, owner: i.owner || '', dueDate: i.dueDate || '' }));
+      .map(i => {
+        // WR-01: `owner` is the same category of personal data statusInstance()
+        // above already strips (respondentName) for every non-admin caller in
+        // a locked-down posture — visible here only to admin/hrbp or the
+        // assigned owner's own session, not to every deal member. `id` and
+        // `dueDate` stay unconditionally visible: CR-01's ownership check
+        // (above, on the completion route) is what actually gates who can
+        // act on a pending row, so leaking the id alone no longer enables
+        // fabricating a completion.
+        const ownerTrim = String(i.owner || '').trim();
+        const isElevated = !!req.portalUser && ['admin', 'hrbp'].includes(req.portalUser.role);
+        const isOwner = !!req.portalUser && !!ownerTrim && ownerTrim === req.portalUser.username;
+        const showOwner = !stripNames || isElevated || isOwner;
+        return { id: i.id, owner: showOwner ? (i.owner || '') : '', dueDate: i.dueDate || '' };
+      });
     const entry = {
       templateId: t.id, slug: t.slug, subject: t.subject,
       required: !!t.required, gates: t.gates || [],

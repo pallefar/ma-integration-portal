@@ -878,3 +878,41 @@ test('deal-wizard (u): an hrbp (Integration Lead) session may complete a pending
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 04-REVIEW.md WR-01: the pending array's `owner` field is visible only to
+// admin/hrbp or the assigned owner's own session, not to every deal member.
+// ---------------------------------------------------------------------------
+
+test('deal-wizard (v): the pending array\'s owner field is visible to the assigned owner and to hrbp, but hidden from an unrelated deal member (WR-01)', async () => {
+  const deal = createTestDeal('deal_wv', { members: ['karen', 'pmo', 'employee-demo'] });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const empToken = newSession('employee-demo', 'employee'); bindDeal(empToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    await fetch(`${base}/api/assessment-instances/assign`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateId: TPL_TARGET, owner: 'pmo', dueDate: '2026-09-01' }),
+    });
+
+    const hrbpStatus = await (await fetch(`${base}/api/assessment-status`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    assert.strictEqual(hrbpStatus.bySubject['target-org'].pending[0].owner, 'pmo', 'hrbp must see the real owner value');
+
+    const ownerStatus = await (await fetch(`${base}/api/assessment-status`, { headers: { Cookie: cookieHeader(pmoToken) } })).json();
+    assert.strictEqual(ownerStatus.bySubject['target-org'].pending[0].owner, 'pmo', 'the assigned owner must see their own name');
+
+    const empStatus = await (await fetch(`${base}/api/assessment-status`, { headers: { Cookie: cookieHeader(empToken) } })).json();
+    assert.strictEqual(empStatus.bySubject['target-org'].pending[0].owner, '', 'an unrelated non-elevated deal member must not see the assigned owner\'s name');
+    assert.ok(empStatus.bySubject['target-org'].pending[0].id, 'the pending id itself must still be present (CR-01 gates action on it, not this read)');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    sessionsDb.deleteSession(runtimeConn, empToken);
+    server.close();
+  }
+});
