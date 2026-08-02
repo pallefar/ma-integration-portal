@@ -2862,6 +2862,25 @@ app.get('/api/dd/request-items', (req, res) => {
   res.json(visible.map(publicDdItem));
 });
 
+// DD-04: "the denial itself is audited" — the ONLY place a DD access
+// refusal is turned into an HTTP response. Records ONE `dd-access-denied`
+// security event (the SAME call shape server.js's deal-create/deal-members
+// call sites use), then sends the uniform 403 body. `areaId` is `null` for
+// an unknown item id — the event's `subject` is null in that case too, so
+// the audit row (never the HTTP response) is the only place "unknown id"
+// and "uncleared area" are distinguishable. Called from server.js only,
+// never from db/accessPolicy.js — that module stays free of any audit
+// dependency, mirroring why db/controlStore.js holds no reference to
+// audit.db (AUD-02's isolation precedent).
+function refuseDdArea(req, res, areaId) {
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'dd-access-denied', dealId: req.dealContext.dealId, subject: areaId,
+    before: null, after: null, request: requestMeta(req),
+  });
+  const err = new accessPolicy.AreaAccessError();
+  res.status(err.status).json({ error: err.message });
+}
+
 // T-04-02/T-04-03: the shared by-id guard every DD by-id route runs BEFORE
 // touching the item. `areaId` is the item's OWN stored area (or `null` for a
 // missing item) — never a caller-supplied one. A missing item and an
@@ -2869,16 +2888,16 @@ app.get('/api/dd/request-items', (req, res) => {
 // never a granted area for any role, including admin/hrbp), which is what
 // gives GET/DELETE /api/dd/request-items/:id the uniform-403 anti-
 // enumeration shape by construction rather than a second, forgettable
-// branch (DD-04). Responds and returns `true` when refused; the caller must
-// `return` immediately when this returns `true`. Task 3 wires the audited
-// `dd-access-denied` security event into this same choke point.
+// branch (DD-04). Responds (via refuseDdArea, recording the denial) and
+// returns `true` when refused; the caller must `return` immediately when
+// this returns `true`.
 function ddAreaRefused(req, res, deal, areaId) {
   try {
     accessPolicy.assertAreaGrant(deal, req.portalUser, areaId);
     return false;
   } catch (e) {
     if (!(e instanceof accessPolicy.AreaAccessError)) throw e;
-    res.status(e.status).json({ error: e.message });
+    refuseDdArea(req, res, areaId);
     return true;
   }
 }
