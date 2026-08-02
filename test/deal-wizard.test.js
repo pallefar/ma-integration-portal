@@ -949,3 +949,106 @@ test('deal-wizard (w): completing a pending instance by id stamps respondentName
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// G-04-10: the setup route must learn completion without stamping a step.
+// ---------------------------------------------------------------------------
+
+test('deal-wizard (x): a completion-only setup post marks the deal complete without stamping a skipped step', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Osprey', targetCompany: 'Osprey Target' }),
+    });
+    const { deal } = await createRes.json();
+
+    const stampRes = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'assessments' }),
+    });
+    assert.strictEqual(stampRes.status, 200);
+
+    const finishRes = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ complete: true }),
+    });
+    assert.strictEqual(finishRes.status, 200);
+    const { deal: finished } = await finishRes.json();
+    assert.strictEqual(finished.setup.complete, true, 'a completion-only post must mark the deal complete');
+    assert.ok(finished.setup.steps.assessments, 'the assessments step stamped earlier must survive untouched');
+    ['scope', 'timeline', 'ddKickoff'].forEach((skippedStep) => {
+      assert.strictEqual(finished.setup.steps[skippedStep], null, `${skippedStep} was never stamped and must remain null, not fabricated by Finish`);
+    });
+
+    // Re-read from disk, not just the response body — the completion-only
+    // branch must never fabricate a stamp for a step the operator skipped.
+    const onDisk = controlStore.getDeal(deal.id);
+    ['scope', 'timeline', 'ddKickoff'].forEach((skippedStep) => {
+      assert.strictEqual(onDisk.setup.steps[skippedStep], null, `${skippedStep} must still be null on disk, not merely absent from the response body`);
+    });
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (y): a setup post naming neither a step nor completion is refused and changes nothing', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Falcon', targetCompany: 'Falcon Target' }),
+    });
+    const { deal } = await createRes.json();
+
+    const before = controlStore.getDeal(deal.id);
+    const snapshot = JSON.parse(JSON.stringify(before.setup));
+
+    const res = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.ok(typeof body.error === 'string' && body.error.includes('step'), 'the 400 error must mention the step field path');
+
+    const after = controlStore.getDeal(deal.id);
+    assert.deepStrictEqual(after.setup, snapshot, 'a refused post must change nothing on the deal record');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (z): a setup post carrying step data but no step name is refused', async () => {
+  const karenToken = newSession('karen', 'hrbp');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/deals`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Project Condor', targetCompany: 'Condor Target' }),
+    });
+    const { deal } = await createRes.json();
+
+    const res = await fetch(`${base}/api/deals/${deal.id}/setup`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ complete: true, data: { vdrRef: 'x' } }),
+    });
+    assert.strictEqual(res.status, 400, 'there is nowhere to store step data with no step name — accepting it would silently discard it');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

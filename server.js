@@ -814,6 +814,30 @@ app.post('/api/deals/:id/setup', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Deal not found.' });
   const { step, data, complete } = req.body;
   const beforeSteps = (existing.setup && existing.setup.steps) || {};
+
+  // G-04-10: a completion-only post (no `step` — validators/wizard.js's
+  // refine is what guarantees `complete === true` and no `data` reach this
+  // branch) is an operator saying "this deal is set up enough for now" — it
+  // must NEVER fabricate a stamp for a step that was never actually done.
+  // The existing `steps` object therefore passes through UNCHANGED: no step
+  // is created, overwritten, or re-stamped. Before this fix, the wizard's
+  // Finish control posted `{ step: 'ddKickoff', complete: true }`, which
+  // stamped ddKickoff even when the operator had skipped it — the deal
+  // home's setup checklist (and its "resume setup" nudge) derives its
+  // per-step status straight from this object, so a fabricated stamp there
+  // silently hid outstanding work from the Integration Lead (live UAT
+  // test 10).
+  if (step === undefined) {
+    const beforeComplete = Boolean(existing.setup && existing.setup.complete);
+    const newComplete = complete === true;
+    const updated = controlStore.updateDealSetup(dealId, { steps: beforeSteps, complete: newComplete });
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'deal-setup-update', dealId, subject: 'complete',
+      before: beforeComplete, after: newComplete, request: requestMeta(req),
+    });
+    return res.json({ success: true, deal: updated });
+  }
+
   const beforeStepValue = beforeSteps[step] != null ? beforeSteps[step] : null;
   const stampedValue = { at: new Date().toISOString(), by: req.portalUser.username, ...(data !== undefined ? { data } : {}) };
   const newSteps = { ...beforeSteps, [step]: stampedValue };

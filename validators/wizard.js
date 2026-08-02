@@ -55,11 +55,29 @@ const DealSetupDataSchema = z.record(
   z.union([z.string().max(2000), z.number(), z.boolean(), z.null(), z.array(z.string().max(60)).max(50)])
 ).optional();
 
+// G-04-10: `step` is now OPTIONAL — a completion-only post (no step name)
+// is a distinct, legitimate intent from "stamp this one step", and the two
+// must never be conflated at the source of truth (server.js's handler is
+// what previously fused them). The `.refine()` below is the ONE place that
+// enforces "name a step, OR mark completion with no step data" — a post
+// naming neither would silently do nothing useful server-side, and a post
+// carrying `data` with no `step` would have nowhere to store that data.
+// zod 4.4.3 (installed/pinned): `.refine()` attaches as a check on the same
+// object schema instance, so `.shape` still resolves for any caller that
+// inspects it. An explicit `path: ['step']` is what lets
+// validators/index.js's formatIssues() render this as a field-path issue
+// the wizard's existing error renderer can place beside the step control.
 const DealSetupSchema = z.object({
-  step: z.enum(DEAL_SETUP_STEPS),
+  step: z.enum(DEAL_SETUP_STEPS).optional(),
   data: DealSetupDataSchema,
   complete: z.boolean().optional(),
-});
+}).refine(
+  (body) => body.step !== undefined || (body.complete === true && body.data === undefined),
+  {
+    message: 'Name the setup step to record, or mark the setup complete with no step data.',
+    path: ['step'],
+  }
+);
 registerSchema('POST', '/api/deals/:id/setup', DealSetupSchema);
 
 module.exports = { WizardBasicsSchema, DealSetupSchema, DEAL_SETUP_STEPS, DEAL_TYPES };
