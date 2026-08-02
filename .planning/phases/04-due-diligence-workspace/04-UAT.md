@@ -1,5 +1,6 @@
 ---
 status: complete
+gaps_resolved: 2
 phase: 04-due-diligence-workspace
 source:
   - 04-01-SUMMARY.md
@@ -11,7 +12,7 @@ source:
   - 04-07-SUMMARY.md
   - 04-08-SUMMARY.md
 started: 2026-08-02T16:40:00Z
-updated: 2026-08-02T17:20:00Z
+updated: 2026-08-02T19:00:00Z
 coverage_mode: coverage
 auto_covered: 45
 human_checkpoints: 10
@@ -87,7 +88,7 @@ evidence: Assigned pmo 3 open items (2 with past due dates). `#dd-nudge-badge` r
 
 total: 11
 passed: 9
-issues: 2
+issues: 2 (both resolved 2026-08-02 by 04-09 / 04-10, re-verified live)
 pending: 0
 skipped: 0
 
@@ -107,18 +108,24 @@ skipped: 0
 
 - gap_id: G-04-8
   truth: "The deal is created once basics and team are complete (D-05); an interruption after that point never loses the deal"
-  status: failed
+  status: resolved
+  resolved_by: 04-10-PLAN.md
+  resolved_at: 2026-08-02
   reason: "User reported: Re-entering the wizard after an interruption creates a duplicate deal and silently re-binds the session to the new one, orphaning the original."
   severity: major
   test: 8
   artifacts: []
   missing: []
+  resolution_evidence: "Live browser walk on :3405 (orchestrator-driven, post-fix). Created 'Project Atlas' through steps 1-2, then RELOADED mid-wizard: the wizard resumed at Step 3 of 7 (was Step 1 pre-fix) with exactly ONE deal and visible copy 'Resuming setup for Project Atlas (Orion Components AB) — completed steps are skipped.' The second duplicate path the planner found (Back from step 3, then Next, no reload) also produced NO extra deal. The 'Start a different deal instead' escape hatch returned a clean Step 1 with cleared fields and correctly created a genuinely distinct second deal ('Project Vega'), proving a legitimately-intended second deal is not blocked. Dedup key is createdBy-pinned with exact string equality, so its failure mode is an extra deal, never a resume into another deal."
 
 - gap_id: G-04-10
   truth: "Steps 4-6 can be skipped with a visible nudge and still end on a usable deal"
-  status: failed
+  status: resolved
+  resolved_by: 04-09-PLAN.md
+  resolved_at: 2026-08-02
   reason: "User reported: A skipped step 6 is recorded as DONE, so the setup checklist under-reports outstanding work."
   severity: major
   test: 10
   artifacts: []
   missing: []
+  resolution_evidence: "Verified twice by the orchestrator. (1) Server-level, against a running server: posting the patched Finish payload { complete: true } left the setup.steps object BYTE-IDENTICAL — scope/timeline/ddKickoff all still null, prior steps' timestamps unchanged — while setup.complete flipped true; an explicit { step: 'ddKickoff' } still stamps, so the normal path is intact. (2) Live browser walk end-to-end: skipping steps 4, 5 and 6 then clicking Finish produced THREE OUTSTANDING rows on the deal home (Integration Scope, Timeline Markers, AND Data Room & DD Kickoff — the last of which falsely read DONE pre-fix), with the 'Setup incomplete — resume setup' nudge intact."
