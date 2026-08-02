@@ -158,7 +158,13 @@
     'survey.html': ['admin', 'pmo', 'hrbp'],
     'assessments.html': ['admin', 'pmo', 'hrbp'],
     'execution.html': ['admin', 'pmo', 'hrbp'],
-    'playbook.html': ['admin', 'pmo', 'hrbp', 'supporting']
+    'playbook.html': ['admin', 'pmo', 'hrbp', 'supporting'],
+    // WIZ-01 (Phase 4 Plan 07): the new-deal setup wizard supersedes the
+    // Phase-3 minimal create-deal modal (D-06) — same admin+hrbp (Integration
+    // Lead) audience D-02 already gives deal creation. A client-side
+    // convenience gate only — every write route the wizard calls is
+    // independently role-checked server-side regardless of this map.
+    'deal-wizard.html': ['admin', 'hrbp']
   };
 
   let isAllowed = true;
@@ -1253,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('deal-switcher-js')) {
       const dsScript = document.createElement('script');
       dsScript.id = 'deal-switcher-js';
-      dsScript.src = '/js/deal-switcher.js?v=1784600000';
+      dsScript.src = '/js/deal-switcher.js?v=1784700001';
       document.body.appendChild(dsScript);
     }
 

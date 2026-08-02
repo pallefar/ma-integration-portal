@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE Connectivity - New Deal Setup Wizard</title>
+  <meta name="description" content="Guided seven-step setup for a new real M&A deal — basics, team and access, readiness assessments, integration scope, timeline, data room and DD kickoff.">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/css/style.css?v=1784600001">
+  <script src="/js/transitions.js?v=1784700001"></script>
+  <style>
+    .wiz-wrap{ max-width:900px; margin:0 auto; }
+    .wiz-field-error{ display:none; color:#C0392B; font-size:0.75rem; margin-top:0.25rem; }
+    .wizard-step-error{ display:none; background:rgba(192,57,43,0.08); border:1px solid rgba(192,57,43,0.3); color:#C0392B; border-radius:8px; padding:0.6rem 0.9rem; font-size:0.82rem; margin-bottom:1rem; }
+    .wiz-skip-note{ font-size:0.78rem; color:var(--text-dim); font-style:italic; margin-bottom:1rem; }
+    .wiz-codename-note{ font-size:0.78rem; color:var(--te-orange); background:var(--te-orange-light); border-radius:8px; padding:0.5rem 0.75rem; margin-bottom:1rem; }
+    .wiz-need-to-know{ font-size:0.82rem; color:var(--text-secondary); background:rgba(36,76,90,0.05); border:1px solid rgba(36,76,90,0.15); border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.25rem; line-height:1.5; }
+    .wiz-assess-row{ display:flex; flex-wrap:wrap; align-items:flex-end; gap:0.75rem; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:0.75rem 1rem; margin-bottom:0.75rem; }
+    .wiz-assess-row .wiz-assess-title{ flex:1 1 220px; font-weight:700; color:var(--te-dark-teal); font-size:0.88rem; }
+    .wiz-assess-row .wiz-assess-field{ display:flex; flex-direction:column; gap:0.25rem; }
+    .wiz-row-error{ display:none; color:#C0392B; font-size:0.72rem; width:100%; }
+    .wiz-review-block{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:0.9rem 1.1rem; margin-bottom:0.75rem; }
+    .wiz-review-block h4{ margin:0 0 0.4rem; color:var(--te-dark-teal); font-size:0.85rem; text-transform:uppercase; letter-spacing:0.04em; }
+    .wiz-review-block p{ margin:0.15rem 0; font-size:0.84rem; color:var(--text-secondary); }
+    .wiz-checklist-item{ display:flex; justify-content:space-between; align-items:center; gap:0.75rem; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem; margin-bottom:0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="main-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-container">
+          <img class="brand-logo-svg" src="/te-logo.png" alt="TE Connectivity" style="height:36px;width:auto;display:block;">
+        </div>
+        <div class="brand-divider"></div>
+        <div class="brand-title"><span class="portal-badge">New Deal Setup</span></div>
+      </div>
+      <nav class="navigation-bar">
+        <a href="/dashboard.html" class="nav-link">Integration Leader Portal</a>
+        <a href="/admin.html" class="nav-link">Admin Console</a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="wiz-wrap">
+        <div id="deal-wizard" class="card card-glass" style="border-top:5px solid var(--te-orange); padding:2.25rem;">
+
+          <div class="wizard-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1.5px solid rgba(36,76,90,0.1); padding-bottom:1rem; margin-bottom:1.5rem;">
+            <div>
+              <span style="font-size:0.72rem; color:var(--te-orange); font-weight:700; text-transform:uppercase; letter-spacing:0.05em; background:var(--te-orange-light); padding:0.25rem 0.6rem; border-radius:4px;">New Deal Setup</span>
+              <h2 style="margin:0.5rem 0 0; color:var(--te-dark-teal); font-size:1.6rem; font-family:var(--font-family-display);">Guided New Deal Setup</h2>
+            </div>
+            <div class="wizard-step-badge" style="background:var(--te-dark-teal); color:white; padding:0.35rem 0.75rem; border-radius:20px; font-size:0.8rem; font-weight:700;">
+              Step <span id="current-step-num">1</span> of 7
+            </div>
+          </div>
+
+          <div class="wizard-progress-bar-container" style="height:6px; background-color:var(--border-color); border-radius:3px; margin-bottom:2rem; overflow:hidden; display:flex; gap:4px;">
+            <div id="wizard-step1-fill" style="height:100%; flex:1; background:var(--te-orange); transition:background-color 0.3s;"></div>
+            <div id="wizard-step2-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
+            <div id="wizard-step3-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
+            <div id="wizard-step4-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
+            <div id="wizard-step5-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
+            <div id="wizard-step6-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
+            <div id="wizard-step7-fill" style="height:100%; flex:1; background:var(--border-color); transition:background-color 0.3s;"></div>
+          </div>
+
+          <!-- Step 1: Basics -->
+          <div class="wizard-step" id="wizard-step-1" style="display:block;">
+            <h3 style="margin-top:0; color:var(--te-dark-teal); margin-bottom:0.5rem;">Step 1: Deal Basics</h3>
+            <p style="color:var(--text-secondary); font-size:0.88rem; margin-bottom:1rem;">The core facts about the new deal. Every field below is validated by the server — there is no separate client-side rule set.</p>
+            <div class="wiz-codename-note">Before announcement, prefer a project codename over the target's real name for the deal name below — this is guidance, not an enforced rule.</div>
+            <form id="wizard-form-1" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="wiz-name">Deal name</label>
+                <input type="text" class="form-control" id="wiz-name" data-field="name" maxlength="200" placeholder="e.g. Project Falcon" required>
+                <span class="wiz-field-error" data-field="name"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wiz-target-company">Target company</label>
+                <input type="text" class="form-control" id="wiz-target-company" data-field="targetCompany" maxlength="200" placeholder="e.g. NextGen Sensors Ltd." required>
+                <span class="wiz-field-error" data-field="targetCompany"></span>
+              </div>
+              <div class="form-group" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                <div>
+                  <label class="form-label" for="wiz-deal-type">Deal type</label>
+                  <select class="form-control form-select" id="wiz-deal-type" data-field="dealType">
+                    <option value="">Not specified</option>
+                    <option value="acquisition">Acquisition</option>
+                    <option value="jv">Joint venture</option>
+                    <option value="merger">Merger</option>
+                  </select>
+                  <span class="wiz-field-error" data-field="dealType"></span>
+                </div>
+                <div>
+                  <label class="form-label" for="wiz-currency">Currency</label>
+                  <input type="text" class="form-control" id="wiz-currency" data-field="currency" maxlength="10" placeholder="e.g. EUR">
+                  <span class="wiz-field-error" data-field="currency"></span>
+                </div>
+              </div>
+              <div class="form-group" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
+                <div>
+                  <label class="form-label" for="wiz-signing-date">Signing date</label>
+                  <input type="date" class="form-control" id="wiz-signing-date" data-field="signingDate">
+                  <span class="wiz-field-error" data-field="signingDate"></span>
+                </div>
+                <div>
+                  <label class="form-label" for="wiz-expected-close">Expected close</label>
+                  <input type="date" class="form-control" id="wiz-expected-close" data-field="expectedClose">
+                  <span class="wiz-field-error" data-field="expectedClose"></span>
+                </div>
+                <div>
+                  <label class="form-label" for="wiz-day1-date">Day-1 date</label>
+                  <input type="date" class="form-control" id="wiz-day1-date" data-field="day1Date">
+                  <span class="wiz-field-error" data-field="day1Date"></span>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wiz-deal-size">Deal size ($M)</label>
+                <input type="number" class="form-control" id="wiz-deal-size" data-field="dealSizeM" min="0" step="0.1" style="max-width:200px;">
+                <span class="wiz-field-error" data-field="dealSizeM"></span>
+              </div>
+              <div class="wizard-step-error" id="wizard-step-1-error"></div>
+              <div style="display:flex; justify-content:flex-end;">
+                <button type="submit" class="btn btn-primary" id="wiz-next-1">Next: Team &amp; access &#10132;</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Step 2: Team and access -->
+          <div class="wizard-step" id="wizard-step-2" style="display:none;">
+            <h3 style="margin-top:0; color:var(--te-dark-teal); margin-bottom:0.5rem;">Step 2: Team &amp; Access</h3>
+            <p style="color:var(--text-secondary); font-size:0.88rem; margin-bottom:1rem;">The deal is created once this step succeeds — an interruption after this point can never lose it.</p>
+            <div class="wiz-need-to-know">Only the members listed below will be able to see this deal exists at all. Per-area clean-room clearance (which functional area each member can see inside due diligence) is granted separately, afterward, from the admin console — adding someone here does not automatically clear them for every area.</div>
+            <form id="wizard-form-2" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="wiz-members">Members (comma-separated usernames)</label>
+                <input type="text" class="form-control" id="wiz-members" data-field="members" placeholder="karen, pmo">
+                <span class="wiz-field-error" data-field="members"></span>
+              </div>
+              <div class="wizard-step-error" id="wizard-step-2-error"></div>
+              <div style="display:flex; justify-content:space-between;">
+                <button type="button" class="btn btn-secondary" id="wiz-back-2">&#8592; Back</button>
+                <button type="submit" class="btn btn-primary" id="wiz-next-2">Next: Readiness assessments &#10132;</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Step 3: Readiness assessments -->
+          <div class="wizard-step" id="wizard-step-3" style="display:none;">
+            <h3 style="margin-top:0; color:var(--te-dark-teal); margin-bottom:0.5rem;">Step 3: Readiness Assessments</h3>
+            <p style="color:var(--text-secondary); font-size:0.88rem; margin-bottom:1rem;">Assign an owner and a due date to each of the deal's three readiness assessments. This kicks them off — it does not require them to be answered before the deal is usable.</p>
+            <form id="wizard-form-3" novalidate>
+              <div id="wiz-assessments-list"></div>
+              <div class="wizard-step-error" id="wizard-step-3-error"></div>
+              <div style="display:flex; justify-content:space-between;">
+                <button type="button" class="btn btn-secondary" id="wiz-back-3">&#8592; Back</button>
+                <button type="submit" class="btn btn-primary" id="wiz-next-3">Next: Integration scope &#10132;</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Step 4: Integration scope -->
+          <div class="wizard-step" id="wizard-step-4" style="display:none;">
+            <h3 style="margin-top:0; color:var(--te-dark-teal); margin-bottom:0.5rem;">Step 4: Integration Scope</h3>
+            <p class="wiz-skip-note">Optional — can be skipped and set up later from the Execution Hub.</p>
+            <form id="wizard-form-4" novalidate>
+              <div class="form-group">
+                <label class="form-label">Workstreams in scope</label>
+                <div id="wiz-workstreams" style="display:flex; flex-wrap:wrap; gap:0.6rem 1.25rem;"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wiz-depth">Integration depth</label>
+                <select class="form-control form-select" id="wiz-depth" style="max-width:280px;">
+                  <option value="">Not specified</option>
+                  <option value="full">Full absorption</option>
+                  <option value="partial">Partial integration</option>
+                  <option value="standalone">Standalone operation</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Checklist templates</label>
+                <div id="wiz-checklist-templates"></div>
+              </div>
+              <div class="wizard-step-error" id="wizard-step-4-error"></div>
+              <div style="display:flex; justify-content:space-between;">
+                <button type="button" class="btn btn-secondary" id="wiz-skip-4">Skip &#10132;</button>
+                <button type="submit" class="btn btn-primary" id="wiz-next-4">Next: Timeline &#10132;</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Step 5: Timeline markers -->
+          <div class="wizard-step" id="wizard-step-5" style="display:none;">
+            <h3 style="margin-top:0; color:var(--te-dark-teal); margin-bottom:0.5rem;">Step 5: Timeline Markers</h3>
+            <p class="wiz-skip-note">Optional — can be skipped and set up later.</p>
+            <form id="wizard-form-5" novalidate>
+              <div class="form-group" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                <div>
+                  <label class="form-label" for="wiz-day1">Day-1</label>
+                  <input type="date" class="form-control" id="wiz-day1">
+                </div>
+                <div>
+                  <label class="form-label" for="wiz-day30">Day-30</label>
+                  <input type="date" class="form-control" id="wiz-day30">
+                </div>
+                <div>
+                  <label class="form-label" for="wiz-day60">Day-60</label>
+                  <input type="date" class="form-control" id="wiz-day60">
+                </div>
+                <div>
+                  <label class="form-label" for="wiz-day100">Day-100</label>
+                  <input type="date" class="form-control" id="wiz-day100">
+                </div>
+              </div>
+              <div class="wizard-step-error" id="wizard-step-5-error"></div>
+              <div style="display:flex; justify-content:space-between;">
+                <button type="button" class="btn btn-secondary" id="wiz-skip-5">Skip &#10132;</button>
+                <button type="submit" class="btn btn-primary" id="wiz-next-5">Next: Data room &amp; DD kickoff &#10132;</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Step 6: Data room and DD kickoff -->
+          <div class="wizard-step" id="wizard-step-6" style="display:none;">
+            <h3 style="margin-top:0; color:var(--te-dark-teal); margin-bottom:0.5rem;">Step 6: Data Room &amp; DD Kickoff</h3>
+            <p class="wiz-skip-note">Optional — can be skipped and set up later from the Due Diligence workspace. Documents are never stored here; only a reference into TE's own virtual data room.</p>
+            <form id="wizard-form-6" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="wiz-vdr-ref">Data room reference (optional)</label>
+                <input type="text" class="form-control" id="wiz-vdr-ref" maxlength="300" placeholder="e.g. TE VDR — Project Falcon — Folder 1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Standard DD request checklist</label>
+                <div id="wiz-dd-templates"></div>
+              </div>
+              <div class="wizard-step-error" id="wizard-step-6-error"></div>
+              <div style="display:flex; justify-content:space-between;">
+                <button type="button" class="btn btn-secondary" id="wiz-skip-6">Skip &#10132;</button>
+                <button type="submit" class="btn btn-primary" id="wiz-next-6">Next: Review &#10132;</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Step 7: Review -->
+          <div class="wizard-step" id="wizard-step-7" style="display:none;">
+            <h3 style="margin-top:0; color:var(--te-dark-teal); margin-bottom:0.5rem;">Step 7: Review</h3>
+            <p style="color:var(--text-secondary); font-size:0.88rem; margin-bottom:1rem;">Confirm what this wizard has set up before finishing.</p>
+            <div id="wiz-review"></div>
+            <div class="wizard-step-error" id="wizard-step-7-error"></div>
+            <div style="display:flex; justify-content:space-between;">
+              <button type="button" class="btn btn-secondary" id="wiz-back-7">&#8592; Back</button>
+              <button type="button" class="btn btn-primary" id="wiz-finish">Finish &amp; go to dashboard &#10132;</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/deal-wizard.js?v=1784700001"></script>
+</body>
+</html>
