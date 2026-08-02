@@ -929,6 +929,7 @@ app.post('/api/rag/upload', async (req, res) => {
     console.log(`AI Insight review complete for "${fileName}". Dimension: ${review.dimension}. Chunks count: ${review.suggestedRags ? review.suggestedRags.length : 0}`);
 
     // Persist finding blocks to db.json
+    const db = readDb();
     db.ragUploads = db.ragUploads || [];
     const newUpload = {
       id: newId('upload'),
