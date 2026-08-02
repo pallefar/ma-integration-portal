@@ -217,3 +217,107 @@ test('dd-workspace (e): two concurrent creates against the same deal both persis
     server.close();
   }
 });
+
+test('dd-workspace (f): overdue is computed on read — past-due & not-closed is true, the same item closed is false, no due date is false', async () => {
+  const deal = freshDeal('deal_ddwkf');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', text: 'Overdue candidate', dueDate: '2000-01-01', status: 'requested' }),
+    });
+    const { item } = await createRes.json();
+    assert.strictEqual(item.overdue, true, 'a past-due, non-closed item must report overdue: true');
+
+    const closeRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, status: 'closed' }),
+    });
+    const closed = await closeRes.json();
+    assert.strictEqual(closed.item.overdue, false, 'a closed item must never report overdue: true regardless of due date');
+
+    const noDueRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', text: 'No due date item' }),
+    });
+    const noDue = await noDueRes.json();
+    assert.strictEqual(noDue.item.overdue, false, 'an item with no due date must never report overdue: true');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-workspace (g): a member cleared for financial gets a byte-identical uniform 403 for an unknown item id and for a legal item they are not cleared for', async () => {
+  const deal = freshDeal('deal_ddwkg', { memberGrants: { pmo: { ddAreas: ['financial'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', text: 'A legal item pmo cannot reach by id' }),
+    });
+    const { item } = await createRes.json();
+
+    const unclearedRes = await fetch(`${base}/api/dd/request-items/${item.id}`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const unclearedBody = await unclearedRes.json();
+
+    const unknownRes = await fetch(`${base}/api/dd/request-items/ddreq_totally_unknown_id`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const unknownBody = await unknownRes.json();
+
+    assert.strictEqual(unclearedRes.status, 403, 'an uncleared-area item must 403');
+    assert.strictEqual(unknownRes.status, 403, 'an unknown item id must ALSO 403 (no 404 branch on DD by-id routes)');
+    assert.deepStrictEqual(unclearedBody, unknownBody, 'an unknown id and an uncleared-area id must return byte-identical response bodies (DD-04 anti-enumeration)');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('dd-workspace (h): a member cleared for legal is refused moving their own item into tax without clearance for tax; the item stays in legal', async () => {
+  const deal = freshDeal('deal_ddwkh', { memberGrants: { pmo: { ddAreas: ['legal'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'legal', text: 'pmo-owned legal item' }),
+    });
+    const { item } = await createRes.json();
+
+    const moveRes = await fetch(`${base}/api/dd/request-items`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, area: 'tax' }),
+    });
+    assert.strictEqual(moveRes.status, 403, 'moving an item into an uncleared area must be refused');
+
+    const stillRes = await fetch(`${base}/api/dd/request-items/${item.id}`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(stillRes.status, 200);
+    const still = await stillRes.json();
+    assert.strictEqual(still.area, 'legal', 'a refused move must leave the item in its original area, unmutated');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});

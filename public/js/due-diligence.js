@@ -2,6 +2,8 @@
  * Due Diligence workspace (DD-01/DD-04) — renders exactly the functional
  * areas the server returned for the signed-in caller (GET /api/dd/areas),
  * then each returned area's own request items (GET /api/dd/request-items).
+ * Every item's status/owner/due-date/blocked flag is editable inline,
+ * PATCHing back through POST /api/dd/request-items with the item's id.
  *
  * T-04-06: every user-controlled string (item text, owner, area label) is
  * written with textContent, never assigned as markup — DD content is MNPI
@@ -11,10 +13,14 @@
  * placeholders from — an uncleared area must never be visible here, not even
  * as a greyed-out or locked row. It renders only the areas GET /api/dd/areas
  * actually returned.
+ *
+ * D-15: `overdue` is a value the SERVER attaches to every item response —
+ * this page never recomputes it client-side, only reads item.overdue.
  */
 (function () {
   'use strict';
 
+  var STATUSES = ['open', 'requested', 'received', 'reviewed', 'closed'];
   var STATUS_LABELS = { open: 'Open', requested: 'Requested', received: 'Received', reviewed: 'Reviewed', closed: 'Closed' };
 
   var state = { areas: [], itemsByArea: {} };
@@ -38,19 +44,78 @@
     });
   }
 
+  function refresh() { return load().then(render); }
+
+  function updateItem(id, patch) {
+    var body = Object.assign({ id: id }, patch);
+    return fetch('/api/dd/request-items', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); }).then(refresh);
+  }
+
   function renderItem(item) {
     var row = el('div', { className: 'dd-item' + (item.overdue ? ' dd-item--overdue' : '') });
     var main = el('div', { className: 'dd-item-main' });
-    var text = el('div', { className: 'dd-item-text', text: item.text });
-    var meta = el('div', { className: 'dd-item-meta' });
-    meta.appendChild(el('span', { text: STATUS_LABELS[item.status] || item.status }));
-    if (item.owner) meta.appendChild(el('span', { text: 'Owner: ' + item.owner }));
-    if (item.dueDate) meta.appendChild(el('span', { text: 'Due: ' + item.dueDate }));
-    if (item.blocked) meta.appendChild(el('span', { text: 'Blocked' }));
-    main.appendChild(text);
-    main.appendChild(meta);
+    main.appendChild(el('div', { className: 'dd-item-text', text: item.text }));
+
+    var controls = el('div', { className: 'dd-item-meta' });
+
+    var statusSel = document.createElement('select');
+    STATUSES.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = STATUS_LABELS[s] || s;
+      if (item.status === s) opt.selected = true;
+      statusSel.appendChild(opt);
+    });
+    statusSel.addEventListener('change', function () { updateItem(item.id, { status: statusSel.value }); });
+    controls.appendChild(statusSel);
+
+    var dueInput = document.createElement('input');
+    dueInput.type = 'date';
+    dueInput.value = item.dueDate || '';
+    dueInput.addEventListener('change', function () { updateItem(item.id, { dueDate: dueInput.value }); });
+    controls.appendChild(dueInput);
+
+    var ownerInput = document.createElement('input');
+    ownerInput.type = 'text';
+    ownerInput.placeholder = 'Owner';
+    ownerInput.value = item.owner || '';
+    ownerInput.addEventListener('change', function () { updateItem(item.id, { owner: ownerInput.value }); });
+    controls.appendChild(ownerInput);
+
+    var blockedLabel = el('label');
+    var blockedCheckbox = document.createElement('input');
+    blockedCheckbox.type = 'checkbox';
+    blockedCheckbox.checked = !!item.blocked;
+    blockedCheckbox.addEventListener('change', function () { updateItem(item.id, { blocked: blockedCheckbox.checked }); });
+    blockedLabel.appendChild(blockedCheckbox);
+    blockedLabel.appendChild(document.createTextNode(' Blocked'));
+    controls.appendChild(blockedLabel);
+
+    main.appendChild(controls);
     row.appendChild(main);
     return row;
+  }
+
+  function renderAddForm(area) {
+    var form = el('div', { className: 'dd-add' });
+    var textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.placeholder = 'Request item text…';
+    form.appendChild(textInput);
+    var addBtn = el('button', { className: 'btn btn-primary', text: 'Add' });
+    addBtn.type = 'button';
+    addBtn.addEventListener('click', function () {
+      var text = textInput.value.trim();
+      if (!text) return;
+      fetch('/api/dd/request-items', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area: area.id, text: text })
+      }).then(function () { textInput.value = ''; return refresh(); });
+    });
+    form.appendChild(addBtn);
+    return form;
   }
 
   function render() {
@@ -68,6 +133,7 @@
       } else {
         items.forEach(function (item) { section.appendChild(renderItem(item)); });
       }
+      section.appendChild(renderAddForm(area));
       container.appendChild(section);
     });
   }

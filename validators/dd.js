@@ -24,19 +24,29 @@ const DUE_DATE_MAX = 10; // 'YYYY-MM-DD'
 // D-14: the five-value request-item lifecycle.
 const DD_STATUSES = ['open', 'requested', 'received', 'reviewed', 'closed'];
 
-/** POST /api/dd/request-items — Task 1's create shape (`text` and `area`
- * both required). Task 2 widens `id`/`text` for the update-by-id path via a
- * `.refine()`, mirroring validators/workstream.js's TaskUpsertSchema. */
+/** POST /api/dd/request-items — upsert-by-id. `text` and `area` are both
+ * required on CREATE (no `id`); both become optional on UPDATE (`id`
+ * present), enforced by the two refine()s below — mirroring
+ * validators/workstream.js's TaskUpsertSchema.refine() shape. `area`, when
+ * present on an update, additionally requires clearance for the NEW area —
+ * that check is the route handler's job (db/accessPolicy.js), not this
+ * schema's; this schema only proves the value is one of the eight valid ids. */
 const DdRequestItemUpsertSchema = z.object({
   id: z.string().trim().min(1).max(ID_MAX).optional(),
-  text: z.string().trim().min(1, 'Request item text is required.').max(TEXT_MAX),
-  area: z.enum(DD_AREA_IDS),
+  text: z.string().trim().min(1, 'Request item text is required.').max(TEXT_MAX).optional(),
+  area: z.enum(DD_AREA_IDS).optional(),
   owner: z.string().trim().max(OWNER_MAX).optional(),
   status: z.enum(DD_STATUSES).optional(),
   dueDate: z.string().trim().max(DUE_DATE_MAX).optional(),
   blocked: z.boolean().optional(),
   notes: z.string().trim().max(NOTES_MAX).optional(),
   source: z.string().trim().max(SOURCE_MAX).optional(),
+}).refine((data) => data.id || (data.text && data.text.trim()), {
+  message: 'Request item text is required.',
+  path: ['text'],
+}).refine((data) => data.id || data.area, {
+  message: 'Request item area is required.',
+  path: ['area'],
 });
 
 registerSchema('POST', '/api/dd/request-items', DdRequestItemUpsertSchema);

@@ -68,11 +68,24 @@ class AreaAccessError extends Error {
  * `deal.memberGrants[user.username].ddAreas` intersected with DD_AREA_IDS.
  * Returns `[]` when the user, the deal, or the grant entry is absent — never
  * throws, never defaults to the full set for an unrecognized shape.
+ *
+ * D-16's role-based (not deal-based) clearance for admin/hrbp PRESUPPOSES a
+ * resolved deal — every real call site fetches one via
+ * controlStore.getDeal(req.dealContext.dealId) before calling this function
+ * (db/resolver.js's bind-time membership check guarantees that fetch never
+ * fails for a request that reached a DD route at all). The `!deal` check
+ * below runs BEFORE the role shortcut — not after — specifically so a future
+ * caller that somehow invokes this with no resolved deal fails CLOSED for
+ * every role, admin/hrbp included, rather than silently granting the
+ * highest-privilege roles full access on a null deal. This ordering is a
+ * defensive guard against a call-site bug, not a live code path today: it
+ * changes nothing for any current caller, since `deal` is always a real
+ * (possibly empty `{}`) object by the time this runs.
  */
 function grantedAreas(deal, user) {
   if (!user) return [];
-  if (user.role === 'admin' || user.role === 'hrbp') return DD_AREA_IDS.slice();
   if (!deal) return [];
+  if (user.role === 'admin' || user.role === 'hrbp') return DD_AREA_IDS.slice();
   const grant = deal.memberGrants && deal.memberGrants[user.username];
   const ddAreas = grant && Array.isArray(grant.ddAreas) ? grant.ddAreas : [];
   return ddAreas.filter((a) => DD_AREA_ID_SET.has(a));

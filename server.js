@@ -2862,19 +2862,84 @@ app.get('/api/dd/request-items', (req, res) => {
   res.json(visible.map(publicDdItem));
 });
 
-// Task 1: the create half of the upsert only — the update-by-id half (and
-// the matching IDOR guard on a caller-supplied id) is added in Task 2.
+// T-04-02/T-04-03: the shared by-id guard every DD by-id route runs BEFORE
+// touching the item. `areaId` is the item's OWN stored area (or `null` for a
+// missing item) — never a caller-supplied one. A missing item and an
+// uncleared item are structurally indistinguishable to this guard (null is
+// never a granted area for any role, including admin/hrbp), which is what
+// gives GET/DELETE /api/dd/request-items/:id the uniform-403 anti-
+// enumeration shape by construction rather than a second, forgettable
+// branch (DD-04). Responds and returns `true` when refused; the caller must
+// `return` immediately when this returns `true`. Task 3 wires the audited
+// `dd-access-denied` security event into this same choke point.
+function ddAreaRefused(req, res, deal, areaId) {
+  try {
+    accessPolicy.assertAreaGrant(deal, req.portalUser, areaId);
+    return false;
+  } catch (e) {
+    if (!(e instanceof accessPolicy.AreaAccessError)) throw e;
+    res.status(e.status).json({ error: e.message });
+    return true;
+  }
+}
+
+app.get('/api/dd/request-items/:id', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const item = ddRequestLane(db).find((i) => i.id === req.params.id);
+  if (ddAreaRefused(req, res, deal, item ? item.area : null)) return;
+  res.json(publicDdItem(item));
+});
+
+app.delete('/api/dd/request-items/:id', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const lane = ddRequestLane(db);
+  const item = lane.find((i) => i.id === req.params.id);
+  if (ddAreaRefused(req, res, deal, item ? item.area : null)) return;
+  db.ddRequestItems = lane.filter((i) => i.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// Upsert-by-id, mirroring POST /api/raid's shape. On UPDATE (`id` present),
+// the guard runs against the item's STORED area FIRST, before any field is
+// mutated — the read model hands back a shared cache, so a mutation
+// followed by a refusal would stick. A body that ALSO carries a different
+// `area` additionally requires clearance for that NEW area (moving an item
+// between areas requires clearance for both sides).
 app.post('/api/dd/request-items', (req, res) => {
   const b = req.body || {};
   const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddRequestLane(db);
-  try {
-    accessPolicy.assertAreaGrant(deal, req.portalUser, b.area);
-  } catch (e) {
-    if (e instanceof accessPolicy.AreaAccessError) return res.status(e.status).json({ error: e.message });
-    throw e;
+
+  if (b.id) {
+    const item = lane.find((i) => i.id === b.id);
+    if (ddAreaRefused(req, res, deal, item ? item.area : null)) return;
+    // Validate everything before mutating the shared readDb() cache (see
+    // the task/RAID/synergy handlers' identical ordering comment above).
+    // VAL-01: text-required-when-id-absent is owned by the schema's own
+    // refine(); this empty-text-on-UPDATE guard stays here because the
+    // schema's refine only requires text when `id` is absent.
+    if (b.text !== undefined && !String(b.text).trim()) {
+      return res.status(400).json({ error: 'Request item text cannot be empty.' });
+    }
+    if (b.area !== undefined && b.area !== item.area) {
+      if (ddAreaRefused(req, res, deal, b.area)) return;
+    }
+    if (b.text !== undefined) item.text = String(b.text).trim().slice(0, 2000);
+    if (b.owner !== undefined) item.owner = String(b.owner || '').slice(0, 120);
+    if (b.status !== undefined) item.status = b.status;
+    if (b.dueDate !== undefined) item.dueDate = String(b.dueDate || '').slice(0, 10);
+    if (b.blocked !== undefined) item.blocked = !!b.blocked;
+    if (b.notes !== undefined) item.notes = String(b.notes || '').slice(0, 2000);
+    if (b.area !== undefined) item.area = b.area;
+    writeDb(db);
+    return res.json({ success: true, item: publicDdItem(item) });
   }
+
+  if (ddAreaRefused(req, res, deal, b.area)) return;
   const item = {
     id: newId('ddreq'),
     area: b.area,
