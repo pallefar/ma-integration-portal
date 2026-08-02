@@ -1,7 +1,7 @@
 ---
 phase: 03-deal-isolation-audit-log-write-validation
 verified: 2026-08-02T06:45:00Z
-status: human_needed
+status: passed
 score: 5/6 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -13,6 +13,8 @@ human_verification:
     expected: "An employee-role session sees zero new header chrome and no way to create or manage deals."
     why_human: "03-04-PLAN.md Task 3 human-check step 6 — a visual absence check, not verifiable by grep. Not yet run per STATE.md."
 ---
+
+> 2026-08-02 update: the human-verification items were executed and PASSED via orchestrator-driven Playwright with live evidence (03-UAT.md, 2/2, source: automated) — deal-switcher round trip incl. create/bind/switch-back with zero demo bleed-through, and employee-no-chrome. Security gate: 03-SECURITY.md threats_open: 0.
 
 # Phase 3: Deal Isolation, Audit Log & Write Validation Verification Report
 
