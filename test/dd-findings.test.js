@@ -248,3 +248,106 @@ test('dd-findings (f): an uncleared member\'s by-id probe and an unknown-id prob
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Task 2: the RAID severity scale extends to four levels in BOTH server.js
+// and validators/workstream.js — D-26.
+// ---------------------------------------------------------------------------
+
+test('dd-findings (g): POST /api/raid carrying the new "critical" severity succeeds and reads back with that severity', async () => {
+  const deal = freshDeal('deal_ddfg');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/raid`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'A critical RAID entry', type: 'risk', severity: 'critical' }),
+    });
+    assert.strictEqual(createRes.status, 201);
+    const { entry } = await createRes.json();
+    assert.strictEqual(entry.severity, 'critical');
+
+    const list = await (await fetch(`${base}/api/raid`, { headers: { Cookie: cookieHeader(karenToken) } })).json();
+    const readBack = list.find((e) => e.id === entry.id);
+    assert.ok(readBack, 'the critical entry must be present in the RAID list');
+    assert.strictEqual(readBack.severity, 'critical', 'a RAID entry created with severity critical must read back as critical');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-findings (h): POST /api/raid carrying a value outside the four levels is rejected by the schema with a 400 naming the field', async () => {
+  const deal = freshDeal('deal_ddfh');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const res = await fetch(`${base}/api/raid`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Bad severity entry', type: 'risk', severity: 'catastrophic' }),
+    });
+    assert.strictEqual(res.status, 400, 'an out-of-enum severity must be rejected by the schema, not silently defaulted');
+    const body = await res.json();
+    assert.ok(body && typeof body.error === 'string' && body.error.length > 0, 'the 400 must carry a non-empty error message naming the problem');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('dd-findings (i): both files\' RAID severity lists contain the exact same four values', () => {
+  // Source-level assertion, not an HTTP round-trip — a future edit to only
+  // ONE of the two independent copies must fail this suite immediately.
+  const app2 = require('../server.js');
+  const workstreamValidators = require('../validators/workstream.js');
+  assert.deepStrictEqual(
+    app2.RAID_LEVELS,
+    workstreamValidators.RAID_LEVELS,
+    "server.js's RAID_LEVELS and validators/workstream.js's RAID_LEVELS are independent copies that must be kept in sync by hand — they have drifted apart",
+  );
+  assert.deepStrictEqual(app2.RAID_LEVELS, ['low', 'medium', 'high', 'critical']);
+});
+
+test('dd-findings (j): an existing RAID entry created before this change still reads and updates normally with its original three-level severity', async () => {
+  const deal = freshDeal('deal_ddfj');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/raid`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'A pre-existing medium entry', type: 'issue', severity: 'medium' }),
+    });
+    const { entry } = await createRes.json();
+    assert.strictEqual(entry.severity, 'medium');
+
+    const updateRes = await fetch(`${base}/api/raid`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: entry.id, status: 'mitigating' }),
+    });
+    assert.strictEqual(updateRes.status, 200);
+    const { entry: updated } = await updateRes.json();
+    assert.strictEqual(updated.severity, 'medium', 'an untouched severity field must be left exactly as it was');
+    assert.strictEqual(updated.status, 'mitigating');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

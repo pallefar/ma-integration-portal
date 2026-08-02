@@ -136,7 +136,15 @@ registerSchema('DELETE', '/api/synergies/:id', EmptyBodySchema);
 // upsert-shaped lanes anyway since the handler DOES honor an incoming id).
 // ---------------------------------------------------------------------------
 const RAID_TYPES = ['risk', 'issue', 'decision', 'dependency'];
-const RAID_LEVELS = ['low', 'medium', 'high'];
+// D-26: four levels — an INDEPENDENT COPY of server.js's own RAID_LEVELS
+// (the RAID route handler's field guard), not a shared import. The two MUST
+// move together: a partial change here without the matching server.js edit
+// would make this validator's enum disagree with the handler's own guard
+// about what a valid severity is. Also governs `probability` below (the
+// SAME enum for both fields) — widening it is deliberate and strictly
+// additive: a four-level probability scale accepts everything the previous
+// three-level one did, plus `critical`.
+const RAID_LEVELS = ['low', 'medium', 'high', 'critical'];
 const RAID_STATUSES = ['open', 'mitigating', 'closed'];
 
 const RaidUpsertSchema = z.object({
@@ -193,4 +201,5 @@ module.exports = {
   RaidUpsertSchema,
   ModuleUpsertSchema,
   ReorderWidgetsSchema,
+  RAID_LEVELS,
 };

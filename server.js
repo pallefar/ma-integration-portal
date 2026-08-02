@@ -2842,7 +2842,16 @@ function raidLane(db) {
   return db.raidEntries;
 }
 const RAID_TYPES = ['risk', 'issue', 'decision', 'dependency'];
-const RAID_LEVELS = ['low', 'medium', 'high'];
+// D-26: four levels — a `critical` DD finding (db/accessPolicy.js's
+// DD_FINDING_SEVERITIES, above) converts into a RAID entry via
+// POST /api/dd/findings/:id/convert and must stay `critical`, not downgrade
+// to `high`. This list is an INDEPENDENT COPY of validators/workstream.js's
+// own RAID_LEVELS — the two are not shared via import and MUST be kept in
+// sync by hand; a test in test/dd-findings.test.js asserts they agree.
+// Widening this list also widens `probability` below (same field, same
+// enum) — that is deliberate: a four-level probability scale is a strict
+// superset of the previous three and rejects nothing accepted today.
+const RAID_LEVELS = ['low', 'medium', 'high', 'critical'];
 const RAID_STATUSES = ['open', 'mitigating', 'closed'];
 
 app.get('/api/raid', (req, res) => {
@@ -4095,3 +4104,6 @@ module.exports.roleAllowedForWrite = roleAllowedForWrite;
 // inventory without booting the HTTP server for every case.
 module.exports.isDemoOnlyPath = isDemoOnlyPath;
 module.exports.DEMO_ONLY_PREFIXES = DEMO_ONLY_PREFIXES;
+// D-26: exposed so a test can assert this copy and validators/workstream.js's
+// own independent RAID_LEVELS copy agree, without re-declaring a third list.
+module.exports.RAID_LEVELS = RAID_LEVELS;
