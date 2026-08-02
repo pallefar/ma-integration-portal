@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: Due Diligence Workspace
 status: executing
-stopped_at: Completed 04-05-PLAN.md
-last_updated: "2026-08-02T08:35:43.482Z"
+stopped_at: Completed 04-06-PLAN.md
+last_updated: "2026-08-02T08:57:44.249Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 20
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 04 (Due Diligence Workspace) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-08-02 — Phase 04 execution started
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -76,6 +76,7 @@ Progress: [█████████░] 85%
 | Phase 04 P03 | 50min | 3 tasks | 9 files |
 | Phase 04 P04 | ~55min | 3 tasks | 6 files |
 | Phase 04 P05 | 35min | 2 tasks | 6 files |
+| Phase 04 P06 | ~40min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 4 Plan 05: vdrLink folds into the existing POST /api/dd/request-items upsert route (not a dedicated route) — the item's clean-room area guard already covers the reference with zero new access-control code
 - [Phase ?]: Phase 4 Plan 05: zod's z.string().url() alone accepts javascript: URLs (verified live against zod@4.4.3) — an explicit .refine() on the parsed protocol is what actually restricts vdrLink.url to http/https
 - [Phase ?]: Phase 4 Plan 05: a data-room access grant (POST /api/deals/:id/vdr-grants) is written ONLY as a recordSecurityEvent — no separate collection, so the append-only audit log IS the compliance record and survives deletion of the deal it describes
+- [Phase ?]: Phase 4 Plan 6: WIZARD_ASSESSMENT_SUBJECTS uses subject 'integration-leader' (verified against seeded template data), not the plan text's literal 'il'
+- [Phase ?]: Phase 4 Plan 6: latestAssessInstanceFor() filters strictly on status==='submitted' — a pending row can never feed a score/band/compatibility calc
+- [Phase ?]: Phase 4 Plan 6: createDeal() stamps a setup skeleton at creation time (basics/team already done); updateDealSetup() does a shallow merge into deal.setup mirroring setDealMemberGrants()'s caller-computes/store-persists shape
 
 ### Pending Todos
 
@@ -162,6 +166,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T08:35:43.461Z
-Stopped at: Completed 04-05-PLAN.md
+Last session: 2026-08-02T08:57:44.240Z
+Stopped at: Completed 04-06-PLAN.md
 Resume file: None

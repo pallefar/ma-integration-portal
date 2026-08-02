@@ -41,7 +41,7 @@
 - [x] **DD-03**: A DD finding can be converted into a Day-1 integration task and/or a RAID entry, reusing the existing remediation linkage (`from-remediation`)
 - [x] **DD-04**: DD content is clean-room restricted — only users with need-to-know for a functional area can read its request items and findings, enforced server-side (not just hidden in the UI), with access decisions audited
 - [x] **DD-05**: DD document exchange links out to TE's existing VDR; the app records the reference and access grant, and does not store the documents themselves
-- [ ] **WIZ-01**: A new deal is created through a guided setup wizard — deal basics, member allowlist, readiness-assessment kickoff (acquirer, target and IL instances, each with an owner and due date), workstream scope and timeline markers — with the deal created after the mandatory core so remaining steps resume later from a deal-home setup checklist, and every wizard write flowing through the existing validation and audit pipeline *(added 2026-08-02 from the user's new-deal-wizard request; see `.planning/todos/pending/new-deal-setup-wizard.md`)*
+- [x] **WIZ-01**: A new deal is created through a guided setup wizard — deal basics, member allowlist, readiness-assessment kickoff (acquirer, target and IL instances, each with an owner and due date), workstream scope and timeline markers — with the deal created after the mandatory core so remaining steps resume later from a deal-home setup checklist, and every wizard write flowing through the existing validation and audit pipeline *(added 2026-08-02 from the user's new-deal-wizard request; see `.planning/todos/pending/new-deal-setup-wizard.md`)*
 
 ### Synergy Value Capture
 
@@ -123,7 +123,7 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | DD-03 | Phase 4: Due Diligence Workspace | Complete |
 | DD-04 | Phase 4: Due Diligence Workspace | Complete |
 | DD-05 | Phase 4: Due Diligence Workspace | Complete |
-| WIZ-01 | Phase 4: Due Diligence Workspace | Pending |
+| WIZ-01 | Phase 4: Due Diligence Workspace | Complete |
 | SYN-01 | Phase 5: Synergy Value Capture | Pending |
 | SYN-02 | Phase 5: Synergy Value Capture | Pending |
 | SYN-03 | Phase 5: Synergy Value Capture | Pending |
