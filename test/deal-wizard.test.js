@@ -801,3 +801,80 @@ test('deal-wizard (s): the status rollup subject order is acquirer, target, Inte
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 04-REVIEW.md CR-01: ownership enforcement on the instanceId completion
+// path — a deal member other than the assigned owner (or an elevated
+// admin/hrbp session) may not promote a pending row to submitted.
+// ---------------------------------------------------------------------------
+
+test('deal-wizard (t): a deal member who is NOT the assigned owner cannot fabricate completion of another member\'s pending assessment (CR-01)', async () => {
+  const deal = createTestDeal('deal_wt', { members: ['karen', 'pmo'] });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const assignRes = await fetch(`${base}/api/assessment-instances/assign`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateId: TPL_TARGET, owner: 'karen', dueDate: '2026-09-01' }),
+    });
+    const { instance: pending } = await assignRes.json();
+
+    // pmo (not the assigned owner, not admin/hrbp) attempts to complete
+    // karen's assignment with a fabricated high score.
+    const forgedRes = await fetch(`${base}/api/assessment-instances`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instanceId: pending.id, templateId: TPL_TARGET, responses: { q_tg_gov1: 5 } }),
+    });
+    assert.strictEqual(forgedRes.status, 403, 'a non-owner, non-elevated caller must be refused completion of someone else\'s pending row');
+
+    // The row must still be pending — the refused attempt must not have
+    // mutated anything.
+    const statusRes = await fetch(`${base}/api/assessment-status`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const status = await statusRes.json();
+    assert.strictEqual(status.bySubject['target-org'].satisfied, false, 'a refused completion attempt must never flip satisfied to true');
+
+    // The real owner (karen) can still complete it normally.
+    const realRes = await fetch(`${base}/api/assessment-instances`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instanceId: pending.id, templateId: TPL_TARGET, responses: { q_tg_gov1: 4 } }),
+    });
+    assert.strictEqual(realRes.status, 200, 'the actual assigned owner must still be able to complete their own pending row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('deal-wizard (u): an hrbp (Integration Lead) session may complete a pending row assigned to a different teammate (CR-01 elevated override)', async () => {
+  const deal = createTestDeal('deal_wu', { members: ['karen', 'pmo'] });
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const assignRes = await fetch(`${base}/api/assessment-instances/assign`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateId: TPL_TARGET, owner: 'pmo', dueDate: '2026-09-01' }),
+    });
+    const { instance: pending } = await assignRes.json();
+
+    // karen is hrbp, not the named owner ('pmo') — the elevated-role branch
+    // must still let her complete it.
+    const res = await fetch(`${base}/api/assessment-instances`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instanceId: pending.id, templateId: TPL_TARGET, responses: { q_tg_gov1: 4 } }),
+    });
+    assert.strictEqual(res.status, 200, 'an hrbp session must be able to complete a pending row assigned to a different named owner');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

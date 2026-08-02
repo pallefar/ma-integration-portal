@@ -2592,6 +2592,28 @@ app.post('/api/assessment-instances', (req, res) => {
     if (pending.status !== 'pending') {
       return res.status(400).json({ error: 'This assessment instance is not pending completion.' });
     }
+    // CR-01: only the session whose username matches the assigned `owner`
+    // (set at assign-time via POST /api/assessment-instances/assign, and — per
+    // that route's tests — expected to carry the intended completer's actual
+    // username, not an arbitrary display label) or an elevated admin/hrbp
+    // role may promote a pending row to submitted. Without this check any
+    // deal member reachable via ROLE_WRITE_POLICY's self-service rule for
+    // this route (even `employee`) could fabricate the completion of someone
+    // else's assigned readiness assessment by reading its id off
+    // GET /api/assessment-status and posting a fabricated score (04-REVIEW.md
+    // CR-01). `req.portalUser` is guaranteed non-null here except in
+    // anonymous DEMO_OPEN mode (no login, no MNPI content in the demo lane)
+    // — the check is skipped there rather than false-failing on a null
+    // identity, matching every other req.portalUser.username call site in
+    // this file that assumes a real session whenever real deal data exists.
+    if (req.portalUser) {
+      const isElevated = ['admin', 'hrbp'].includes(req.portalUser.role);
+      const ownerTrim = String(pending.owner || '').trim();
+      const isOwner = !!ownerTrim && ownerTrim === req.portalUser.username;
+      if (!isElevated && !isOwner) {
+        return res.status(403).json({ error: 'You are not the assigned owner of this assessment.' });
+      }
+    }
     pending.rater = (template.raterModes || ['self']).includes(rater) ? rater : (pending.rater || 'self');
     pending.respondentRole = String(respondentRole || '').slice(0, 60);
     pending.respondentName = String(respondentName || '').slice(0, 120);
