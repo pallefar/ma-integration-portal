@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: Due Diligence Workspace
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-08-02T07:23:19.108Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-08-02T07:40:11.254Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 20
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 04 (Due Diligence Workspace) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-08-02 — Phase 04 execution started
 
-Progress: [███████░░░] 65%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Progress: [███████░░░] 65%
 | Phase 03 P05 | ~70min | 3 tasks | 9 files |
 | Phase 03 P06 | ~2h | 3 tasks | 16 files |
 | Phase 04 P01 | 45min | 3 tasks | 10 files |
+| Phase 04 P02 | 40min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 4 Plan 01: grantedAreas() checks deal truthiness before the admin/hrbp role shortcut (coordinator-requested hardening) — closes a latent fail-open with zero behavior change for any real caller
 - [Phase ?]: Phase 4 Plan 01: an unknown item id and an uncleared-area item share one refusal path (assertAreaGrant with areaId: null, never granted to any role) — the DD-04 uniform-403 anti-enumeration property is structural, not a second branch
 - [Phase ?]: Phase 4 Plan 01: db/accessPolicy.js holds zero audit dependency by design — every dd-access-denied event is recorded from server.js's refuseDdArea() choke point, mirroring db/controlStore.js's AUD-02 isolation precedent
+- [Phase ?]: Phase 4 Plan 02: GET /api/deals/:id/grants narrowed inline to admin+hrbp (Rule 1/2 auto-fix) — ROLE_WRITE_POLICY only role-gates writes and /api/admin*-prefixed GETs; left unguarded, any authenticated role could have read any deal's membership + per-area clearance map by id
+- [Phase ?]: Phase 4 Plan 02: a grant naming a username absent from deal.members is refused (400, no memberGrants entry created) — clearance can never exist without membership
+- [Phase ?]: Phase 4 Plan 02: removing a member from deal.members intentionally leaves their memberGrants entry in place (not pruned) — safe by construction since grantedAreas() is only consulted after the bind-time membership check has already passed
 
 ### Pending Todos
 
@@ -148,6 +152,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-02T07:23:19.095Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-08-02T07:40:11.244Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
