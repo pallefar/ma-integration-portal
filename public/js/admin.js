@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const SECTION_META = {
     projects: ['M&A Projects', 'Each acquisition is a project at the top of the hierarchy — create, switch, and manage them'],
     deals: ['Real Deals', 'Isolated real-acquisition workspaces — create, manage membership, archive or delete (separate from the demo Projects above)'],
+    audit: ['Audit Log', 'Append-only compliance trail — every real-deal write and control-plane security event, filterable by deal, actor and date range'],
     courses: ['Courses', 'Manage the academy curriculum — courses, modules, lessons & quizzes'],
     modules: ['Action Modules', 'Score-gated recommendations shown on the Integration Leader dashboard'],
     departments: ['Department Modules', 'Functional integration tracks — shared culture & communication, per-department systems & trainings'],
@@ -2568,6 +2569,131 @@ document.addEventListener('DOMContentLoaded', () => {
     tries = tries || 0;
     if (!window.__portalUser && tries < 40) { setTimeout(() => pollPortalUserForDeals(tries + 1), 250); return; }
     renderDeals();
+  })();
+
+  // ---------- Audit Log Viewer (Phase 3 Plan 05, D-10) ----------------------
+  // Admin-only: the nav tab button itself stays hidden (see admin.html,
+  // display:none by default) until the poller below confirms the caller's
+  // real role — the server independently re-enforces this on every request
+  // (GET /api/admin/audit inherits the existing admin-only /api/admin
+  // ROLE_WRITE_POLICY rule for ALL methods, CR-02), so this client-side gate
+  // is a UX convenience, never the actual access control. Every audit value
+  // (actor, action, before/after JSON) is set via textContent only — a deal
+  // name or a before/after row snapshot may be pre-announcement MNPI.
+  let auditOffset = 0;
+  const AUDIT_PAGE_SIZE = 50;
+
+  function auditFilterParams() {
+    const params = new URLSearchParams();
+    const dealEl = document.getElementById('audit-filter-deal');
+    const actorEl = document.getElementById('audit-filter-actor');
+    const fromEl = document.getElementById('audit-filter-from');
+    const toEl = document.getElementById('audit-filter-to');
+    if (dealEl && dealEl.value.trim()) params.set('deal', dealEl.value.trim());
+    if (actorEl && actorEl.value.trim()) params.set('user', actorEl.value.trim());
+    if (fromEl && fromEl.value) params.set('from', fromEl.value);
+    if (toEl && toEl.value) params.set('to', toEl.value);
+    params.set('limit', String(AUDIT_PAGE_SIZE));
+    params.set('offset', String(auditOffset));
+    return params;
+  }
+
+  function renderAuditLog(rows) {
+    const wrap = document.getElementById('audit-log-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.style.cssText = 'text-align:center;color:var(--text-dim);padding:1.5rem;';
+      empty.textContent = 'No audit rows for this filter.';
+      wrap.appendChild(empty);
+      return;
+    }
+    // Most-recent-first for readability; the API itself stays ordered by
+    // ascending autoincrement id (db/auditHook.js's queryAudit(), D-11's
+    // specified stable readback order for equal timestamps).
+    rows.slice().reverse().forEach((row) => {
+      const item = document.createElement('div');
+      item.className = 'cms-row';
+      item.style.cssText = 'flex-direction:column; align-items:stretch; gap:0.35rem;';
+
+      const summary = document.createElement('div');
+      summary.style.cssText = 'display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;';
+      const left = document.createElement('span');
+      left.className = 'cms-row-title';
+      left.textContent = row.ts + ' — ' + row.action + (row.collection ? (' (' + row.collection + (row.row_id ? ('#' + row.row_id) : '') + ')') : (row.row_id ? (' — ' + row.row_id) : ''));
+      const right = document.createElement('span');
+      right.className = 'cms-row-sub';
+      right.textContent = row.actor_username + ' (' + row.actor_role + ')' + (row.deal_id ? (' — deal ' + row.deal_id) : '');
+      summary.appendChild(left);
+      summary.appendChild(right);
+      item.appendChild(summary);
+
+      if (row.before_json || row.after_json) {
+        const details = document.createElement('details');
+        const summaryTag = document.createElement('summary');
+        summaryTag.textContent = 'Before / after';
+        summaryTag.style.cssText = 'cursor:pointer; font-size:0.78rem; color:var(--text-secondary);';
+        details.appendChild(summaryTag);
+        const pre = document.createElement('pre');
+        pre.style.cssText = 'font-size:0.72rem; white-space:pre-wrap; word-break:break-word; background:rgba(0,0,0,0.03); padding:0.5rem; border-radius:6px; margin:0.35rem 0 0;';
+        pre.textContent = 'before: ' + (row.before_json || '(none)') + '\n\nafter: ' + (row.after_json || '(none)');
+        details.appendChild(pre);
+        item.appendChild(details);
+      }
+      wrap.appendChild(item);
+    });
+  }
+
+  function loadAuditLog() {
+    const wrap = document.getElementById('audit-log-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const loading = document.createElement('p');
+    loading.style.cssText = 'text-align:center;color:var(--text-dim);padding:1.5rem;';
+    loading.textContent = 'Loading audit log…';
+    wrap.appendChild(loading);
+    fetch('/api/admin/audit?' + auditFilterParams().toString())
+      .then((r) => r.json())
+      .then((rows) => { renderAuditLog(Array.isArray(rows) ? rows : []); })
+      .catch(() => {
+        wrap.innerHTML = '';
+        const err = document.createElement('p');
+        err.style.cssText = 'text-align:center;color:#B91C1C;padding:1.5rem;';
+        err.textContent = 'Failed to load the audit log.';
+        wrap.appendChild(err);
+      });
+  }
+
+  const btnAuditFilter = document.getElementById('btn-audit-filter');
+  if (btnAuditFilter) btnAuditFilter.addEventListener('click', () => { auditOffset = 0; loadAuditLog(); });
+  const btnAuditClear = document.getElementById('btn-audit-clear');
+  if (btnAuditClear) {
+    btnAuditClear.addEventListener('click', () => {
+      ['audit-filter-deal', 'audit-filter-actor', 'audit-filter-from', 'audit-filter-to'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      auditOffset = 0;
+      loadAuditLog();
+    });
+  }
+  const btnAuditPrev = document.getElementById('btn-audit-prev');
+  if (btnAuditPrev) btnAuditPrev.addEventListener('click', () => { auditOffset = Math.max(0, auditOffset - AUDIT_PAGE_SIZE); loadAuditLog(); });
+  const btnAuditNext = document.getElementById('btn-audit-next');
+  if (btnAuditNext) btnAuditNext.addEventListener('click', () => { auditOffset += AUDIT_PAGE_SIZE; loadAuditLog(); });
+
+  // Same admin-role poll pattern as pollPortalUserForDeals() above — reveal
+  // the tab button and load its first page only once the caller's real role
+  // is confirmed admin (D-10).
+  (function pollPortalUserForAudit(tries) {
+    tries = tries || 0;
+    if (!window.__portalUser && tries < 40) { setTimeout(() => pollPortalUserForAudit(tries + 1), 250); return; }
+    const btn = document.getElementById('admin-tab-btn-audit');
+    if (btn && window.__portalUser && window.__portalUser.role === 'admin') {
+      btn.style.display = '';
+      loadAuditLog();
+    }
   })();
 
   // --- Initial runs ---

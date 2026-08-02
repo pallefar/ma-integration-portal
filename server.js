@@ -13,6 +13,13 @@ const dbFiles = require('./db/dbFiles');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
+// AUD-01/D-08 (Phase 3 Plan 05): the store-layer audit hook — db/store.js's
+// writeDb() dispatches to it automatically for every deal write; server.js
+// itself calls recordSecurityEvent() directly at each D-08 control-plane
+// event site below (break-glass token use, password change, session
+// revocation, deal lifecycle/membership), and queryAudit() backs the
+// admin-only GET /api/admin/audit viewer route.
+const auditHook = require('./db/auditHook');
 // VAL-01 (first instance): validators/deals.js — see its own header for why
 // zod's z.object() default strip-unknown behavior closes D-13 with no extra
 // call needed.
@@ -352,6 +359,16 @@ app.use('/api', (req, res, next) => {
     // deal-bound (dealId: null) — a break-glass token has no session row to
     // persist a deal selection on.
     req.portalUser = { username: 'admin-token', role: 'admin', sessionId: null, dealId: null };
+    // D-08: every use of the break-glass token is itself a control-plane
+    // security event — this token grants admin-equivalent access outside a
+    // normal session's own trail, so each use is recorded here, attributed
+    // to this stable identity, never anonymously.
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser,
+      action: 'admin-token-use',
+      subject: `${req.method} ${(req.baseUrl || '') + (req.path || '')}`,
+      request: requestMeta(req),
+    });
   } else {
     const cookieToken = readSessionCookie(req);
     const sess = cookieToken ? sessions.findSession(getRuntimeConnection(), cookieToken) : null;
@@ -526,6 +543,14 @@ app.post('/api/auth/change-password', (req, res) => {
   }
   const newSalt = crypto.randomBytes(16).toString('hex');
   controlStore.updateUser(user.username, { salt: newSalt, hash: hashPassword(newPassword, newSalt) });
+  // D-08: a password change is a control-plane security event — the actor
+  // and the subject are the SAME user here (self-service), which is exactly
+  // why it must still be recorded: a session that changed its own password
+  // is meaningfully different from one that never did.
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'password-change', subject: user.username,
+    request: requestMeta(req),
+  });
   // WR-01: rotating a credential must revoke every OTHER outstanding session
   // for this user (db/sessions.js's own docstring calls this "Admin
   // offboarding action", but the same primitive applies here) — otherwise a
@@ -593,6 +618,17 @@ function newId(prefix) {
   return prefix + '_' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
 }
 
+// AUD-01/D-08: the exact `{ method, path, ip }` shape db/auditHook.js's
+// recordSecurityEvent()/writeAuditBatch() store per row. `req.path` is
+// mount-relative ONLY inside the consolidated /api gate's own middleware
+// callback (see that gate's own comment above) — every OTHER call site
+// below (an actual matched route handler) sees the full path in req.path
+// with an empty req.baseUrl, so `(req.baseUrl || '') + (req.path || '')`
+// reconstructs the correct full path in both contexts.
+function requestMeta(req) {
+  return { method: req.method, path: (req.baseUrl || '') + (req.path || ''), ip: req.ip };
+}
+
 // =====================================================================
 // Deal registry (ISO-01/D-01/D-02/D-03) — the control-plane surface on top
 // of Plan 03's resolver. Every route below is a CONTROL_PLANE_PATH
@@ -619,6 +655,11 @@ app.post('/api/deals', dealValidators.validateBody(dealValidators.CreateDealSche
     catch (rollbackErr) { console.error(`Error rolling back deal registry row ${deal.id} after provisioning failure:`, rollbackErr); }
     return res.status(500).json({ error: 'Failed to provision the new deal database.' });
   }
+  // D-08: deal creation is a control-plane security event.
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'deal-create', dealId: deal.id, subject: deal.id,
+    before: null, after: deal, request: requestMeta(req),
+  });
   res.json({ success: true, deal });
 });
 
@@ -676,6 +717,11 @@ app.post('/api/deals/:id/members', dealValidators.validateBody(dealValidators.De
   for (const username of before) {
     if (!after.has(username)) sessions.releaseSessionsForDeal(getRuntimeConnection(), dealId, username);
   }
+  // D-08: a membership edit is a control-plane security event.
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'deal-members-update', dealId, subject: dealId,
+    before: Array.from(before), after: Array.from(after), request: requestMeta(req),
+  });
   res.json({ success: true, deal: updated });
 });
 
@@ -698,6 +744,13 @@ app.post('/api/admin/deals/:id/archive', dealValidators.validateBody(dealValidat
   // an archived deal must never be left silently readable/writable by a
   // session that selected it before the archive.
   sessions.releaseSessionsForDeal(getRuntimeConnection(), dealId);
+  // D-08: archiving a deal is a control-plane security event. Recorded HERE
+  // (server.js), never inside db/controlStore.js — that module must keep
+  // holding zero reference to audit.db so AUD-02 holds by construction.
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'deal-archive', dealId, subject: dealId,
+    before: deal, after: updated, request: requestMeta(req),
+  });
   res.json({ success: true, deal: updated });
 });
 
@@ -710,7 +763,38 @@ app.delete('/api/admin/deals/:id', dealValidators.validateBody(dealValidators.De
   if (!deal) return res.status(404).json({ error: 'Deal not found.' });
   sessions.releaseSessionsForDeal(getRuntimeConnection(), dealId);
   controlStore.deleteDeal(dealId); // AUD-02: registry row + file only — never touches audit.db (db/controlStore.js's own header)
+  // D-08: deleting a deal is a control-plane security event — routed through
+  // this hook (server.js), never through db/controlStore.js, for the SAME
+  // AUD-02 reason as the archive route above. `deal` (the pre-delete
+  // snapshot fetched above) is the `before` value; the deal no longer
+  // exists, so `after` is null.
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'deal-delete', dealId, subject: dealId,
+    before: deal, after: null, request: requestMeta(req),
+  });
   res.json({ success: true });
+});
+
+// D-10: admin-only audit viewer. Inherits admin-only enforcement from the
+// existing `{ prefix: '/api/admin', roles: ['admin'] }` ROLE_WRITE_POLICY
+// rule, which (per CR-02) applies to EVERY method under /api/admin — reads
+// included — so this route is never reachable by a non-admin session, and
+// db/resolver.js's CONTROL_PLANE_PATHS covers this exact path so an admin's
+// own stale/archived deal binding can never lock them out of it (see that
+// module's own comment). Deliberately GET-only: no POST/PUT/DELETE route
+// exists anywhere under /api/admin/audit* — the append-only triggers
+// (Plan 03-01) would reject a mutation anyway, but the route must also
+// simply not exist (asserted by test/audit-security-events.test.js's own
+// route-inventory check).
+app.get('/api/admin/audit', (req, res) => {
+  res.json(auditHook.queryAudit({
+    dealId: req.query.deal || undefined,
+    actor: req.query.user || undefined,
+    from: req.query.from || undefined,
+    to: req.query.to || undefined,
+    limit: req.query.limit,
+    offset: req.query.offset,
+  }));
 });
 
 // Strip server-only secrets from any settings object before returning it to a
@@ -1907,6 +1991,21 @@ app.post('/api/admin/migrate-db', (req, res) => {
 // primitive — NOT the deferred full user-CRUD.
 app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
   sessions.deleteAllSessionsForUser(getRuntimeConnection(), req.params.username);
+  // D-08: an admin revoking a USER's sessions (offboarding) is a security
+  // event — deliberately distinct from an ordinary self-service logout,
+  // which is never audited. `req.portalUser` is null here under the
+  // DEMO_OPEN=1 open-mode bypass (D-02: an isOpenMode request is not gated
+  // on role/session at all, and this path is NOT a CONTROL_PLANE_PATH, so it
+  // resolves to demo.db and skips the gate's role check entirely) — with no
+  // attributable actor and no real security boundary in that mode to begin
+  // with, this mirrors D-08's "demo writes are NOT audited" rule rather than
+  // throwing and breaking an otherwise-legitimate demo-mode request.
+  if (req.portalUser) {
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'session-revoke-all', subject: req.params.username,
+      request: requestMeta(req),
+    });
+  }
   res.json({ success: true });
 });
 

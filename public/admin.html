@@ -59,6 +59,13 @@
               <span class="admin-rail-label">Real Deals</span>
               <button class="admin-tab-btn" data-tab="deals"><span class="admin-rail-ic">🔒</span> Deals</button>
             </div>
+            <div class="admin-rail-group" id="admin-rail-group-audit">
+              <span class="admin-rail-label">Compliance</span>
+              <!-- D-10: admin-only — hidden by default, revealed by admin.js once the
+                   caller's real role is confirmed via window.__portalUser (mirrors the
+                   Real Deals panel's own admin-only row-action gating below). -->
+              <button class="admin-tab-btn" data-tab="audit" id="admin-tab-btn-audit" style="display:none;"><span class="admin-rail-ic">🧾</span> Audit Log</button>
+            </div>
             <div class="admin-rail-group">
               <span class="admin-rail-label">Content</span>
               <button class="admin-tab-btn" data-tab="courses"><span class="admin-rail-ic">🎓</span> Courses</button>
@@ -131,6 +138,33 @@
               <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Each real acquisition is its own isolated database, separate from the demo showcase. Creation is admin + Integration Lead only; archive and delete are admin-only and require typing the deal's own id to confirm.</p>
               <div id="deals-admin-list" style="display:flex; flex-direction:column; gap:0.75rem;">
                 <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading deals…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Compliance: Audit Log (Phase 3 Plan 05, D-10) — admin-only,
+               filterable, append-only. Every write to a real deal database plus
+               every control-plane security event D-08 names. ===== -->
+          <div class="tab-content tab-content-panel" id="tab-audit" style="display:none;">
+            <div class="card card-glass">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Audit Log</h2>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin:0 0 1rem;">Every write to a real deal database, plus control-plane security events — deal lifecycle, membership changes, password changes, session revocations, and break-glass token use. Admin-only; append-only — nothing here can be edited or removed.</p>
+              <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+                <input type="text" id="audit-filter-deal" placeholder="Deal id" style="flex:1; min-width:140px; padding:0.45rem 0.6rem; border-radius:6px; border:1px solid var(--border-color, #d8dee4);">
+                <input type="text" id="audit-filter-actor" placeholder="Actor username" style="flex:1; min-width:140px; padding:0.45rem 0.6rem; border-radius:6px; border:1px solid var(--border-color, #d8dee4);">
+                <input type="date" id="audit-filter-from" style="flex:1; min-width:140px; padding:0.45rem 0.6rem; border-radius:6px; border:1px solid var(--border-color, #d8dee4);">
+                <input type="date" id="audit-filter-to" style="flex:1; min-width:140px; padding:0.45rem 0.6rem; border-radius:6px; border:1px solid var(--border-color, #d8dee4);">
+                <button class="btn btn-secondary" id="btn-audit-filter" style="font-size:0.82rem;">Filter</button>
+                <button class="btn btn-secondary" id="btn-audit-clear" style="font-size:0.82rem;">Clear</button>
+              </div>
+              <div id="audit-log-list" style="display:flex; flex-direction:column; gap:0.5rem;">
+                <p style="text-align:center; color:var(--text-dim); padding:1.5rem;">Loading audit log…</p>
+              </div>
+              <div style="display:flex; justify-content:center; gap:0.5rem; margin-top:1rem;">
+                <button class="btn btn-secondary" id="btn-audit-prev" style="font-size:0.78rem;">← Newer</button>
+                <button class="btn btn-secondary" id="btn-audit-next" style="font-size:0.78rem;">Older →</button>
               </div>
             </div>
           </div>
@@ -1153,7 +1187,7 @@
   </div>
 
   <script src="/js/ted-launcher.js?v=1784300020"></script>
-  <script src="/js/admin.js?v=1784300020"></script>
+  <script src="/js/admin.js?v=1784600010"></script>
   <script src="/js/page-layout.js?v=1784300020"></script>
   <script src="/js/admin-cms.js?v=1784300020"></script>
 </body>
