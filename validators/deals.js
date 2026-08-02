@@ -20,6 +20,9 @@
 
 const { z } = require('zod');
 const { formatIssues, validateBody, registerSchema } = require('./index');
+// DD_AREA_IDS is imported (never redeclared) so this schema's z.enum() stays
+// the single source of truth's own list — db/accessPolicy.js (Plan 01).
+const { DD_AREA_IDS } = require('../db/accessPolicy');
 
 const NAME_MAX = 200;
 const USERNAME_MAX = 64;
@@ -58,6 +61,17 @@ const DealMembersSchema = z.object({
   members: z.array(z.string().trim().min(1).max(USERNAME_MAX)),
 });
 
+/** POST /api/deals/:id/grants — DD-04/D-02/T-04-12. `ddAreas` is constrained
+ * to a `z.enum` over DD_AREA_IDS (imported, never duplicated) so an unknown
+ * area id 400s here, before the route handler or db/controlStore.js ever see
+ * it; the array is capped at the taxonomy's own size — the same eight-area
+ * bound that makes an unbounded-length payload impossible regardless of the
+ * enum constraint alone. */
+const DealGrantsSchema = z.object({
+  username: z.string().trim().min(1, 'Username is required.').max(USERNAME_MAX),
+  ddAreas: z.array(z.enum(DD_AREA_IDS)).max(DD_AREA_IDS.length),
+});
+
 /** POST /api/admin/deals/:id/archive and DELETE /api/admin/deals/:id — D-02's
  * destructive guard: the caller must submit the deal's own id as an explicit
  * confirmation value. This schema only proves `confirm` is present and a
@@ -77,10 +91,11 @@ const DeleteConfirmSchema = z.object({
 registerSchema('POST', '/api/deals', CreateDealSchema);
 registerSchema('POST', '/api/deals/select', SelectDealSchema);
 registerSchema('POST', '/api/deals/:id/members', DealMembersSchema);
+registerSchema('POST', '/api/deals/:id/grants', DealGrantsSchema);
 registerSchema('POST', '/api/admin/deals/:id/archive', DeleteConfirmSchema);
 registerSchema('DELETE', '/api/admin/deals/:id', DeleteConfirmSchema);
 
 module.exports = {
-  CreateDealSchema, SelectDealSchema, DealMembersSchema, DeleteConfirmSchema,
+  CreateDealSchema, SelectDealSchema, DealMembersSchema, DealGrantsSchema, DeleteConfirmSchema,
   validateBody, formatIssues, DEAL_ID_PATTERN,
 };

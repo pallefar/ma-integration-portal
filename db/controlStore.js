@@ -19,6 +19,10 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { getOrOpenConnection, closeConnection } = require('./store');
 const dbFiles = require('./dbFiles');
+// DD_AREA_IDS only (the fixed eight-area taxonomy) — db/accessPolicy.js is a
+// pure module with no database connection of its own (see its own header), so
+// requiring it here creates no circularity and no second connection.
+const { DD_AREA_IDS } = require('./accessPolicy');
 
 // Deal ids are minted with the SAME `${prefix}_${Date.now().toString(36)}
 // ${randomHex}` convention server.js's own newId() uses (server.js:561-563).
@@ -151,6 +155,40 @@ function updateDealMembers(dealId, members) {
   return updated;
 }
 
+/**
+ * DD-04/D-02: replace `username`'s DD-area clearance inside
+ * `deal.memberGrants`, following updateDealMembers()'s exact read-modify-
+ * write shape — spreads the EXISTING deal object (never rebuilds it), so
+ * `members`, `status`, `createdBy` and every other field survive untouched.
+ * `ddAreas` is de-duplicated into a Set and re-ordered to match DD_AREA_IDS's
+ * own declared order (db/accessPolicy.js) — the persisted array is always in
+ * that canonical order regardless of what order the caller submitted them in.
+ * Throws (never silently no-ops) when the deal does not exist, mirroring
+ * updateDealMembers()'s own "not an upsert" contract above. This module still
+ * holds no reference to the audit store — server.js's route handler records
+ * the security event, exactly like the deal-create/deal-archive/deal-members
+ * call sites already do.
+ */
+function setDealMemberGrants(dealId, username, ddAreas) {
+  const deal = getDeal(dealId);
+  if (!deal) throw new Error(`db/controlStore.js: setDealMemberGrants() found no deal '${dealId}'`);
+  const set = new Set((ddAreas || []).map(String));
+  const ordered = DD_AREA_IDS.filter((id) => set.has(id));
+  const memberGrants = { ...(deal.memberGrants || {}) };
+  memberGrants[username] = { ddAreas: ordered };
+  const updated = { ...deal, memberGrants };
+  controlConn().prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
+  return updated;
+}
+
+/** DD-04: the whole `memberGrants` map for `dealId`, or `{}` when the deal
+ * has none (or does not exist — mirrors getDeal()'s own null-safety, never
+ * throws for a read). */
+function getDealMemberGrants(dealId) {
+  const deal = getDeal(dealId);
+  return (deal && deal.memberGrants) || {};
+}
+
 /** D-02: archive a deal — flips BOTH the `status` metadata column and
  * `data.status` (db/resolver.js's resolveDatabase() checks `deal.status ===
  * 'archived'` against the JSON blob, not the metadata column, so both must
@@ -259,6 +297,7 @@ module.exports = {
   findUser, listUsers, updateUser,
   getDeal, listDeals, listDealsForUser, isDealMember,
   createDeal, updateDealMembers, archiveDeal, deleteDeal,
+  setDealMemberGrants, getDealMemberGrants,
   getControlSettings, setControlSettings,
   getSecretSettings, setSecretSettings,
 };

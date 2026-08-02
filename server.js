@@ -779,6 +779,88 @@ app.post('/api/deals/:id/members', (req, res) => {
   res.json({ success: true, deal: updated });
 });
 
+// DD-04/D-02: per-area clean-room clearance. Deliberately inherits the
+// broader '/api/deals' ROLE_WRITE_POLICY entry (admin + hrbp) UNCHANGED — NOT
+// narrowed to admin-only via isAdminRequest() the way the members route above
+// is, because D-02 explicitly calls for "the deal's Integration Lead (hrbp)
+// OR an admin", not admin-only. There is no separate revoke route: a revoke
+// is the SAME POST with a shorter (or empty) ddAreas array — the audit action
+// name is chosen below by comparing the before/after sets as strict
+// superset/subset/neither.
+//
+// Both routes 404 when the deal id does not exist, mirroring the members
+// route's own 404 branch immediately above — a deal id is already enumerable
+// through GET /api/deals for a member and through the admin list, so the
+// deal-level anti-enumeration rule governing /api/deals/select does not apply
+// to this admin/IL surface.
+app.get('/api/deals/:id/grants', (req, res) => {
+  // [security] Deviation from plan text (Rule 1/2 auto-fix): GET requests
+  // bypass ROLE_WRITE_POLICY entirely except for '/api/admin'-prefixed paths
+  // (see the consolidated /api gate's own `requiresRoleCheck` — CR-02's
+  // carve-out is admin-prefix-only, and this route is NOT admin-prefixed).
+  // Left unguarded, ANY authenticated role — including pmo/employee — could
+  // read an arbitrary deal's membership AND per-area clearance map purely
+  // from its id, which is exactly the MNPI disclosure D-02's "IL + admin"
+  // access model is meant to prevent. Narrowed inline to the SAME admin+hrbp
+  // role set the POST handler below inherits from ROLE_WRITE_POLICY's
+  // broader '/api/deals' entry, so the read is never more permissive than
+  // the write for this control-plane surface.
+  if (req.portalUser.role !== 'admin' && req.portalUser.role !== 'hrbp') {
+    return res.status(403).json({ error: 'Your role cannot view deal grants.' });
+  }
+  const dealId = req.params.id;
+  const deal = controlStore.getDeal(dealId);
+  if (!deal) return res.status(404).json({ error: 'Deal not found.' });
+  const grants = deal.memberGrants || {};
+  const members = (deal.members || []).map((username) => ({
+    username,
+    ddAreas: (grants[username] && grants[username].ddAreas) || [],
+  }));
+  res.json({ members });
+});
+
+app.post('/api/deals/:id/grants', (req, res) => {
+  const dealId = req.params.id;
+  const deal = controlStore.getDeal(dealId);
+  if (!deal) return res.status(404).json({ error: 'Deal not found.' });
+  const { username, ddAreas } = req.body;
+  // T-04-09: clearance for an area can never exist for someone who is not a
+  // member of the deal — a grant naming a non-member is refused outright,
+  // never silently creating a shadow-access memberGrants entry.
+  if (!Array.isArray(deal.members) || !deal.members.includes(username)) {
+    return res.status(400).json({ error: 'username must be a current member of this deal.' });
+  }
+
+  const priorGrant = (deal.memberGrants && deal.memberGrants[username]) || { ddAreas: [] };
+  const beforeArr = accessPolicy.DD_AREA_IDS.filter((id) => (priorGrant.ddAreas || []).includes(id));
+  const afterSet = new Set((ddAreas || []).filter((id) => accessPolicy.DD_AREA_IDS.includes(id)));
+  const afterArr = accessPolicy.DD_AREA_IDS.filter((id) => afterSet.has(id));
+
+  // A no-op grant (identical before/after sets) must not pollute the
+  // compliance record: persist nothing new and record nothing, returning the
+  // UNCHANGED deal — mirrors the interface contract's own stated rule.
+  const setsEqual = beforeArr.length === afterArr.length && beforeArr.every((id, i) => id === afterArr[i]);
+  if (setsEqual) {
+    return res.json({ success: true, deal });
+  }
+
+  const updated = controlStore.setDealMemberGrants(dealId, username, ddAreas);
+
+  const beforeSet = new Set(beforeArr);
+  const isSuperset = beforeArr.every((id) => afterSet.has(id)) && afterArr.length > beforeArr.length;
+  const isSubset = afterArr.every((id) => beforeSet.has(id)) && beforeArr.length > afterArr.length;
+  const action = isSuperset ? 'dd-area-grant' : (isSubset ? 'dd-area-revoke' : 'dd-area-grants-update');
+
+  // D-08: every grant/revoke decision is a control-plane security event —
+  // the SAME recordSecurityEvent() call shape server.js's other deal-lifecycle
+  // routes already use, never a second, divergent audit call site.
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action, dealId, subject: username,
+    before: beforeArr, after: afterArr, request: requestMeta(req),
+  });
+  res.json({ success: true, deal: updated });
+});
+
 // D-02: archive/delete are admin-only, inherited with ZERO new
 // ROLE_WRITE_POLICY entry from the existing `{ prefix: '/api/admin', roles:
 // ['admin'] }` rule (matches migrate-db/revoke-sessions's own precedent).
