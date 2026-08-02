@@ -146,7 +146,13 @@ test('deal-resolver (c): a session bound to a deal the user is NOT a member of g
   }
 });
 
-test('deal-resolver (d): a session bound to a nonexistent or archived deal is refused with the missing-deal status, never served demo content', async () => {
+test('deal-resolver (d) WR-02: a session bound to a nonexistent or archived deal is refused with a UNIFORM 403 (never a distinguishable 404), never served demo content', async () => {
+  // WR-02: resolveDatabase() must not hand back a distinct 404-for-missing
+  // vs 403-for-non-member status — that would let a caller enumerate which
+  // deal ids exist purely from the status code, exactly what POST
+  // /api/deals/select's own uniform-403 anti-enumeration rule (T-03-17)
+  // forbids. This is the same rule enforced on EVERY subsequent request a
+  // deal-bound session makes, not just at select time.
   const tokenMissing = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   sessionsDb.bindSessionDeal(runtimeConn, tokenMissing, 'deal_ghost999'); // never registered
   const tokenArchived = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
@@ -155,9 +161,9 @@ test('deal-resolver (d): a session bound to a nonexistent or archived deal is re
   try {
     const { port } = server.address();
     const resMissing = await fetch(`http://127.0.0.1:${port}/api/employees`, { headers: { Cookie: cookieHeader(tokenMissing) } });
-    assert.strictEqual(resMissing.status, 404, 'a session bound to a nonexistent deal must get the missing-deal status');
+    assert.strictEqual(resMissing.status, 403, 'a session bound to a nonexistent deal must get the same uniform 403 as a non-member refusal');
     const resArchived = await fetch(`http://127.0.0.1:${port}/api/employees`, { headers: { Cookie: cookieHeader(tokenArchived) } });
-    assert.strictEqual(resArchived.status, 404, 'a session bound to an archived deal must also get the missing-deal status');
+    assert.strictEqual(resArchived.status, 403, 'a session bound to an archived deal must also get the same uniform 403');
   } finally {
     sessionsDb.deleteSession(runtimeConn, tokenMissing);
     sessionsDb.deleteSession(runtimeConn, tokenArchived);

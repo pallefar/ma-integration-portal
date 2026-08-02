@@ -74,11 +74,16 @@ function resolveDatabase(req) {
     return { kind: 'demo', dealId: null, dbPath: dbFiles.DEMO_DB_PATH, schemaPath: dbFiles.DEAL_SCHEMA_PATH };
   }
 
+  // WR-02: a uniform 403 for BOTH "deal missing/archived" and "not a
+  // member" — matching POST /api/deals/select's own documented
+  // anti-enumeration rule (server.js). A distinct 404-for-missing vs
+  // 403-for-non-member here would let a caller enumerate which deal ids
+  // exist purely from the status code, exactly what T-03-17 forbids for a
+  // pre-announcement target's very existence. This runs on EVERY request a
+  // deal-bound session makes (not just at select time), so it must not
+  // reintroduce the distinction /api/deals/select deliberately closed.
   const deal = controlStore.getDeal(dealId);
-  if (!deal || deal.status === 'archived') {
-    throw new DealAccessError(404, 'That deal no longer exists.');
-  }
-  if (!controlStore.isDealMember(dealId, req.portalUser)) {
+  if (!deal || deal.status === 'archived' || !controlStore.isDealMember(dealId, req.portalUser)) {
     throw new DealAccessError(403, 'You are not a member of that deal.');
   }
   return { kind: 'deal', dealId, dbPath: dbFiles.dealDbPath(dealId), schemaPath: dbFiles.DEAL_SCHEMA_PATH };
