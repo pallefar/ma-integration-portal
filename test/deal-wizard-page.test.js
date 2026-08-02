@@ -133,6 +133,33 @@ test('deal-wizard-page: the wizard script assigns no markup sink', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3b. Regression (checkpoint feedback): a show-path that clears an error
+//     element's inline `display` to `''` merely falls back to the
+//     stylesheet's own `display:none` default (public/deal-wizard.html's
+//     `.wiz-field-error`/`.wizard-step-error`/`.wiz-row-error` rules) — the
+//     message is correctly fetched and assigned to textContent, but the
+//     operator never sees it. Every show-path must assign an EXPLICIT
+//     non-empty display value; only a hide-path may assign `'none'`.
+// ---------------------------------------------------------------------------
+test('deal-wizard-page: no error-display show-path clears display to an empty string', () => {
+  assert.strictEqual(
+    (wizardJs.match(/\.style\.display\s*=\s*['"]['"]/g) || []).length,
+    0,
+    'a show-path must set an explicit non-empty display value, never clear to \'\' (falls back to the stylesheet\'s own display:none default)'
+  );
+  // Every error-class element (.wiz-field-error / .wiz-assess-field-error /
+  // .wizard-step-error / .wiz-row-error) defaults to display:none in the
+  // page's stylesheet — assert the corresponding show-paths in the script
+  // assign a real, non-empty display value.
+  const errorDisplayAssignments = wizardJs.match(/\.style\.display\s*=\s*(VISIBLE_ERROR_DISPLAY|['"][a-z-]+['"])/g) || [];
+  const nonEmptyAssignments = errorDisplayAssignments.filter((a) => !/=\s*['"]none['"]/.test(a));
+  assert.ok(nonEmptyAssignments.length >= 4, 'at least the 4 known show-paths (field error x2, step banner, row banner) must assign a visible display value');
+  nonEmptyAssignments.forEach((assignment) => {
+    assert.doesNotMatch(assignment, /=\s*['"]{2}$/, `show-path must not clear display to an empty string: ${assignment}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. The switcher navigates to the wizard page (D-06's ONE creation path).
 // ---------------------------------------------------------------------------
 test('deal-wizard-page: the header switcher navigates to the wizard page', () => {

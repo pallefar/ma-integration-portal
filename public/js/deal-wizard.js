@@ -38,6 +38,17 @@
 
   function qs(id) { return document.getElementById(id); }
 
+  // Every error element's stylesheet default is `display:none` (an empty
+  // error node must stay invisible) — a show-path MUST assign an explicit
+  // non-empty display value here, never `''`. Clearing to `''` merely
+  // removes the INLINE override and falls back to the stylesheet's own
+  // `display:none`, which silently hides a correctly-populated message
+  // (confirmed live: textContent set, node present, but display:none —
+  // the operator sees nothing). 'block' matches every error element's
+  // actual layout need (.wiz-field-error's margin-top, .wiz-row-error's
+  // width:100%, .wizard-step-error's own block banner shape).
+  var VISIBLE_ERROR_DISPLAY = 'block';
+
   // Interface contract: id/class conventions copied from the existing
   // wizard precedent (public/js/pmo.js#switchWizStep) so the shared styles
   // apply — counter, hide-all/show-one panels, colour the progress fills.
@@ -129,14 +140,14 @@
         : null;
       if (target) {
         target.textContent = parsed.message;
-        target.style.display = '';
+        target.style.display = VISIBLE_ERROR_DISPLAY;
       } else {
         unmatched.push(parsed.fieldKey ? (parsed.fieldKey + ': ' + parsed.message) : parsed.message);
       }
     });
     if (unmatched.length) {
       var banner = stepEl.querySelector('.wizard-step-error');
-      if (banner) { banner.textContent = unmatched.join(' '); banner.style.display = ''; }
+      if (banner) { banner.textContent = unmatched.join(' '); banner.style.display = VISIBLE_ERROR_DISPLAY; }
     }
   }
 
@@ -156,11 +167,11 @@
       var target = parsed.fieldKey
         ? rowEl.querySelector('.wiz-assess-field-error[data-field="' + parsed.fieldKey + '"]')
         : null;
-      if (target) { target.textContent = parsed.message; target.style.display = ''; }
+      if (target) { target.textContent = parsed.message; target.style.display = VISIBLE_ERROR_DISPLAY; }
       else unmatched.push(parsed.message);
     });
     if (rowBanner) {
-      if (unmatched.length) { rowBanner.textContent = unmatched.join(' '); rowBanner.style.display = ''; }
+      if (unmatched.length) { rowBanner.textContent = unmatched.join(' '); rowBanner.style.display = VISIBLE_ERROR_DISPLAY; }
       else { rowBanner.textContent = ''; rowBanner.style.display = 'none'; }
     }
   }
