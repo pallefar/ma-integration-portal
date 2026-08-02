@@ -574,12 +574,11 @@
     clearStepBanner(stepEl);
     var btn = qs('wiz-finish');
     setBusy(btn, true);
-    // The Finish control's own stamp: DEAL_SETUP_STEPS requires SOME step
-    // name (ddKickoff, the wizard's last real step) even though this call's
-    // real purpose is `complete: true` — server.js's own handler comment
-    // documents this exact "operator choice to mark the wizard done enough"
-    // shape. Harmless to stamp ddKickoff again if step 6 already did.
-    postJson('/api/deals/' + state.dealId + '/setup', { step: 'ddKickoff', complete: true }).then(function (res) {
+    // G-04-10: Finish marks the whole setup complete and deliberately
+    // records NO step — a step the operator skipped must stay outstanding
+    // on the deal home, keeping its "resume setup" nudge alive, rather than
+    // being fabricated as done just because Finish was clicked.
+    postJson('/api/deals/' + state.dealId + '/setup', { complete: true }).then(function (res) {
       setBusy(btn, false);
       if (!res.ok) { renderErrors(res.data && res.data.error, stepEl); return; }
       window.location.href = '/dashboard.html';

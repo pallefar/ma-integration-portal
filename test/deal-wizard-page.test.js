@@ -160,6 +160,18 @@ test('deal-wizard-page: no error-display show-path clears display to an empty st
 });
 
 // ---------------------------------------------------------------------------
+// 3c. G-04-10: the Finish control must post completion only — never a step
+//     name — so a step the operator skipped is never fabricated as done.
+// ---------------------------------------------------------------------------
+test('deal-wizard-page: the Finish control marks the setup complete without stamping a wizard step', () => {
+  assert.match(
+    wizardJs,
+    /\/api\/deals\/'\s*\+\s*state\.dealId\s*\+\s*'\/setup',\s*\{\s*complete:\s*true\s*\}/,
+    'the Finish control\'s setup post must carry only `{ complete: true }`, never a `step` name'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // 4. The switcher navigates to the wizard page (D-06's ONE creation path).
 // ---------------------------------------------------------------------------
 test('deal-wizard-page: the header switcher navigates to the wizard page', () => {
