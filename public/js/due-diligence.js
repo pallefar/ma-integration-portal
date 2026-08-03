@@ -315,6 +315,16 @@
       });
     }
 
+    // T-04-21: clean-room disclosure. Conversion copies title+notes into the
+    // shared RAID/task lanes, which are NOT clearance-filtered like the DD
+    // routes are — so this must render for every row, converted or not, so
+    // the operator (who IS cleared here) makes an informed, deliberate call
+    // before widening the audience.
+    convertRow.appendChild(el('span', {
+      className: 'dd-finding-convert-note',
+      text: 'Visible to the whole deal team once created — not only members cleared for this area.',
+    }));
+
     row.appendChild(convertRow);
     return row;
   }
