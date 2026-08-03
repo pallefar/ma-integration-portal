@@ -2,12 +2,14 @@
 phase: 4
 slug: due-diligence-workspace
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
-status: draft
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-02
 filled_by: gsd-planner
 filled: 2026-08-02
+validated: 2026-08-03
+validated_by: orchestrator (no gaps — all requirements covered by green automated tests)
 ---
 
 # Phase 4 — Validation Strategy
@@ -65,29 +67,43 @@ feedback.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 04-01-01 | 01 | 1 | DD-01, DD-04 | T-04-01, T-04-05, T-04-06 | List responses omit uncleared areas server-side; write payload schema-bounded; DD text rendered as text | integration | `node --test test/dd-workspace.test.js` | ➕ created by this task | ⬜ pending |
-| 04-01-02 | 01 | 1 | DD-01, DD-04 | T-04-02, T-04-03 | By-id routes assert against the item's stored area; unknown id and uncleared area return one uniform 403 | integration | `node --test test/dd-workspace.test.js` | ✅ from 04-01-01 | ⬜ pending |
-| 04-01-03 | 01 | 1 | DD-04 | T-04-04 | Every refusal writes one attributed `dd-access-denied` audit row; browsing a cleared area writes none | integration | `node --test test/dd-access-policy.test.js` | ➕ created by this task | ⬜ pending |
-| 04-02-01 | 02 | 2 | DD-04 | T-04-09, T-04-10, T-04-11, T-04-12 | Grants are admin+IL only, require membership, are audited, and take effect on the next request | integration | `node --test test/dd-grants.test.js` | ➕ created by this task | ⬜ pending |
-| 04-02-02 | 02 | 2 | DD-04 | T-04-14 | Admin grants panel renders usernames and labels as text only | source | `node --test test/dd-grants.test.js` | ✅ from 04-02-01 | ⬜ pending |
-| 04-02-03 | 02 | 2 | DD-04 | T-04-13 | The four previously-untested `members: string[]` consumers still behave with grants populated; a stale grant on a removed member is unreachable | integration | `node --test test/dd-grants.test.js` | ✅ from 04-02-01 | ⬜ pending |
-| 04-03-01 | 03 | 3 | DD-01 | T-04-15 | Only the curated template row is seeded; the seeder is idempotent | unit | `node -e` template-shape assertion (in-task verify block) | ➕ source module created by this task | ⬜ pending |
-| 04-03-02 | 03 | 3 | DD-01 | T-04-15, T-04-17 | Allowlist copy stays allowlist-shaped; the empty-collections sweep keeps its strength | integration | `node --test test/deal-seed.test.js` | ✅ pre-existing, extended | ⬜ pending |
-| 04-03-03 | 03 | 3 | DD-01 | T-04-16, T-04-18, T-04-19 | Instantiate materialises only cleared areas, dedups on re-run, and reports skipped counts without naming an area | integration | `node --test test/dd-seed.test.js` | ➕ created by this task | ⬜ pending |
-| 04-04-01 | 04 | 4 | DD-02 | T-04-20, T-04-22 | Findings are area-filtered and by-id-guarded exactly like request items, with audited refusals | integration | `node --test test/dd-findings.test.js` | ➕ created by this task | ⬜ pending |
-| 04-04-02 | 04 | 4 | DD-02, DD-03 | T-04-24 | Both RAID severity list copies agree on four levels, proven by the suite | unit | `node --test test/dd-findings.test.js` | ✅ from 04-04-01 | ⬜ pending |
-| 04-04-03 | 04 | 4 | DD-03 | T-04-21, T-04-23, T-04-25 | Conversion asserts clearance before reading the finding; severity is copied verbatim; re-conversion is a no-op | integration | `node --test test/dd-findings.test.js` | ✅ from 04-04-01 | ⬜ pending |
-| 04-05-01 | 05 | 5 | DD-05 | T-04-27, T-04-28, T-04-31 | Only absolute web URLs are accepted and re-checked at render; the aggregate omits uncleared areas; provenance is server-stamped | integration | `node --test test/dd-vdr.test.js` | ➕ created by this task | ⬜ pending |
-| 04-05-02 | 05 | 5 | DD-05 | T-04-26, T-04-29, T-04-30 | Grants are audited security events for members only; the route inventory proves no upload route exists | integration | `node --test test/dd-vdr.test.js` | ✅ from 04-05-01 | ⬜ pending |
-| 04-06-01 | 06 | 6 | WIZ-01 | T-04-32, T-04-33 | A pending instance carries no score field; a submitted instance cannot be rewritten through the completion path | integration | `node --test test/deal-wizard.test.js` | ➕ created by this task | ⬜ pending |
-| 04-06-02 | 06 | 6 | WIZ-01 | T-04-34, T-04-35, T-04-37, T-04-38 | Wizard routes are admin+IL only; step names are enum-bounded; setup changes are audited; a failed provisioning rolls the registry row back | integration | `node --test test/deal-wizard.test.js` | ✅ from 04-06-01 | ⬜ pending |
-| 04-06-03 | 06 | 6 | WIZ-01 | T-04-36 | The full create-early / resume-later walk holds, and no route blocks work on an unfinished assessment | integration | `node --test test/deal-wizard.test.js` | ✅ from 04-06-01 | ⬜ pending |
-| 04-07-01 | 07 | 7 | WIZ-01 | T-04-39, T-04-41, T-04-43 | The page holds no duplicate rule set; values render as text; Next is disabled in flight | source | `node --test test/deal-wizard-page.test.js` | ➕ created by 04-07-02 (this task's verify runs it once 04-07-02 lands; run `node -e` parse check meanwhile) | ⬜ pending |
-| 04-07-02 | 07 | 7 | WIZ-01 | T-04-44 | Exactly one creation path exists and every endpoint the page calls is proven present in the live route inventory | source | `node --test test/deal-wizard-page.test.js` | ➕ created by this task | ⬜ pending |
-| 04-07-03 (human) | 07 | 7 | WIZ-01 | T-04-39, T-04-40, T-04-42 | A non-privileged role is redirected; a rejected step blocks and shows the server's message | manual | `node --test test/deal-wizard-page.test.js` (automated half) + browser walk-through | ✅ from 04-07-02 | ⬜ pending |
-| 04-08-01 | 08 | 8 | DD-01, DD-02 | T-04-45 | The rollup omits uncleared areas entirely and totals only what it returned | integration | `node --test test/dd-summary.test.js` | ➕ created by this task | ⬜ pending |
-| 04-08-02 | 08 | 8 | DD-01, DD-02, WIZ-01 | T-04-46, T-04-47, T-04-48, T-04-51 | The page renders only what the endpoint returned; the nudge names counts only; no audit route is referenced; nothing leaves the app | source | `node --test test/dd-summary.test.js` | ✅ from 04-08-01 | ⬜ pending |
-| 04-08-03 (human) | 08 | 8 | DD-01, DD-04, WIZ-01 | T-04-49, T-04-50 | The demo showcase is unchanged; uncleared areas are absent rather than greyed; an archived deal renders read-only | manual | `node --test test/dd-summary.test.js` (automated half) + browser walk-through | ✅ from 04-08-01 | ⬜ pending |
+| 04-01-01 | 01 | 1 | DD-01, DD-04 | T-04-01, T-04-05, T-04-06 | List responses omit uncleared areas server-side; write payload schema-bounded; DD text rendered as text | integration | `node --test test/dd-workspace.test.js` | ➕ created by this task | ✅ green |
+| 04-01-02 | 01 | 1 | DD-01, DD-04 | T-04-02, T-04-03 | By-id routes assert against the item's stored area; unknown id and uncleared area return one uniform 403 | integration | `node --test test/dd-workspace.test.js` | ✅ from 04-01-01 | ✅ green |
+| 04-01-03 | 01 | 1 | DD-04 | T-04-04 | Every refusal writes one attributed `dd-access-denied` audit row; browsing a cleared area writes none | integration | `node --test test/dd-access-policy.test.js` | ➕ created by this task | ✅ green |
+| 04-02-01 | 02 | 2 | DD-04 | T-04-09, T-04-10, T-04-11, T-04-12 | Grants are admin+IL only, require membership, are audited, and take effect on the next request | integration | `node --test test/dd-grants.test.js` | ➕ created by this task | ✅ green |
+| 04-02-02 | 02 | 2 | DD-04 | T-04-14 | Admin grants panel renders usernames and labels as text only | source | `node --test test/dd-grants.test.js` | ✅ from 04-02-01 | ✅ green |
+| 04-02-03 | 02 | 2 | DD-04 | T-04-13 | The four previously-untested `members: string[]` consumers still behave with grants populated; a stale grant on a removed member is unreachable | integration | `node --test test/dd-grants.test.js` | ✅ from 04-02-01 | ✅ green |
+| 04-03-01 | 03 | 3 | DD-01 | T-04-15 | Only the curated template row is seeded; the seeder is idempotent | unit | `node -e` template-shape assertion (in-task verify block) | ➕ source module created by this task | ✅ green |
+| 04-03-02 | 03 | 3 | DD-01 | T-04-15, T-04-17 | Allowlist copy stays allowlist-shaped; the empty-collections sweep keeps its strength | integration | `node --test test/deal-seed.test.js` | ✅ pre-existing, extended | ✅ green |
+| 04-03-03 | 03 | 3 | DD-01 | T-04-16, T-04-18, T-04-19 | Instantiate materialises only cleared areas, dedups on re-run, and reports skipped counts without naming an area | integration | `node --test test/dd-seed.test.js` | ➕ created by this task | ✅ green |
+| 04-04-01 | 04 | 4 | DD-02 | T-04-20, T-04-22 | Findings are area-filtered and by-id-guarded exactly like request items, with audited refusals | integration | `node --test test/dd-findings.test.js` | ➕ created by this task | ✅ green |
+| 04-04-02 | 04 | 4 | DD-02, DD-03 | T-04-24 | Both RAID severity list copies agree on four levels, proven by the suite | unit | `node --test test/dd-findings.test.js` | ✅ from 04-04-01 | ✅ green |
+| 04-04-03 | 04 | 4 | DD-03 | T-04-21, T-04-23, T-04-25 | Conversion asserts clearance before reading the finding; severity is copied verbatim; re-conversion is a no-op | integration | `node --test test/dd-findings.test.js` | ✅ from 04-04-01 | ✅ green |
+| 04-05-01 | 05 | 5 | DD-05 | T-04-27, T-04-28, T-04-31 | Only absolute web URLs are accepted and re-checked at render; the aggregate omits uncleared areas; provenance is server-stamped | integration | `node --test test/dd-vdr.test.js` | ➕ created by this task | ✅ green |
+| 04-05-02 | 05 | 5 | DD-05 | T-04-26, T-04-29, T-04-30 | Grants are audited security events for members only; the route inventory proves no upload route exists | integration | `node --test test/dd-vdr.test.js` | ✅ from 04-05-01 | ✅ green |
+| 04-06-01 | 06 | 6 | WIZ-01 | T-04-32, T-04-33 | A pending instance carries no score field; a submitted instance cannot be rewritten through the completion path | integration | `node --test test/deal-wizard.test.js` | ➕ created by this task | ✅ green |
+| 04-06-02 | 06 | 6 | WIZ-01 | T-04-34, T-04-35, T-04-37, T-04-38 | Wizard routes are admin+IL only; step names are enum-bounded; setup changes are audited; a failed provisioning rolls the registry row back | integration | `node --test test/deal-wizard.test.js` | ✅ from 04-06-01 | ✅ green |
+| 04-06-03 | 06 | 6 | WIZ-01 | T-04-36 | The full create-early / resume-later walk holds, and no route blocks work on an unfinished assessment | integration | `node --test test/deal-wizard.test.js` | ✅ from 04-06-01 | ✅ green |
+| 04-07-01 | 07 | 7 | WIZ-01 | T-04-39, T-04-41, T-04-43 | The page holds no duplicate rule set; values render as text; Next is disabled in flight | source | `node --test test/deal-wizard-page.test.js` | ➕ created by 04-07-02 (this task's verify runs it once 04-07-02 lands; run `node -e` parse check meanwhile) | ✅ green |
+| 04-07-02 | 07 | 7 | WIZ-01 | T-04-44 | Exactly one creation path exists and every endpoint the page calls is proven present in the live route inventory | source | `node --test test/deal-wizard-page.test.js` | ➕ created by this task | ✅ green |
+| 04-07-03 (human) | 07 | 7 | WIZ-01 | T-04-39, T-04-40, T-04-42 | A non-privileged role is redirected; a rejected step blocks and shows the server's message | manual | `node --test test/deal-wizard-page.test.js` (automated half) + browser walk-through | ✅ from 04-07-02 | ✅ green |
+| 04-08-01 | 08 | 8 | DD-01, DD-02 | T-04-45 | The rollup omits uncleared areas entirely and totals only what it returned | integration | `node --test test/dd-summary.test.js` | ➕ created by this task | ✅ green |
+| 04-08-02 | 08 | 8 | DD-01, DD-02, WIZ-01 | T-04-46, T-04-47, T-04-48, T-04-51 | The page renders only what the endpoint returned; the nudge names counts only; no audit route is referenced; nothing leaves the app | source | `node --test test/dd-summary.test.js` | ✅ from 04-08-01 | ✅ green |
+| 04-08-03 (human) | 08 | 8 | DD-01, DD-04, WIZ-01 | T-04-49, T-04-50 | The demo showcase is unchanged; uncleared areas are absent rather than greyed; an archived deal renders read-only | manual | `node --test test/dd-summary.test.js` (automated half) + browser walk-through | ✅ from 04-08-01 | ✅ green |
+
+### Gap-closure and remediation tasks (added after the original map was filled)
+
+The map above was authored 2026-08-02, before UAT produced two gap-closure plans and the
+security gate produced one remediation task. Those rows are recorded here rather than
+retro-fitted above, so the original planned scope stays legible.
+
+| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | Status |
+|---------|------|------|-------------|------------|-----------------|-----------|-------------------|--------|
+| 04-09-01 | 09 | 9 | WIZ-01 (G-04-10) | T-04-49(09), T-04-50(09) | A completion-only setup post marks the deal complete without fabricating a stamp for a skipped step; the existing `steps` object passes through untouched; the event is still audited | integration | `node --test test/deal-wizard.test.js` | ✅ green |
+| 04-09-02 | 09 | 9 | WIZ-01 (G-04-10) | T-04-50(09) | The wizard Finish control posts `{ complete: true }` only, never a step name | source | `node --test test/deal-wizard-page.test.js` | ✅ green |
+| 04-10-01 | 10 | 10 | WIZ-01 (G-04-8) | T-04-52, T-04-56 | `POST /api/deals` returns the caller's own unfinished deal instead of minting a duplicate; the key is `createdBy`-pinned with exact name/target equality and fails closed when `createdBy` is falsy; D-05 create-early preserved | integration | `node --test test/deal-wizard.test.js` | ✅ green |
+| 04-10-02 | 10 | 10 | WIZ-01 (G-04-8) | T-04-53, T-04-54 | The wizard resumes the session's own bound deal from `setup.steps`, adopting only what `/api/auth/me` reports and `/api/deals` confirms; the resume notice renders as text | source | `node --test test/deal-wizard-page.test.js` | ✅ green |
+| quick-t0421 | quick `260802-u5d` | — | DD-03 | **T-04-21** | The finding convert control discloses that a created task/RAID entry is visible to the whole deal team, not only members cleared for that area — the condition the accepted risk depends on | source | `node --test test/dd-findings.test.js` (`dd-findings (p)`) | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -180,3 +196,57 @@ lost.
 
 **Approval:** filled by gsd-planner at plan time, 2026-08-02. Status stays `draft` until `/gsd-validate-phase`
 or phase completion flips it to `validated`.
+
+---
+
+## Validation Audit 2026-08-03
+
+| Metric | Count |
+|--------|-------|
+| Tasks in map | 29 (24 planned + 4 gap-closure + 1 remediation) |
+| Gaps found | 0 |
+| Resolved | 0 (none needed) |
+| Escalated | 0 |
+
+**Method.** State A audit. Every requirement (DD-01…DD-05, WIZ-01) was cross-referenced
+against the phase's test files, and each file was run individually rather than inferred
+from a whole-suite pass:
+
+| Test file | Passing |
+|-----------|---------|
+| `test/dd-workspace.test.js` | 10 |
+| `test/dd-access-policy.test.js` | 5 |
+| `test/dd-grants.test.js` | 16 |
+| `test/dd-seed.test.js` | 5 |
+| `test/dd-findings.test.js` | 16 |
+| `test/dd-vdr.test.js` | 13 |
+| `test/dd-summary.test.js` | 13 |
+| `test/deal-wizard.test.js` | 29 |
+| `test/deal-wizard-page.test.js` | 11 |
+| `test/deal-seed.test.js` | 6 |
+
+Full suite: **240/240** (`npm test`). No requirement classified MISSING or PARTIAL, so
+the nyquist auditor was not spawned — per workflow §3, "No gaps → skip to Step 6".
+
+**What changed since the map was filled (2026-08-02).** All 24 planned task rows moved
+from `⬜ pending` to `✅ green`. Five rows were added: waves 9 and 10 (gap closure for
+G-04-10 and G-04-8, found by live UAT) and the quick task closing security threat
+T-04-21.
+
+**Honest note on regression strength.** Test *count* overstates protection here. Both
+gap-closure executors were required to prove their new tests failed pre-fix, and both
+reported that most did not: of 04-09's three new cases only `(x)` genuinely failed, and
+of 04-10's three only `(aa)` did — the others pass against pre-fix code and serve as
+over-broad-match guards rather than regression detectors. The T-04-21 test was verified
+to genuinely fail when the disclosure is removed. Real regression protection for the two
+UAT gaps therefore rests on **two** tests, not nine.
+
+**Manual-only verifications** (no automated substitute; closed by the orchestrator in a
+live browser, since no executor has browser access):
+
+- Wizard field-error visibility (04-07) — the wave-7 defect where every error was written
+  to the DOM correctly and was invisible. Source tests all passed; only a live walk caught it.
+- Demo-showcase regression + clean-room DOM absence (04-08).
+- Duplicate-deal resume, Back→Next path, and the escape hatch (04-10).
+- T-04-21 disclosure rendering — `computedDisplay: block`, `offsetParent` non-null,
+  present in `body.innerText`, under cache stamp `?v=1784800003`.
