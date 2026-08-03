@@ -553,3 +553,26 @@ test('dd-findings (o): a member uncleared for the finding\'s area gets the unifo
     server.close();
   }
 });
+
+test('dd-findings (p): the convert control discloses the whole-deal-team audience via textContent, not markup', () => {
+  // T-04-21: this threat was accepted as "the convert control states that the
+  // created task or entry is visible to the whole deal team" — but no such
+  // disclosure existed anywhere in the client. /api/raid and
+  // /api/integration-tasks are NOT clearance-filtered like the DD routes are
+  // (see dd-findings (o) above and server.js:3126-3128), so converting a
+  // finding silently republishes its title/notes to every deal member. This
+  // is a source-level assertion, not an HTTP round-trip, because the
+  // disclosure is a client-rendered UI element with no server-observable
+  // side effect — a regression here would not be caught by any API test.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'due-diligence.js'), 'utf8');
+  assert.ok(
+    src.includes('whole deal team'),
+    'the finding-row convert control must disclose that conversion makes the entry visible to the whole deal team (T-04-21) — this text has been removed or reworded',
+  );
+  const noteLine = src.split('\n').find((line) => line.includes('whole deal team'));
+  assert.ok(noteLine, 'expected to locate the exact line carrying the whole-deal-team disclosure text');
+  assert.ok(
+    /text\s*:/.test(noteLine),
+    "the whole-deal-team disclosure must be assigned via the el() helper's `text:` property (textContent), never via innerHTML or another markup sink",
+  );
+});
