@@ -226,7 +226,41 @@ Plans:
   2. The IL can record a role-selection or redundancy decision against a role or person.
   3. The IL can maintain a flight-risk register (risk level, owner, mitigation) that only authorized roles can read, with access to it audited.
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — Tracer: org position spine, current/target tiered clearance, graph-integrity guards (ORG-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 06-02-PLAN.md — Collapsible indented tree, search, unassigned bucket, current/target switch and copy-to-target (ORG-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 06-03-PLAN.md — Bulk paste importer (all-or-nothing), employee linking, and the first orphan guard on employee delete (ORG-01)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 06-04-PLAN.md — Append-only decision register, five-value vocabulary in three copies, IL/admin-only write gate (ORG-02)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 06-05-PLAN.md — Flight-risk register with denial AND successful-read audit, restricted register surface (ORG-03)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 06-06-PLAN.md — One-click bidirectional conversion and the provenance-based outbound RAID filter closing T-04-21 (ORG-03)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 06-07-PLAN.md — Clearance-scoped org rollup, two-tier deal-home panel and the flight-risk owner nudge (ORG-01, ORG-02, ORG-03)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 06-08-PLAN.md — Hand-tuned demo org seed, four-language decision labels, and the two live regression walks (ORG-01, ORG-02, ORG-03)
 
 ### Phase 7: IMO Reporting & Exports
 
@@ -254,5 +288,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
-| 6. Org Design & Talent Retention | 0/TBD | Not started | - |
+| 6. Org Design & Talent Retention | 0/8 | Planned | - |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |

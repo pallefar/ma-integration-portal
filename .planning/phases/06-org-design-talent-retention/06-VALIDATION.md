@@ -52,6 +52,26 @@ specifically warrant a live walk.
 
 Task IDs are assigned when plans are written; this table is keyed on requirement + behavior until then.
 
+**Plan assignment (filled in by `/gsd-plan-phase 6`, 2026-08-06 — 8 plans, 8 sequential waves):**
+
+| Behaviour group | Test file | Plan · Wave · Task |
+|---|---|---|
+| ORG-01 position CRUD + current/target state filtering | `test/org-positions.test.js` | 06-01 · W1 · T1 |
+| ORG-01 / D-07 target-state read boundary, four identities | `test/org-access-policy.test.js` | 06-01 · W1 · T3 |
+| ORG-01 graph integrity — self-parent, unknown parent, cycle, cross-state | `test/org-positions.test.js` | 06-01 · W1 · T2 |
+| ORG-01 capability probe, copy-to-target, guarded position delete | `test/org-positions.test.js`, `test/org-access-policy.test.js` | 06-02 · W2 · T3 |
+| ORG-01 / D-10 bulk import, all-or-nothing | `test/org-import.test.js` | 06-03 · W3 · T1 |
+| ORG-01 / D-09 employee orphan guard | `test/org-positions.test.js` | 06-03 · W3 · T3 |
+| ORG-02 / D-04 decision write authz, four identities | `test/org-decisions.test.js` | 06-04 · W4 · T1 |
+| ORG-02 / D-14 three-copy anti-drift · D-13 derived current · append-only | `test/org-decisions.test.js` | 06-04 · W4 · T2 |
+| ORG-03 / D-03 denial audit + successful-read audit | `test/org-flight-risk-audit.test.js` | 06-05 · W5 · T1 |
+| ORG-03 / D-03 open-tier zero-audit scoping · encoding · concurrency | `test/org-flight-risk-audit.test.js` | 06-05 · W5 · T2 |
+| ORG-03 / D-15 conversion, bidirectional link, dedupe by source | `test/org-flight-risk-conversion.test.js` | 06-06 · W6 · T1 |
+| D-17 RAID outbound filter, BOTH directions | `test/raid-access-filter.test.js` | 06-06 · W6 · T2 |
+| D-19/D-20/D-21 rollup, absent-not-zeroed, zero-audit | `test/org-summary.test.js` | 06-07 · W7 · T1 |
+| D-18 demo seed + committed-bytes WAL proof | `git diff --stat data/demo.db` | 06-08 · W8 · T1 |
+| Manual-only rows below (live walks) | browser | 06-08 · W8 · T2 and T3 |
+
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | TBD | TBD | TBD | ORG-01 | — | A position with `title`/`level`/`reportsToId`/`employeeId`/`state` can be created, read (current state, open to any deal member) and updated | integration | `node --test test/org-positions.test.js` | ❌ W0 | ⬜ pending |
