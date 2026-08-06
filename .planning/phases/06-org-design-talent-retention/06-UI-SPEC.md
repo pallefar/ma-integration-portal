@@ -114,6 +114,43 @@ Design Tension 5 below.
 
 ---
 
+## Internationalisation & Text Expansion
+
+**Added at the step-9.5 probe gate (user decision) — the authored spec omitted this axis entirely
+and the checker's 6/6 pass did not catch it.**
+
+Every user-facing string in this app renders through `data-i18n="key"` and exists in **four
+languages (EN/DE/ZH/CS)** — ~698 keys today. `public/js/execution.js:1008` is the governing
+precedent: severity badges render `data-i18n="raid.lvl_" + severity`, i.e. **badge text is
+translated, not literal**. D-14's five decision values therefore need five new keys × four
+languages, and D-16's severity labels already have theirs.
+
+Locked contract for every new surface in this phase:
+
+- **No fixed-width chrome.** Every badge, pill, chip and count row sizes to its content. No `width`
+  or `max-width` in absolute units on the level chip, the decision badge, the severity accent's
+  label, the switch labels, or the deal-home count rows.
+- **Wrap, never clip.** No `overflow:hidden` + `text-overflow:ellipsis` on translated label text.
+  A longer translation must reflow its container, not be silently truncated — a clipped
+  `redundant`/`in-selection` badge is a data-integrity problem, not a cosmetic one, because the
+  label IS the decision.
+- **German is the sizing case.** DE is the longest of the four for this vocabulary; ZH is the
+  shortest and exercises the opposite failure (a pill collapsing to near-nothing). Both ends get
+  looked at, not just EN.
+- **Verification is part of "done".** The executor's visual pass for any wave touching the tree
+  card, the decision badge, the deal-home panel or the nudge must be run at the longest available
+  translation, not only at EN. This is the same class as the layout regression previously reported
+  on this project as "looks very weird", and it is why this is a locked contract rather than a
+  backstop.
+
+Note for the planner: this is a *design* contract only. Actually authoring the five DE/ZH/CS
+translations is separate work already budgeted in 06-CONTEXT.md D-14 ("~5 i18n keys × 4
+languages"), and Phase 5's D-07 precedent applies — where a translation's meaning is genuinely
+unchanged it may be carried verbatim, otherwise English text ships and relies on
+`transitions.js`'s documented fallback-to-English contract.
+
+---
+
 ## Copywriting Contract
 
 | Element | Copy |
@@ -216,6 +253,16 @@ UAT used to prove T-04-46):
   even offers a `state=target` request from an uncleared session; the client has no code path that
   constructs that URL unless a `restricted` capability flag from an initial `GET /api/org/summary`
   or equivalent probe is present).
+- **The client-side omission above is NOT the control.** Exactly as stated for the write path in
+  Surface Contract §5 ("Server-side authz is the actual gate; the UI omission is a courtesy, not
+  the control"), the same rule governs this READ path: `GET /api/org/positions?state=target` MUST
+  be refused server-side for an uncleared caller — a hand-crafted request with that query string,
+  from a valid session that simply never loaded the page's JS, must not return target-state rows.
+  Stated explicitly here because D-07 is a *read* restriction and this project's review gate has
+  already caught precisely this class once on the read side: Phase 4 Wave 2 found `server.js:446`
+  role-checking GETs **only** on `/api/admin`-prefixed paths, so any authenticated role could read
+  any deal's membership + clearance map. The planner must treat the server filter on `state` as
+  the security boundary and this section's DOM-absence rules as defence in depth on top of it.
 
 ### 4. The current/target switch — absent, not present-but-inert
 
@@ -446,49 +493,102 @@ pattern, not as shared code** — per that function's own comment, the synergy n
 
 ## UI Considerations
 
-Elements classified: org-tree (list-collection), position-editor-form (form), paste-importer
-(form), decision-history (list-collection), record-decision-form (form), flight-risk-register
-(list-collection), flight-risk-form (form), deal-home-org-panel (list-collection), owner-nudge
-(interactive-control/static-content), current-target-switch (interactive-control), search-box
-(interactive-control), unassigned-employees-bucket (list-collection). No `unclassified`
-candidates — every element proposed a clear kind from its own description above.
+**Source: the `ui-consideration-probe.cjs` engine, run at step 9.5 after checker approval.** This
+section REPLACES an earlier hand-authored block that used this format but was not probe output —
+the engine raised **78** applicable considerations against that block's 32, and produced two
+`unclassified` elements it had reported as none.
 
-Applicable state considerations resolved: 28 covered, 3 backstop, 1 unresolved.
+**Kind confirmation (the recall step).** The prose classifier is heuristic and lossy. Two elements
+classified as `unclassified` and so contributed ZERO coverage until an authored `elements` override
+was supplied at the user-confirmation gate:
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
+| Element | Heuristic | Authored override (user-confirmed) | Considerations recovered |
+|---|---|---|---|
+| deal-home-org-panel | `unclassified` | `list-collection` + `static-content` | 1 → 8 |
+| owner-nudge | `unclassified` | `static-content` + `interactive-control` | 1 → 4 |
+
+**Coverage: 78 applicable — 74 covered, 3 backstop, 1 unresolved. 0 unclassified.**
+
+| Category | Element | Status | Resolution / Reason |
+|----------|---------|--------|---------------------|
 | empty | org-tree | ✅ covered | "No positions mapped yet" + body copy pointing at the paste importer (Copywriting Contract; Surface Contract §2) |
-| empty | position-editor-form | ✅ covered | Opens blank with placeholder text per field, mirroring `.dd-add`'s no-default-value fields |
-| empty | paste-importer | ✅ covered | Textarea placeholder shows an example CSV/JSON row, mirroring `#wiz-roster-raw`'s existing `placeholder` attribute (`pmo.html:186`) |
+| loading | org-tree | ✅ covered | Plain-text "Loading organization…" — no skeleton-loader class exists in this codebase, so this follows the established plain-text idiom (`due-diligence.html:30`), not a new pattern |
+| error | org-tree | ✅ covered | Degrades to the "No positions mapped yet" empty state rather than a distinct error surface, matching the app-wide graceful-degradation convention (CLAUDE.md §Error Handling) and `deal-home.js`'s `.catch(() => null)` |
+| populated | org-tree | ✅ covered | Full contract at 200+ nodes in Design Tensions 1/2/6 — indent rail, depth-decreasing elevation, level chip |
+| partial | org-tree | ✅ covered | Positions with no `employeeId` are D-05's core design, not an edge case — vacant nodes render inline via the `<em>` tag-level distinction (Surface Contract §2) |
+| overflow | org-tree | ✅ covered | Indent cap at depth 6, default expand depth 2, search-driven ancestor expansion (Tension 2); indent cap tightens to depth 3 ≤768px (Tension 6) |
+| zero-one-many | org-tree | ✅ covered | Bare-count heading convention inherited from `.dd-area-count` (`due-diligence.html:19`), which reads correctly at 0/1/many |
+| long-text | org-tree | ✅ covered | `min-width:0` on the flex text container, matching `.dd-item-main`'s wrap-not-overflow rule (`due-diligence.html:22`); translated labels wrap per §Internationalisation & Text Expansion |
+| empty | position-editor-form | ✅ covered | Opens blank with per-field placeholder text, mirroring `.dd-add`'s no-default-value fields |
+| loading | position-editor-form | ✅ covered | Submit button enters a disabled in-flight state; no overlay (no overlay idiom exists on comparable forms) |
+| error | position-editor-form | ✅ covered | Field-level and form-level errors set an **explicit visible `display` value, never `''`** — the Phase-4-Wave-7 countermeasure (Copywriting Contract) |
+| partial | position-editor-form | ✅ covered | Only `title` is required; `level`, `reportsTo` and `employeeId` are all optional, so a partially-filled position is a valid saved state by design (D-05 vacant positions) |
+| overflow | position-editor-form | ✅ covered | Fields stack vertically and the form scrolls with the page — no fixed-height container is specified anywhere in the contract |
+| long-text | position-editor-form | ✅ covered | Inputs scroll horizontally within themselves (browser default, unchanged); stored values wrap wherever rendered |
+| empty | paste-importer | ✅ covered | Textarea placeholder shows an example CSV/JSON row, mirroring `#wiz-roster-raw`'s existing `placeholder` (`pmo.html:186`) |
+| loading | paste-importer | ✅ covered | Parse is synchronous and client-side; the commit step disables the submit button in flight |
+| error | paste-importer | ✅ covered | "Couldn't read that paste…" with explicit `display:'block'` (never `''`), plus per-row validation errors (Copywriting Contract) |
+| populated | paste-importer | ✅ covered | Preview step renders the parsed rows as a table before commit (Surface Contract §4) |
+| partial | paste-importer | ⚠ unresolved | **Explicit planner assumption.** Mixed valid/invalid rows in one paste — reject wholesale vs import-good-and-report-bad — was delegated to Claude's Discretion in 06-CONTEXT.md and re-confirmed as still-delegated at this gate. The spec locks the Preview step's existence but NOT this policy. Planner must decide and state it |
+| overflow | paste-importer | ✅ covered | Textarea is fixed-rows with native scroll (the `#wiz-roster-raw` precedent); the preview table scrolls with the page |
+| zero-one-many | paste-importer | ✅ covered | Preview heading reads "{N} positions parsed" — a bare count, correct at 0/1/many |
+| long-text | paste-importer | ✅ covered | Pasted content is bounded by the write route's zod length limits (VAL-01); over-length rows surface as per-row validation errors rather than being silently truncated |
 | empty | decision-history | ✅ covered | "No decisions recorded yet." (Surface Contract §5) |
-| empty | flight-risk-register | ✅ covered | "No flight-risk entries yet.", extending the `.dd-empty` italic-text idiom used elsewhere in this contract |
-| empty | deal-home-org-panel (open tier) | ✅ covered | "No positions mapped yet — see the Org page", linking `/org.html` (Surface Contract §7) |
-| empty | unassigned-employees-bucket | ✅ covered | Italic zero-state treatment when 0, matching `.dd-empty` (Surface Contract §2) |
-| loading | org-tree | ✅ covered | Plain-text "Loading organization…" — no skeleton-loader class exists anywhere in this codebase (confirmed by grep), so this follows the established plain-text idiom (`.dd-checklist-status-line`, `due-diligence.html:30`), not a new skeleton pattern |
-| loading | flight-risk-register | ✅ covered | Same plain-text loading idiom |
-| loading | deal-home-org-panel | ✅ covered | Joins `renderDealHome()`'s existing all-or-nothing `Promise.all` fan-out (`deal-home.js:267-284`) — no independent loading state needed |
-| loading | search-box | 🧪 backstop | Search is client-side substring match against already-fetched tree data (no network round-trip per keystroke), so no loading spinner is needed today — flagged as a backstop asserting search never shows a stale result set that outlives its own source fetch, in case search is ever made server-side later |
-| error | paste-importer | ✅ covered | "Couldn't read that paste…" + explicit `display:'block'` (never `''`), the Phase-4-Wave-7 countermeasure, stated in Copywriting Contract |
-| error | position-editor-form | ✅ covered | Same explicit-visible-display rule (Copywriting Contract) |
-| error | record-decision-form | ✅ covered | Same explicit-visible-display rule |
-| error | flight-risk-form | ✅ covered | Same explicit-visible-display rule |
-| error | org-tree (fetch failure) | ✅ covered | Degrades to the same "No positions mapped yet" empty state rather than a distinct error message — matching the app-wide graceful-degradation convention (CLAUDE.md §Error Handling) and `deal-home.js`'s own `.catch(() => null)` pattern |
-| error | deal-home-org-panel | ✅ covered | Same catch-to-null-panel pattern already used by the other 3 deal-home panels (`deal-home.js:268-271`) |
-| populated | org-tree | ✅ covered | Full contract at 200+ nodes given in Tensions 1/2/6 |
-| populated | flight-risk-register | ✅ covered | `.raid-row`-styled list at typical volume (Surface Contract §6) |
+| loading | decision-history | ✅ covered | Plain-text loading idiom, same as the tree |
+| error | decision-history | ✅ covered | Catch-to-empty-state, same graceful-degradation convention |
 | populated | decision-history | ✅ covered | Reverse-chronological row list (Surface Contract §5) |
-| partial | paste-importer (mixed valid/invalid rows in one paste) | ⚠ unresolved | 06-CONTEXT.md's own "Claude's Discretion" explicitly leaves row-by-row-vs-wholesale rejection policy to the planner. This spec locks the Preview-step's existence (Surface Contract §4) but not that policy — recorded as an explicit planner assumption, not silently dropped |
-| partial | org-tree (positions with no `employeeId`) | ✅ covered | Not an edge case but D-05's core design — vacant nodes render inline via the `<em>` tag-level distinction (Surface Contract §2) |
-| partial | decision-history (position with no explicit entry recorded yet) | ✅ covered | Same "No decisions recorded yet." empty-state copy (Surface Contract §5) |
-| overflow | org-tree at 200+ nodes | ✅ covered | Indent cap, default collapse depth, search-driven ancestor expansion (Tension 2) |
-| overflow | flight-risk-register at high volume | 🧪 backstop | No explicit pagination/grouping contract exists for this register (unlike the tree, which has collapse-driven density control). Flagged as a backstop — if a real deal seeds 100+ entries, plan-phase should decide whether it needs tree-style grouping, or whether headcount naturally bounds it enough not to need one |
-| overflow | deal-home-org-panel rows | ✅ covered | Bounded by design — the panel shows summary counts/deltas only (D-19/D-21), never a per-position list, so no row count can overflow |
-| zero-one-many | flight-risk-register | ✅ covered | Singular/plural copy pattern from §Copywriting/§8 ("entry"/"entries") |
-| zero-one-many | unassigned-employees-bucket | ✅ covered | "Unassigned employees ({N})" — a bare count reads correctly at 0/1/many, matching `.dd-area-count`'s existing bare-number convention (`due-diligence.html:19`) |
-| zero-one-many | deal-home restricted counts-by-decision-type | ✅ covered | Each of the 5 decision-type counts renders as a bare number, same bare-count convention |
-| long-text | org-tree title / occupant name | ✅ covered | `min-width:0` on the flex text container, matching `.dd-item-main`'s existing wrap-not-overflow rule (`due-diligence.html:22`) |
-| long-text | rationale / mitigation free-text fields | ✅ covered | Normal wrapping block, `line-height:1.4`, no clamp/ellipsis anywhere in the comparable codebase surfaces (`.dd-item-text`, RAID notes) |
-| long-text | level chip (D-08 free-text) | 🧪 backstop | `level` is explicitly unconstrained free text (D-08) — an unusually long value could break the compact pill's sizing; no truncation/max-width rule is locked here, flagged for executor visual verification rather than assumed |
+| partial | decision-history | ✅ covered | A position with no entry yet shows the same "No decisions recorded yet." copy; `effectiveDate` is optional and simply omitted from the row when absent |
+| overflow | decision-history | ✅ covered | Bounded by construction — an append-only log per position accumulates a handful of entries over a deal's life, and the list scrolls with the page; no pagination contract needed |
+| zero-one-many | decision-history | ✅ covered | Bare-count convention |
+| long-text | decision-history | ✅ covered | `rationale` renders as a normal wrapping block, `line-height:1.4`, no clamp/ellipsis — matching `.dd-item-text` and RAID notes |
+| empty | record-decision-form | ✅ covered | Opens with no decision type preselected — a deliberate non-default, so `retain` is never recorded by accident |
+| loading | record-decision-form | ✅ covered | Submit disabled in flight |
+| error | record-decision-form | ✅ covered | Explicit visible `display` value, never `''` |
+| partial | record-decision-form | ✅ covered | `rationale` is a required textarea (D-13); the form hard-blocks on it rather than saving a rationale-less governance record |
+| long-text | record-decision-form | ✅ covered | Rationale wraps; bounded by the route's zod length limit |
+| empty | flight-risk-register | ✅ covered | "No flight-risk entries yet.", extending the `.dd-empty` italic-text idiom |
+| loading | flight-risk-register | ✅ covered | Plain-text loading idiom |
+| error | flight-risk-register | ✅ covered | Catch-to-empty-state |
+| populated | flight-risk-register | ✅ covered | `.raid-row`-styled list (`execution.html:108`) at typical volume (Surface Contract §6) |
+| partial | flight-risk-register | ✅ covered | An entry with no mitigation recorded is exactly what D-22's "unmitigated high/critical" nudge keys on — a first-class state, not a defect |
+| overflow | flight-risk-register | 🧪 backstop | { statement: "The flight-risk register renders correctly at high entry volume", verification: backstop } — no pagination or grouping contract is locked. Rationale (user-confirmed at this gate): the register tracks KEY talent, not headcount, so realistic volume is tens not hundreds, and a speculative pagination design now would be unearned. Routes to `human_needed` at verify time if unevidenced — never a silent pass |
+| zero-one-many | flight-risk-register | ✅ covered | Singular/plural copy pattern ("entry"/"entries"), Copywriting Contract |
+| long-text | flight-risk-register | ✅ covered | `mitigation` wraps as a normal block, no clamp |
+| empty | flight-risk-form | ✅ covered | Opens blank, no preselected severity |
+| loading | flight-risk-form | ✅ covered | Submit disabled in flight |
+| error | flight-risk-form | ✅ covered | Explicit visible `display` value, never `''` |
+| partial | flight-risk-form | ✅ covered | Severity and owner required; `mitigation` optional, so an unmitigated entry is representable (see `partial`/flight-risk-register above) |
+| overflow | flight-risk-form | ✅ covered | Fields stack; no fixed-height container |
+| long-text | flight-risk-form | ✅ covered | Mitigation textarea wraps; bounded by the route's zod length limit |
+| empty | deal-home-org-panel | ✅ covered | "No positions mapped yet — see the Org page", linking `/org.html` (Surface Contract §7) |
+| loading | deal-home-org-panel | ✅ covered | Joins `renderDealHome()`'s existing all-or-nothing `Promise.all` fan-out (`deal-home.js:267-284`) — no independent loading state |
+| error | deal-home-org-panel | ✅ covered | Same `.catch(() => null)` drop-the-panel pattern already used by the other three deal-home panels (`deal-home.js:268-271`) |
+| populated | deal-home-org-panel | ✅ covered | Open-tier rows always render; restricted-tier `<section>` renders only when `summary.restricted !== undefined` (Surface Contract §7) |
+| partial | deal-home-org-panel | ✅ covered | **This is the clean-room state.** For an uncleared caller the restricted key is absent from the response entirely (not `null`, not `{}`), so no restricted `<section>` is constructed. The panel must render as a complete, non-broken open-tier-only panel — no empty heading, no gap, no placeholder (D-20, Tension 3) |
+| overflow | deal-home-org-panel | ✅ covered | Bounded by design — the panel shows summary counts and deltas only (D-19/D-21), never a per-position list, so no row count can overflow |
+| zero-one-many | deal-home-org-panel | ✅ covered | Each of the five decision-type counts renders as a bare number, correct at 0/1/many |
+| long-text | deal-home-org-panel | ✅ covered | Row labels wrap per §Internationalisation & Text Expansion — the five decision-type labels are translated and DE is the sizing case; row styling matches `.deal-home-readiness-row` (`dashboard.html:16,20`) with no fixed width |
+| loading | owner-nudge | ✅ covered | Rides the same deal-home `Promise.all` fan-out; the nudge simply does not render until its source resolves |
+| error | owner-nudge | ✅ covered | If the source fetch fails the nudge is absent, consistent with the panel's drop-on-failure pattern — a nudge is never rendered from stale or partial data, since a retention nudge that fires on bad data is worse than one that does not fire |
+| overflow | owner-nudge | ✅ covered | Banner text wraps to multiple lines; reuses the existing banner system's own overflow behaviour rather than introducing a new rule |
+| long-text | owner-nudge | ✅ covered | Wraps per §Internationalisation & Text Expansion; the nudge string is translated and interpolates a server-derived count |
+| loading | current-target-switch | ✅ covered | The switch renders only after the initial summary/positions fetch resolves — it is never briefly visible then withdrawn, which would leak the existence of restricted content to an uncleared viewer (Tension 4) |
+| error | current-target-switch | ✅ covered | On fetch failure the switch is absent, matching the fail-closed direction: an errored clearance check must never fall back to showing the control |
+| long-text | current-target-switch | ✅ covered | "Current" / "Target" labels are translated and size to content per §Internationalisation & Text Expansion |
+| empty | search-box | ✅ covered | No-match state: "No positions match your search." (Copywriting Contract, line 130) |
+| loading | search-box | 🧪 backstop | { statement: "Search never displays a result set that outlives its own source fetch", verification: backstop } — search is a client-side substring match over already-fetched tree data, so no spinner is needed today; the backstop guards the staleness invariant should search ever become server-side |
+| error | search-box | ✅ covered | Search cannot fail independently — it operates on already-fetched data; a source-fetch failure is handled by the tree's own error state |
+| partial | search-box | ✅ covered | A match on a collapsed deep node expands every ancestor so the result is reachable, and non-matching siblings are de-emphasised rather than removed (Tension 2) |
+| overflow | search-box | ✅ covered | Result set is the tree itself, already governed by the tree's overflow contract |
+| long-text | search-box | ✅ covered | Input scrolls horizontally within itself; placeholder is translated and wraps per §Internationalisation |
+| empty | unassigned-employees-bucket | ✅ covered | Italic zero-state matching `.dd-empty` when no unassigned employees exist (Surface Contract §2) |
+| loading | unassigned-employees-bucket | ✅ covered | Shares the org page's single fetch and its plain-text loading idiom |
+| error | unassigned-employees-bucket | ✅ covered | Shares the tree's catch-to-empty-state behaviour |
+| populated | unassigned-employees-bucket | ✅ covered | Flat list, deliberately not a tree — these records have no position and therefore no parent (Surface Contract §2) |
+| partial | unassigned-employees-bucket | ✅ covered | An employee with sparse fields renders the fields it has; absent fields are omitted, never rendered as "—" placeholders |
+| overflow | unassigned-employees-bucket | ✅ covered | Scrolls with the page; bounded in practice by roster size and shrinks as positions are mapped |
+| zero-one-many | unassigned-employees-bucket | ✅ covered | "Unassigned employees ({N})" — bare count, correct at 0/1/many, matching `.dd-area-count` (`due-diligence.html:19`) |
+| long-text | unassigned-employees-bucket | 🧪 backstop | { statement: "The level chip renders correctly with an unusually long value", verification: backstop } — `level` is unconstrained free text per D-08, so beyond translation expansion (now covered by §Internationalisation) an arbitrarily long authored value could still break the compact pill. Flagged for executor visual verification rather than assumed |
 
 <!-- Status vocabulary (locked by probe-core projectTruths):
      ✅ covered   → a plain truth string lifted into must_haves.truths
