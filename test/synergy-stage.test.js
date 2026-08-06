@@ -203,3 +203,105 @@ test('synergy-stage (f): an existing initiative can be advanced through the upda
     server.close();
   }
 });
+
+// ------------------------------------------- Task 3: migration script --
+
+const { migrateSynergyStages } = require('../scripts/migrate-synergy-stages.js');
+
+const LEGACY_ROWS = [
+  { id: 'syn_mig_1', status: 'identified' },
+  { id: 'syn_mig_2', status: 'validated' },
+  { id: 'syn_mig_3', status: 'planned' },
+  { id: 'syn_mig_4', status: 'executing' },
+  { id: 'syn_mig_5', status: 'realized' },
+];
+const LEGACY_I18N_LABELS = {
+  en: { 'syn.st_identified': 'Identified', 'syn.st_validated': 'Validated', 'syn.st_planned': 'Planned', 'syn.st_executing': 'Executing', 'syn.st_realized': 'Realized', 'unrelated.key': 'Untouched' },
+  de: { 'syn.st_identified': 'Identifiziert', 'syn.st_validated': 'Validiert', 'syn.st_planned': 'Geplant', 'syn.st_executing': 'In Umsetzung', 'syn.st_realized': 'Realisiert' },
+  zh: { 'syn.st_identified': '已识别', 'syn.st_validated': '已验证', 'syn.st_planned': '已规划', 'syn.st_executing': '执行中', 'syn.st_realized': '已实现' },
+  cs: { 'syn.st_identified': 'Identifikováno', 'syn.st_validated': 'Ověřeno', 'syn.st_planned': 'Naplánováno', 'syn.st_executing': 'V realizaci', 'syn.st_realized': 'Realizováno' },
+};
+
+function seedLegacyMigrationDb(dbPath) {
+  const conn = dbFiles.openDbFile(dbPath, dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    LEGACY_ROWS.forEach((row, i) => {
+      const item = { id: row.id, title: 'Migration seed ' + row.id, category: 'cost', targetM: 1, realizedM: 0, status: row.status, createdAt: new Date().toISOString() };
+      conn.prepare('INSERT INTO synergyInitiatives (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+        .run(row.id, null, i, JSON.stringify(item));
+    });
+    conn.prepare("INSERT INTO app_state (key, data) VALUES ('i18n', ?)")
+      .run(JSON.stringify({ languages: [{ code: 'en' }, { code: 'de' }, { code: 'zh' }, { code: 'cs' }], defaultLang: 'en', strings: LEGACY_I18N_LABELS }));
+    conn.pragma('wal_checkpoint(TRUNCATE)');
+  } finally {
+    conn.close();
+  }
+}
+
+function readMigrationDb(dbPath) {
+  const conn = dbFiles.openDbFile(dbPath, dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    const rows = conn.prepare('SELECT id, data FROM synergyInitiatives ORDER BY id').all().map((r) => JSON.parse(r.data));
+    const i18nRow = conn.prepare("SELECT data FROM app_state WHERE key = 'i18n'").get();
+    return { rows, i18n: JSON.parse(i18nRow.data) };
+  } finally {
+    conn.close();
+  }
+}
+
+test('synergy-stage (g): migrateSynergyStages rewrites every legacy row onto the four-stage vocabulary, deletes the retired `status` key, and migrates the i18n singleton per D-07\'s mechanical map', () => {
+  const dbPath = path.join(TMP_DIR, 'migration-test-g.db');
+  seedLegacyMigrationDb(dbPath);
+
+  const result = migrateSynergyStages(dbPath);
+  assert.strictEqual(result.rowsMigrated, 5);
+  assert.strictEqual(result.rowsSkipped, 0);
+
+  const { rows, i18n } = readMigrationDb(dbPath);
+  const expectedStages = { syn_mig_1: 'idea', syn_mig_2: 'validated', syn_mig_3: 'committed', syn_mig_4: 'committed', syn_mig_5: 'captured' };
+  rows.forEach((r) => {
+    assert.strictEqual(r.stage, expectedStages[r.id], `row ${r.id} must map to ${expectedStages[r.id]} per D-07's mechanical map`);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(r, 'status'), false, `row ${r.id} must have the retired status key deleted`);
+  });
+
+  ['en', 'de', 'zh', 'cs'].forEach((lang) => {
+    const strings = i18n.strings[lang];
+    ['syn.st_idea', 'syn.st_validated', 'syn.st_committed', 'syn.st_captured'].forEach((newKey) => {
+      const isDirectPredecessor = newKey === 'syn.st_validated' || newKey === 'syn.st_captured';
+      if (lang === 'en' || isDirectPredecessor) {
+        assert.ok(strings[newKey], `${lang} must carry ${newKey}`);
+      }
+    });
+    ['syn.st_identified', 'syn.st_planned', 'syn.st_executing', 'syn.st_realized'].forEach((retiredKey) => {
+      assert.strictEqual(Object.prototype.hasOwnProperty.call(strings, retiredKey), false, `${lang} must no longer carry the retired key ${retiredKey}`);
+    });
+  });
+  // An untouched, unrelated key must survive the rewrite unchanged.
+  assert.strictEqual(i18n.strings.en['unrelated.key'], 'Untouched');
+});
+
+test('synergy-stage (h): running migrateSynergyStages a second time is a full no-op — byte-identical result, zero rows migrated', () => {
+  // Seed ONE database, then fs.copyFileSync it to two paths BEFORE either is
+  // migrated — two independently-INSERTed SQLite files can differ at the
+  // byte level even with identical logical content (page layout, freelist
+  // state), so a true file copy is what makes byte-equality a meaningful
+  // idempotency proof rather than an artifact of independent construction.
+  const seedPath = path.join(TMP_DIR, 'migration-test-h-seed.db');
+  const dbPathA = path.join(TMP_DIR, 'migration-test-h-a.db');
+  const dbPathB = path.join(TMP_DIR, 'migration-test-h-b.db');
+  seedLegacyMigrationDb(seedPath);
+  fs.copyFileSync(seedPath, dbPathA);
+  fs.copyFileSync(seedPath, dbPathB);
+
+  migrateSynergyStages(dbPathA);
+  migrateSynergyStages(dbPathB);
+  const second = migrateSynergyStages(dbPathB);
+
+  assert.strictEqual(second.rowsMigrated, 0, 'a second run must migrate zero rows');
+  assert.strictEqual(second.rowsSkipped, LEGACY_ROWS.length, 'a second run must find every row already migrated');
+  assert.strictEqual(second.languagesTouched, 0, 'a second run must touch zero i18n languages');
+
+  const bytesA = fs.readFileSync(dbPathA);
+  const bytesB = fs.readFileSync(dbPathB);
+  assert.ok(bytesA.equals(bytesB), 'a single run and a run-twice result must be byte-identical on disk');
+});
