@@ -756,3 +756,97 @@ test('synergy-stage (h): running migrateSynergyStages a second time is a full no
   const bytesB = fs.readFileSync(dbPathB);
   assert.ok(bytesA.equals(bytesB), 'a single run and a run-twice result must be byte-identical on disk');
 });
+
+// -------------------------------------------- Plan 06: client stage UI --
+//
+// Source-level assertions against public/js/execution.js and
+// public/execution.html — a live browser walk of these controls is deferred
+// to Plan 08's human checkpoint (per this plan's own <verification> block),
+// so these tests are what proves the wraparound removal, the empty-reason
+// abort, the deal-case pin, the role-conditional re-baseline render, and
+// the universal write-failure helper, ahead of that walk.
+
+function readClientSrc() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+}
+function readExecutionHtml() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'execution.html'), 'utf8');
+}
+
+test('synergy-stage-ui (a): public/js/execution.js contains no modulo-based SYN_STAGES index computation — the wraparound cycle is gone', () => {
+  const src = readClientSrc();
+  assert.ok(!/%\s*SYN_STAGES\.length/.test(src), 'no "% SYN_STAGES.length" modulo operation may remain anywhere in the file — this is exactly how the old cycle-and-wrap handler produced a silent demotion');
+});
+
+test('synergy-stage-ui (b): the stage pill click handler returns early — no fetch, no visual change — when the current stage is already the last vocabulary entry', () => {
+  const src = readClientSrc();
+  const handlerMatch = src.match(/card\.querySelector\('\.syn-stage'\)\.addEventListener\('click', function \(\) \{([\s\S]*?)\n {6}\}\);/);
+  assert.ok(handlerMatch, 'a .syn-stage click handler must be attached inside the card-wiring loop');
+  const body = handlerMatch[1];
+  assert.match(body, /if \(currentIdx === SYN_STAGES\.length - 1\) return;/, 'the handler must return early, with no fetch, when the current index is the last vocabulary index');
+  // The early-return line must appear BEFORE the stage-change request, not
+  // merely exist somewhere in the function — proves the last stage cannot
+  // fall through to a request.
+  const returnIdx = body.indexOf('if (currentIdx === SYN_STAGES.length - 1) return;');
+  const requestIdx = body.indexOf('requestStageChange(');
+  assert.ok(returnIdx > -1 && requestIdx > returnIdx, 'the early return must be ordered BEFORE the stage-change request call');
+});
+
+test('synergy-stage-ui (c): the stage menu\'s backward-selection branch prompts for a reason and issues no fetch when the prompt is cancelled or the trimmed result is empty', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function openSynStageMenu\(wrapEl, item, id\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(fnMatch, 'openSynStageMenu must be defined');
+  const body = fnMatch[0];
+  assert.match(body, /window\.prompt\(/, 'a backward move must prompt for a reason');
+  assert.match(body, /if \(reason === null\) return;/, 'a cancelled prompt (null) must abort with no request');
+  assert.match(body, /reason = reason\.trim\(\);/, 'the prompt result must be trimmed before the emptiness check');
+  assert.match(body, /if \(!reason\) return;/, 'an empty trimmed reason must abort with no request — an empty-reason request must never leave the client');
+  // Ordering proof: both abort checks must appear BEFORE the fetch-issuing
+  // requestStageChange(...reason) call, not merely exist in the function.
+  const promptIdx = body.indexOf('window.prompt(');
+  const nullAbortIdx = body.indexOf('if (reason === null) return;');
+  const emptyAbortIdx = body.indexOf('if (!reason) return;');
+  const requestWithReasonIdx = body.lastIndexOf('requestStageChange(id, targetStage, reason);');
+  assert.ok(promptIdx > -1 && promptIdx < nullAbortIdx && nullAbortIdx < emptyAbortIdx && emptyAbortIdx < requestWithReasonIdx,
+    'the fetch-triggering call must be ordered strictly after both abort checks');
+});
+
+test('synergy-stage-ui (d): every fetch added by the stage control routes its non-success branch through the shared failure helper', () => {
+  const src = readClientSrc();
+  assert.match(src, /function synAlertFailure\(res\) \{/, 'the shared failure helper must be defined');
+  const reqFnMatch = src.match(/function requestStageChange\(id, targetStage, reason\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(reqFnMatch, 'requestStageChange must be defined — it is the ONE fetch this task adds (the pill and every menu row route through it)');
+  assert.match(reqFnMatch[0], /\} else \{[\s\S]*?synAlertFailure\(res\);/, 'requestStageChange\'s non-success branch must call synAlertFailure(res)');
+});
+
+test('synergy-stage-ui (e): public/execution.html declares .syn-stage-menu as position:absolute, inside a position:relative wrapper', () => {
+  const html = readExecutionHtml();
+  const menuLine = html.split('\n').find((l) => l.includes('.syn-stage-menu{'));
+  assert.ok(menuLine, '.syn-stage-menu rule must exist in public/execution.html');
+  assert.match(menuLine, /position:absolute/, '.syn-stage-menu must be position:absolute');
+  const wrapLine = html.split('\n').find((l) => l.includes('.syn-stage-wrap{'));
+  assert.ok(wrapLine, '.syn-stage-wrap rule must exist');
+  assert.match(wrapLine, /position:relative/, '.syn-stage-wrap must be the position:relative containing block for the absolutely-positioned menu');
+});
+
+test('synergy-stage-ui (f): the stage pill composes the per-stage i18n key so the four syn.st_* keys hydrate it', () => {
+  const src = readClientSrc();
+  const occurrences = (src.match(/syn\.st_/g) || []).length;
+  assert.ok(occurrences >= 1, 'public/js/execution.js must compose at least one syn.st_ i18n key');
+});
+
+test('synergy-stage-ui (g): the stage menu adds and removes both the Escape-key and outside-click document listeners, never leaving one behind across a wholesale re-render', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function openSynStageMenu\(wrapEl, item, id\) \{[\s\S]*?\n {2}\}/);
+  const body = fnMatch[0];
+  assert.match(body, /document\.addEventListener\('click', onDocClick\);/, 'an outside-click document listener must be added when the menu opens');
+  assert.match(body, /document\.addEventListener\('keydown', onKeydown\);/, 'an Escape-key document listener must be added when the menu opens');
+  assert.match(body, /document\.removeEventListener\('click', onDocClick\);/, 'the outside-click listener must be removed by the close/cleanup path');
+  assert.match(body, /document\.removeEventListener\('keydown', onKeydown\);/, 'the Escape-key listener must be removed by the close/cleanup path');
+  // The removal calls must live inside the cleanup function assigned to
+  // synStageMenuState — the single choke point closeSynStageMenu() invokes
+  // — not merely exist elsewhere unreachably in the file.
+  assert.match(body, /cleanup: function \(\) \{[\s\S]*?document\.removeEventListener\('click', onDocClick\);[\s\S]*?document\.removeEventListener\('keydown', onKeydown\);/,
+    'both removeEventListener calls must be inside the cleanup function that closeSynStageMenu() invokes');
+});
+

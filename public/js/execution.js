@@ -13,6 +13,16 @@
     });
   };
 
+  // T-05-35/UI-SPEC Copywriting Contract: the single choke point every write
+  // handler on the synergy detail surface (stage change, re-baseline, and
+  // Plan 07's confirm-current/cost-entry writes) routes its non-success
+  // branch through — a rejected write can never fail silently, and the
+  // server's own stated reason is always shown verbatim (D-08's hard-gate
+  // refusal, D-09's empty-reason 400, D-15's authz 403, etc).
+  function synAlertFailure(res) {
+    window.alert((res && res.error) || 'That action could not be completed. Please try again.');
+  }
+
   var PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
   var PHASE_LABELS = { pre: 'Pre-close', day1: 'Day 1', d30: 'Day 30', d60: 'Day 60', d100: 'Day 100' };
   var STATUS_ORDER = ['todo', 'doing', 'blocked', 'done'];
@@ -329,6 +339,124 @@
       + '</div>';
   }
 
+  // ------------------------------------------------------- stage control --
+
+  // UI-SPEC §1: the pill carries the stage's palette colour and its English
+  // fallback label, plus a data-i18n attribute composed from the stage value
+  // so the four syn.st_* keys hydrate it (applyPortalI18n's own missing-key
+  // no-op is why SYN_LABELS is the real safety net, per read_first note).
+  // Wrapped in a position:relative span so the caret's menu can be
+  // position:absolute against it (UI-SPEC's declared containment rule).
+  function renderStageControl(item) {
+    var color = SYN_COLORS[item.stage] || '#8a8f92';
+    var label = SYN_LABELS[item.stage] || item.stage;
+    return '<span class="syn-stage-wrap">'
+      + '<button type="button" class="ex-status syn-stage" style="background:' + color + ';min-width:96px;" data-i18n="syn.st_' + esc(item.stage) + '">' + esc(label) + '</button>'
+      + '<button type="button" class="syn-stage-caret" title="Change stage" aria-label="Change stage">&#9662;</button>'
+      + '</span>';
+  }
+
+  // module-level: at most one stage menu open at a time across the whole
+  // list — closeSynStageMenu() is the single place that tears down the
+  // document-level Escape/outside-click listener pair, so a wholesale
+  // renderSynergy() re-render (triggered by any successful write) can never
+  // leave an orphaned document listener behind (UI-SPEC §1).
+  var synStageMenuState = null;
+
+  function closeSynStageMenu() {
+    if (synStageMenuState) {
+      synStageMenuState.cleanup();
+      synStageMenuState = null;
+    }
+  }
+
+  // requestStageChange(id, targetStage[, reason]) is the ONE fetch this
+  // section issues — used by both the pill (forward-only) and every menu
+  // row (forward runs the same D-08 gate; backward carries the D-09 reason).
+  function requestStageChange(id, targetStage, reason) {
+    closeSynStageMenu();
+    var body = { targetStage: targetStage };
+    if (reason) body.reason = reason;
+    fetch('/api/synergies/' + encodeURIComponent(id) + '/stage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      if (res && res.success) {
+        var idx = state.synergies.findIndex(function (s) { return s.id === id; });
+        if (idx !== -1) state.synergies[idx] = res.initiative;
+        renderSynergy(); applyI18n();
+      } else {
+        // D-08/D-09/UI-SPEC error contract: the pill keeps showing the
+        // unchanged stage (no re-render happens on this branch at all) and
+        // the server's stated gate reason is shown verbatim.
+        synAlertFailure(res);
+      }
+    });
+  }
+
+  // UI-SPEC §1: opens the absolutely-positioned 4-row menu inside wrapEl
+  // (the .syn-stage-wrap span, position:relative). The current stage stays
+  // in the list, marked with a checkmark rather than removed. Selecting the
+  // current stage closes the menu with no request; selecting a stage ahead
+  // runs the same gate as the pill; selecting a stage behind runs the
+  // reason prompt and aborts (no fetch) on a cancelled or empty trimmed
+  // result.
+  function openSynStageMenu(wrapEl, item, id) {
+    closeSynStageMenu();
+    var menu = document.createElement('div');
+    menu.className = 'syn-stage-menu';
+    menu.innerHTML = SYN_STAGES.map(function (stage) {
+      var isCurrent = stage === item.stage;
+      return '<button type="button" class="syn-stage-menu-item" data-stage="' + esc(stage) + '">'
+        + (isCurrent ? '&#10003; ' : '')
+        + '<span data-i18n="syn.st_' + esc(stage) + '">' + esc(SYN_LABELS[stage] || stage) + '</span>'
+        + '</button>';
+    }).join('');
+    wrapEl.appendChild(menu);
+    applyI18n();
+
+    function onDocClick(ev) {
+      if (!wrapEl.contains(ev.target)) closeSynStageMenu();
+    }
+    function onKeydown(ev) {
+      if (ev.key === 'Escape') closeSynStageMenu();
+    }
+    document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onKeydown);
+
+    menu.querySelectorAll('.syn-stage-menu-item').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var targetStage = btn.getAttribute('data-stage');
+        var currentOrdinal = SYN_STAGES.indexOf(item.stage);
+        var targetOrdinal = SYN_STAGES.indexOf(targetStage);
+        if (targetOrdinal === currentOrdinal) { closeSynStageMenu(); return; }
+        if (targetOrdinal > currentOrdinal) {
+          requestStageChange(id, targetStage);
+          return;
+        }
+        // D-09: a backward move requires a non-empty trimmed reason — a
+        // cancelled prompt (null) or an empty/whitespace-only result aborts
+        // entirely, and no request is ever sent from the client.
+        closeSynStageMenu();
+        var targetLabel = SYN_LABELS[targetStage] || targetStage;
+        var reason = window.prompt('Reason for moving this initiative back to ' + targetLabel + ':');
+        if (reason === null) return;
+        reason = reason.trim();
+        if (!reason) return;
+        requestStageChange(id, targetStage, reason);
+      });
+    });
+
+    synStageMenuState = {
+      id: id,
+      cleanup: function () {
+        document.removeEventListener('click', onDocClick);
+        document.removeEventListener('keydown', onKeydown);
+        if (menu.parentNode) menu.parentNode.removeChild(menu);
+      }
+    };
+  }
+
   function renderSynergy() {
     var list = state.synergies;
     var target = list.reduce(function (a, s) { return a + (s.targetM || 0); }, 0);
@@ -354,7 +482,7 @@
         + '<div class="syn-head"><div style="flex:1;min-width:0;"><div class="syn-title">' + esc(s.title) + '</div>'
         + '<div class="syn-meta">'
         + '<span class="syn-cat ' + esc(s.category) + '" data-i18n="syn.cat_' + esc(s.category) + '">' + (s.category === 'cost' ? 'Cost' : 'Revenue') + '</span>'
-        + '<button class="ex-status syn-status" style="background:' + (SYN_COLORS[s.stage] || '#8a8f92') + ';min-width:96px;" data-i18n="syn.st_' + esc(s.stage) + '">' + (SYN_LABELS[s.stage] || s.stage) + '</button>'
+        + renderStageControl(s)
         + (wsDef ? '<span>' + (wsDef.icon || '') + ' <span data-i18n="' + esc(wsDef.labelKey || '') + '">' + esc(wsDef.label) + '</span></span>' : '')
         + (s.owner ? '<span>👤 ' + esc(s.owner) + '</span>' : '')
         + '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: <input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (s.realizedM || 0) + '"></span>'
@@ -370,13 +498,23 @@
 
     document.querySelectorAll('#syn-list .syn-card').forEach(function (card) {
       var id = card.getAttribute('data-syn');
-      card.querySelector('.syn-status').addEventListener('click', function () {
+      // UI-SPEC §1: pill click advances one stage forward ONLY — no
+      // wraparound, no modulo. At the last vocabulary entry the click is a
+      // no-op: no request, no visual change (this is what prevents the old
+      // cycle-and-wrap handler's silent-demotion class of bug).
+      card.querySelector('.syn-stage').addEventListener('click', function () {
         var item = state.synergies.find(function (s) { return s.id === id; });
         if (!item) return;
-        var next = SYN_STAGES[(SYN_STAGES.indexOf(item.stage) + 1) % SYN_STAGES.length];
-        fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, stage: next }) })
-          .then(function (r) { return r.json(); })
-          .then(function (res) { if (res && res.success) { item.stage = next; renderSynergy(); applyI18n(); } });
+        var currentIdx = SYN_STAGES.indexOf(item.stage);
+        if (currentIdx === SYN_STAGES.length - 1) return;
+        requestStageChange(id, SYN_STAGES[currentIdx + 1]);
+      });
+      card.querySelector('.syn-stage-caret').addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var item = state.synergies.find(function (s) { return s.id === id; });
+        if (!item) return;
+        if (synStageMenuState && synStageMenuState.id === id) { closeSynStageMenu(); return; }
+        openSynStageMenu(card.querySelector('.syn-stage-wrap'), item, id);
       });
       // SYN-01/UI-SPEC §2: writes state.synExpanded — the ONLY place in
       // this file that assigns to it. Toggling re-renders the whole list,
