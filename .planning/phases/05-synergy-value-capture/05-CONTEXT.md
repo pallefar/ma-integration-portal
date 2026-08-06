@@ -200,6 +200,21 @@ Phase 5 depends only on Phase 3 and is independent of Phase 4.
   credibility failure D-06 exists to prevent. Rejected auto-advance, and
   rejected (for now) the softer "prompt the IL when all linked tasks are done".
 
+### Post-research resolutions (2026-08-06 — the two open questions RESEARCH.md flagged)
+
+- **D-24:** Ramp auto-fill uses **smooth monthly interpolation**: attainment climbs
+  linearly within each year toward that year's checkpoint (cost 0→30% across months
+  1-12, 30→70% across 13-24, 70→100% across 25-36; revenue likewise to 10/40/70;
+  `linear` = same rule with checkpoints 33/67/100). A month's target value =
+  attainment% × annual run-rate ÷ 12. Rejected step-at-year-boundaries (two big
+  jumps read oddly month-to-month) and leaving it as a planner assumption.
+- **D-25:** Per-month realized-value edits go through a **dedicated sub-route**
+  (e.g. `POST /api/synergies/:id/phasing/:month`), per RESEARCH.md's recommended
+  5-sub-route architecture following the `/api/deals/:id/members` precedent. Each
+  sub-route carries its own zod schema, so a monthly edit cannot smuggle a stage
+  change past D-08's gates, and D-06's arrived-month check lives in exactly one
+  place. Rejected extending the base upsert with a `phasing[]` patch branch.
+
 ### Claude's Discretion
 
 No area was delegated with "you decide" — all 23 decisions were chosen
