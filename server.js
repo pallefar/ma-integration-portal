@@ -3714,7 +3714,13 @@ app.post('/api/synergies/:id/stage', (req, res) => {
   // reason string and never runs stageGateFailure(). Fail closed instead:
   // refuse the move outright rather than assuming "backward".
   if (currentOrdinal === undefined) {
-    return res.status(500).json({ error: 'This initiative carries an unrecognized stage value and cannot be advanced until migrated.' });
+    // 409, not 500: the server is working correctly and has REFUSED a request
+    // because of a conflicting stored state. A 500 would misreport a handled
+    // data condition as a server fault — noise in any monitoring that alerts
+    // on 5xx, and misleading to the caller. Matches this file's convention of
+    // 4xx for refused-because-of-state (see the phased-initiative refusal at
+    // ~3449 and the not-pending-completion refusal at ~2658).
+    return res.status(409).json({ error: 'This initiative carries an unrecognized stage value and cannot be advanced until migrated.' });
   }
 
   if (targetOrdinal === currentOrdinal) {

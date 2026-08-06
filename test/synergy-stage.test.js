@@ -436,7 +436,7 @@ test('synergy-stage-gate (h): a targetStage outside the four-value vocabulary is
 // bypassing the create-time schema (which always enum-validates `stage`) —
 // exactly how a real pre-Phase-5 row would look, and the ONLY way to
 // construct one for this test.
-test('synergy-stage-gate (i): CR-02 — a stage-change request against an initiative with NO stage value (unmigrated row) is refused with 500, never silently advanced to the target stage with no gate check', async () => {
+test('synergy-stage-gate (i): CR-02 — a stage-change request against an initiative with NO stage value (unmigrated row) is refused with 409, never silently advanced to the target stage with no gate check', async () => {
   const deal = freshDeal('deal_syngi');
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
@@ -467,7 +467,11 @@ test('synergy-stage-gate (i): CR-02 — a stage-change request against an initia
     // with a reason string, no owner, no phased target, no realized value.
     const res = await postJSON(base, '/api/synergies/syn_unmigrated/stage', karenToken, { targetStage: 'captured', reason: 'x' });
     assert.notStrictEqual(res.status, 200, 'a stage-change request against an unmigrated row must NEVER succeed — this is the whole gate-bypass bug');
-    assert.strictEqual(res.status, 500, 'an unrecognized current stage must fail closed with a clear server error, not silently coerce to a backward move');
+    // 409 Conflict, not 500: the refusal is a handled conflicting-state
+    // condition, not a server fault — a 500 would be noise in any monitoring
+    // that alerts on 5xx. What the test actually guards is that the request
+    // is REFUSED (never silently coerced into the ungated backward branch).
+    assert.strictEqual(res.status, 409, 'an unrecognized current stage must fail closed as a state conflict, not silently coerce to a backward move');
 
     const listRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
     const list = await listRes.json();
