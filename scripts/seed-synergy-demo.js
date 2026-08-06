@@ -226,7 +226,20 @@ const INITIATIVE_SEEDS = [
     createdAt: '2026-04-25T09:00:00.000Z',
     stage: 'committed',
     runRateM: 3,
-    startMonth: '2026-03',
+    // Follow-up tweak (post-checkpoint, human-approved 2026-08-06): the
+    // cost curve's own shallow first-year ramp (0.30 at month 12) rounds
+    // every one of this row's per-month targetM figures to $0.0M when
+    // startMonth sits as close to today as the other rows (roundSynergyMoney
+    // rounds to one decimal, and each month's slice of a $3M/yr cost ramp is
+    // well under $0.05M until month 9+) — so realizedM landed at exactly
+    // $0.0M even with a 0.85 fill ratio, and the rollup's D-18 unconfirmed
+    // sentence had nothing real to show. Started 5 months earlier than the
+    // hand-tuned distribution's other rows so THIS row's already-arrived
+    // window reaches month 9-11 of its own ramp, where the per-month slice
+    // finally rounds to $0.1M — still respects T-05-42 (only already-arrived
+    // months carry realizedM) and still straddles today's calendar month
+    // (36-row horizon keeps most of the grid in the locked future).
+    startMonth: '2025-10',
     curveShape: 'cost',
     realizedFillRatio: 0.85, // committed: concrete, quick-to-execute savings already banked
     dealCaseStage: 'idea',
