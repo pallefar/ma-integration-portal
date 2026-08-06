@@ -713,7 +713,16 @@
         + '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: <input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (s.realizedM || 0) + '"></span>'
         + '</div>'
         + renderTaskProgress(s)
-        + '</div></div>'
+        // Close the flex column ONLY — .syn-money and .ex-del stay inside
+        // .syn-head (closed after them), and .syn-track/.syn-expand-toggle/
+        // .syn-detail stay inside .syn-card (closed by the final </div>).
+        // 05-07 added a meta-closing </div> before renderTaskProgress but left
+        // this as '</div></div>', over-closing .syn-head so the stray </div>
+        // after .ex-del closed .syn-card EARLY — the toggle/track/detail
+        // parsed as SIBLINGS of the card and card.querySelector('.syn-expand-
+        // toggle') returned null, aborting the whole wiring loop (caught by
+        // the wave-8 live regression walk; invisible to source-level tests).
+        + '</div>'
         + '<div class="syn-money"><div class="syn-realized">$' + (s.realizedM || 0) + 'M</div><div class="syn-target">/ $' + (s.targetM || 0) + 'M</div></div>'
         + '<button class="ex-del" title="✕">✕</button>'
         + '</div>'
