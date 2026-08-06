@@ -287,3 +287,205 @@ test('synergy-phasing (http e): an initiative with zero phasing rows keeps the p
     server.close();
   }
 });
+
+// ---------------------------------------------------------- Task 2: per-month gate --
+
+// SYN-01/D-06/D-25/T-05-01: the arrived-month gate is a SERVER control,
+// proven here by a direct fetch() against the per-month sub-route that never
+// touches the UI — the client's span-vs-input rendering is cosmetic only.
+async function setupPhasedInitiative(base, token, startMonth, curveShape) {
+  const initiative = await createInitiative(base, token);
+  const genRes = await fetch(`${base}/api/synergies/${initiative.id}/generate-phasing`, {
+    method: 'POST', headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ runRateM: 12, startMonth, curveShape: curveShape || 'cost' }),
+  });
+  const body = await genRes.json();
+  return body.initiative;
+}
+
+test('synergy-phasing (http f): a realized-value write to the CURRENT month returns 200 and the row is updated; the derived realizedM equals the rounded sum of all rows', async () => {
+  const deal = freshDeal('deal_synpf');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    // startMonth 12 months before the current month, so the initiative's
+    // 36-row horizon straddles past/current/future, giving every case a
+    // real row to exercise (2026-04's tracer default is too far in the
+    // future relative to "now" for a boundary test; this test derives its
+    // own start month from wall-clock "now" instead).
+    const now = new Date();
+    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1));
+    const startMonth = startDate.toISOString().slice(0, 7);
+    const currentMonth = now.toISOString().slice(0, 7);
+
+    const initiative = await setupPhasedInitiative(base, karenToken, startMonth);
+
+    const res = await fetch(`${base}/api/synergies/${initiative.id}/phasing/${currentMonth}`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realizedM: 2.5 }),
+    });
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    const row = body.initiative.phasing.find((r) => r.month === currentMonth);
+    assert.strictEqual(row.realizedM, 2.5);
+    const expectedSum = Math.round(body.initiative.phasing.reduce((a, r) => a + r.realizedM, 0) * 10) / 10;
+    assert.strictEqual(body.initiative.realizedM, expectedSum, 'derived realizedM must equal the rounded sum of all rows after a write');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-phasing (http g): a realized-value write to the month immediately AFTER the current month returns 400 with a stated reason, and the stored row is unchanged (D-06 boundary)', async () => {
+  const deal = freshDeal('deal_synpg');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const now = new Date();
+    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1));
+    const startMonth = startDate.toISOString().slice(0, 7);
+    const nextDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const nextMonth = nextDate.toISOString().slice(0, 7);
+
+    const initiative = await setupPhasedInitiative(base, karenToken, startMonth);
+    const beforeRow = initiative.phasing.find((r) => r.month === nextMonth);
+    assert.ok(beforeRow, 'the generated 36-row horizon must include the month right after current for this test to be meaningful');
+
+    const res = await fetch(`${base}/api/synergies/${initiative.id}/phasing/${nextMonth}`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realizedM: 9 }),
+    });
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.ok(body.error && body.error.includes(nextMonth), 'the rejection reason must name the month');
+    assert.ok(/not.*arrived/i.test(body.error), 'the rejection reason must state the month has not arrived');
+
+    const listRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const list = await listRes.json();
+    const found = list.find((s) => s.id === initiative.id);
+    const afterRow = found.phasing.find((r) => r.month === nextMonth);
+    assert.strictEqual(afterRow.realizedM, beforeRow.realizedM, 'a rejected write must leave the stored row unchanged');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-phasing (http h): a targetM write to a FUTURE month returns 200 — target planning is not arrival-restricted (D-06)', async () => {
+  const deal = freshDeal('deal_synph');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const now = new Date();
+    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1));
+    const startMonth = startDate.toISOString().slice(0, 7);
+    const nextDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const nextMonth = nextDate.toISOString().slice(0, 7);
+
+    const initiative = await setupPhasedInitiative(base, karenToken, startMonth);
+    const res = await fetch(`${base}/api/synergies/${initiative.id}/phasing/${nextMonth}`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetM: 4 }),
+    });
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    const row = body.initiative.phasing.find((r) => r.month === nextMonth);
+    assert.strictEqual(row.targetM, 4);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-phasing (http i): the month immediately BEFORE the current month accepts a realized write (200) — the boundary is inclusive of the current month, exclusive above it (D-06)', async () => {
+  const deal = freshDeal('deal_synpi');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const now = new Date();
+    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1));
+    const startMonth = startDate.toISOString().slice(0, 7);
+    const prevDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const previousMonth = prevDate.toISOString().slice(0, 7);
+
+    const initiative = await setupPhasedInitiative(base, karenToken, startMonth);
+    const res = await fetch(`${base}/api/synergies/${initiative.id}/phasing/${previousMonth}`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realizedM: 1 }),
+    });
+    assert.strictEqual(res.status, 200);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-phasing (http j): a :month not present in item.phasing returns 404', async () => {
+  const deal = freshDeal('deal_synpj');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const initiative = await setupPhasedInitiative(base, karenToken, '2026-04');
+    const res = await fetch(`${base}/api/synergies/${initiative.id}/phasing/2099-01`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetM: 1 }),
+    });
+    assert.strictEqual(res.status, 404);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-phasing (http k): a :month failing the shape check is rejected by the schema with 400, before the handler ever runs', async () => {
+  const deal = freshDeal('deal_synpk');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const initiative = await setupPhasedInitiative(base, karenToken, '2026-04');
+    const res = await fetch(`${base}/api/synergies/${initiative.id}/phasing/not-a-month`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetM: 1 }),
+    });
+    // :month is a route param, not a body field, so PhasingMonthSchema
+    // itself never sees it — server.js's handler reuses the SAME
+    // isValidMonth() the schema is built on, checked before the row-lookup
+    // 404, so a malformed month is distinguishable from a well-formed month
+    // that simply has no generated row.
+    assert.strictEqual(res.status, 400);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});

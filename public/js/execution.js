@@ -246,12 +246,25 @@
       // placeholder so the section always renders something.
       gridHtml = '<div class="ex-empty" data-i18n="syn.no_phasing">No phasing rows yet.</div>';
     } else {
+      // SYN-01/D-06/UI-SPEC §2: the client mirrors the server's
+      // monthHasArrived() rule using the same YYYY-MM string comparison —
+      // cosmetic only, the server is the real enforcement (T-05-01). An
+      // arrived month's Realized cell is a structurally different tag
+      // (<input>) from a future month's (<span class="syn-grid-locked">),
+      // never one tag toggled between disabled/enabled states — the
+      // concrete guard against the Phase 4 Wave 7 bug class where a value
+      // landed on the right element but was rendered invisible.
+      var currentMonth = new Date().toISOString().slice(0, 7);
       var head = '<div class="syn-grid-head"><span data-i18n="syn.grid_month">Month</span><span data-i18n="syn.grid_target">Target $</span><span data-i18n="syn.grid_realized">Realized $</span></div>';
       var body = rows.map(function (r) {
+        var arrived = r.month <= currentMonth;
+        var realizedCell = arrived
+          ? '<input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (r.realizedM || 0) + '" data-syn-month="' + esc(r.month) + '">'
+          : '<span class="syn-grid-locked" title="Not yet arrived — editable once this month begins">—</span>';
         return '<div class="syn-grid-row" data-syn-month="' + esc(r.month) + '">'
           + '<span>' + esc(r.month) + '</span>'
-          + '<span>$' + (r.targetM || 0) + 'M</span>'
-          + '<span>$' + (r.realizedM || 0) + 'M</span>'
+          + '<span><input type="number" class="syn-target-input" min="0" step="0.1" value="' + (r.targetM || 0) + '" data-syn-month="' + esc(r.month) + '"></span>'
+          + '<span>' + realizedCell + '</span>'
           + '</div>';
       }).join('');
       gridHtml = '<div class="syn-grid">' + head + body + '</div>';
@@ -358,8 +371,40 @@
               var item = state.synergies.find(function (s) { return s.id === id; });
               if (item) item.realizedM = res.initiative.realizedM;
               renderSynergy(); applyI18n();
+            } else {
+              // Rule 1 fix: once an initiative has phasing rows, D-04
+              // refuses this direct write with 400 — this field must not
+              // fail silently (UI-SPEC's "never silently fail" contract).
+              window.alert(res && res.error);
             }
           });
+      });
+      // SYN-01/D-06/D-25: per-month grid cell handlers — scoped to
+      // .syn-detail so they never collide with the card-head
+      // .syn-realized-input above (different DOM subtree, same reused CSS
+      // class per UI-SPEC §2 "existing input styling, reused verbatim").
+      // Each cell POSTs only the field that changed to the dedicated
+      // per-month sub-route; the server is the real arrived-month gate
+      // (T-05-01) — this handler never decides that on its own.
+      card.querySelectorAll('.syn-detail .syn-target-input, .syn-detail .syn-realized-input').forEach(function (cell) {
+        cell.addEventListener('change', function (ev) {
+          var month = cell.getAttribute('data-syn-month');
+          if (!month) return;
+          var field = cell.classList.contains('syn-target-input') ? 'targetM' : 'realizedM';
+          var body = {};
+          body[field] = parseFloat(ev.target.value) || 0;
+          fetch('/api/synergies/' + encodeURIComponent(id) + '/phasing/' + encodeURIComponent(month), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res && res.success) {
+              var idx = state.synergies.findIndex(function (s) { return s.id === id; });
+              if (idx !== -1) state.synergies[idx] = res.initiative;
+              renderSynergy(); applyI18n();
+            } else {
+              window.alert(res && res.error);
+            }
+          });
+        });
       });
       card.querySelector('.ex-del').addEventListener('click', function () {
         if (!window.confirm('Delete this initiative?')) return;

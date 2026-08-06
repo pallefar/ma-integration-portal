@@ -144,6 +144,19 @@ const GeneratePhasingSchema = z.object({
   curveShape: z.enum(['cost', 'revenue', 'linear']),
 });
 
+// D-06/D-25: the dedicated per-month sub-route body — targetM is accepted on
+// any month (forward planning), realizedM is accepted here at the schema
+// layer too but the arrived-month gate itself is server.js's job
+// (monthHasArrived()), not this schema's — a schema can only shape-check,
+// it cannot know "now". At least one of the two fields must be present or
+// the request carries nothing to do.
+const PhasingMonthSchema = z.object({
+  targetM: SynMoneyUnion.optional(),
+  realizedM: SynMoneyUnion.optional(),
+}).refine((data) => data.targetM !== undefined || data.realizedM !== undefined, {
+  message: 'At least one of targetM or realizedM is required.',
+});
+
 const SynergyUpsertSchema = z.object({
   id: z.string().trim().min(1).max(ID_MAX).optional(),
   title: z.string().trim().min(1, 'Initiative title is required.').max(NAME_MAX).optional(),
@@ -174,6 +187,11 @@ registerSchema('DELETE', '/api/synergies/:id', EmptyBodySchema);
 // (server.js) — an unregistered route 500s at request time regardless of
 // how correct the handler itself is.
 registerSchema('POST', '/api/synergies/:id/generate-phasing', GeneratePhasingSchema);
+// D-25: the route path template must be registered EXACTLY as Express sees
+// it (with the literal `:month` segment) — registerSchema keys off the raw
+// path template, not the resolved request path, so this line landing in the
+// same edit as the route (server.js) is what keeps the route from 500ing.
+registerSchema('POST', '/api/synergies/:id/phasing/:month', PhasingMonthSchema);
 
 // ---------------------------------------------------------------------------
 // RAID entries — upsert (POST-create-only route; no id-present update path
@@ -254,4 +272,5 @@ module.exports = {
   isValidMonth,
   PhasingRowSchema,
   GeneratePhasingSchema,
+  PhasingMonthSchema,
 };

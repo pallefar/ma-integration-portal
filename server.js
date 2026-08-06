@@ -34,7 +34,11 @@ const auditHook = require('./db/auditHook');
 // module's own routes below can be reached.
 const validators = require('./validators/index');
 require('./validators/deals'); // require()d for its registerSchema() side effect only
-require('./validators/workstream'); // ditto
+// SYN-01/D-25: captured (not side-effect-only) — the phasing sub-route
+// handler below reuses isValidMonth() rather than duplicating the month
+// shape check, so a malformed :month path param is rejected with the SAME
+// validation the schema layer uses, before the row-lookup 404 ever runs.
+const workstreamValidators = require('./validators/workstream');
 require('./validators/cms'); // ditto
 require('./validators/people'); // ditto
 require('./validators/assessment'); // ditto
@@ -3211,6 +3215,47 @@ app.post('/api/synergies/:id/generate-phasing', (req, res) => {
   item.startMonth = b.startMonth;
   item.curveShape = b.curveShape;
   item.phasing = generatePhasingRows(item.runRateM, item.startMonth, item.curveShape, synergyHorizonYears(db));
+
+  const rollup = synergyRollupFields(item);
+  item.targetM = rollup.targetM;
+  item.realizedM = rollup.realizedM;
+
+  writeDb(db);
+  res.json({ success: true, initiative: item });
+});
+
+// SYN-01/D-06/D-25/T-05-01: the dedicated per-month sub-route — the ONLY
+// writable path for a phasing row's realized value once phasing rows exist
+// (the base POST /api/synergies upsert refuses targetM/realizedM above once
+// item.phasing is non-empty, D-04). Realized value is arrival-restricted
+// server-side via monthHasArrived(); target value is accepted for any month
+// (forward planning is normal, only realized is forward-booking-restricted).
+app.post('/api/synergies/:id/phasing/:month', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+
+  // SYN-01/D-25: a malformed :month path param is a 400 (bad request shape),
+  // distinct from a well-formed month that simply has no row (404 below) —
+  // reuses isValidMonth() rather than a second, ad hoc shape check.
+  if (!workstreamValidators.isValidMonth(req.params.month)) {
+    return res.status(400).json({ error: 'Month must be a valid YYYY-MM month.' });
+  }
+
+  const row = Array.isArray(item.phasing) ? item.phasing.find(r => r.month === req.params.month) : undefined;
+  if (!row) return res.status(404).json({ error: 'No phasing row exists for month ' + req.params.month + '.' });
+
+  if (b.realizedM !== undefined) {
+    if (!monthHasArrived(row.month)) {
+      return res.status(400).json({ error: 'Month ' + row.month + ' has not arrived yet — realized value cannot be entered until this month begins.' });
+    }
+    row.realizedM = roundSynergyMoney(b.realizedM);
+  }
+  if (b.targetM !== undefined) {
+    row.targetM = roundSynergyMoney(b.targetM);
+  }
 
   const rollup = synergyRollupFields(item);
   item.targetM = rollup.targetM;
