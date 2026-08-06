@@ -3213,9 +3213,51 @@ function synergyRollupFields(item) {
   return { targetM, realizedM };
 }
 
+// SYN-02/D-20/D-21: cost incurred is the rounded sum of costEntries[]
+// amounts; net benefit is derived realized (synergyRollupFields().realizedM)
+// minus cost incurred, deliberately NOT clamped at zero — a negative net
+// benefit is a real, expected early-deal state (more spent than realized so
+// far) that a steering committee needs to see, not a floor that hides it.
+// A dated entry's month bucket is its own date's first seven characters
+// (YYYY-MM) — this is what makes monthly net benefit computable against the
+// D-01 phasing grid without a second, parallel cost grid.
+function synergyCostFields(item) {
+  const entries = Array.isArray(item && item.costEntries) ? item.costEntries : [];
+  const costIncurredM = roundSynergyMoney(entries.reduce((a, e) => a + (e.amountM || 0), 0));
+  const realizedM = synergyRollupFields(item).realizedM;
+  const netBenefitM = Math.round((realizedM - costIncurredM) * 10) / 10;
+  return { costIncurredM, netBenefitM };
+}
+
+// SYN-04/D-22/T-05-18: validates every supplied taskIds entry against the
+// bound deal's OWN task lane (taskLane(db), resolved by the Phase 3
+// session-bound resolver) BEFORE any mutation — an id from another deal or a
+// nonexistent id is simply not found in this lane, so the whole request is
+// refused with no partial write. Deduplicates while preserving first-seen
+// order. Does not touch taskLane() itself or any task-side field (D-22).
+function resolveSynergyTaskIds(taskIds, db) {
+  const lane = taskLane(db);
+  const known = new Set(lane.map((t) => t.id));
+  const seen = new Set();
+  const ids = [];
+  for (const id of taskIds) {
+    if (!known.has(id)) return { ok: false, error: `Unknown task id: ${id}` };
+    if (!seen.has(id)) { seen.add(id); ids.push(id); }
+  }
+  return { ok: true, ids };
+}
+
 app.get('/api/synergies', (req, res) => {
   const lane = synergyLane(readDb());
-  res.json(lane.map((item) => Object.assign({}, item, synergyRollupFields(item))));
+  res.json(lane.map((item) => {
+    const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
+    // SYN-02: newest-date-first, a STABLE sort (Array.prototype.sort() is
+    // spec-guaranteed stable) run against a COPY of the stored array — two
+    // same-date entries keep their original insertion order between reads,
+    // and the stored array itself is never reordered.
+    const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return Object.assign({}, item, synergyRollupFields(item), synergyCostFields(item), { costEntries: sortedCostEntries });
+  }));
 });
 
 app.post('/api/synergies', (req, res) => {
@@ -3241,10 +3283,22 @@ app.post('/api/synergies', (req, res) => {
     if (Array.isArray(item.phasing) && item.phasing.length > 0 && (b.targetM !== undefined || b.realizedM !== undefined)) {
       return res.status(400).json({ error: 'This initiative is phased — edit targetM/realizedM per month on the phasing grid, not on the initiative directly.' });
     }
+    // SYN-04/D-22/T-05-18: resolved (validated + deduplicated) BEFORE any
+    // mutation below — a bad id must never leave a half-written list behind.
+    // An absent `taskIds` key leaves `resolvedTaskIds` undefined, so the
+    // assignment below is skipped and the stored list is untouched; an
+    // explicitly empty array resolves to [] and clears it.
+    let resolvedTaskIds;
+    if (b.taskIds !== undefined) {
+      const resolution = resolveSynergyTaskIds(b.taskIds, db);
+      if (!resolution.ok) return res.status(400).json({ error: resolution.error });
+      resolvedTaskIds = resolution.ids;
+    }
     ['title', 'owner', 'workstreamId', 'notes'].forEach(k => { if (b[k] !== undefined) item[k] = String(b[k] || '').slice(0, 300); });
     if (b.category !== undefined) item.category = b.category === 'cost' ? 'cost' : 'revenue';
     if (b.targetM !== undefined) item.targetM = num(b.targetM);
     if (b.realizedM !== undefined) item.realizedM = num(b.realizedM);
+    if (resolvedTaskIds !== undefined) item.taskIds = resolvedTaskIds;
     // D-08/T-05-13: the stage gate has no bypass — a stage change must go
     // through the dedicated POST /api/synergies/:id/stage route, which alone
     // evaluates stageGateFailure() and appends a reasoned demotion baseline
@@ -3267,11 +3321,24 @@ app.post('/api/synergies', (req, res) => {
     }
     if (b.runRateM !== undefined) item.runRateM = num(b.runRateM);
     if (b.curveShape !== undefined) item.curveShape = b.curveShape;
+    // SYN-02/D-20/D-21: ordinary plan fields — unlike runRateM/curveShape
+    // above, a costPlannedM/costExpectedMonth change never triggers D-13's
+    // forced re-baseline regardless of stage.
+    if (b.costPlannedM !== undefined) item.costPlannedM = num(b.costPlannedM);
+    if (b.costExpectedMonth !== undefined) item.costExpectedMonth = b.costExpectedMonth;
     writeDb(db);
     return res.json({ success: true, initiative: item });
   }
   // VAL-01: title-required-on-create is now owned exclusively by
   // validators/workstream.js's SynergyUpsertSchema.refine().
+  // SYN-04/D-22/T-05-18: resolved BEFORE the item is built/pushed — a bad id
+  // must refuse the whole create with no row added.
+  let createdTaskIds = [];
+  if (b.taskIds !== undefined) {
+    const resolution = resolveSynergyTaskIds(b.taskIds, db);
+    if (!resolution.ok) return res.status(400).json({ error: resolution.error });
+    createdTaskIds = resolution.ids;
+  }
   const title = String(b.title || '').trim();
   const item = {
     id: newId('syn'),
@@ -3283,6 +3350,11 @@ app.post('/api/synergies', (req, res) => {
     workstreamId: String(b.workstreamId || 'ws_imo').slice(0, 60),
     stage: SYN_STAGES.includes(b.stage) ? b.stage : SYN_STAGES[0],
     notes: String(b.notes || '').slice(0, 600),
+    // SYN-02/D-20: the planned cost-to-achieve figure and its expected
+    // spend month — ordinary optional plan fields.
+    costPlannedM: num(b.costPlannedM),
+    costExpectedMonth: typeof b.costExpectedMonth === 'string' ? b.costExpectedMonth : '',
+    taskIds: createdTaskIds,
     createdAt: new Date().toISOString()
   };
   lane.push(item);
@@ -3297,6 +3369,46 @@ app.delete('/api/synergies/:id', (req, res) => {
   if (filtered.length === lane.length) return res.status(404).json({ error: 'Initiative not found.' });
   if (db.settings && db.settings.demoMode === false) db.customSynergyInitiatives = filtered;
   else db.synergyInitiatives = filtered;
+  writeDb(db);
+  res.json({ success: true });
+});
+
+// SYN-02/D-20/D-21/T-05-19: dedicated sub-route mirroring the established
+// shape (resolve the lane, 404 on an unknown id, one writeDb() at the end).
+// Two entries sharing a date and amount are two entries — never dedupe,
+// because a lumpy cost profile legitimately contains repeated identical
+// payments. The entry's identity is its generated id, never its array
+// position.
+app.post('/api/synergies/:id/cost-entries', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+
+  item.costEntries = Array.isArray(item.costEntries) ? item.costEntries : [];
+  const entry = { id: newId('cost'), date: b.date, amountM: roundSynergyMoney(b.amountM), note: String(b.note || '').slice(0, 2000) };
+  item.costEntries.push(entry);
+
+  writeDb(db);
+  res.json({ success: true, initiative: item });
+});
+
+// SYN-02/T-05-19: filters by the entry's generated id and 404s when no entry
+// matches — never indexes into the array, so a crafted numeric path segment
+// cannot remove an arbitrary neighbouring row. 404 on an unknown initiative
+// id too, matching the established pattern.
+app.delete('/api/synergies/:id/cost-entries/:eid', (req, res) => {
+  const db = readDb();
+  const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+
+  const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
+  const filtered = entries.filter(e => e.id !== req.params.eid);
+  if (filtered.length === entries.length) return res.status(404).json({ error: 'Cost entry not found.' });
+  item.costEntries = filtered;
+
   writeDb(db);
   res.json({ success: true });
 });

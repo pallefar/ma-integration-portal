@@ -137,6 +137,24 @@ function isValidMonth(value) {
 
 const SynMoneyUnion = z.union([z.number(), z.string().max(20)]);
 
+// SYN-02/D-20/D-21: cost-entry dates are full YYYY-MM-DD calendar dates (not
+// the YYYY-MM month shape above) — this mirrors validators/dd.js's own
+// isValidCalendarDate .refine() idiom (day-of-month range checked, including
+// leap years via the Date.UTC(y, m, 0) "day 0 of next month" trick) rather
+// than importing it, matching this file's established convention of
+// replicating a shared validator idiom in place instead of a cross-file
+// import (see MONTH_SHAPE_RE/isValidMonth above, which mirrors the same
+// source idiom for the YYYY-MM shape).
+const COST_DATE_SHAPE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+function isValidCalendarDate(value) {
+  const m = COST_DATE_SHAPE_RE.exec(value);
+  if (!m) return false;
+  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  if (month < 1 || month > 12) return false;
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day >= 1 && day <= daysInMonth;
+}
+
 // D-25: a phasing row's identity is its `month`; targetM/realizedM mirror
 // the existing targetM/realizedM union style used elsewhere in this file.
 const PhasingRowSchema = z.object({
@@ -169,6 +187,25 @@ const PhasingMonthSchema = z.object({
   message: 'At least one of targetM or realizedM is required.',
 });
 
+// SYN-02/D-20: a single dated actual-cost entry — `date` is a full calendar
+// date (not a month), `amountM` required, `note` an optional short caption.
+// The entry's identity is its server-generated `id` (server.js's newId('cost')),
+// never its array position — this schema has no `id` field because the
+// client never supplies one; POST always appends.
+const CostEntrySchema = z.object({
+  date: z.string().trim().refine(isValidCalendarDate, {
+    message: 'Cost entry date must be a valid YYYY-MM-DD calendar date.',
+  }),
+  amountM: SynMoneyUnion,
+  note: z.string().trim().max(TEXT_MAX).optional(),
+});
+
+// SYN-04/D-22/D-23: the id array is capped generously below the file's other
+// array bounds (LineItemSchema arrays cap at 200) — a task-linkage list has
+// no realistic reason to exceed a few dozen entries, so 100 is a sane sanity
+// bound (T-05-22) without being so tight it could ever bind a real workflow.
+const TASK_IDS_MAX = 100;
+
 const SynergyUpsertSchema = z.object({
   id: z.string().trim().min(1).max(ID_MAX).optional(),
   title: z.string().trim().min(1, 'Initiative title is required.').max(NAME_MAX).optional(),
@@ -195,12 +232,24 @@ const SynergyUpsertSchema = z.object({
   // initiative's current stage, so the conditional requirement stays a
   // server-side business rule.
   reason: z.string().trim().max(TEXT_MAX).optional(),
+  // SYN-02/D-20: the planned cost-to-achieve figure and its expected spend
+  // month — ordinary plan fields, not gated by D-13's forced re-baseline.
+  costPlannedM: SynMoneyUnion.optional(),
+  costExpectedMonth: z.string().trim().refine((val) => val === '' || isValidMonth(val), {
+    message: 'Expected spend month must be a valid YYYY-MM month.',
+  }).optional(),
+  // SYN-04/D-22/D-23: a plain many-to-many linkage list — no dedicated
+  // route, rides the existing upsert. server.js validates every id against
+  // taskLane(db) before mutating (T-05-18); this schema only shape-checks.
+  taskIds: z.array(z.string().trim().min(1).max(ID_MAX)).max(TASK_IDS_MAX).optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Initiative title is required.',
   path: ['title'],
 });
 registerSchema('POST', '/api/synergies', SynergyUpsertSchema);
 registerSchema('DELETE', '/api/synergies/:id', EmptyBodySchema);
+registerSchema('POST', '/api/synergies/:id/cost-entries', CostEntrySchema);
+registerSchema('DELETE', '/api/synergies/:id/cost-entries/:eid', EmptyBodySchema);
 // SYN-01/Pitfall 4: schema registration lands in the SAME edit as the route
 // (server.js) — an unregistered route 500s at request time regardless of
 // how correct the handler itself is.
@@ -316,4 +365,5 @@ module.exports = {
   PhasingMonthSchema,
   StageChangeSchema,
   RebaselineSchema,
+  CostEntrySchema,
 };
