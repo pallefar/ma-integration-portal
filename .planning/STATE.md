@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 6
 current_phase_name: Org Design & Talent Retention
 status: executing
-stopped_at: Phase 6 planned — 8 plans, 8 sequential waves, all gates green
+stopped_at: Quick task 260806-x2j complete — XSS chain closed; ready for /gsd-execute-phase 6
 last_updated: "2026-08-06T21:46:26.271Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 6 planned (8 plans); XSS quick-fix pending before execution
+last_activity_desc: Completed quick task 260806-x2j (XSS chain); Phase 6 ready to execute
 progress:
   total_phases: 7
   completed_phases: 5
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 Phase: 6 — Org Design & Talent Retention
 Plan: Not started
 Status: Ready to execute
-Last activity: 2026-08-06 — Phase 6 planned (8 plans, 8 waves); XSS quick-fix pending before execution
+Last activity: 2026-08-06 — Completed quick task 260806-x2j (XSS chain closed); Phase 6 ready to execute
 
 Progress: [██████████] 100%
 
@@ -187,6 +187,9 @@ None yet.
 - [Phase 3 Plan 05] D-10 admin Audit Log tab browser check CLOSED by orchestrator via Playwright (2026-08-02, :3337 admin login): tab renders under Compliance group, 50 entries with timestamp/op/collection#id/actor(role)/deal + collapsible before-after, actor filter returns only matching rows, pagination present, zero console errors.
 - [Phase 4 Plan 07, out of scope] public/js/transitions.js's pageAccess gate races the login-role handshake on the first navigation after a browser's active role changes (pre-existing, app-wide, not introduced by this plan) — every write route is independently role-checked server-side regardless (confirmed live: pmo session got 403 from POST /api/deals/wizard/basics); a future phase should consider hardening the handshake ordering
 - [Phase 4, deferred by user decision] Post-close read-only access for archived deals is NOT implemented — an archived deal is a full freeze today (no reads/writes/listing for anyone, per db/resolver.js's uniform 403 + listDealsForUser()'s exclusion filter). If a real deal ever needs retained-member read access after archiving, it requires: (1) resolveDatabase() distinguishing GET from write for an archived deal's bind, (2) listDealsForUser() including archived deals for a retained member with a status flag, (3) not force-releasing every session at archive time. Captured in 04-CONTEXT.md's amended D-22, not scheduled.
+- ⚠️ [Quick task 260806-x2j, T-X2J-07, accepted risk] The new `.gitignore` stanza covering `public/sent_emails/*` is **forward-looking only** — it does not unpublish `public/sent_emails/comm_1783454326531.html`, which has been in git history since the initial commit `94eb08b` on a repository that is public with 11 published releases. Removing a file from the index does not remove it from history. Mitigating fact verified while planning: that file is 4,965 bytes of demo content and contains no email addresses, so the realised exposure from this specific file is negligible — the value of the stanza is preventing a **future real-deal** email from ever being committed. A history rewrite plus force-push is the only true remediation; it would break the provenance of the 11 published release tags. This is the user's call to make, not the executor's.
+- ⚠️ [Quick task 260806-x2j, orchestrator finding at verification, ACCEPTED — deliberately not "fixed"] The widened separator class `[\s/]` makes the sanitizer **over-aggressive in one narrow shape**: an HTML attribute value containing a URL path segment of the form `/on<word>=<value>` is stripped, because `on\w+` matches words like `one`/`online`/`onboarding`. Verified live: `<a href="/one=1">x</a>` → `<a href=">x</a>`. NOT triggered by `/onboarding` (no `=`) or by query strings (`?`/`&` are not in the class); zero occurrences in the shipped i18n corpus or any page today. **The obvious refinement — a `(?<!["'=])` lookbehind so `/` only counts outside attribute values — was tested and REJECTED: it reopens a real bypass, because `<img src="x"/onerror=alert(1)>` is valid HTML whose `/` is preceded by a quote.** Over-aggression is the correct failure direction for a sanitizer: mangling a rare legitimate path is cosmetic, missing a handler is a security hole. Recorded so a future maintainer does not "fix" it back into a vulnerability.
+- ⚠️ [Quick task 260806-x2j, T-X2J-08, accepted risk, out of scope by deliberate scoping] Roughly 350 `innerHTML` sinks exist app-wide; this task proved and fixed 2 (F1/F2). Three further sinks were flagged as **unproven candidates** and remain untouched: `public/js/admin.js` line 373, `public/js/pmo.js` lines 1073-1076, `public/js/signage.js` lines 300-306. This was a deliberate scoping decision for a surgical fix, not a finding that those sinks are safe — a future sweep should verify them before treating them as closed.
 
 ### Quick Tasks Completed
 
@@ -194,6 +197,7 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260801-fj5 | Hide Post-Merger splash screen via guarded early return (keep code) | 2026-08-01 | f2a0484 | [260801-fj5-hide-post-merger-splash-screen-via-guard](./quick/260801-fj5-hide-post-merger-splash-screen-via-guard/) |
 | 2 | Fix infinite reload loop (admin role hidden by demo roleVisibility) — flicker on / after mandatory auth | 2026-08-01 | 13d6cb9 | — |
+| 260806-x2j | Fix the XSS chain — escape Leaders roster sinks, widen sanitizer separator class in all THREE copies (incl. the server-side write-time one), gitignore future outbound emails | 2026-08-06 | 4f7c1da | [260806-x2j-fix-the-xss-chain](./quick/260806-x2j-fix-the-xss-chain/) |
 
 ## Deferred Items
 
