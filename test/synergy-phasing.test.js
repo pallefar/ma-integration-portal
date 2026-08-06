@@ -489,3 +489,70 @@ test('synergy-phasing (http k): a :month failing the shape check is rejected by 
     server.close();
   }
 });
+
+// ------------------------------------------------------- Task 3: source-level --
+
+// SYN-01/UI-SPEC §2 persistence rule: a card expanded by the user must
+// survive renderSynergy() rebuilding #syn-list wholesale on an unrelated
+// edit. require() is not viable for this browser-global IIFE file inside
+// node:test, so this is asserted at the SOURCE level — reading the file text
+// and confirming the only assignment shape present is the one the toggle
+// handler makes, never a wholesale reassignment.
+test('synergy-phasing (source a): state.synExpanded is declared exactly once, assigned to only inside the expand-toggle handler, and never reassigned wholesale', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+
+  const declarations = src.match(/synExpanded\s*:\s*\{\}/g) || [];
+  assert.strictEqual(declarations.length, 1, 'state.synExpanded must be declared exactly once, as part of the initial state object literal');
+
+  const indexedAssignments = src.match(/state\.synExpanded\[[^\]]+\]\s*=(?!=)/g) || [];
+  assert.strictEqual(indexedAssignments.length, 1, 'state.synExpanded[id] must be assigned to exactly once in this file');
+  const assignIdx = src.indexOf(indexedAssignments[0]);
+  const toggleHandlerIdx = src.indexOf(".syn-expand-toggle').addEventListener");
+  assert.ok(toggleHandlerIdx !== -1 && assignIdx > toggleHandlerIdx, 'the one indexed assignment must occur inside (after the start of) the expand-toggle click handler');
+
+  const wholesaleReassignments = src.match(/state\.synExpanded\s*=(?!\s*\{\}[\s,])/g) || [];
+  assert.strictEqual(wholesaleReassignments.length, 0, 'state.synExpanded must never be reassigned a fresh object outside its initial declaration');
+});
+
+// Same shape of proof for the mobile-grid's per-initiative show-all flag —
+// the "showAll" state UI-SPEC §2 places "in the same state.synExpanded-
+// adjacent module state."
+test('synergy-phasing (source b): state.synShowAll is declared exactly once and assigned to only inside the show-all-link click handler', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+
+  const declarations = src.match(/synShowAll\s*:\s*\{\}/g) || [];
+  assert.strictEqual(declarations.length, 1, 'state.synShowAll must be declared exactly once');
+
+  const indexedAssignments = src.match(/state\.synShowAll\[[^\]]+\]\s*=(?!=)/g) || [];
+  assert.strictEqual(indexedAssignments.length, 1, 'state.synShowAll[id] must be assigned to exactly once in this file');
+  const assignIdx = src.indexOf(indexedAssignments[0]);
+  const linkHandlerIdx = src.indexOf("showAllLink.addEventListener");
+  assert.ok(linkHandlerIdx !== -1 && assignIdx > linkHandlerIdx, 'the one indexed assignment must occur inside the show-all-link click handler');
+});
+
+// UI-SPEC §2/Copywriting Contract: regenerating discards manually-edited
+// rows and must never be silent. Asserted at the source level that
+// window.confirm() textually precedes the fetch() call inside the generate
+// handler, i.e. the confirm gate runs BEFORE any request is issued.
+test('synergy-phasing (source c): the regenerate handler calls window.confirm before its fetch to generate-phasing', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+  const handlerStart = src.indexOf("genBtn.addEventListener('click', function () {");
+  assert.ok(handlerStart !== -1, 'the generate button click handler must exist');
+  const handlerEnd = src.indexOf("card.querySelector('.syn-realized-input').addEventListener", handlerStart);
+  assert.ok(handlerEnd !== -1 && handlerEnd > handlerStart, 'the next handler after the generate handler must be found to bound the slice');
+  const handlerSrc = src.slice(handlerStart, handlerEnd);
+
+  const confirmIdx = handlerSrc.indexOf('window.confirm(');
+  const fetchIdx = handlerSrc.indexOf("fetch('/api/synergies/' + encodeURIComponent(id) + '/generate-phasing'");
+  assert.ok(confirmIdx !== -1, 'the generate handler must call window.confirm');
+  assert.ok(fetchIdx !== -1, 'the generate handler must call fetch on the generate-phasing route');
+  assert.ok(confirmIdx < fetchIdx, 'window.confirm must be called BEFORE the fetch, so a cancelled confirm aborts the request entirely');
+});
+
+// UI-SPEC §2 empty state: replaces the grid and its header row entirely —
+// never an empty grid shell.
+test('synergy-phasing (source d): the empty-phasing state renders the exact "No phasing rows yet" heading exactly once', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+  const occurrences = src.match(/No phasing rows yet/g) || [];
+  assert.strictEqual(occurrences.length, 1, 'the empty-state heading copy must appear exactly once');
+});

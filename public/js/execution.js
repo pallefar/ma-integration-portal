@@ -28,7 +28,10 @@
   // markup, and written to ONLY by the expand-toggle click handler below —
   // renderSynergy() must NEVER reset it wholesale, or an expanded card would
   // silently collapse on the next unrelated re-render (UI-SPEC §2).
-  var state = { tasks: [], template: null, wsFilter: null, synergies: [], raid: [], raidFilter: null, synExpanded: {} };
+  // state.synShowAll is the mobile-grid analogue: per-initiative "show all
+  // months" flag, read by buildSynDetail() and written ONLY by the
+  // .syn-show-all-link click handler — same never-reset-wholesale rule.
+  var state = { tasks: [], template: null, wsFilter: null, synergies: [], raid: [], raidFilter: null, synExpanded: {}, synShowAll: {} };
 
   var SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
   var SYN_LABELS = { identified: 'Identified', validated: 'Validated', planned: 'Planned', executing: 'Executing', realized: 'Realized' };
@@ -241,10 +244,13 @@
 
     var gridHtml;
     if (rows.length === 0) {
-      // Task 3 replaces this with the full "No phasing rows yet" empty
-      // state per UI-SPEC's Copywriting Contract; Task 1 keeps a minimal
-      // placeholder so the section always renders something.
-      gridHtml = '<div class="ex-empty" data-i18n="syn.no_phasing">No phasing rows yet.</div>';
+      // UI-SPEC §2/Copywriting Contract: the empty state replaces the grid
+      // AND its header row entirely (never an empty grid shell) — the ramp
+      // controls above stay visible so the empty state is actionable.
+      gridHtml = '<div class="syn-empty-phasing">'
+        + '<div class="syn-section-label" data-i18n="syn.no_phasing">No phasing rows yet</div>'
+        + '<div class="ex-empty" data-i18n="syn.no_phasing_body">Enter a run-rate, start month and curve shape, then generate phasing rows to start tracking monthly targets.</div>'
+        + '</div>';
     } else {
       // SYN-01/D-06/UI-SPEC §2: the client mirrors the server's
       // monthHasArrived() rule using the same YYYY-MM string comparison —
@@ -255,19 +261,49 @@
       // concrete guard against the Phase 4 Wave 7 bug class where a value
       // landed on the right element but was rendered invisible.
       var currentMonth = new Date().toISOString().slice(0, 7);
-      var head = '<div class="syn-grid-head"><span data-i18n="syn.grid_month">Month</span><span data-i18n="syn.grid_target">Target $</span><span data-i18n="syn.grid_realized">Realized $</span></div>';
-      var body = rows.map(function (r) {
+      function buildRealizedCell(r) {
         var arrived = r.month <= currentMonth;
-        var realizedCell = arrived
+        return arrived
           ? '<input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (r.realizedM || 0) + '" data-syn-month="' + esc(r.month) + '">'
           : '<span class="syn-grid-locked" title="Not yet arrived — editable once this month begins">—</span>';
+      }
+      function buildTargetCell(r) {
+        return '<input type="number" class="syn-target-input" min="0" step="0.1" value="' + (r.targetM || 0) + '" data-syn-month="' + esc(r.month) + '">';
+      }
+
+      // Desktop (>=768px): every row, sticky header, scroll container.
+      var head = '<div class="syn-grid-head"><span data-i18n="syn.grid_month">Month</span><span data-i18n="syn.grid_target">Target $</span><span data-i18n="syn.grid_realized">Realized $</span></div>';
+      var body = rows.map(function (r) {
         return '<div class="syn-grid-row" data-syn-month="' + esc(r.month) + '">'
           + '<span>' + esc(r.month) + '</span>'
-          + '<span><input type="number" class="syn-target-input" min="0" step="0.1" value="' + (r.targetM || 0) + '" data-syn-month="' + esc(r.month) + '"></span>'
-          + '<span>' + realizedCell + '</span>'
+          + '<span>' + buildTargetCell(r) + '</span>'
+          + '<span>' + buildRealizedCell(r) + '</span>'
           + '</div>';
       }).join('');
-      gridHtml = '<div class="syn-grid">' + head + body + '</div>';
+      var desktopGrid = '<div class="syn-grid">' + head + body + '</div>';
+
+      // Mobile (<768px, CSS media query below): stacked cards, windowed to
+      // 4 months (prior + current + next 2, clamped to the generated
+      // range) by default; "Show all N months" reveals the rest inline —
+      // never horizontal scroll, never a modal (UI-SPEC §2).
+      var showAll = !!state.synShowAll[s.id];
+      var currentIdx = rows.findIndex(function (r) { return r.month === currentMonth; });
+      var windowStart = currentIdx === -1 ? 0 : Math.max(0, currentIdx - 1);
+      var windowEnd = currentIdx === -1 ? Math.min(rows.length, 4) : Math.min(rows.length, currentIdx + 3);
+      var visibleRows = showAll ? rows : rows.slice(windowStart, windowEnd);
+      var mobileBody = visibleRows.map(function (r) {
+        return '<div class="syn-grid-mobile-row" data-syn-month="' + esc(r.month) + '">'
+          + '<div class="syn-grid-mobile-month">' + esc(r.month) + '</div>'
+          + '<div class="syn-grid-mobile-field"><span data-i18n="syn.grid_target">Target $</span>' + buildTargetCell(r) + '</div>'
+          + '<div class="syn-grid-mobile-field"><span data-i18n="syn.grid_realized">Realized $</span>' + buildRealizedCell(r) + '</div>'
+          + '</div>';
+      }).join('');
+      var showAllLink = (!showAll && visibleRows.length < rows.length)
+        ? '<a href="#" class="syn-show-all-link">Show all ' + rows.length + ' months</a>'
+        : '';
+      var mobileGrid = '<div class="syn-grid-mobile">' + mobileBody + showAllLink + '</div>';
+
+      gridHtml = desktopGrid + mobileGrid;
     }
 
     return '<div class="syn-detail">'
@@ -341,6 +377,14 @@
       var genBtn = card.querySelector('.syn-generate-btn');
       if (genBtn) {
         genBtn.addEventListener('click', function () {
+          // UI-SPEC §2/Copywriting Contract: regenerating discards
+          // manually-edited rows, so it must never be silent when rows
+          // already exist. window.confirm() is called BEFORE the fetch —
+          // Task 3's source-level regression asserts that ordering.
+          var existing = state.synergies.find(function (s) { return s.id === id; });
+          if (existing && Array.isArray(existing.phasing) && existing.phasing.length > 0) {
+            if (!window.confirm('This replaces the existing phasing rows. Continue?')) return;
+          }
           var runRateEl = card.querySelector('.syn-ramp-runrate');
           var startEl = card.querySelector('.syn-ramp-start');
           var curveEl = card.querySelector('.syn-ramp-curve');
@@ -406,6 +450,17 @@
           });
         });
       });
+      // SYN-01/UI-SPEC §2: writes state.synShowAll — the mobile-grid
+      // analogue of the expand-toggle write above, and the ONLY place in
+      // this file that assigns to it.
+      var showAllLink = card.querySelector('.syn-show-all-link');
+      if (showAllLink) {
+        showAllLink.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          state.synShowAll[id] = true;
+          renderSynergy(); applyI18n();
+        });
+      }
       card.querySelector('.ex-del').addEventListener('click', function () {
         if (!window.confirm('Delete this initiative?')) return;
         fetch('/api/synergies/' + encodeURIComponent(id), { method: 'DELETE' })
