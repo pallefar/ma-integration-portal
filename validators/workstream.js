@@ -113,22 +113,67 @@ registerSchema('POST', '/api/integration-tasks/from-remediation', FromRemediatio
 // ---------------------------------------------------------------------------
 const SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
 
+// SYN-01/D-24: month-shape validator mirroring validators/dd.js's
+// isValidCalendarDate .refine() idiom — a phasing row's identity is its
+// month string ('YYYY-MM'), so this is the ONE place both the row schema and
+// the generate/per-month sub-route schemas anchor their month validation to.
+// No day-of-month arithmetic, unlike the calendar-date validator.
+const MONTH_SHAPE_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
+function isValidMonth(value) {
+  return typeof value === 'string' && MONTH_SHAPE_RE.test(value);
+}
+
+const SynMoneyUnion = z.union([z.number(), z.string().max(20)]);
+
+// D-25: a phasing row's identity is its `month`; targetM/realizedM mirror
+// the existing targetM/realizedM union style used elsewhere in this file.
+const PhasingRowSchema = z.object({
+  month: z.string().trim().refine(isValidMonth, { message: 'Phasing row month must be a valid YYYY-MM month.' }),
+  targetM: SynMoneyUnion.optional(),
+  realizedM: SynMoneyUnion.optional(),
+});
+
+// D-01/D-02/D-03/D-05/D-24: the ramp auto-fill input body for
+// POST /api/synergies/:id/generate-phasing. runRateM is the steady-state
+// ANNUAL figure (D-02, never the sum of the generated rows); startMonth
+// anchors the generated horizon; curveShape selects one of the three fixed
+// checkpoint tables server.js's RAMP_CURVES defines.
+const GeneratePhasingSchema = z.object({
+  runRateM: SynMoneyUnion,
+  startMonth: z.string().trim().refine(isValidMonth, { message: 'Start month must be a valid YYYY-MM month.' }),
+  curveShape: z.enum(['cost', 'revenue', 'linear']),
+});
+
 const SynergyUpsertSchema = z.object({
   id: z.string().trim().min(1).max(ID_MAX).optional(),
   title: z.string().trim().min(1, 'Initiative title is required.').max(NAME_MAX).optional(),
   category: z.string().trim().max(20).optional(),
-  targetM: z.union([z.number(), z.string().max(20)]).optional(),
-  realizedM: z.union([z.number(), z.string().max(20)]).optional(),
+  targetM: SynMoneyUnion.optional(),
+  realizedM: SynMoneyUnion.optional(),
   owner: z.string().trim().max(NAME_MAX).optional(),
   workstreamId: z.string().trim().max(60).optional(),
   status: z.enum(SYN_STATUSES).optional(),
   notes: z.string().trim().max(TEXT_MAX).optional(),
+  // SYN-01/D-01: the ramp inputs, also stamped by the dedicated
+  // generate-phasing route — accepted here too since the base upsert schema
+  // is the one place every synergy field is validated; server.js's own
+  // derived-rollup guard (D-04) is what actually prevents a client from
+  // forging targetM/realizedM once phasing rows exist, not this schema.
+  runRateM: SynMoneyUnion.optional(),
+  startMonth: z.string().trim().refine((val) => val === '' || isValidMonth(val), {
+    message: 'Start month must be a valid YYYY-MM month.',
+  }).optional(),
+  curveShape: z.enum(['cost', 'revenue', 'linear']).optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Initiative title is required.',
   path: ['title'],
 });
 registerSchema('POST', '/api/synergies', SynergyUpsertSchema);
 registerSchema('DELETE', '/api/synergies/:id', EmptyBodySchema);
+// SYN-01/Pitfall 4: schema registration lands in the SAME edit as the route
+// (server.js) — an unregistered route 500s at request time regardless of
+// how correct the handler itself is.
+registerSchema('POST', '/api/synergies/:id/generate-phasing', GeneratePhasingSchema);
 
 // ---------------------------------------------------------------------------
 // RAID entries — upsert (POST-create-only route; no id-present update path
@@ -205,4 +250,8 @@ module.exports = {
   ModuleUpsertSchema,
   ReorderWidgetsSchema,
   RAID_LEVELS,
+  MONTH_SHAPE_RE,
+  isValidMonth,
+  PhasingRowSchema,
+  GeneratePhasingSchema,
 };

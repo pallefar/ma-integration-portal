@@ -3042,8 +3042,94 @@ function synergyLane(db) {
 }
 const SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
 
+// SYN-01/D-05/D-24: fixed year-end cumulative-attainment checkpoints per
+// curve shape — cost back-loads savings validation (30/70/100), revenue
+// ramps slower given customer-facing lead time (10/40/70), linear is the
+// neutral default (33/67/100). generatePhasingRows() below interpolates
+// linearly BETWEEN these year-end checkpoints across each year's 12 months —
+// a smooth monthly ramp, never a step at the year boundary.
+const RAMP_CURVES = {
+  cost: [0.30, 0.70, 1.00],
+  revenue: [0.10, 0.40, 0.70],
+  linear: [0.33, 0.67, 1.00],
+};
+
+// SYN-01: the same rounding contract as POST /api/synergies' own local
+// `num()` helper below (parseFloat, NaN -> 0, clamp negative to 0, round to
+// one decimal) — pulled out to module scope because generatePhasingRows()
+// and the phasing sub-routes need it outside any single handler's closure.
+function roundSynergyMoney(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : Math.max(0, Math.round(n * 10) / 10);
+}
+
+// SYN-01/D-01/D-03/D-05/D-24: generates horizonYears*12 consecutive monthly
+// phasing rows starting at startMonth, ramped per curveShape's checkpoints.
+// Month arithmetic is integer year/month math — never Date-object month
+// addition, which drifts across DST/locale edge cases. A row's targetM is
+// that row's interpolated CUMULATIVE attainment fraction multiplied by the
+// annual run-rate, divided by 12 (D-24) — never a year-boundary step.
+function generatePhasingRows(runRateM, startMonth, curveShape, horizonYears) {
+  const checkpoints = RAMP_CURVES[curveShape] || RAMP_CURVES.linear;
+  const [startYear, startMon] = String(startMonth).split('-').map(Number);
+  const rate = roundSynergyMoney(runRateM);
+  const totalRows = Math.max(0, horizonYears | 0) * 12;
+  const rows = [];
+  for (let i = 1; i <= totalRows; i++) {
+    const absMonthIndex = (startMon - 1) + (i - 1);
+    const rowYear = startYear + Math.floor(absMonthIndex / 12);
+    const rowMonth = (absMonthIndex % 12) + 1;
+    const month = rowYear + '-' + String(rowMonth).padStart(2, '0');
+
+    const yearBucket = Math.ceil(i / 12);
+    const monthWithinYear = i - (yearBucket - 1) * 12;
+    const lastCheckpoint = checkpoints[checkpoints.length - 1];
+    const prevCheckpoint = yearBucket === 1 ? 0 : (checkpoints[yearBucket - 2] !== undefined ? checkpoints[yearBucket - 2] : lastCheckpoint);
+    const nextCheckpoint = checkpoints[yearBucket - 1] !== undefined ? checkpoints[yearBucket - 1] : lastCheckpoint;
+    const attainment = prevCheckpoint + (nextCheckpoint - prevCheckpoint) * (monthWithinYear / 12);
+
+    rows.push({
+      month,
+      targetM: roundSynergyMoney((attainment * rate) / 12),
+      realizedM: 0,
+    });
+  }
+  return rows;
+}
+
+// SYN-01/D-03: horizon length in years, read from the deal's own settings
+// singleton, defaulting to 3 — the settings key itself is registered in
+// Plan 05; this reader tolerates its absence today rather than throwing.
+function synergyHorizonYears(db) {
+  const configured = db.settings && db.settings.synergyHorizonYears;
+  return typeof configured === 'number' && configured > 0 ? configured : 3;
+}
+
+// SYN-01/D-06: wall-clock "has this month started" check, mirroring
+// computeOverdue()'s established real-clock precedent (below in this file)
+// — deliberately NO timeTravelDay branch, in demo mode or real-deal mode
+// (05-RESEARCH.md Finding A1, flagged in this plan's objective).
+function monthHasArrived(month) {
+  if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) return false;
+  return month <= new Date().toISOString().slice(0, 7);
+}
+
+// SYN-01/D-04: targetM/realizedM become the derived rollup of an
+// initiative's phasing rows once any exist; an initiative with zero rows
+// keeps today's independently-writable pair, passed through unchanged.
+function synergyRollupFields(item) {
+  if (!item) return { targetM: 0, realizedM: 0 };
+  if (!Array.isArray(item.phasing) || item.phasing.length === 0) {
+    return { targetM: item.targetM || 0, realizedM: item.realizedM || 0 };
+  }
+  const targetM = roundSynergyMoney(item.phasing.reduce((a, r) => a + (r.targetM || 0), 0));
+  const realizedM = roundSynergyMoney(item.phasing.reduce((a, r) => a + (r.realizedM || 0), 0));
+  return { targetM, realizedM };
+}
+
 app.get('/api/synergies', (req, res) => {
-  res.json(synergyLane(readDb()));
+  const lane = synergyLane(readDb());
+  res.json(lane.map((item) => Object.assign({}, item, synergyRollupFields(item))));
 });
 
 app.post('/api/synergies', (req, res) => {
@@ -3061,6 +3147,13 @@ app.post('/api/synergies', (req, res) => {
     // (which only requires a title when `id` is absent) and stays here.
     if (b.title !== undefined && !String(b.title).trim()) {
       return res.status(400).json({ error: 'Initiative title cannot be empty.' });
+    }
+    // SYN-01/D-04/T-05-02: once an initiative carries phasing rows,
+    // targetM/realizedM are a DERIVED rollup of those rows — this is the
+    // base-upsert half of the forward-booking guard (the dedicated
+    // per-month sub-route is the only writable path once rows exist).
+    if (Array.isArray(item.phasing) && item.phasing.length > 0 && (b.targetM !== undefined || b.realizedM !== undefined)) {
+      return res.status(400).json({ error: 'This initiative is phased — edit targetM/realizedM per month on the phasing grid, not on the initiative directly.' });
     }
     ['title', 'owner', 'workstreamId', 'notes'].forEach(k => { if (b[k] !== undefined) item[k] = String(b[k] || '').slice(0, 300); });
     if (b.category !== undefined) item.category = b.category === 'cost' ? 'cost' : 'revenue';
@@ -3099,6 +3192,32 @@ app.delete('/api/synergies/:id', (req, res) => {
   else db.synergyInitiatives = filtered;
   writeDb(db);
   res.json({ success: true });
+});
+
+// SYN-01/D-01/D-05/D-25: dedicated sub-route mirroring
+// POST /api/deals/:id/members's shape (inline 404 guard, one writeDb() at
+// the end). Regeneration REPLACES item.phasing wholesale, never merges — a
+// phasing row's identity is its month, so there is no meaningful partial
+// merge, and re-running the ramp after manual edits is a deliberate,
+// client-confirmed destructive action (Task 3's window.confirm gate).
+app.post('/api/synergies/:id/generate-phasing', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+
+  item.runRateM = roundSynergyMoney(b.runRateM);
+  item.startMonth = b.startMonth;
+  item.curveShape = b.curveShape;
+  item.phasing = generatePhasingRows(item.runRateM, item.startMonth, item.curveShape, synergyHorizonYears(db));
+
+  const rollup = synergyRollupFields(item);
+  item.targetM = rollup.targetM;
+  item.realizedM = rollup.realizedM;
+
+  writeDb(db);
+  res.json({ success: true, initiative: item });
 });
 
 // =====================================================================
@@ -4607,3 +4726,10 @@ module.exports.DEMO_ONLY_PREFIXES = DEMO_ONLY_PREFIXES;
 // D-26: exposed so a test can assert this copy and validators/workstream.js's
 // own independent RAID_LEVELS copy agree, without re-declaring a third list.
 module.exports.RAID_LEVELS = RAID_LEVELS;
+// SYN-01: exposed so a test can unit-check the ramp math and the
+// arrived-month gate directly, without booting the HTTP server for every
+// pure-function case (same rationale as roleAllowedForWrite above).
+module.exports.generatePhasingRows = generatePhasingRows;
+module.exports.monthHasArrived = monthHasArrived;
+module.exports.synergyRollupFields = synergyRollupFields;
+module.exports.RAMP_CURVES = RAMP_CURVES;

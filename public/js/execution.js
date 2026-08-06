@@ -23,11 +23,24 @@
     done: { label: 'Done', color: '#3f7a37' }
   };
 
-  var state = { tasks: [], template: null, wsFilter: null, synergies: [], raid: [], raidFilter: null };
+  // SYN-01: state.synExpanded is read at the top of each card's render to
+  // decide whether that card's .syn-detail is included in the rendered
+  // markup, and written to ONLY by the expand-toggle click handler below —
+  // renderSynergy() must NEVER reset it wholesale, or an expanded card would
+  // silently collapse on the next unrelated re-render (UI-SPEC §2).
+  var state = { tasks: [], template: null, wsFilter: null, synergies: [], raid: [], raidFilter: null, synExpanded: {} };
 
   var SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
   var SYN_LABELS = { identified: 'Identified', validated: 'Validated', planned: 'Planned', executing: 'Executing', realized: 'Realized' };
   var SYN_COLORS = { identified: '#8a8f92', validated: '#475569', planned: '#C77700', executing: '#167987', realized: '#3f7a37' };
+  // D-05: the three named ramp shapes, verbatim per UI-SPEC's Copywriting
+  // Contract — labels state each curve's checkpoints so the choice is
+  // self-explanatory without a separate legend.
+  var SYN_CURVE_OPTIONS = [
+    { value: 'cost', label: 'Cost 30/70/100' },
+    { value: 'revenue', label: 'Revenue 10/40/70' },
+    { value: 'linear', label: 'Linear 33/67/100' }
+  ];
   var RAID_STATUS_ORDER = ['open', 'mitigating', 'closed'];
   var RAID_STATUS_META = { open: { label: 'Open', color: '#C0392B' }, mitigating: { label: 'Mitigating', color: '#C77700' }, closed: { label: 'Closed', color: '#3f7a37' } };
   var RAID_TYPES = ['risk', 'issue', 'decision', 'dependency'];
@@ -213,6 +226,48 @@
   }
 
   // ---------------------------------------------------------------- synergy
+
+  // SYN-01/UI-SPEC §2: builds the expanded card's ramp-controls + phasing
+  // grid markup. Only ever called for a card whose id is in
+  // state.synExpanded — a collapsed card never includes this markup at all
+  // (not merely hidden with CSS), so rendering N collapsed cards costs
+  // nothing extra.
+  function buildSynDetail(s) {
+    var rows = Array.isArray(s.phasing) ? s.phasing : [];
+    var curveOptions = SYN_CURVE_OPTIONS.map(function (o) {
+      var sel = (s.curveShape || '') === o.value ? ' selected' : '';
+      return '<option value="' + o.value + '"' + sel + '>' + esc(o.label) + '</option>';
+    }).join('');
+
+    var gridHtml;
+    if (rows.length === 0) {
+      // Task 3 replaces this with the full "No phasing rows yet" empty
+      // state per UI-SPEC's Copywriting Contract; Task 1 keeps a minimal
+      // placeholder so the section always renders something.
+      gridHtml = '<div class="ex-empty" data-i18n="syn.no_phasing">No phasing rows yet.</div>';
+    } else {
+      var head = '<div class="syn-grid-head"><span data-i18n="syn.grid_month">Month</span><span data-i18n="syn.grid_target">Target $</span><span data-i18n="syn.grid_realized">Realized $</span></div>';
+      var body = rows.map(function (r) {
+        return '<div class="syn-grid-row" data-syn-month="' + esc(r.month) + '">'
+          + '<span>' + esc(r.month) + '</span>'
+          + '<span>$' + (r.targetM || 0) + 'M</span>'
+          + '<span>$' + (r.realizedM || 0) + 'M</span>'
+          + '</div>';
+      }).join('');
+      gridHtml = '<div class="syn-grid">' + head + body + '</div>';
+    }
+
+    return '<div class="syn-detail">'
+      + '<div class="syn-ramp-controls">'
+      + '<input type="number" class="syn-ramp-runrate" min="0" step="0.1" data-i18n-ph="syn.runrate_ph" placeholder="Run-rate $M" value="' + (s.runRateM || '') + '">'
+      + '<input type="month" class="syn-ramp-start" value="' + esc(s.startMonth || '') + '">'
+      + '<select class="syn-ramp-curve">' + curveOptions + '</select>'
+      + '<button class="btn btn-primary syn-generate-btn" type="button" data-i18n="syn.generate_btn">Generate phasing rows</button>'
+      + '</div>'
+      + gridHtml
+      + '</div>';
+  }
+
   function renderSynergy() {
     var list = state.synergies;
     var target = list.reduce(function (a, s) { return a + (s.targetM || 0); }, 0);
@@ -231,6 +286,9 @@
     document.getElementById('syn-list').innerHTML = list.map(function (s) {
       var p = s.targetM > 0 ? Math.round(((s.realizedM || 0) / s.targetM) * 100) : 0;
       var wsDef = workstreams().find(function (w) { return w.id === s.workstreamId; });
+      // SYN-01/UI-SPEC §2: read state.synExpanded (never write it here) to
+      // decide whether this card's .syn-detail is included at all.
+      var expanded = !!state.synExpanded[s.id];
       return '<div class="syn-card" data-syn="' + esc(s.id) + '">'
         + '<div class="syn-head"><div style="flex:1;min-width:0;"><div class="syn-title">' + esc(s.title) + '</div>'
         + '<div class="syn-meta">'
@@ -244,6 +302,8 @@
         + '<button class="ex-del" title="✕">✕</button>'
         + '</div>'
         + '<div class="syn-track"><div class="syn-fill" style="width:' + Math.min(p, 100) + '%"></div></div>'
+        + '<button class="syn-expand-toggle" type="button">' + (expanded ? '▾ Hide details' : '▸ Phasing, baseline & cost details') + '</button>'
+        + (expanded ? buildSynDetail(s) : '')
         + '</div>';
     }).join('');
 
@@ -257,6 +317,38 @@
           .then(function (r) { return r.json(); })
           .then(function (res) { if (res && res.success) { item.status = next; renderSynergy(); applyI18n(); } });
       });
+      // SYN-01/UI-SPEC §2: writes state.synExpanded — the ONLY place in
+      // this file that assigns to it. Toggling re-renders the whole list,
+      // which is what proves this write must survive the rebuild (Task 3's
+      // regression test).
+      card.querySelector('.syn-expand-toggle').addEventListener('click', function () {
+        state.synExpanded[id] = !state.synExpanded[id];
+        renderSynergy(); applyI18n();
+      });
+      var genBtn = card.querySelector('.syn-generate-btn');
+      if (genBtn) {
+        genBtn.addEventListener('click', function () {
+          var runRateEl = card.querySelector('.syn-ramp-runrate');
+          var startEl = card.querySelector('.syn-ramp-start');
+          var curveEl = card.querySelector('.syn-ramp-curve');
+          var body = {
+            runRateM: parseFloat(runRateEl.value) || 0,
+            startMonth: startEl.value,
+            curveShape: curveEl.value
+          };
+          fetch('/api/synergies/' + encodeURIComponent(id) + '/generate-phasing', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res && res.success) {
+              var idx = state.synergies.findIndex(function (s) { return s.id === id; });
+              if (idx !== -1) state.synergies[idx] = res.initiative;
+              renderSynergy(); applyI18n();
+            } else {
+              window.alert(res && res.error);
+            }
+          });
+        });
+      }
       card.querySelector('.syn-realized-input').addEventListener('change', function (ev) {
         var val = parseFloat(ev.target.value) || 0;
         fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, realizedM: val }) })
