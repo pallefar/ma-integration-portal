@@ -3188,6 +3188,28 @@ function stageGateFailure(item, targetStage) {
   return null;
 }
 
+// CR-03: after a mutation that can invalidate a HIGHER stage's already-passed
+// gate without moving the item through the /stage route (currently: phasing
+// regeneration, which resets every row's realizedM to 0 — the ONLY thing the
+// captured gate depends on), walks the ordinal DOWN from item.stage to the
+// highest stage whose own gate re-checks satisfied against the item's
+// CURRENT fields. Reuses stageGateFailure() one ordinal at a time — probing
+// `stageGateFailure({...item, stage: SYN_STAGES[ord-1]}, SYN_STAGES[ord])`
+// checks EXACTLY stage `ord`'s own gate (the loop inside stageGateFailure
+// runs for a single ordinal when from/to are one apart), never re-walking
+// gates below it that were never at risk. `idea` (ordinal 0) carries no
+// gate, so this always terminates. Returns the item's stage unchanged when
+// no demotion is needed.
+function demoteToSatisfiedStage(item) {
+  let ord = STAGE_ORDER[item.stage];
+  while (ord > 0) {
+    const probe = Object.assign({}, item, { stage: SYN_STAGES[ord - 1] });
+    if (!stageGateFailure(probe, SYN_STAGES[ord])) break;
+    ord -= 1;
+  }
+  return SYN_STAGES[ord];
+}
+
 // D-12/D-13/D-14: append-only baseline snapshot list. Version is derived
 // from the HIGHEST existing version, never the array length (T-05-16), so a
 // future deletion path could never silently reuse a version number. The
@@ -3571,6 +3593,23 @@ app.post('/api/synergies/:id/generate-phasing', (req, res) => {
   const rollup = synergyRollupFields(item);
   item.targetM = rollup.targetM;
   item.realizedM = rollup.realizedM;
+
+  // CR-03: regeneration wholesale-replaces item.phasing with rows carrying
+  // realizedM: 0 (the ramp loop above), so an initiative sitting at
+  // `committed` or `captured` on the strength of evidence that no longer
+  // exists in the fresh rows must not keep that stage claim — the rollup
+  // above already dropped to reflect the fresh zero rows, but nothing else
+  // re-checks whether item.stage is still true. Demote to the highest stage
+  // whose own gate still passes, recording the automatic demotion as a
+  // baseline entry (mirrors D-09's reasoned-demotion pattern) so the badge
+  // and the steering-committee rollup can never again disagree about whether
+  // the initiative's captured-value claim still holds.
+  const preRegenStage = item.stage;
+  const satisfiedStage = demoteToSatisfiedStage(item);
+  if (satisfiedStage !== preRegenStage) {
+    pushBaseline(item, req, `Automatic demotion: phasing regenerated, ${preRegenStage} evidence no longer present.`);
+    item.stage = satisfiedStage;
+  }
 
   writeDb(db);
   res.json({ success: true, initiative: item });

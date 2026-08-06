@@ -479,6 +479,71 @@ test('synergy-stage-gate (i): CR-02 — a stage-change request against an initia
   }
 });
 
+// CR-03: generate-phasing wholesale-replaces item.phasing with rows all
+// carrying realizedM: 0. Regenerating on an already-captured initiative used
+// to leave item.stage === 'captured' with no re-check — the stage badge
+// claimed "Captured" while grossRealizedM (the steering-committee rollup)
+// silently dropped to 0, a domain-invariant violation reachable through the
+// feature's own primary documented workflow, not database tampering.
+test('synergy-stage-gate (j): CR-03 — regenerating phasing on a captured initiative demotes it to committed (the highest stage whose own gate still passes) and records an automatic-demotion baseline entry; realizedM rolls back to the fresh zero-row sum', async () => {
+  const deal = freshDeal('deal_syngj');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Regen after capture', category: 'cost', owner: 'Karen Owner' });
+    const { initiative } = await createRes.json();
+
+    // A start month far enough in the past that the whole 3-year horizon's
+    // first months have already arrived, mirroring the arrived-month setup
+    // synergy-phasing.test.js's own http (f) test uses.
+    const now = new Date();
+    const startDate = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), 1));
+    const startMonth = startDate.toISOString().slice(0, 7);
+    const currentMonth = now.toISOString().slice(0, 7);
+
+    await postJSON(base, `/api/synergies/${initiative.id}/generate-phasing`, karenToken, { runRateM: 2, startMonth, curveShape: 'linear' });
+    await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'validated' });
+    const toCommitted = await (await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'committed' })).json();
+    assert.strictEqual(toCommitted.initiative.stage, 'committed');
+
+    await postJSON(base, `/api/synergies/${initiative.id}/phasing/${currentMonth}`, karenToken, { realizedM: 1 });
+    const toCaptured = await (await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'captured' })).json();
+    assert.strictEqual(toCaptured.initiative.stage, 'captured', 'sanity check: the initiative must actually reach captured before this test\'s regeneration step is meaningful');
+    const baselineCountBeforeRegen = toCaptured.initiative.baselines.length;
+
+    // The regeneration itself — same runRateM/startMonth/curveShape, so this
+    // is purely "re-run the ramp", not a scope change. Every fresh row
+    // carries realizedM: 0, which is exactly what invalidates the captured
+    // gate's "realized value recorded in at least one arrived month"
+    // requirement.
+    const regenRes = await postJSON(base, `/api/synergies/${initiative.id}/generate-phasing`, karenToken, { runRateM: 2, startMonth, curveShape: 'linear' });
+    assert.strictEqual(regenRes.status, 200);
+    const regenBody = await regenRes.json();
+
+    assert.strictEqual(regenBody.initiative.stage, 'committed', 'the captured-evidence gate no longer holds against the fresh zero rows — the initiative must be demoted to the highest stage (committed) whose own gate still passes, never left claiming captured');
+    assert.strictEqual(regenBody.initiative.realizedM, 0, 'the derived rollup must reflect the fresh zero-row phasing, matching the demoted stage');
+    assert.strictEqual(regenBody.initiative.baselines.length, baselineCountBeforeRegen + 1, 'exactly one new baseline entry must record the automatic demotion');
+    const demotionEntry = regenBody.initiative.baselines[regenBody.initiative.baselines.length - 1];
+    assert.match(demotionEntry.reason, /[Aa]utomatic demotion/, 'the appended baseline must state this was an automatic demotion, distinguishable from a deliberate D-09 backward move');
+
+    // Persisted, not just the response body — read back via GET to prove the
+    // demotion survived the write, matching this file's established
+    // read-back-after-write proof pattern.
+    const listRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const list = await listRes.json();
+    const stored = list.find((s) => s.id === initiative.id);
+    assert.strictEqual(stored.stage, 'committed', 'the persisted stage must reflect the demotion, not just the response body');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
 // ============================================================= Plan 03 ==
 // Task 2: D-12/D-13/D-14 baseline history + the pinned deal case, D-15
 // re-baseline authz (the CR-01-lesson two-identity 200/403 proof).
