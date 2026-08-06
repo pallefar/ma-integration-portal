@@ -86,6 +86,16 @@ const SettingsUpdateSchema = z.object({
   doomUnlockXp: z.union([z.number(), z.string().max(10)]).optional(),
   floatingMenuEnabled: z.boolean().optional(),
   databaseConfig: DatabaseConfigSchema,
+  // SYN-05/D-17: the per-deal staleness threshold, in days, read by
+  // server.js's synergyStaleDays(). SYN-01/D-03: the per-deal phasing
+  // horizon, in years, read by server.js's synergyHorizonYears() — schema
+  // accepted since Plan 01 but never enumerated here, so it was silently
+  // stripped by this schema's own explicit-enumeration rule (D-13) on every
+  // write until now. Without both keys enumerated here, zod's object parse
+  // silently strips them and the per-deal configurability D-03/D-17 promise
+  // fails invisibly.
+  synergyStaleDays: z.union([z.number(), z.string().max(10)]).optional(),
+  synergyHorizonYears: z.union([z.number(), z.string().max(10)]).optional(),
 });
 registerSchema('POST', '/api/settings', SettingsUpdateSchema);
 

@@ -273,3 +273,223 @@ test('synergy-staleness (h): isSynergyStale() falls back to createdAt when lastC
   assert.strictEqual(app.isSynergyStale({}, staleDays, now), false, 'an item with neither field must be reported not stale, not defaulted to stale');
   assert.strictEqual(app.isSynergyStale({ lastConfirmedAt: 'not-a-date' }, staleDays, now), false, 'an unparseable lastConfirmedAt with no createdAt fallback must be reported not stale');
 });
+
+// ============================================================
+// Task 2: per-deal settings and the server-computed rollup
+// ============================================================
+
+async function getSynergies(base, token) {
+  return (await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(token) } })).json();
+}
+async function getRollup(base, token) {
+  return (await fetch(`${base}/api/synergies/rollup`, { headers: { Cookie: cookieHeader(token) } })).json();
+}
+async function getSettings(base, token) {
+  return (await fetch(`${base}/api/settings`, { headers: { Cookie: cookieHeader(token) } })).json();
+}
+
+test('synergy-staleness (i): POST /api/settings with synergyStaleDays and synergyHorizonYears stores both; re-reading settings returns them (not stripped)', async () => {
+  const token = await setupDeal('deal_synstali');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const writeRes = await postJSON(base, '/api/settings', token, { synergyStaleDays: 45, synergyHorizonYears: 5 });
+    assert.strictEqual(writeRes.status, 200);
+
+    const settings = await getSettings(base, token);
+    assert.strictEqual(settings.synergyStaleDays, 45, 'synergyStaleDays must survive the write, not be stripped');
+    assert.strictEqual(settings.synergyHorizonYears, 5, 'synergyHorizonYears must survive the write, not be stripped');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
+test('synergy-staleness (j): a non-positive or non-numeric threshold falls back to the 30-day default at read time', () => {
+  assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 0 } }), 30, 'a zero threshold must fall back to 30');
+  assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: -5 } }), 30, 'a negative threshold must fall back to 30');
+  assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 'not-a-number' } }), 30, 'a non-numeric threshold must fall back to 30');
+  assert.strictEqual(app.synergyStaleDays({ settings: {} }), 30, 'an absent threshold must fall back to 30');
+  assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 45 } }), 45, 'a valid positive threshold must be honored');
+});
+
+test('synergy-staleness (k): a configured short threshold on the deal changes the returned stale flags to match, not the 30-day default (D-17 configurability)', async () => {
+  const token = await setupDeal('deal_synstalk');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    await postJSON(base, '/api/settings', token, { synergyStaleDays: 1 });
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Short threshold', category: 'cost', owner: 'karen' });
+    const { initiative: created } = await createRes.json();
+    // A stamping-field edit sets lastConfirmedAt to "now" — with a 1-day
+    // threshold this item is fresh immediately after the edit.
+    await postJSON(base, '/api/synergies', token, { id: created.id, owner: 'pmo' });
+
+    const list = await getSynergies(base, token);
+    const stored = list.find((s) => s.id === created.id);
+    assert.strictEqual(stored.stale, false, 'an item confirmed moments ago must not be stale even against a 1-day threshold');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
+test('synergy-staleness (l): unconfirmedRealizedM never exceeds grossRealizedM across a lane with both stale and fresh initiatives carrying fractional values (precision)', async () => {
+  const token = await setupDeal('deal_synstall');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    // A fresh (confirmed-just-now) initiative and a stale one (never
+    // confirmed, old createdAt fallback simulated via a short threshold
+    // applied AFTER creation so the just-created item reads as stale).
+    const freshRes = await postJSON(base, '/api/synergies', token, { title: 'Fresh', category: 'cost', owner: 'karen', realizedM: 3.3 });
+    const { initiative: fresh } = await freshRes.json();
+    await postJSON(base, '/api/synergies', token, { id: fresh.id, owner: 'pmo' }); // seeds a lastConfirmedAt "now"
+
+    const staleRes = await postJSON(base, '/api/synergies', token, { title: 'Stale', category: 'cost', owner: 'karen', realizedM: 4.1 });
+    const { initiative: stale } = await staleRes.json();
+    // No confirming edit — lastConfirmedAt falls back to createdAt.
+
+    // A zero-day threshold makes ANY confirmed-in-the-past item stale
+    // immediately, while the not-yet-elapsed-a-tick "fresh" one may or may
+    // not tip over depending on timing — the precision property under test
+    // (unconfirmed <= gross) holds regardless of exactly which items land on
+    // which side, so this does not need to pin down which item is stale.
+    await postJSON(base, '/api/settings', token, { synergyStaleDays: 0.0000000001 });
+
+    const rollup = await getRollup(base, token);
+    assert.ok(rollup.unconfirmedRealizedM <= rollup.grossRealizedM, 'unconfirmedRealizedM must never exceed grossRealizedM');
+    assert.strictEqual(rollup.grossRealizedM, 7.4, 'gross realized must be the sum of both initiatives\' realized values');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
+test('synergy-staleness (m): with zero stale initiatives, unconfirmedRealizedM, staleCount and mine.staleCount are all exactly zero (empty)', async () => {
+  const token = await setupDeal('deal_synstalm');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Never stale', category: 'cost', owner: 'karen', realizedM: 5 });
+    const { initiative: created } = await createRes.json();
+    await postJSON(base, '/api/synergies', token, { id: created.id, owner: 'pmo' }); // freshly confirmed
+
+    const rollup = await getRollup(base, token);
+    assert.strictEqual(rollup.unconfirmedRealizedM, 0);
+    assert.strictEqual(rollup.staleCount, 0);
+    assert.strictEqual(rollup.mine.staleCount, 0);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
+test('synergy-staleness (n): net benefit equals gross realized minus cost incurred and is negative when cost exceeds realized value', async () => {
+  const token = await setupDeal('deal_synstaln');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Net benefit', category: 'cost', realizedM: 2 });
+    const { initiative: created } = await createRes.json();
+    await postJSON(base, `/api/synergies/${created.id}/cost-entries`, token, { date: '2025-01-01', amountM: 10 });
+
+    const rollup = await getRollup(base, token);
+    assert.strictEqual(rollup.grossRealizedM, 2);
+    assert.strictEqual(rollup.costIncurredM, 10);
+    assert.strictEqual(rollup.netBenefitM, -8, 'net benefit must equal gross realized minus cost incurred, negative and unclamped');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
+test('synergy-staleness (o): two initiatives sharing an identical lastConfirmedAt carry the same stale flag in one response (adjacency)', async () => {
+  const token = await setupDeal('deal_synstalo');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const aRes = await postJSON(base, '/api/synergies', token, { title: 'Adjacency A', category: 'cost', owner: 'karen' });
+    const { initiative: a } = await aRes.json();
+    const bRes = await postJSON(base, '/api/synergies', token, { title: 'Adjacency B', category: 'cost', owner: 'karen' });
+    const { initiative: b } = await bRes.json();
+
+    // Both fall back to createdAt (never confirmed) — a very short threshold
+    // makes both stale in the same request, judged against the same clock.
+    await postJSON(base, '/api/settings', token, { synergyStaleDays: 0.0000000001 });
+
+    const list = await getSynergies(base, token);
+    const storedA = list.find((s) => s.id === a.id);
+    const storedB = list.find((s) => s.id === b.id);
+    assert.strictEqual(storedA.stale, true);
+    assert.strictEqual(storedB.stale, true, 'both initiatives must carry the same stale verdict within one response');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
+test('synergy-staleness (p): mine.staleCount differs between two identities reading the same lane, proving the scoping is on the caller (D-19)', async () => {
+  const deal = freshDeal('deal_synstalp', { members: ['karen', 'pmo'] });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    await postJSON(base, '/api/settings', karenToken, { synergyStaleDays: 0.0000000001 });
+
+    const karenItemRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Owned by karen', category: 'cost', owner: 'karen' });
+    await karenItemRes.json();
+    const pmoItemRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Owned by pmo', category: 'cost', owner: 'pmo' });
+    await pmoItemRes.json();
+
+    const rollupAsKaren = await getRollup(base, karenToken);
+    const rollupAsPmo = await getRollup(base, pmoToken);
+
+    assert.strictEqual(rollupAsKaren.staleCount, 2, 'the total stale count is identical for both callers');
+    assert.strictEqual(rollupAsPmo.staleCount, 2);
+    assert.strictEqual(rollupAsKaren.mine.staleCount, 1, 'karen owns exactly one of the two stale initiatives');
+    assert.strictEqual(rollupAsPmo.mine.staleCount, 1, 'pmo owns exactly one of the two stale initiatives');
+    assert.notStrictEqual(rollupAsKaren.mine.staleCount, rollupAsKaren.staleCount, 'mine must be scoped narrower than the total in this fixture');
+  } finally {
+    [karenToken, pmoToken].forEach((t) => sessionsDb.deleteSession(runtimeConn, t));
+    server.close();
+  }
+});
+
+test('synergy-staleness (q): GET /api/synergies returns items in the lane\'s stored insertion order (ordering)', async () => {
+  const token = await setupDeal('deal_synstalq');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const titles = ['First', 'Second', 'Third'];
+    for (const title of titles) {
+      await postJSON(base, '/api/synergies', token, { title, category: 'cost' });
+    }
+
+    const list = await getSynergies(base, token);
+    assert.deepStrictEqual(list.map((s) => s.title), titles, 'items must be returned in the lane\'s stored insertion order');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});

@@ -3284,8 +3284,26 @@ function resolveSynergyTaskIds(taskIds, db) {
   return { ok: true, ids };
 }
 
+// SYN-05/D-18/D-19: the item merged with every derived field this phase's
+// routes attach — the rollup totals (synergyRollupFields), the cost fields
+// (synergyCostFields), and the `stale` boolean (isSynergyStale). `ctx` is
+// built ONCE per request by the caller (GET /api/synergies and
+// GET /api/synergies/rollup below) — its `staleDays` and `nowMs` are read
+// once and reused for every item in that request, so two initiatives
+// sharing a lastConfirmedAt are always judged against the identical instant
+// and no item can flip mid-loop (SYN-05 adjacency).
+function enrichSynergy(item, ctx) {
+  return Object.assign({}, item, synergyRollupFields(item), synergyCostFields(item), {
+    stale: isSynergyStale(item, ctx.staleDays, ctx.nowMs),
+  });
+}
+
 app.get('/api/synergies', (req, res) => {
-  const lane = synergyLane(readDb());
+  const db = readDb();
+  const lane = synergyLane(db);
+  // SYN-05: ctx built ONCE per request — every item in this response is
+  // judged against the identical clock and threshold.
+  const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
   res.json(lane.map((item) => {
     const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
     // SYN-02: newest-date-first, a STABLE sort (Array.prototype.sort() is
@@ -3293,8 +3311,51 @@ app.get('/api/synergies', (req, res) => {
     // same-date entries keep their original insertion order between reads,
     // and the stored array itself is never reordered.
     const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-    return Object.assign({}, item, synergyRollupFields(item), synergyCostFields(item), { costEntries: sortedCostEntries });
+    return Object.assign({}, enrichSynergy(item, ctx), { costEntries: sortedCostEntries });
   }));
+});
+
+// SYN-05/D-18/D-19/D-21: a single server-computed object a report can read
+// directly — gross realized, cost incurred, net benefit, deal target, the
+// unconfirmed portion of gross realized, a total stale count, and a
+// caller-scoped stale count. Every figure sums per-item values that were
+// already rounded to one decimal inside enrichSynergy() — round only at the
+// item level, never re-round the aggregate upward, so unconfirmedRealizedM
+// is structurally incapable of exceeding grossRealizedM. Defined adjacent to
+// GET /api/synergies so the two read paths sit together.
+app.get('/api/synergies/rollup', (req, res) => {
+  const db = readDb();
+  const lane = synergyLane(db);
+  // SYN-05: the SAME single-clock ctx pattern as GET /api/synergies above —
+  // one captured instant, reused for every item this rollup sums.
+  const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
+  const enriched = lane.map((item) => enrichSynergy(item, ctx));
+
+  const grossRealizedM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.realizedM || 0), 0));
+  const costIncurredM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.costIncurredM || 0), 0));
+  const netBenefitM = Math.round((grossRealizedM - costIncurredM) * 10) / 10;
+  const dealTargetM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.targetM || 0), 0));
+  const staleItems = enriched.filter((i) => i.stale);
+  const unconfirmedRealizedM = roundSynergyMoney(staleItems.reduce((a, i) => a + (i.realizedM || 0), 0));
+  const staleCount = staleItems.length;
+
+  // `mine.staleCount` mirrors GET /api/dd/summary's owner-comparison idiom
+  // exactly — derived from the SAME enriched array the totals above came
+  // from, so the deal-home nudge and the card badges can never disagree
+  // (D-19). Read only from the server-resolved session identity, never a
+  // client-supplied username.
+  const myUsername = String((req.portalUser && req.portalUser.username) || '').trim();
+  const mineStaleCount = staleItems.filter((i) => String(i.owner || '').trim() === myUsername).length;
+
+  res.json({
+    grossRealizedM,
+    costIncurredM,
+    netBenefitM,
+    dealTargetM,
+    unconfirmedRealizedM,
+    staleCount,
+    mine: { staleCount: mineStaleCount },
+  });
 });
 
 app.post('/api/synergies', (req, res) => {
