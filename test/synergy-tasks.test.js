@@ -266,6 +266,56 @@ test('synergy-tasks (g): a taskIds array exceeding the schema\'s array maximum i
   }
 });
 
+// --------------------------------------------- Plan 07: client task-progress UI --
+//
+// Source-level assertions against public/js/execution.js and
+// public/execution.html — a live browser walk is deferred to Plan 08's
+// human checkpoint (per this plan's own <verification> block), so these
+// tests are what proves the indicator is structurally non-interactive
+// (never a button, never a listener target) and the CSS declares no
+// pointer cursor and no hover selector, ahead of that walk.
+
+function readClientSrc() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+}
+function readExecutionHtml() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'execution.html'), 'utf8');
+}
+function readTaskProgressFn() {
+  const src = readClientSrc();
+  const m = src.match(/function renderTaskProgress\(item\) \{[\s\S]*?\n {2}\}/);
+  return m && m[0];
+}
+
+test('synergy-tasks-ui (a): renderTaskProgress() emits a plain div, never a button, and no click handler is attached anywhere to .syn-task-progress', () => {
+  const body = readTaskProgressFn();
+  assert.ok(body, 'renderTaskProgress must be defined');
+  assert.match(body, /<div class="syn-task-progress">/, 'the container must be a div');
+  assert.ok(!/<button[^>]*syn-task-progress/.test(body), 'the task-progress container must never be a button element');
+  const src = readClientSrc();
+  assert.ok(!/querySelector\(['"]\.syn-task-progress/.test(src), 'no click/event listener may be wired to .syn-task-progress anywhere in the file');
+});
+
+test('synergy-tasks-ui (b): the empty-task branch emits the no-tasks-linked line rather than a "0 of 0" numeric count', () => {
+  const body = readTaskProgressFn();
+  assert.match(body, /linked\.length === 0/, 'an explicit empty-linkage branch must exist');
+  assert.match(body, /syn\.no_tasks/, 'the empty branch must render the no-tasks-linked copy key, not a numeric count');
+});
+
+test('synergy-tasks-ui (c): the denominator only counts linked ids that still resolve to a task in the already-fetched task array — a deleted linked task inflates neither figure', () => {
+  const body = readTaskProgressFn();
+  assert.match(body, /\.filter\(Boolean\)/, 'linked ids that no longer resolve to a task must be filtered out before either figure is computed');
+  assert.match(body, /state\.tasks\.find/, 'resolution must read the already-fetched state.tasks array — no new endpoint');
+});
+
+test('synergy-tasks-ui (d): public/execution.html declares .syn-task-progress with no pointer cursor and no :hover selector', () => {
+  const html = readExecutionHtml();
+  const line = html.split('\n').find((l) => l.includes('.syn-task-progress{'));
+  assert.ok(line, '.syn-task-progress rule must exist in public/execution.html');
+  assert.ok(!/cursor\s*:/.test(line), '.syn-task-progress must declare no cursor');
+  assert.ok(!html.includes('.syn-task-progress:hover'), 'no .syn-task-progress:hover selector may be defined anywhere in the file');
+});
+
 test('synergy-tasks (h): grep-level guard — this task touches no integration-task route, taskLane(), or task schema', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   // taskLane() itself must still be defined exactly once, and resolveSynergyTaskIds

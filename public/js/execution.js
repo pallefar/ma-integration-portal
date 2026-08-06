@@ -41,7 +41,7 @@
   // state.synShowAll is the mobile-grid analogue: per-initiative "show all
   // months" flag, read by buildSynDetail() and written ONLY by the
   // .syn-show-all-link click handler — same never-reset-wholesale rule.
-  var state = { tasks: [], template: null, wsFilter: null, synergies: [], raid: [], raidFilter: null, synExpanded: {}, synShowAll: {} };
+  var state = { tasks: [], template: null, wsFilter: null, synergies: [], raid: [], raidFilter: null, synExpanded: {}, synShowAll: {}, synRollup: {} };
 
   // D-07/D-11: four ordered confidence stages — an INDEPENDENT COPY of
   // server.js's own SYN_STAGES and validators/workstream.js's own SYN_STAGES,
@@ -87,12 +87,18 @@
       fetch('/api/integration-tasks').then(function (r) { return r.json(); }),
       fetch('/api/checklist-templates').then(function (r) { return r.json(); }),
       fetch('/api/synergies').then(function (r) { return r.json(); }).catch(function () { return []; }),
-      fetch('/api/raid').then(function (r) { return r.json(); }).catch(function () { return []; })
+      fetch('/api/raid').then(function (r) { return r.json(); }).catch(function () { return []; }),
+      // UI-SPEC §7/D-18/D-21: a fourth fetch feeding the four-tile rollup and
+      // the unconfirmed-split sentence — same per-fetch degradation pattern
+      // as synergies/raid above, so a failed rollup fetch yields a neutral
+      // empty object and the tab still renders (never blanks).
+      fetch('/api/synergies/rollup').then(function (r) { return r.json(); }).catch(function () { return {}; })
     ]).then(function (res) {
       state.tasks = Array.isArray(res[0]) ? res[0] : [];
       state.template = (Array.isArray(res[1]) && res[1][0]) || null;
       state.synergies = Array.isArray(res[2]) ? res[2] : [];
       state.raid = Array.isArray(res[3]) ? res[3] : [];
+      state.synRollup = (res[4] && typeof res[4] === 'object') ? res[4] : {};
     });
   }
 
@@ -337,6 +343,7 @@
       + '</div>'
       + gridHtml
       + renderBaselines(s)
+      + renderCostSection(s)
       + '</div>';
   }
 
@@ -525,6 +532,113 @@
       + '</div>';
   }
 
+  // -------------------------------------------------- cost-to-achieve --
+
+  // UI-SPEC §4/D-20: costExpectedMonth is a YYYY-MM string (not a full
+  // date) — formatted the same way as the baseline dates for a consistent
+  // "Month Year" reading, never left as the raw machine-readable string.
+  function formatCostExpectedMonth(monthStr) {
+    if (!monthStr) return '';
+    var parts = String(monthStr).split('-');
+    if (parts.length !== 2) return monthStr;
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+    if (isNaN(d.getTime())) return monthStr;
+    return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }
+
+  // UI-SPEC §4/D-20: the third .syn-detail sub-section — a single planned-
+  // figure line, then .syn-cost-list, a PLAIN LIST (never a grid) of dated
+  // actual-cost entries. Entries render in EXACTLY the order
+  // GET /api/synergies already returned (the server sorts newest-date-first
+  // with a stable same-date tiebreak, Plan 04) — this function applies no
+  // .sort() of its own, so the two sides can never disagree about
+  // equal-dated rows. A row with no note renders date+amount only; a long
+  // note truncates to one line via CSS with the full text in a title
+  // attribute, matching the baseline-reason convention from Plan 06.
+  function renderCostSection(item) {
+    var plannedLine = (item.costPlannedM != null || item.costExpectedMonth)
+      ? '<div class="syn-cost-planned"><span data-i18n="syn.cost_planned_lbl">Planned</span>: $'
+        + (item.costPlannedM != null ? item.costPlannedM : 0) + 'M'
+        + (item.costExpectedMonth
+          ? ', <span data-i18n="syn.cost_expected_lbl">expected</span> ' + esc(formatCostExpectedMonth(item.costExpectedMonth))
+          : '')
+        + '</div>'
+      : '';
+
+    var entries = Array.isArray(item.costEntries) ? item.costEntries : [];
+    var listHtml;
+    if (entries.length === 0) {
+      // UI-E4 empty: the no-costs-logged line replaces the list entirely —
+      // never an empty .syn-cost-list container.
+      listHtml = '<div class="ex-empty" data-i18n="syn.no_costs">No actual costs logged yet.</div>';
+    } else {
+      var rows = entries.map(function (e) {
+        // UI-E4 partial: a note-less entry renders date+amount only —
+        // nothing occupies the note position. The note (when present)
+        // passes through esc() for both its text content and its title.
+        var noteHtml = e.note
+          ? '<span class="syn-cost-note" title="' + esc(e.note) + '">' + esc(e.note) + '</span>'
+          : '';
+        return '<div class="syn-cost-row" data-cost-entry="' + esc(e.id) + '">'
+          + '<span class="syn-cost-date">' + esc(e.date) + '</span>'
+          + '<span class="syn-cost-amount">$' + esc(e.amountM) + 'M</span>'
+          + noteHtml
+          + '<button class="ex-del syn-cost-del" title="✕">✕</button>'
+          + '</div>';
+      }).join('');
+      listHtml = '<div class="syn-cost-list">' + rows + '</div>';
+    }
+
+    // UI-SPEC §4: the add-entry mini-form matches the existing .ex-add
+    // pattern (date + number + text + Add button) already used three times
+    // in this file — no new form pattern invented.
+    var addForm = '<div class="ex-add syn-cost-add">'
+      + '<input type="date" class="syn-cost-date-input">'
+      + '<input type="number" class="syn-cost-amount-input" min="0" step="0.1" data-i18n-ph="syn.cost_amount_ph" placeholder="Amount $M">'
+      + '<input type="text" class="syn-cost-note-input" data-i18n-ph="syn.cost_note_ph" placeholder="Note (optional)">'
+      + '<button class="btn btn-primary syn-cost-add-btn" type="button" data-i18n="syn.cost_add_btn">Add cost entry</button>'
+      + '</div>';
+
+    return '<div class="syn-cost">'
+      + '<div class="syn-section-label" data-i18n="syn.cost_heading">Cost to achieve</div>'
+      + plannedLine
+      + listHtml
+      + addForm
+      + '</div>';
+  }
+
+  // -------------------------------------------------------- task linkage --
+
+  // UI-SPEC §5/D-22/D-23: informational only, NEVER a control — no button,
+  // no click handler, no pointer cursor, no hover state anywhere in this
+  // markup or its CSS (the concrete rule that satisfies "must not look like
+  // a control that changes value or stage"). The denominator is the count
+  // of linked ids that STILL resolve to a task in the already-fetched task
+  // array (state.tasks, from load()'s Promise.all — no new endpoint); a
+  // linked id whose task has since been deleted inflates neither figure.
+  function renderTaskProgress(item) {
+    var ids = Array.isArray(item.taskIds) ? item.taskIds : [];
+    var linked = ids.map(function (tid) {
+      return state.tasks.find(function (t) { return t.id === tid; });
+    }).filter(Boolean);
+
+    if (linked.length === 0) {
+      // UI-E5 empty: the no-tasks-linked line, never "0 of 0 tasks done".
+      return '<div class="syn-task-progress"><span class="ex-empty" data-i18n="syn.no_tasks">No tasks linked yet.</span></div>';
+    }
+
+    var done = linked.filter(function (t) { return t.status === 'done'; }).length;
+    var pct = Math.round((done / linked.length) * 100);
+    // UI-E5 zero-one-many: plain "N of M tasks done" phrasing scales from
+    // one linked task to many with no pluralization edge case. Reuses the
+    // existing .ex-ws-track/.ex-ws-fill workstream bar classes verbatim —
+    // not a new bar component.
+    return '<div class="syn-task-progress">'
+      + '<span>' + done + ' <span data-i18n="syn.tasks_of">of</span> ' + linked.length + ' <span data-i18n="syn.tasks_done">tasks done</span></span>'
+      + '<div class="ex-ws-track"><div class="ex-ws-fill" style="width:' + pct + '%;background:' + ragColor(pct, false) + '"></div></div>'
+      + '</div>';
+  }
+
   function renderSynergy() {
     var list = state.synergies;
     var target = list.reduce(function (a, s) { return a + (s.targetM || 0); }, 0);
@@ -554,6 +668,8 @@
         + (wsDef ? '<span>' + (wsDef.icon || '') + ' <span data-i18n="' + esc(wsDef.labelKey || '') + '">' + esc(wsDef.label) + '</span></span>' : '')
         + (s.owner ? '<span>👤 ' + esc(s.owner) + '</span>' : '')
         + '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: <input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (s.realizedM || 0) + '"></span>'
+        + '</div>'
+        + renderTaskProgress(s)
         + '</div></div>'
         + '<div class="syn-money"><div class="syn-realized">$' + (s.realizedM || 0) + 'M</div><div class="syn-target">/ $' + (s.targetM || 0) + 'M</div></div>'
         + '<button class="ex-del" title="✕">✕</button>'
@@ -695,6 +811,61 @@
           });
         });
       }
+      // UI-SPEC §4/D-20: the cost-entry mini-form — copies the raid-add
+      // handler's shape verbatim (read+trim, return early on empty
+      // required fields, POST, push the returned entry's owning initiative
+      // into local state and re-render on success, route the non-success
+      // branch through the shared failure helper). Both elements are only
+      // present when the card is expanded (buildSynDetail()'s output), so
+      // this is guarded exactly like the ramp-controls' genBtn above.
+      var costAddBtn = card.querySelector('.syn-cost-add-btn');
+      if (costAddBtn) {
+        costAddBtn.addEventListener('click', function () {
+          var dateEl = card.querySelector('.syn-cost-date-input');
+          var amountEl = card.querySelector('.syn-cost-amount-input');
+          var noteEl = card.querySelector('.syn-cost-note-input');
+          var date = dateEl.value.trim();
+          var amountRaw = amountEl.value.trim();
+          if (!date || !amountRaw) return;
+          var body = { date: date, amountM: parseFloat(amountRaw) || 0 };
+          var note = noteEl.value.trim();
+          if (note) body.note = note;
+          fetch('/api/synergies/' + encodeURIComponent(id) + '/cost-entries', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res && res.success) {
+              var idx = state.synergies.findIndex(function (s) { return s.id === id; });
+              if (idx !== -1) state.synergies[idx] = res.initiative;
+              renderSynergy(); applyI18n();
+            } else {
+              synAlertFailure(res);
+            }
+          });
+        });
+      }
+      // UI-SPEC §4/Copywriting Contract: the delete button runs the
+      // window.confirm() cost-entry confirmation BEFORE issuing the
+      // request — mirrors the existing .ex-del confirm-then-delete idiom.
+      card.querySelectorAll('.syn-cost-del').forEach(function (delBtn) {
+        delBtn.addEventListener('click', function () {
+          var row = delBtn.parentNode;
+          var eid = row.getAttribute('data-cost-entry');
+          if (!window.confirm('Delete this cost entry?')) return;
+          fetch('/api/synergies/' + encodeURIComponent(id) + '/cost-entries/' + encodeURIComponent(eid), { method: 'DELETE' })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+              if (res && res.success) {
+                var item = state.synergies.find(function (s) { return s.id === id; });
+                if (item && Array.isArray(item.costEntries)) {
+                  item.costEntries = item.costEntries.filter(function (e) { return e.id !== eid; });
+                }
+                renderSynergy(); applyI18n();
+              } else {
+                synAlertFailure(res);
+              }
+            });
+        });
+      });
       // SYN-01/UI-SPEC §2: writes state.synShowAll — the mobile-grid
       // analogue of the expand-toggle write above, and the ONLY place in
       // this file that assigns to it.

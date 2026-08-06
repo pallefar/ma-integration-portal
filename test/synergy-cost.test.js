@@ -279,6 +279,67 @@ test('synergy-cost (h): net benefit is negative when cost exceeds realized value
   }
 });
 
+// ---------------------------------------------- Plan 07: client cost UI --
+//
+// Source-level assertions against public/js/execution.js and
+// public/execution.html — a live browser walk is deferred to Plan 08's
+// human checkpoint (per this plan's own <verification> block), so these
+// tests are what proves the mini-form pattern reuse, the confirm-before-
+// delete idiom, the empty-state branch, the escaping/title-attribute
+// discipline, and the no-client-sort ordering guarantee, ahead of that walk.
+
+function readClientSrc() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+}
+function readExecutionHtml() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'execution.html'), 'utf8');
+}
+function readCostSectionFn() {
+  const src = readClientSrc();
+  const m = src.match(/function renderCostSection\(item\) \{[\s\S]*?\n {2}\}/);
+  return m && m[0];
+}
+
+test('synergy-cost-ui (a): renderCostSection() emits the no-costs-logged line rather than an empty .syn-cost-list container when costEntries is empty', () => {
+  const body = readCostSectionFn();
+  assert.ok(body, 'renderCostSection must be defined');
+  assert.match(body, /entries\.length === 0/, 'an explicit empty-array branch must exist');
+  assert.match(body, /syn\.no_costs/, 'the empty branch must render the no-costs-logged copy key, not an empty list shell');
+});
+
+test('synergy-cost-ui (b): the cost-entry add handler reuses the existing .ex-add mini-form class and the cost list applies no client-side sort', () => {
+  const body = readCostSectionFn();
+  assert.match(body, /class="ex-add syn-cost-add"/, 'the add-entry mini-form must reuse the existing .ex-add class, no new form pattern invented');
+  assert.ok(!/entries\.slice\(\)\.sort/.test(body) && !/costEntries.*\.sort\(/.test(body), 'renderCostSection must apply no client-side sort — the server\'s own order is authoritative');
+});
+
+test('synergy-cost-ui (c): the delete handler calls window.confirm() before issuing its DELETE request', () => {
+  const src = readClientSrc();
+  const handlerMatch = src.match(/delBtn\.addEventListener\('click', function \(\) \{([\s\S]*?)\n {8}\}\);/);
+  assert.ok(handlerMatch, 'a .syn-cost-del click handler must be attached');
+  const handlerBody = handlerMatch[1];
+  const confirmIdx = handlerBody.indexOf("window.confirm('Delete this cost entry?')");
+  const fetchIdx = handlerBody.indexOf('fetch(');
+  assert.ok(confirmIdx > -1 && fetchIdx > confirmIdx, 'window.confirm() must be called strictly BEFORE the delete fetch');
+});
+
+test('synergy-cost-ui (d): a note-less cost entry renders date and amount only, with nothing occupying the note position', () => {
+  const body = readCostSectionFn();
+  assert.match(body, /var noteHtml = e\.note\s*\n\s*\? /, 'the note position must be a conditional — present only when e.note is truthy');
+});
+
+test('synergy-cost-ui (e): the cost-entry note passes through the file\'s escaping helper and carries a title attribute holding the full text', () => {
+  const body = readCostSectionFn();
+  assert.match(body, /class="syn-cost-note" title="' \+ esc\(e\.note\) \+ '">/, 'the note span must carry a title attribute set to the escaped full note text');
+  assert.match(body, /esc\(e\.note\) \+ '<\/span>/, 'the note\'s visible text content must also pass through esc()');
+});
+
+test('synergy-cost-ui (f): public/execution.html declares .syn-cost-row and .syn-task-progress rules', () => {
+  const html = readExecutionHtml();
+  assert.ok(html.split('\n').some((l) => l.includes('.syn-cost-row{')), '.syn-cost-row rule must exist in public/execution.html');
+  assert.ok(html.split('\n').some((l) => l.includes('.syn-task-progress{')), '.syn-task-progress rule must exist in public/execution.html');
+});
+
 test('synergy-cost (i): both new routes are registered — each returns 200, 400 or 404, never the validator registry\'s 500', async () => {
   const token = await setupDeal('deal_syncosti');
   const server = app.listen(0);
