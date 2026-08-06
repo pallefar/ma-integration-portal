@@ -476,6 +476,19 @@ function isAdminRequest(req) {
   return false;
 }
 
+// D-15: re-baselining is restricted to admin and the Integration Lead
+// (hrbp), enforced server-side. Mirrors isAdminRequest()'s shape — like
+// POST /api/deals/:id/members above, ROLE_WRITE_POLICY's flat prefix table
+// has no wildcard for "admin+hrbp+pmo on /api/synergies broadly, but
+// admin+hrbp ONLY on this one dynamic-:id-segment sub-route" — so the
+// narrowing lives inline, inside the handler. Deliberately does NOT honour
+// the X-Admin-Token break-glass path isAdminRequest() accepts: D-15's rule
+// is about an ATTRIBUTED human role, and an unattributed token would defeat
+// the governance meaning of the baseline record.
+function isAdminOrIlRequest(req) {
+  return !!(req.portalUser && ['admin', 'hrbp'].includes(req.portalUser.role));
+}
+
 // Tiny in-memory login throttle: scrypt is deliberately expensive, so cap
 // attempts per source before doing any hashing work.
 const _loginAttempts = new Map();
@@ -3161,6 +3174,32 @@ function stageGateFailure(item, targetStage) {
   return null;
 }
 
+// D-12/D-13/D-14: append-only baseline snapshot list. Version is derived
+// from the HIGHEST existing version, never the array length (T-05-16), so a
+// future deletion path could never silently reuse a version number. The
+// targetCurve deep copy is load-bearing per D-12 — a shared reference to
+// item.phasing would let a pinned baseline drift forward as the live rows
+// are edited afterwards (proven by test/synergy-stage.test.js's D-12 case).
+// Returns the appended entry.
+function pushBaseline(item, req, reason) {
+  item.baselines = Array.isArray(item.baselines) ? item.baselines : [];
+  const maxVersion = item.baselines.reduce((max, entry) => Math.max(max, entry.version || 0), 0);
+  const entry = {
+    id: newId('bl'),
+    version: maxVersion + 1,
+    at: new Date().toISOString(),
+    by: req.portalUser.username,
+    stage: item.stage,
+    runRateM: item.runRateM,
+    startMonth: item.startMonth,
+    curveShape: item.curveShape,
+    targetCurve: (Array.isArray(item.phasing) ? item.phasing : []).map((row) => ({ month: row.month, targetM: row.targetM })),
+    reason,
+  };
+  item.baselines.push(entry);
+  return entry;
+}
+
 // SYN-01/D-04: targetM/realizedM become the derived rollup of an
 // initiative's phasing rows once any exist; an initiative with zero rows
 // keeps today's independently-writable pair, passed through unchanged.
@@ -3213,6 +3252,21 @@ app.post('/api/synergies', (req, res) => {
     if (b.stage !== undefined) {
       return res.status(400).json({ error: 'Stage changes must go through POST /api/synergies/:id/stage.' });
     }
+    // D-13: once an initiative has reached committed, a run-rate or
+    // curve-shape change is a forced re-baseline event — require a reason
+    // and pin the PRE-CHANGE state (via pushBaseline(), called BEFORE the
+    // fields below are mutated) so the baseline records what was superseded,
+    // not what replaced it. Below committed these stay ordinary edits.
+    const changesRunRateOrCurve = b.runRateM !== undefined || b.curveShape !== undefined;
+    if (changesRunRateOrCurve && STAGE_ORDER[item.stage] >= STAGE_ORDER.committed) {
+      const reasonTrim = String(b.reason || '').trim();
+      if (!reasonTrim) {
+        return res.status(400).json({ error: 'A reason is required to change run-rate or curve shape once this initiative has reached committed.' });
+      }
+      pushBaseline(item, req, reasonTrim);
+    }
+    if (b.runRateM !== undefined) item.runRateM = num(b.runRateM);
+    if (b.curveShape !== undefined) item.curveShape = b.curveShape;
     writeDb(db);
     return res.json({ success: true, initiative: item });
   }
@@ -3264,6 +3318,17 @@ app.post('/api/synergies/:id/generate-phasing', (req, res) => {
   item.startMonth = b.startMonth;
   item.curveShape = b.curveShape;
   item.phasing = generatePhasingRows(item.runRateM, item.startMonth, item.curveShape, synergyHorizonYears(db));
+
+  // D-14: version 1 ("the deal case") is stamped the FIRST time this
+  // initiative gets a phased target — never regenerated, renumbered or
+  // reordered afterwards. The `.length === 0` guard is what stops a LATER
+  // regeneration (a deliberate, client-confirmed destructive re-ramp) from
+  // ever creating a competing v1; pushBaseline()'s own max-version
+  // derivation would otherwise happily append a v2+ here too, but this
+  // guard means it only ever runs once per initiative.
+  if (!Array.isArray(item.baselines) || item.baselines.length === 0) {
+    pushBaseline(item, req, 'Deal case — initial phased target.');
+  }
 
   const rollup = synergyRollupFields(item);
   item.targetM = rollup.targetM;
@@ -3347,30 +3412,43 @@ app.post('/api/synergies/:id/stage', (req, res) => {
       return res.status(400).json({ error: 'A reason is required to move an initiative backward to an earlier stage.' });
     }
     // D-09/D-12: record the pre-change stage and the reason in the
-    // initiative's baseline history before applying the demotion. This
-    // inline shape is generalized into pushBaseline() by the next task
-    // (D-12/D-13/D-14) — the version-derivation and deep-copy rules already
-    // match that shape exactly so the later refactor is behavior-neutral.
-    item.baselines = Array.isArray(item.baselines) ? item.baselines : [];
-    const maxVersion = item.baselines.reduce((max, entry) => Math.max(max, entry.version || 0), 0);
-    item.baselines.push({
-      id: newId('bl'),
-      version: maxVersion + 1,
-      at: new Date().toISOString(),
-      by: req.portalUser.username,
-      stage: item.stage,
-      runRateM: item.runRateM,
-      startMonth: item.startMonth,
-      curveShape: item.curveShape,
-      targetCurve: (Array.isArray(item.phasing) ? item.phasing : []).map((row) => ({ month: row.month, targetM: row.targetM })),
-      reason,
-    });
+    // initiative's baseline history BEFORE applying the demotion —
+    // pushBaseline() snapshots item.stage/runRateM/phasing as they stand
+    // right now, which is the pre-change state.
+    pushBaseline(item, req, reason);
     item.stage = targetStage;
   }
 
   // D-16: a stage change is a real value change — stamp lastConfirmedAt here
   // so no stage change can leave the confirmation clock behind. Plan 05 owns
   // the staleness READER; this write side is stamped now regardless.
+  item.lastConfirmedAt = new Date().toISOString();
+  writeDb(db);
+  res.json({ success: true, initiative: item });
+});
+
+// D-13/D-15: an explicit re-baseline act, available at any time (unlike the
+// D-13 FORCED re-baseline on the base upsert above, which only engages once
+// committed). D-15's authz guard is deliberately the handler's FIRST
+// statement, before even the 404 lookup, so an unauthorized caller gets an
+// identical 403 whether or not the id exists — no existence oracle
+// (T-05-17). Broader '/api/synergies' ROLE_WRITE_POLICY entry already lets
+// admin/hrbp/pmo through the outer gate; isAdminOrIlRequest() narrows
+// FURTHER, inside this handler, to admin+hrbp only.
+app.post('/api/synergies/:id/rebaseline', (req, res) => {
+  if (!isAdminOrIlRequest(req)) {
+    return res.status(403).json({ error: 'Only admin and the Integration Lead can re-baseline a synergy initiative.' });
+  }
+  const b = req.body || {};
+  const db = readDb();
+  const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+
+  const reason = String(b.reason || '').trim();
+  if (!reason) return res.status(400).json({ error: 'A reason is required to re-baseline.' });
+
+  pushBaseline(item, req, reason);
   item.lastConfirmedAt = new Date().toISOString();
   writeDb(db);
   res.json({ success: true, initiative: item });

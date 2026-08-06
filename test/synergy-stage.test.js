@@ -421,6 +421,240 @@ test('synergy-stage-gate (h): a targetStage outside the four-value vocabulary is
   }
 });
 
+// ============================================================= Plan 03 ==
+// Task 2: D-12/D-13/D-14 baseline history + the pinned deal case, D-15
+// re-baseline authz (the CR-01-lesson two-identity 200/403 proof).
+// ============================================================================
+
+test('synergy-baseline (a): D-15 — re-baselining the SAME payload returns 200 for admin and hrbp, 403 for pmo and employee; baselines.length is unchanged after each refusal', async () => {
+  const deal = freshDeal('deal_synba', { members: ['karen', 'pmo', 'employee-demo'] });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const employeeToken = newSession('employee-demo', 'employee'); bindDeal(employeeToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Four identities', category: 'cost' });
+    const { initiative } = await createRes.json();
+    const payload = { reason: 'quarterly reforecast' };
+
+    const adminRes = await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, adminToken, payload);
+    assert.strictEqual(adminRes.status, 200, 'admin must be able to re-baseline');
+
+    const karenRes = await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, karenToken, payload);
+    assert.strictEqual(karenRes.status, 200, 'hrbp (Integration Lead) must be able to re-baseline');
+
+    const beforePmo = (await (await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } })).json())
+      .find((s) => s.id === initiative.id).baselines.length;
+
+    const pmoRes = await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, pmoToken, payload);
+    assert.strictEqual(pmoRes.status, 403, 'pmo must be refused — the SAME payload that succeeded for admin/hrbp');
+
+    const employeeRes = await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, employeeToken, payload);
+    assert.strictEqual(employeeRes.status, 403, 'employee must be refused — the SAME payload that succeeded for admin/hrbp');
+
+    const afterRefusals = (await (await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } })).json())
+      .find((s) => s.id === initiative.id).baselines.length;
+    assert.strictEqual(afterRefusals, beforePmo, 'baselines.length must be unchanged after each 403 refusal');
+  } finally {
+    [adminToken, karenToken, pmoToken, employeeToken].forEach((t) => sessionsDb.deleteSession(runtimeConn, t));
+    server.close();
+  }
+});
+
+test('synergy-baseline (b): the 403 is returned for an unknown initiative id too, proving the role guard runs BEFORE the lookup', async () => {
+  const deal = freshDeal('deal_synbb');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const res = await postJSON(base, '/api/synergies/syn_totally_unknown_id/rebaseline', pmoToken, { reason: 'anything' });
+    assert.strictEqual(res.status, 403, 'an unauthorized role must be refused before the id is even looked up (no 404 leak)');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('synergy-baseline (c): re-baselining with an empty or whitespace-only reason returns 400', async () => {
+  const deal = freshDeal('deal_synbc');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Reasonless', category: 'cost' });
+    const { initiative } = await createRes.json();
+
+    const emptyRes = await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, karenToken, { reason: '' });
+    assert.strictEqual(emptyRes.status, 400);
+
+    const whitespaceRes = await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, karenToken, { reason: '   ' });
+    assert.strictEqual(whitespaceRes.status, 400);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-baseline (d): D-14 — the deal case is stamped as version 1 the first time an initiative gets a phased target, and three successive re-baselines never move, renumber or replace it', async () => {
+  const deal = freshDeal('deal_synbd');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Deal case', category: 'cost' });
+    const { initiative } = await createRes.json();
+    assert.strictEqual((initiative.baselines || []).length, 0, 'UI-E3 empty: no baseline yet is a real state before any phased target exists');
+
+    const phaseRes = await postJSON(base, `/api/synergies/${initiative.id}/generate-phasing`, karenToken, { runRateM: 2, startMonth: '2020-01', curveShape: 'linear' });
+    const phased = await phaseRes.json();
+    assert.strictEqual(phased.initiative.baselines.length, 1, 'generating the first phased target must stamp the deal case');
+    assert.strictEqual(phased.initiative.baselines[0].version, 1);
+    const dealCase = phased.initiative.baselines[0];
+
+    const first = await (await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, karenToken, { reason: 'r1' })).json();
+    const second = await (await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, karenToken, { reason: 'r2' })).json();
+    const third = await (await postJSON(base, `/api/synergies/${initiative.id}/rebaseline`, karenToken, { reason: 'r3' })).json();
+
+    assert.strictEqual(third.initiative.baselines.length, 4, 'deal case + 3 re-baselines = 4 entries');
+    [first, second, third].forEach((r) => {
+      assert.strictEqual(r.initiative.baselines[0].id, dealCase.id, 'the entry at index 0 must keep the SAME id after every subsequent re-baseline');
+      assert.strictEqual(r.initiative.baselines[0].version, 1, 'the entry at index 0 must stay version 1');
+      assert.strictEqual(r.initiative.baselines[0].at, dealCase.at, 'the entry at index 0 must keep the SAME timestamp');
+      assert.strictEqual(r.initiative.baselines[0].reason, dealCase.reason, 'the entry at index 0 must keep the SAME reason');
+    });
+    assert.strictEqual(third.initiative.baselines[3].version, 4, 'a later re-baseline must derive its version from the highest existing version, not the array length');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-baseline (e): D-12 — a baseline\'s targetCurve is a deep copy; editing item.phasing afterwards through the per-month route leaves the stored baseline unchanged', async () => {
+  const deal = freshDeal('deal_synbe');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Deep copy', category: 'cost' });
+    const { initiative } = await createRes.json();
+    // runRateM=240 with linear checkpoints guarantees a non-trivial (nonzero,
+    // easily distinguishable after rounding) targetM even in the ramp's very
+    // first month, so the "did it actually mutate" assertion below is
+    // meaningful regardless of the ramp math's exact interpolation.
+    const phaseRes = await postJSON(base, `/api/synergies/${initiative.id}/generate-phasing`, karenToken, { runRateM: 240, startMonth: '2020-01', curveShape: 'linear' });
+    const phased = await phaseRes.json();
+    const originalTargetM = phased.initiative.baselines[0].targetCurve.find((r) => r.month === '2020-01').targetM;
+    assert.ok(originalTargetM > 0, 'sanity check: the seeded fixture (runRateM=240) must produce a nonzero first-month target');
+
+    const mutatedTargetM = originalTargetM + 999;
+    const mutateRes = await postJSON(base, `/api/synergies/${initiative.id}/phasing/2020-01`, karenToken, { targetM: mutatedTargetM });
+    assert.strictEqual(mutateRes.status, 200);
+
+    const afterRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const after = (await afterRes.json()).find((s) => s.id === initiative.id);
+    assert.strictEqual(after.phasing.find((r) => r.month === '2020-01').targetM, mutatedTargetM, 'the LIVE phasing row must reflect the edit');
+    assert.strictEqual(after.baselines[0].targetCurve.find((r) => r.month === '2020-01').targetM, originalTargetM, 'the STORED baseline must be UNCHANGED — a shared reference would have let it drift');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-baseline (f): D-13 — once committed, a run-rate/curve-shape change without a reason is refused (400, no baseline appended); with a reason it succeeds and pins the PRE-CHANGE run-rate', async () => {
+  const deal = freshDeal('deal_synbf');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Post-commit edit', category: 'cost', owner: 'Karen Owner' });
+    const { initiative } = await createRes.json();
+    await postJSON(base, `/api/synergies/${initiative.id}/generate-phasing`, karenToken, { runRateM: 2, startMonth: '2020-01', curveShape: 'linear' });
+    await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'validated' });
+    const toCommitted = await (await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'committed' })).json();
+    const baselineCountBefore = toCommitted.initiative.baselines.length; // deal case only, 1
+
+    const noReasonRes = await postJSON(base, '/api/synergies', karenToken, { id: initiative.id, runRateM: 5 });
+    assert.strictEqual(noReasonRes.status, 400, 'a post-commitment run-rate change without a reason must be refused');
+
+    const afterRefusal = (await (await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } })).json()).find((s) => s.id === initiative.id);
+    assert.strictEqual(afterRefusal.baselines.length, baselineCountBefore, 'a refused run-rate change must append no baseline');
+    assert.strictEqual(afterRefusal.runRateM, 2, 'a refused run-rate change must leave the stored value unchanged');
+
+    const withReasonRes = await postJSON(base, '/api/synergies', karenToken, { id: initiative.id, runRateM: 5, reason: 'Scope increased per steerco' });
+    assert.strictEqual(withReasonRes.status, 200);
+    const withReasonBody = await withReasonRes.json();
+    assert.strictEqual(withReasonBody.initiative.runRateM, 5, 'the run-rate must be updated');
+    assert.strictEqual(withReasonBody.initiative.baselines.length, baselineCountBefore + 1, 'exactly one new baseline must be appended');
+    const newEntry = withReasonBody.initiative.baselines[withReasonBody.initiative.baselines.length - 1];
+    assert.strictEqual(newEntry.runRateM, 2, 'the appended baseline must pin the PRE-CHANGE run-rate, not the new one');
+    assert.strictEqual(newEntry.reason, 'Scope increased per steerco');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-baseline (g): below committed, an ordinary run-rate change requires no reason and appends no baseline entry', async () => {
+  const deal = freshDeal('deal_synbg');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Still forming', category: 'cost' });
+    const { initiative } = await createRes.json();
+    assert.strictEqual(initiative.stage, 'idea');
+
+    const res = await postJSON(base, '/api/synergies', karenToken, { id: initiative.id, runRateM: 3 });
+    assert.strictEqual(res.status, 200, 'below committed, a run-rate edit needs no reason');
+    const body = await res.json();
+    assert.strictEqual(body.initiative.runRateM, 3);
+    assert.strictEqual((body.initiative.baselines || []).length, 0, 'no baseline entry may be appended below committed');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-baseline (h): grep-level guard — isAdminOrIlRequest is defined once in server.js and called only from the re-baseline route', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const definitionCount = (src.match(/function isAdminOrIlRequest\(/g) || []).length;
+  const callSites = (src.match(/isAdminOrIlRequest\(req\)/g) || []).length;
+  assert.strictEqual(definitionCount, 1, 'isAdminOrIlRequest must be defined exactly once');
+  // One definition-site usage (`function isAdminOrIlRequest(req)`) + exactly
+  // one call site (`if (!isAdminOrIlRequest(req))` in the re-baseline route).
+  assert.strictEqual(callSites, 2, 'isAdminOrIlRequest(req) must appear exactly twice: its own definition signature and its one call site in the re-baseline route');
+});
+
 // ------------------------------------------- Task 3: migration script --
 
 const { migrateSynergyStages } = require('../scripts/migrate-synergy-stages.js');

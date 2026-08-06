@@ -189,6 +189,12 @@ const SynergyUpsertSchema = z.object({
     message: 'Start month must be a valid YYYY-MM month.',
   }).optional(),
   curveShape: z.enum(['cost', 'revenue', 'linear']).optional(),
+  // D-13: only REQUIRED (by server.js's own handler logic, not this schema)
+  // when the update branch changes runRateM/curveShape on an
+  // already-committed initiative — a shape-only schema can't know the
+  // initiative's current stage, so the conditional requirement stays a
+  // server-side business rule.
+  reason: z.string().trim().max(TEXT_MAX).optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Initiative title is required.',
   path: ['title'],
@@ -217,6 +223,15 @@ const StageChangeSchema = z.object({
   reason: z.string().trim().max(TEXT_MAX).optional(),
 });
 registerSchema('POST', '/api/synergies/:id/stage', StageChangeSchema);
+
+// D-13/D-15: a re-baseline act ALWAYS requires a reason (unlike the
+// conditionally-required reason on SynergyUpsertSchema above) — trim() runs
+// before min(1), so a whitespace-only value is refused here too, matching
+// D-09's "trimmed before the emptiness check" rule.
+const RebaselineSchema = z.object({
+  reason: z.string().trim().min(1, 'A reason is required to re-baseline.').max(TEXT_MAX),
+});
+registerSchema('POST', '/api/synergies/:id/rebaseline', RebaselineSchema);
 
 // ---------------------------------------------------------------------------
 // RAID entries — upsert (POST-create-only route; no id-present update path
@@ -300,4 +315,5 @@ module.exports = {
   GeneratePhasingSchema,
   PhasingMonthSchema,
   StageChangeSchema,
+  RebaselineSchema,
 };
