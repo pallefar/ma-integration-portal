@@ -2,8 +2,10 @@
   "phase": "5",
   "phase_slug": "synergy-value-capture",
   "started": "2026-08-03",
+  "updated": "2026-08-06",
   "areas_selected": ["Phasing model", "Stage vocabulary + migration", "Baseline history", "Staleness rule"],
-  "areas_completed": ["Phasing model"],
+  "areas_completed": ["Phasing model", "Stage vocabulary + migration"],
+  "areas_remaining": ["Baseline history", "Staleness rule"],
   "decisions": [
     {
       "area": "Phasing model",
@@ -40,21 +42,108 @@
       "id": "D-06",
       "decision": "Realized value is editable ONLY for months that have arrived — no forward-booking of value into future months.",
       "note": "Credibility control: forward-booked value is the main way synergy tracking loses trust."
+    },
+    {
+      "area": "Stage vocabulary + migration",
+      "id": "D-07",
+      "decision": "REPLACE the 5 execution statuses with exactly the 4 SYN-03 confidence stages: idea → validated → committed → captured. One canonical field, one axis.",
+      "note": "Mapping applied once: identified→idea, validated→validated, planned+executing→committed, realized→captured. Rejected: a 5-gate rename keeping 'executing' (mixes a confidence axis with an execution state — the thing the stage-gate exists to fix), and a second independent confidenceStage field (two axes to keep in sync, nonsense combinations possible). Costs accepted before choosing: 3 of 5 demo seeds map onto 'committed' (addressed by D-10), 2 new i18n keys × 4 langs added and 3 retired (syn.st_identified/planned/executing/realized), demo.db seed rows rewritten — which per the standing WAL trap means a wal_checkpoint(TRUNCATE) before committing."
+    },
+    {
+      "area": "Stage vocabulary + migration",
+      "id": "D-08",
+      "decision": "Stage advancement carries MINIMAL HARD GATES, enforced server-side with a stated rejection reason: 'committed' requires an owner AND a phased target (run-rate + start month, per D-05); 'captured' requires realized value recorded in at least one arrived month (per D-06).",
+      "note": "Rejected advisory-only and ungated. Rationale: an ungated stage label is decoration — Phase 7's steerco pack (RPT-03, confidence-stage movement) can only trust stage counts if the gates are real."
+    },
+    {
+      "area": "Stage vocabulary + migration",
+      "id": "D-09",
+      "decision": "Backward stage movement (de-scoping) is ALLOWED but the server requires a non-empty reason, recorded in the initiative's history alongside the stage change.",
+      "note": "Rejected forward-only (would force modelling a separate 'dropped' terminal state) and silent-backward. De-scoping is real; an unexplained demotion is worse than none. Ties directly into the Baseline history area."
+    },
+    {
+      "area": "Stage vocabulary + migration",
+      "id": "D-10",
+      "decision": "The 5 demo seed initiatives are HAND-TUNED to spread across all four stages (rather than taking the mechanical map verbatim), and carry believable phasing rows.",
+      "note": "The demo showcase is a maintained deliverable per PROJECT.md; 3 of 5 identical-looking cards would undersell the new capability. Same migration effort, better showcase."
+    },
+    {
+      "area": "Stage vocabulary + migration",
+      "id": "D-11",
+      "decision": "HARD CUTOVER — no read-time compatibility shim. The 4 stages become the only accepted values in all three duplicated copies (server.js:3043, validators/workstream.js:114, public/js/execution.js:28-30 incl. SYN_LABELS/SYN_COLORS); legacy values are rejected by the validator.",
+      "note": "Verified safe during discussion: data/deals/ is EMPTY — no real-deal database exists yet, so there is no real data to strand. A shim would be permanent dead weight no test could prove unreachable. Migration surface is 5 seed rows in demo.db plus the legacy ma-portal.db copy."
+    },
+    {
+      "area": "Baseline history",
+      "id": "D-12",
+      "decision": "Baseline history is an EXPLICIT SNAPSHOT model: a `baselines[]` array on the initiative, each entry pinning the full prior target curve + run-rate + stage with who/when/why. NOT a keystroke-level change log.",
+      "note": "Separation of concerns, decided deliberately: baselines[] = intentional re-baselining, user-visible, deal-member readable; audit.db = exhaustive forensic record, admin-only, unchanged. Rejected a full history[] array (buries the real signal in typo-correction noise, duplicates audit.db) and deriving from audit.db (would require a rowId filter on queryAudit AND a non-admin deal-scoped read path into a compliance control — its own authz design and threat review, for a computed rather than intentional 'baseline')."
+    },
+    {
+      "area": "Baseline history",
+      "id": "D-13",
+      "decision": "A new baseline version is created by an EXPLICIT re-baseline act at any time, AND is FORCED (with a required reason) for any run-rate or curve-shape change once the initiative has reached 'committed'.",
+      "note": "Before 'committed' the numbers are still being worked out, so ordinary edits stay ordinary edits. After 'committed' nothing can be edited quietly — the trail is in-app, not just in audit.db. Rejected explicit-only (a committed target could be silently edited) and automatic-on-any-change (many low-value versions during early entry)."
+    },
+    {
+      "area": "Baseline history",
+      "id": "D-14",
+      "decision": "Baseline v1 is PINNED as the 'deal case' and is never superseded. Variance reports against BOTH the deal case and the current baseline.",
+      "note": "This is the number the deal was approved on — losing it behind three re-baselines is how synergy programs stop being accountable. Phase 7 RPT-03 depends on it. Rejected a flat peer-version list."
+    },
+    {
+      "area": "Baseline history",
+      "id": "D-15",
+      "decision": "AUTHZ: re-baselining is restricted to the Integration Lead and admin, enforced SERVER-SIDE. Baseline history is readable by any authenticated member of that deal.",
+      "note": "Stated explicitly rather than left for the planner to infer, because an authz bug has surfaced at the review gate in four consecutive phases (most recently CR-01, where a completion branch checked status but never compared owner to caller). Rejected owner-can-also-re-baseline (weakens the governance meaning AND needs the exact owner-vs-caller comparison the codebase has gotten wrong before) and any-member-writes."
+    },
+    {
+      "area": "Staleness rule",
+      "id": "D-16",
+      "decision": "Staleness is driven by an explicit `lastConfirmedAt` stamp, set by a deliberate 'confirm current' action OR a real value/stage change — but NOT by editing a note or title.",
+      "note": "The point of SYN-05 is that someone stands behind the number; a typo fix must not make a six-week-old forecast look confirmed. Works identically at every stage. Rejected period-completeness (says nothing about idea/validated initiatives, which have no realized value yet and would read as permanently stale, and cannot distinguish 'not updated' from 'genuinely zero') and any-write updatedAt (freshness only as honest as the editor). NOTE: no updatedAt/lastConfirmedAt field exists today — this is greenfield."
+    },
+    {
+      "area": "Staleness rule",
+      "id": "D-17",
+      "decision": "Staleness threshold is 30 days, configurable per deal, applied uniformly to every stage.",
+      "note": "Matches the monthly phasing cadence of D-01 and the monthly reporting rhythm; one number is also what Phase 7 RPT-04 needs to split current from stale. Rejected stage-dependent defaults (more faithful, but a rule the IL and the steerco pack both have to explain) and 14 days (more items sitting stale at any moment, dulling the signal)."
+    },
+    {
+      "area": "Staleness rule",
+      "id": "D-18",
+      "decision": "Stale initiatives are visibly badged AND the headline rollup splits the figure: 'realized $XM, of which $YM unconfirmed'.",
+      "note": "Matches SYN-05's own wording — visibly flagged rather than silently trusted — without hiding value, and gives Phase 7 a number to print. Rejected flag-only (a rollup made entirely of stale numbers still presents as one confident figure) and exclude-from-rollup (headline jumps for reasons unrelated to actual value capture)."
+    },
+    {
+      "area": "Staleness rule",
+      "id": "D-19",
+      "decision": "Stale initiatives nudge their owner by REUSING the Phase 4 deal-home in-app owner-nudge pattern (DD-02), not a new notification surface.",
+      "note": "A flag nobody sees does not change behaviour. Reuses an existing, tested surface rather than inventing a second one."
     }
   ],
   "deferred_ideas": [],
+  "candidate_extra_areas": [
+    "Cost-to-achieve treatment (SYN-02) — single figure vs phased monthly alongside the value ramp; how net benefit is computed",
+    "Task linkage shape (SYN-04) — one initiative→many tasks vs many-to-many, and whether task completion feeds realized value"
+  ],
   "canonical_refs": [
     ".planning/ROADMAP.md (Phase 5 section, line 173+)",
     ".planning/REQUIREMENTS.md (SYN-01..SYN-05, lines 48-52)",
     "server.js:3037-3100 (existing synergy lane, routes, SYN_STATUSES)",
-    "validators/workstream.js:130 (SynergyUpsertSchema registration)",
-    "db/collections.js:34,55 (synergyInitiatives + customSynergyInitiatives are deal-scoped ARRAY_COLLECTIONS)"
+    "validators/workstream.js:111-131 (SynergyUpsertSchema + its own SYN_STATUSES copy)",
+    "public/js/execution.js:26-30,215-280 (the ONLY synergy UI — third SYN_STATUSES copy plus SYN_LABELS/SYN_COLORS and the render/edit handlers)",
+    "db/collections.js:34,55 (synergyInitiatives + customSynergyInitiatives are deal-scoped ARRAY_COLLECTIONS)",
+    "db/auditHook.js (append-only audit.db; writeAuditBatch stores before/after JSON per write, queryAudit is the admin-only read path — relevant to Baseline history)"
   ],
   "code_ground_truth": {
     "current_model": "{ id, title, category: 'cost'|'revenue', targetM, realizedM, owner, workstreamId, status, notes, createdAt }",
-    "current_statuses": "['identified','validated','planned','executing','realized'] — duplicated between server.js:3043 and validators/workstream.js",
+    "current_statuses": "['identified','validated','planned','executing','realized'] — duplicated in THREE places: server.js:3043, validators/workstream.js:114, public/js/execution.js:28",
+    "no_updated_at": "Synergy initiatives carry createdAt ONLY — there is no updatedAt/lastConfirmed anywhere in the lane. Staleness (SYN-05) has no existing field to build on. Verified 2026-08-06.",
+    "i18n_keys": "syn.st_identified / syn.st_validated / syn.st_planned / syn.st_executing / syn.st_realized — 5 keys × 4 langs (EN/DE/ZH/CS), rendered via data-i18n='syn.st_'+status in execution.js:239",
     "deal_isolated": true,
     "deal_isolation_note": "readDb/writeDb come from db/store.js and resolve to the bound deal's SQLite DB; both synergy collections are in ARRAY_COLLECTIONS (35 total). Verified 2026-08-03, correcting an initial mis-read that they lived in a shared db.json.",
+    "no_real_deals_yet": "data/deals/ is EMPTY as of 2026-08-06. Only demo.db and the legacy ma-portal.db hold synergy rows (5 seeds each, customSynergyInitiatives=0 in both). This is what makes D-11's hard cutover safe.",
     "demo_branch": "synergyLane() branches on db.settings.demoMode === false → customSynergyInitiatives (real) vs synergyInitiatives (demo)",
     "routes": "GET /api/synergies, POST /api/synergies (create+update), DELETE /api/synergies/:id"
   }
