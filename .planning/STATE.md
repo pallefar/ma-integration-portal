@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Synergy Value Capture
 status: executing
-stopped_at: Completed 05-04-PLAN.md
-last_updated: "2026-08-06T07:32:41.293Z"
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-08-06T07:47:24.833Z"
 last_activity: 2026-08-06
 last_activity_desc: Phase 5 execution started
 progress:
   total_phases: 7
   completed_phases: 4  # 1-4 executed; Phase 1 formal close deferred to release-cut (01-VERIFICATION.md still untracked)
   total_plans: 30
-  completed_plans: 26
+  completed_plans: 27
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 5 (Synergy Value Capture) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-08-06 — Phase 5 execution started
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -86,6 +86,7 @@ Progress: [█████████░] 87%
 | Phase 05 P02 | 7min | 3 tasks | 6 files |
 | Phase 05 P03 | ~16min | 2 tasks | 3 files |
 | Phase 5 P4 | 12min | 2 tasks | 4 files |
+| Phase 5 P05 | ~12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -159,6 +160,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5 Plan 03] D-15 re-baseline authz (isAdminOrIlRequest) deliberately excludes the X-Admin-Token break-glass path isAdminRequest() accepts — an unattributed token would defeat the governance meaning of a baseline record; role guard runs as the rebaseline handler's first statement, before the 404 lookup, proven by a four-identity 200/200/403/403 test with the identical payload
 - [Phase ?]: [Phase 5 Plan 04] isValidCalendarDate replicated locally in validators/workstream.js (validators/dd.js does not export it) mirroring the existing isValidMonth local-idiom convention
 - [Phase ?]: [Phase 5 Plan 04] Task 2's taskIds server/schema implementation landed inside Task 1's commit (both needed the identical validate-before-mutate restructuring of the same code region); Task 2's own commit is test-file-only
+- [Phase ?]: [Phase 5 Plan 05] startMonth wired into base upsert update branch (schema-accepted since Plan 01, never applied — same drift class Plan 03 fixed for runRateM/curveShape); required so SYN-05's stamping allowlist naming it doesn't produce a false stamp on a field that can't actually change
+- [Phase ?]: [Phase 5 Plan 05] synergyHorizonYears added to SettingsUpdateSchema alongside synergyStaleDays — the reader has existed since Plan 01 but the write-side schema key was missing, silently stripping it on every settings write (D-03 configurability was broken invisibly until now)
 
 ### Pending Todos
 
@@ -194,6 +197,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T07:32:41.282Z
-Stopped at: Completed 05-04-PLAN.md
+Last session: 2026-08-06T07:47:24.822Z
+Stopped at: Completed 05-05-PLAN.md
 Resume file: None
