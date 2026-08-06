@@ -110,11 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
       row.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.75rem;">
           <div style="width: 38px; height: 38px; background: rgba(36,76,90,0.06); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--te-dark-teal);">
-            ${emp.name[0]}
+            ${escapeHtml((emp.name || '')[0])}
           </div>
           <div>
-            <h5 style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display); font-size: 0.9rem;">${emp.name}</h5>
-            <p style="margin: 0.15rem 0 0 0; font-size: 0.75rem; color: var(--text-secondary);">${emp.role} &bull; <strong style="color:var(--te-orange);">${emp.points || 0} XP</strong></p>
+            <h5 style="margin: 0; color: var(--te-dark-teal); font-family: var(--font-family-display); font-size: 0.9rem;">${escapeHtml(emp.name)}</h5>
+            <p style="margin: 0.15rem 0 0 0; font-size: 0.75rem; color: var(--text-secondary);">${escapeHtml(emp.role)} &bull; <strong style="color:var(--te-orange);">${Number(emp.points) || 0} XP</strong></p>
           </div>
         </div>
         
@@ -223,9 +223,9 @@ document.addEventListener('DOMContentLoaded', () => {
       bubble.style.alignSelf = 'flex-start';
       const buddyInitials = buddyNameEl ? buddyNameEl.textContent.split(' ').map(n => n[0]).join('') : 'SC';
       bubble.innerHTML = `
-        <div style="width: 28px; height: 28px; background: var(--te-orange); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;">${buddyInitials}</div>
+        <div style="width: 28px; height: 28px; background: var(--te-orange); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;">${escapeHtml(buddyInitials)}</div>
         <div style="background: white; border: 1px solid var(--border-color); border-radius: 0 10px 10px 10px; padding: 0.55rem 0.75rem; color: var(--text-primary); line-height: 1.4; box-shadow: var(--shadow-sm);">
-          ${text}
+          ${escapeHtml(text)}
         </div>
       `;
     }
@@ -266,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function escapeHtml(str) {
-    return str
+    return String(str == null ? '' : str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
