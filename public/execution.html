@@ -64,6 +64,18 @@
        anywhere in this block: an indicator that looks actionable invites
        exactly the derive-value-from-delivery mental model D-23 rejected. */
     .syn-task-progress{ margin-top:.6rem; font-size:.72rem; font-weight:700; color:var(--text-dim); }
+    /* synergy — staleness badge + confirm-current control (SYN-05/D-16/D-18/UI-SPEC §6)
+       — the EXACT existing .ex-src pill treatment / .page-banner--warning
+       palette, reused rather than a 5th colour entering the codebase. */
+    .syn-stale-badge{ font-size:.64rem; font-weight:800; color:#C77700; background:rgba(233,131,0,.09); border:1px solid rgba(233,131,0,.25); border-radius:12px; padding:.1rem .5rem; }
+    .syn-confirm-btn{ font-size:.7rem; padding:.3rem .7rem; }
+    /* synergy — four-tile rollup (SYN-05/D-18/D-21/UI-SPEC §7) — "Rollup stat"
+       typography role: 1.6rem/800/1.15. */
+    .syn-rollup-tiles{ display:flex; align-items:flex-start; gap:1.75rem; flex-wrap:wrap; }
+    .syn-rollup-tile{ min-width:130px; }
+    .syn-rollup-label{ font-size:.72rem; font-weight:800; text-transform:uppercase; color:var(--text-dim); }
+    .syn-rollup-value{ font-size:1.6rem; font-weight:800; line-height:1.15; color:var(--te-dark-teal); }
+    .syn-rollup-stale-split{ font-size:.86rem; font-weight:600; color:var(--text-primary); margin-top:.75rem; }
     /* synergy — phasing grid (SYN-01) */
     .syn-expand-toggle{ display:block; width:100%; text-align:left; background:none; border:none; border-top:1px solid var(--border-color); margin-top:.6rem; padding-top:.6rem; font-family:inherit; font-size:.76rem; font-weight:700; color:var(--te-dark-teal); cursor:pointer; }
     .syn-detail{ margin-top:1rem; padding:1.5rem; background:var(--bg-light,#F8FAFC); border-radius:10px; }

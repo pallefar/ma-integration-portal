@@ -639,20 +639,54 @@
       + '</div>';
   }
 
+  // UI-SPEC §7/D-18/D-21: four stat tiles (gross realized, cost incurred,
+  // net benefit, deal target) replacing the old two-figure rollup, plus the
+  // unconfirmed-split sentence (D-18's exact wording) and the retained
+  // percent-of-target bar — now driven by deal target vs gross realized.
+  // Reads ONLY state.synRollup (the server-computed GET
+  // /api/synergies/rollup response, Plan 05) — never recomputes any of
+  // these figures from the card list, so a wrong client clock or a stale
+  // local card can never disagree with the server's own totals (T-05-36).
+  function renderSynRollup() {
+    var r = state.synRollup || {};
+    var gross = r.grossRealizedM || 0;
+    var cost = r.costIncurredM || 0;
+    var net = r.netBenefitM != null ? r.netBenefitM : (gross - cost);
+    var target = r.dealTargetM || 0;
+    var staleCount = r.staleCount || 0;
+    var unconfirmed = r.unconfirmedRealizedM || 0;
+    var pct = target > 0 ? Math.round((gross / target) * 100) : 0;
+    // Destructive colour when net benefit is negative — a real, expected
+    // early-deal state (cost currently exceeds realized value), not an
+    // error, so a colour rather than a warning treatment (UI-SPEC §7).
+    var netColor = net < 0 ? '#C0392B' : 'var(--te-dark-teal)';
+
+    var tiles = '<div class="syn-rollup-tiles">'
+      + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_gross">Gross realized</div><div class="syn-rollup-value">$' + gross.toFixed(1) + 'M</div></div>'
+      + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_cost">Cost incurred</div><div class="syn-rollup-value">$' + cost.toFixed(1) + 'M</div></div>'
+      + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_net">Net benefit</div><div class="syn-rollup-value" style="color:' + netColor + ';">$' + net.toFixed(1) + 'M</div></div>'
+      + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_target">Deal target</div><div class="syn-rollup-value">$' + target.toFixed(1) + 'M</div></div>'
+      + '</div>';
+
+    // D-18: the unconfirmed-split sentence is emitted ONLY when the stale
+    // count is non-zero — omitted entirely (not a "$0M unconfirmed"
+    // version of it) when nothing is stale, because a zero-value sentence
+    // reads as an error, not reassurance.
+    var staleSentence = staleCount > 0
+      ? '<div class="syn-rollup-stale-split">realized $' + gross.toFixed(1) + 'M, of which $' + unconfirmed.toFixed(1) + 'M unconfirmed</div>'
+      : '';
+
+    return '<div class="syn-card" style="border-top:4px solid var(--te-orange);">'
+      + tiles
+      + staleSentence
+      + '<div style="margin-top:.75rem;"><div style="font-size:.72rem;font-weight:800;color:var(--text-dim);margin-bottom:.3rem;">' + pct + '% <span data-i18n="syn.of_target">of target</span></div>'
+      + '<div class="syn-track" style="margin-top:0;height:12px;"><div class="syn-fill" style="width:' + Math.min(pct, 100) + '%"></div></div></div>'
+      + '</div>';
+  }
+
   function renderSynergy() {
     var list = state.synergies;
-    var target = list.reduce(function (a, s) { return a + (s.targetM || 0); }, 0);
-    var realized = list.reduce(function (a, s) { return a + (s.realizedM || 0); }, 0);
-    var pct = target > 0 ? Math.round((realized / target) * 100) : 0;
-    document.getElementById('syn-rollup').innerHTML = '<div class="syn-card" style="border-top:4px solid var(--te-orange);">'
-      + '<div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap;">'
-      + '<div><div style="font-size:.72rem;font-weight:800;text-transform:uppercase;color:var(--text-dim);" data-i18n="syn.total_realized">Realized</div>'
-      + '<div style="font-size:1.6rem;font-weight:800;color:var(--te-dark-teal);">$' + realized.toFixed(1) + 'M</div></div>'
-      + '<div><div style="font-size:.72rem;font-weight:800;text-transform:uppercase;color:var(--text-dim);" data-i18n="syn.total_target">Deal target</div>'
-      + '<div style="font-size:1.6rem;font-weight:800;color:var(--text-secondary);">$' + target.toFixed(1) + 'M</div></div>'
-      + '<div style="flex:1;min-width:200px;"><div style="font-size:.72rem;font-weight:800;color:var(--text-dim);margin-bottom:.3rem;">' + pct + '% <span data-i18n="syn.of_target">of target</span></div>'
-      + '<div class="syn-track" style="margin-top:0;height:12px;"><div class="syn-fill" style="width:' + Math.min(pct, 100) + '%"></div></div></div>'
-      + '</div></div>';
+    document.getElementById('syn-rollup').innerHTML = renderSynRollup();
 
     document.getElementById('syn-list').innerHTML = list.map(function (s) {
       var p = s.targetM > 0 ? Math.round(((s.realizedM || 0) / s.targetM) * 100) : 0;
@@ -660,11 +694,20 @@
       // SYN-01/UI-SPEC §2: read state.synExpanded (never write it here) to
       // decide whether this card's .syn-detail is included at all.
       var expanded = !!state.synExpanded[s.id];
+      // UI-SPEC §6/D-16/D-18: the badge renders ONLY inside a conditional
+      // on the item's SERVER-COMPUTED stale flag (enrichSynergy(), Plan
+      // 05) — the client never recomputes staleness from timestamps. The
+      // title carries the exact last-confirmed date.
+      var staleBadge = s.stale
+        ? '<span class="syn-stale-badge" data-i18n="syn.stale_badge" title="' + esc('Last confirmed: ' + (s.lastConfirmedAt ? formatBaselineDate(s.lastConfirmedAt) : 'Never')) + '">Stale</span>'
+        : '';
       return '<div class="syn-card" data-syn="' + esc(s.id) + '">'
         + '<div class="syn-head"><div style="flex:1;min-width:0;"><div class="syn-title">' + esc(s.title) + '</div>'
         + '<div class="syn-meta">'
         + '<span class="syn-cat ' + esc(s.category) + '" data-i18n="syn.cat_' + esc(s.category) + '">' + (s.category === 'cost' ? 'Cost' : 'Revenue') + '</span>'
         + renderStageControl(s)
+        + staleBadge
+        + '<button type="button" class="btn btn-secondary syn-confirm-btn" data-i18n="syn.confirm_current">Confirm current</button>'
         + (wsDef ? '<span>' + (wsDef.icon || '') + ' <span data-i18n="' + esc(wsDef.labelKey || '') + '">' + esc(wsDef.label) + '</span></span>' : '')
         + (s.owner ? '<span>👤 ' + esc(s.owner) + '</span>' : '')
         + '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: <input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (s.realizedM || 0) + '"></span>'
@@ -699,6 +742,24 @@
         if (!item) return;
         if (synStageMenuState && synStageMenuState.id === id) { closeSynStageMenu(); return; }
         openSynStageMenu(card.querySelector('.syn-stage-wrap'), item, id);
+      });
+      // UI-SPEC §6/D-16: its OWN button, hitting its OWN dedicated route
+      // with a payload carrying no content fields at all (an empty object,
+      // never derived from any input on the page) — structurally distinct
+      // from every title/notes change handler, so a confirmation and a
+      // content edit can never be the same request.
+      card.querySelector('.syn-confirm-btn').addEventListener('click', function () {
+        fetch('/api/synergies/' + encodeURIComponent(id) + '/confirm-current', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+        }).then(function (r) { return r.json(); }).then(function (res) {
+          if (res && res.success) {
+            var idx = state.synergies.findIndex(function (s) { return s.id === id; });
+            if (idx !== -1) state.synergies[idx] = res.initiative;
+            renderSynergy(); applyI18n();
+          } else {
+            synAlertFailure(res);
+          }
+        });
       });
       // SYN-01/UI-SPEC §2: writes state.synExpanded — the ONLY place in
       // this file that assigns to it. Toggling re-renders the whole list,

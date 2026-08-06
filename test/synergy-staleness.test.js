@@ -474,6 +474,89 @@ test('synergy-staleness (p): mine.staleCount differs between two identities read
   }
 });
 
+// -------------------------------------------- Plan 07: client staleness UI --
+//
+// Source-level assertions against public/js/execution.js and
+// public/execution.html — a live browser walk is deferred to Plan 08's
+// human checkpoint (per this plan's own <verification> block), so these
+// tests are what proves the confirm-current click/route/payload isolation
+// (D-16), the server-verdict-only stale badge, the omitted-at-zero
+// unconfirmed sentence, and the four-tile net-benefit colour rule, ahead of
+// that walk.
+
+function readClientSrc() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+}
+function readExecutionHtml() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'execution.html'), 'utf8');
+}
+
+test('synergy-staleness-ui (a): the confirm-current handler is attached to its own dedicated button and issues a request carrying no content fields', () => {
+  const src = readClientSrc();
+  const handlerMatch = src.match(/card\.querySelector\('\.syn-confirm-btn'\)\.addEventListener\('click', function \(\) \{([\s\S]*?)\n {6}\}\);/);
+  assert.ok(handlerMatch, 'a .syn-confirm-btn click handler must be attached, distinct from every other control');
+  const body = handlerMatch[1];
+  assert.match(body, /\/confirm-current/, 'the handler must POST to the dedicated confirm-current sub-route');
+  assert.match(body, /body: JSON\.stringify\(\{\}\)/, 'the request body must be an empty object literal — no content field of any kind');
+});
+
+test('synergy-staleness-ui (b): no title or notes change handler in the file references the confirm-current route', () => {
+  const src = readClientSrc();
+  // Every fetch() call site targeting the confirm-current route (as
+  // opposed to a plain descriptive comment mentioning the feature by
+  // name) must be the ONE dedicated handler asserted above — never a
+  // second call site riding along inside a title/notes/owner edit handler.
+  const callSites = (src.match(/'\/confirm-current'/g) || []).length;
+  assert.strictEqual(callSites, 1, 'the confirm-current route literal must appear in exactly one fetch() call — its own dedicated handler');
+});
+
+test('synergy-staleness-ui (c): the unconfirmed sentence is emitted only inside a conditional on a non-zero stale count, and is therefore absent at zero', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function renderSynRollup\(\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(fnMatch, 'renderSynRollup must be defined');
+  const body = fnMatch[0];
+  assert.match(body, /staleCount > 0\s*\n\s*\? '<div class="syn-rollup-stale-split">/, 'the stale-split sentence must be gated on staleCount > 0, and the else branch must be empty');
+});
+
+test('synergy-staleness-ui (d): the stale badge is emitted only inside a conditional on the item\'s server-computed stale flag, and the client performs no staleness computation from timestamps', () => {
+  const src = readClientSrc();
+  assert.match(src, /var staleBadge = s\.stale\s*\n\s*\? /, 'the badge markup must be gated on the item\'s own s.stale field (the server verdict), not a client-side date comparison');
+  assert.ok(!/Date\.now\(\)\s*-.*lastConfirmedAt/.test(src), 'the client must never subtract lastConfirmedAt from the current time to derive its own staleness verdict');
+  assert.ok(!/isSynergyStale/.test(src), 'the client must never replicate the server\'s staleness function');
+});
+
+test('synergy-staleness-ui (e): four rollup tile elements are emitted, and the net-benefit tile applies the destructive colour under a negative-value condition', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function renderSynRollup\(\) \{[\s\S]*?\n {2}\}/);
+  const body = fnMatch[0];
+  const tileCount = (body.match(/class="syn-rollup-tile"/g) || []).length;
+  assert.strictEqual(tileCount, 4, 'exactly four .syn-rollup-tile elements must be emitted: gross realized, cost incurred, net benefit, deal target');
+  assert.match(body, /var netColor = net < 0 \? '#C0392B' : /, 'the net-benefit tile\'s colour must be conditioned on a negative net value, applying the destructive colour');
+  assert.match(body, /syn-rollup-value" style="color:' \+ netColor/, 'the destructive colour must actually be applied to the net-benefit tile\'s value element');
+});
+
+test('synergy-staleness-ui (f): the rollup fetch added to load() carries a degradation branch matching the file\'s existing per-fetch pattern', () => {
+  const src = readClientSrc();
+  const loadFnMatch = src.match(/function load\(\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(loadFnMatch, 'load() must be defined');
+  const body = loadFnMatch[0];
+  assert.match(body, /fetch\('\/api\/synergies\/rollup'\)\.then\(function \(r\) \{ return r\.json\(\); \}\)\.catch\(function \(\) \{ return \{\}; \}\)/, 'the rollup fetch must degrade to a neutral empty object on failure, matching the synergies/raid fetches\' own .catch pattern');
+});
+
+test('synergy-staleness-ui (g): public/execution.html declares .syn-rollup-tiles and .syn-stale-badge rules', () => {
+  const html = readExecutionHtml();
+  assert.ok(html.split('\n').some((l) => l.includes('.syn-rollup-tiles{')), '.syn-rollup-tiles rule must exist in public/execution.html');
+  assert.ok(html.split('\n').some((l) => l.includes('.syn-stale-badge{')), '.syn-stale-badge rule must exist in public/execution.html');
+});
+
+test('synergy-staleness-ui (h): the retained percent-of-target bar still uses the pre-existing .syn-track/.syn-fill classes', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function renderSynRollup\(\) \{[\s\S]*?\n {2}\}/);
+  const body = fnMatch[0];
+  assert.match(body, /class="syn-track"/, 'the progress bar track must reuse the pre-existing .syn-track class');
+  assert.match(body, /class="syn-fill"/, 'the progress bar fill must reuse the pre-existing .syn-fill class');
+});
+
 test('synergy-staleness (q): GET /api/synergies returns items in the lane\'s stored insertion order (ordering)', async () => {
   const token = await setupDeal('deal_synstalq');
   const server = app.listen(0);
