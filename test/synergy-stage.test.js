@@ -903,6 +903,66 @@ test('synergy-stage (h): running migrateSynergyStages a second time is a full no
   assert.ok(bytesA.equals(bytesB), 'a single run and a run-twice result must be byte-identical on disk');
 });
 
+// WR-04: the migration used to be hard-scoped to the synergyInitiatives
+// table ONLY — a row living in the customSynergyInitiatives lane (used
+// whenever a deal's settings.demoMode === false, server.js:3054-3059) was
+// never touched, kept its retired `status` field, never got a `stage`
+// value, and fed directly into CR-02's gate-bypass bug on its first
+// stage-change request. Seeds a legacy row into customSynergyInitiatives
+// specifically (never synergyInitiatives) to prove the SECOND lane is now
+// covered.
+test('synergy-stage (i): WR-04 — migrateSynergyStages also migrates the customSynergyInitiatives lane, not just synergyInitiatives', () => {
+  const dbPath = path.join(TMP_DIR, 'migration-test-i.db');
+  const conn = dbFiles.openDbFile(dbPath, dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    const item = { id: 'syn_custom_1', title: 'Custom-lane legacy row', category: 'cost', targetM: 1, realizedM: 0, status: 'executing', createdAt: new Date().toISOString() };
+    conn.prepare('INSERT INTO customSynergyInitiatives (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+      .run('syn_custom_1', null, 0, JSON.stringify(item));
+    // A sanity-check row in the OTHER lane too, so this test also proves
+    // both lanes are migrated in the SAME run, not exclusively.
+    conn.prepare('INSERT INTO synergyInitiatives (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+      .run('syn_normal_1', null, 0, JSON.stringify({ id: 'syn_normal_1', title: 'Normal-lane legacy row', category: 'cost', targetM: 1, realizedM: 0, status: 'realized', createdAt: new Date().toISOString() }));
+    conn.pragma('wal_checkpoint(TRUNCATE)');
+  } finally {
+    conn.close();
+  }
+
+  const result = migrateSynergyStages(dbPath);
+  assert.strictEqual(result.rowsMigrated, 2, 'both the custom-lane row and the normal-lane row must be migrated in the same run');
+
+  const readConn = dbFiles.openDbFile(dbPath, dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    const customRow = JSON.parse(readConn.prepare('SELECT data FROM customSynergyInitiatives WHERE id = ?').get('syn_custom_1').data);
+    assert.strictEqual(customRow.stage, 'committed', 'the custom-lane row must be migrated per D-07\'s mechanical map (executing -> committed)');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(customRow, 'status'), false, 'the custom-lane row must have the retired status key deleted');
+
+    const normalRow = JSON.parse(readConn.prepare('SELECT data FROM synergyInitiatives WHERE id = ?').get('syn_normal_1').data);
+    assert.strictEqual(normalRow.stage, 'captured', 'the normal-lane row must still be migrated (realized -> captured)');
+  } finally {
+    readConn.close();
+  }
+});
+
+test('synergy-stage (j): WR-04 — a second run over a database with a migrated customSynergyInitiatives row finds it already up to date (idempotent) and touches no i18n language a second time', () => {
+  const dbPath = path.join(TMP_DIR, 'migration-test-j.db');
+  const conn = dbFiles.openDbFile(dbPath, dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    const item = { id: 'syn_custom_2', title: 'Custom-lane legacy row', category: 'cost', targetM: 1, realizedM: 0, status: 'identified', createdAt: new Date().toISOString() };
+    conn.prepare('INSERT INTO customSynergyInitiatives (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+      .run('syn_custom_2', null, 0, JSON.stringify(item));
+    conn.pragma('wal_checkpoint(TRUNCATE)');
+  } finally {
+    conn.close();
+  }
+
+  const first = migrateSynergyStages(dbPath);
+  assert.strictEqual(first.rowsMigrated, 1);
+
+  const second = migrateSynergyStages(dbPath);
+  assert.strictEqual(second.rowsMigrated, 0, 'a second run must migrate zero rows in the custom lane too');
+  assert.strictEqual(second.rowsSkipped, 1, 'the already-migrated custom-lane row must be counted as skipped on the second run');
+});
+
 // -------------------------------------------- Plan 06: client stage UI --
 //
 // Source-level assertions against public/js/execution.js and

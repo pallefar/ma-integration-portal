@@ -2,11 +2,14 @@
 // D-07/D-11: one-off migration of the retired five-value synergy-initiative
 // lifecycle (identified/validated/planned/executing/realized) onto the new
 // four-value SYN-03 confidence-stage vocabulary (idea/validated/committed/
-// captured), against a committed database's `synergyInitiatives` rows and
-// its `app_state` i18n singleton, following
-// scripts/seed-dd-request-templates.js's shape exactly (openDbFile() +
-// prepared-statement rewrite + wal_checkpoint(TRUNCATE) + close, CLI
-// defaulting to DEMO_DB_PATH).
+// captured), against a committed database's synergy-initiative rows —
+// BOTH lanes server.js's synergyLane() can resolve to, `synergyInitiatives`
+// AND `customSynergyInitiatives` (WR-04: a row left unmigrated in either
+// lane carries no `stage` value and feeds CR-02's gate-bypass bug on its
+// first stage-change request) — and its `app_state` i18n singleton,
+// following scripts/seed-dd-request-templates.js's shape exactly
+// (openDbFile() + prepared-statement rewrite + wal_checkpoint(TRUNCATE) +
+// close, CLI defaulting to DEMO_DB_PATH).
 //
 // Usage:
 //   node scripts/migrate-synergy-stages.js [path-to-db]
@@ -15,10 +18,11 @@
 //   dormant Phase-1 artifact, db/store.js:171-176) — pass its path
 //   explicitly as the one CLI argument to migrate it too.
 //
-// Idempotent: a synergyInitiatives row already carrying `stage` (and no
-// retired `status` key) is left untouched; an i18n language whose new stage
-// label keys already exist is not duplicated. Running this script twice
-// against the same file leaves it byte-identical to a single run.
+// Idempotent: a synergy-initiative row (in either lane) already carrying
+// `stage` (and no retired `status` key) is left untouched; an i18n language
+// whose new stage label keys already exist is not duplicated. Running this
+// script twice against the same file leaves it byte-identical to a single
+// run.
 //
 // D-07's mechanical map (05-CONTEXT.md, UI-SPEC's stage-badge palette table)
 // is intentionally a fixed lookup table local to this one-off script, not a
@@ -64,14 +68,27 @@ const CARRIED_TRANSLATION_KEY = { 'syn.st_captured': 'syn.st_realized' };
 // not retired, it carries forward unchanged.
 const RETIRED_LABEL_KEYS = ['syn.st_identified', 'syn.st_planned', 'syn.st_executing', 'syn.st_realized'];
 
+// WR-04: BOTH synergy lanes server.js's synergyLane() can resolve to —
+// `synergyInitiatives` (db.settings.demoMode !== false) and
+// `customSynergyInitiatives` (db.settings.demoMode === false, the legacy
+// "custom M&A intake" mode, server.js:3054-3059). The migration used to be
+// hard-scoped to synergyInitiatives ONLY, so a pre-Phase-5 row living in the
+// custom lane kept its retired `status` field, never got a `stage` value at
+// all, and fed directly into CR-02's gate-bypass bug on its very first
+// stage-change request. Migrating both tables in the same transaction closes
+// that gap at the source, rather than relying solely on CR-02's runtime
+// fail-closed guard.
+const SYNERGY_LANE_TABLES = ['synergyInitiatives', 'customSynergyInitiatives'];
+
 /**
- * Migrate one committed database's `synergyInitiatives` rows and its
- * `app_state['i18n']` singleton from the retired five-value lifecycle to the
- * new four-value SYN-03 stage vocabulary. Opens `dbPath` through
- * openDbFile() (creates the file / applies schema idempotently if it
- * predates this collection, mirroring seedDdRequestTemplates()'s contract).
- * Returns `{ rowsMigrated, rowsSkipped, languagesTouched }` for the CLI's
- * one-line summary.
+ * Migrate one committed database's synergy-initiative rows — BOTH lanes,
+ * SYNERGY_LANE_TABLES above — and its `app_state['i18n']` singleton from the
+ * retired five-value lifecycle to the new four-value SYN-03 stage
+ * vocabulary. Opens `dbPath` through openDbFile() (creates the file /
+ * applies schema idempotently if it predates this collection, mirroring
+ * seedDdRequestTemplates()'s contract). Returns
+ * `{ rowsMigrated, rowsSkipped, languagesTouched }` for the CLI's one-line
+ * summary — rowsMigrated/rowsSkipped are summed across both lanes.
  */
 function migrateSynergyStages(dbPath) {
   const conn = openDbFile(dbPath, DEAL_SCHEMA_PATH);
@@ -80,27 +97,29 @@ function migrateSynergyStages(dbPath) {
   let languagesTouched = 0;
   try {
     const migrate = conn.transaction(() => {
-      // --- 1. synergyInitiatives rows -----------------------------------
-      const rows = conn.prepare('SELECT id, data FROM synergyInitiatives').all();
-      const updateStmt = conn.prepare('UPDATE synergyInitiatives SET data = ? WHERE id = ?');
-      for (const row of rows) {
-        const item = JSON.parse(row.data);
-        if (!Object.prototype.hasOwnProperty.call(item, 'status')) {
-          // Already migrated (or never carried the retired key) — idempotent no-op.
-          rowsSkipped++;
-          continue;
+      // --- 1. synergy-initiative rows, both lanes ------------------------
+      for (const table of SYNERGY_LANE_TABLES) {
+        const rows = conn.prepare(`SELECT id, data FROM ${table}`).all();
+        const updateStmt = conn.prepare(`UPDATE ${table} SET data = ? WHERE id = ?`);
+        for (const row of rows) {
+          const item = JSON.parse(row.data);
+          if (!Object.prototype.hasOwnProperty.call(item, 'status')) {
+            // Already migrated (or never carried the retired key) — idempotent no-op.
+            rowsSkipped++;
+            continue;
+          }
+          const legacyValue = item.status;
+          const newStage = STAGE_MIGRATION_MAP[legacyValue];
+          if (!newStage) {
+            throw new Error(
+              `scripts/migrate-synergy-stages.js: row ${row.id} in ${table} carries an unrecognized legacy status "${legacyValue}" with no D-07 mechanical mapping — refusing to guess.`
+            );
+          }
+          delete item.status;
+          item.stage = newStage;
+          updateStmt.run(JSON.stringify(item), row.id);
+          rowsMigrated++;
         }
-        const legacyValue = item.status;
-        const newStage = STAGE_MIGRATION_MAP[legacyValue];
-        if (!newStage) {
-          throw new Error(
-            `scripts/migrate-synergy-stages.js: row ${row.id} carries an unrecognized legacy status "${legacyValue}" with no D-07 mechanical mapping — refusing to guess.`
-          );
-        }
-        delete item.status;
-        item.stage = newStage;
-        updateStmt.run(JSON.stringify(item), row.id);
-        rowsMigrated++;
       }
 
       // --- 2. app_state['i18n'] singleton --------------------------------
@@ -161,7 +180,7 @@ function main() {
   const target = process.argv[2] || DEMO_DB_PATH;
   const result = migrateSynergyStages(target);
   console.log(
-    `Migrated ${target}: ${result.rowsMigrated} synergyInitiatives row(s) rewritten, ${result.rowsSkipped} already up to date, ${result.languagesTouched} i18n language(s) touched.`
+    `Migrated ${target}: ${result.rowsMigrated} synergy-initiative row(s) rewritten across both lanes (synergyInitiatives + customSynergyInitiatives), ${result.rowsSkipped} already up to date, ${result.languagesTouched} i18n language(s) touched.`
   );
 }
 
@@ -174,4 +193,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { migrateSynergyStages, STAGE_MIGRATION_MAP, RETIRED_LABEL_KEYS };
+module.exports = { migrateSynergyStages, STAGE_MIGRATION_MAP, RETIRED_LABEL_KEYS, SYNERGY_LANE_TABLES };
