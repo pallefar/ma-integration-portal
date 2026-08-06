@@ -3,10 +3,12 @@ phase: 5
 slug: synergy-value-capture
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
+status: validated
+nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-06
+validated: 2026-08-06
+validated_at_head: daa5af3
 ---
 
 # Phase 5 — Validation Strategy
@@ -58,8 +60,8 @@ created: 2026-08-06
 | T2 | 05-07 | 7 | SYN-05 | T-05-36, T-05-37, T-05-40 | Confirm-current is its own button, route and payload; client never recomputes staleness | source | `node --test test/synergy-staleness.test.js` | ✅ | ✅ |
 | T3 | 05-07 | 7 | SYN-05 | T-05-39 | Nudge reads only the caller-scoped count; deal-home textContent-only discipline preserved | source | `node --test test/synergy-staleness.test.js` | ✅ | ✅ |
 | T1 | 05-08 | 8 | SYN-01..05 | T-05-42, T-05-43, T-05-44 | No seeded realized value in a future month; seed diff visible in git; seeded task links resolve | integration + CLI | `npm test` | ✅ | ✅ |
-| T2 | 05-08 | 8 | SYN-01..05 | T-05-46 | Demo-showcase regression walk — runs FIRST, blocking human | manual (blocking human) | n/a — checkpoint | n/a | ⬜ |
-| T3 | 05-08 | 8 | SYN-01..05 | T-05-36, T-05-37 | Live synergy walk covering both UI-SPEC backstops that no static check can prove | manual (blocking human) | n/a — checkpoint | n/a | ⬜ |
+| T2 | 05-08 | 8 | SYN-01..05 | T-05-46 | Demo-showcase regression walk — runs FIRST, blocking human | manual (blocking human) | n/a — checkpoint | n/a | ✅ |
+| T3 | 05-08 | 8 | SYN-01..05 | T-05-36, T-05-37 | Live synergy walk covering both UI-SPEC backstops that no static check can prove | manual (blocking human) | n/a — checkpoint | n/a | ✅ |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -94,11 +96,61 @@ separate Wave 0 pass is required — every plan's own first task carries its sca
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 10s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-08-06
+
+### Post-plan additions (landed after this map was authored)
+
+Nine regression tests were added by the code-review fix pass and the verification
+gap closure — none existed when the Per-Task Verification Map above was written.
+Each was proven to FAIL against its own pre-fix code before being accepted.
+
+| Origin | Requirement | Secure behavior | Automated command | Status |
+|---|---|---|---|---|
+| CR-01 | SYN-01 | `synergyHorizonYears` bounded [1,15]; a valid 5 still accepted (D-03 configurability preserved) | `node --test test/synergy-phasing.test.js` | ✅ |
+| CR-02 | SYN-03 | Unrecognized stored stage fails closed (409 Conflict, not 500 — a handled state conflict is not a server fault) | `node --test test/synergy-stage.test.js` | ✅ |
+| CR-03 | SYN-01/03 | Phasing regeneration auto-demotes when the current stage's gate no longer holds | `node --test test/synergy-phasing.test.js` | ✅ |
+| WR-01 | SYN-03 | `isAdminOrIlRequest()` excludes the X-Admin-Token break-glass identity | `node --test test/synergy-stage.test.js` | ✅ |
+| WR-02 | SYN-02 | `roundSynergyMoney()` rejects non-finite results (Infinity→null corruption path) | `node --test test/synergy-cost.test.js` | ✅ |
+| WR-03 | SYN-05 | `synergyStaleDays` capped at 365 — the staleness signal cannot be permanently suppressed | `node --test test/synergy-staleness.test.js` | ✅ |
+| WR-04 | SYN-03 | Migration covers the `customSynergyInitiatives` lane (the gap that made CR-02 reachable) | `node --test test/synergy-stage.test.js` | ✅ |
+| WR-05 | SYN-01 | Header realized-input gated on D-04's phased condition | `node --test test/synergy-phasing.test.js` | ✅ |
+| **G-05-01** | **SYN-03** | **CREATE path runs the same D-08 gate as every other stage-setting route — enum membership is not a gate** | `node --test test/synergy-stage.test.js` | ✅ |
+
+---
+
+## Validation Audit 2026-08-06
+
+**State A** (VALIDATION.md seeded at plan-phase). Audited at HEAD `daa5af3`.
+
+**Result: no gaps — `nyquist_compliant: true`.** Per the workflow's own §3 rule ("No gaps → skip
+to Step 6"), `gsd-nyquist-auditor` was **not** spawned: there was nothing for it to fill.
+
+**Coverage was confirmed by running each phase test file individually**, not by inferring it from a
+whole-suite pass — a green aggregate can hide a file that never ran:
+
+| Test file | Requirement | Result |
+|---|---|---|
+| `test/synergy-phasing.test.js` | SYN-01 | 26 pass, 0 fail |
+| `test/synergy-stage.test.js` | SYN-03 | 44 pass, 0 fail |
+| `test/synergy-cost.test.js` | SYN-02 | 18 pass, 0 fail |
+| `test/synergy-tasks.test.js` | SYN-04 | 12 pass, 0 fail |
+| `test/synergy-staleness.test.js` | SYN-05 | 34 pass, 0 fail |
+| **Total** | **SYN-01…05 all COVERED** | **134 pass, 0 fail** |
+
+Full suite: **374/374**. Every requirement maps to a dedicated, individually-green test file; the
+two-identity 200/403 authz proof and all nine post-plan regression tests are present.
+
+**The five Manual-Only rows are genuinely manual and were all driven live by the orchestrator in
+headless Chrome**, not asserted from source: both UI-SPEC backstops (expand-state persistence
+across a full-list re-render; initial-load render), the demo-showcase regression walk across 14
+pages in 4 languages, and the D-10 seed visual check. The regression walk is what caught the
+`0e778f5` div-nesting bug that killed every synergy card interaction while the 358-test suite
+stayed green — the standing evidence that a structural DOM defect is invisible to source-level
+tests.
