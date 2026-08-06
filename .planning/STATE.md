@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Synergy Value Capture
 status: executing
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-08-06T07:47:24.833Z"
+stopped_at: Completed 05-06-PLAN.md
+last_updated: "2026-08-06T08:01:51.048Z"
 last_activity: 2026-08-06
 last_activity_desc: Phase 5 execution started
 progress:
   total_phases: 7
   completed_phases: 4  # 1-4 executed; Phase 1 formal close deferred to release-cut (01-VERIFICATION.md still untracked)
   total_plans: 30
-  completed_plans: 27
+  completed_plans: 28
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 5 (Synergy Value Capture) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-08-06 — Phase 5 execution started
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -87,6 +87,7 @@ Progress: [█████████░] 90%
 | Phase 05 P03 | ~16min | 2 tasks | 3 files |
 | Phase 5 P4 | 12min | 2 tasks | 4 files |
 | Phase 5 P05 | ~12min | 2 tasks | 4 files |
+| Phase 05 P06 | ~12.5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -162,6 +163,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5 Plan 04] Task 2's taskIds server/schema implementation landed inside Task 1's commit (both needed the identical validate-before-mutate restructuring of the same code region); Task 2's own commit is test-file-only
 - [Phase ?]: [Phase 5 Plan 05] startMonth wired into base upsert update branch (schema-accepted since Plan 01, never applied — same drift class Plan 03 fixed for runRateM/curveShape); required so SYN-05's stamping allowlist naming it doesn't produce a false stamp on a field that can't actually change
 - [Phase ?]: [Phase 5 Plan 05] synergyHorizonYears added to SettingsUpdateSchema alongside synergyStaleDays — the reader has existed since Plan 01 but the write-side schema key was missing, silently stripping it on every settings write (D-03 configurability was broken invisibly until now)
+- [Phase ?]: [Phase 5 Plan 06] Task 1 and Task 2 built together but committed separately by temporarily withholding renderBaselines()/CSS/tests from Task 1's commit and restoring for Task 2 — true per-task atomicity rather than a combined commit, both intermediate (326/326) and final (333/333) states verified green
 
 ### Pending Todos
 
@@ -197,6 +199,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T07:47:24.822Z
-Stopped at: Completed 05-05-PLAN.md
+Last session: 2026-08-06T08:01:51.037Z
+Stopped at: Completed 05-06-PLAN.md
 Resume file: None
