@@ -3640,6 +3640,17 @@ app.post('/api/synergies/:id/stage', (req, res) => {
   const currentOrdinal = STAGE_ORDER[item.stage];
   const targetOrdinal = STAGE_ORDER[targetStage];
 
+  // CR-02: an unrecognized/absent item.stage (e.g. a customSynergyInitiatives
+  // row this phase's migration script never reached, WR-04) makes
+  // currentOrdinal `undefined` — `targetOrdinal > currentOrdinal` is ALWAYS
+  // false against undefined (a NaN comparison), so control used to silently
+  // fall into the backward-move `else` branch below, which requires only a
+  // reason string and never runs stageGateFailure(). Fail closed instead:
+  // refuse the move outright rather than assuming "backward".
+  if (currentOrdinal === undefined) {
+    return res.status(500).json({ error: 'This initiative carries an unrecognized stage value and cannot be advanced until migrated.' });
+  }
+
   if (targetOrdinal === currentOrdinal) {
     return res.json({ success: true, initiative: item });
   }

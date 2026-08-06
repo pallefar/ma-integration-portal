@@ -421,6 +421,64 @@ test('synergy-stage-gate (h): a targetStage outside the four-value vocabulary is
   }
 });
 
+// CR-02: `STAGE_ORDER[item.stage]` is `undefined` for a row whose stage was
+// never migrated onto the four-value vocabulary (WR-04's exact scenario — a
+// customSynergyInitiatives-lane row that predates this phase's migration
+// script, or any row a future write path leaves without a `stage`).
+// `targetOrdinal > currentOrdinal` is ALWAYS false against `undefined` (a
+// NaN comparison), which used to fall into the backward-move branch —
+// requiring only a non-empty reason string and running NO gate at all. This
+// is reachable through completely ordinary use of the stage route, not
+// database tampering: `{ targetStage: 'captured', reason: 'x' }` against
+// such a row used to jump it straight to captured with no owner, no phased
+// target and no realized value. Simulates the pre-migration row directly by
+// inserting a raw synergyInitiatives row via the deal's own SQLite file,
+// bypassing the create-time schema (which always enum-validates `stage`) —
+// exactly how a real pre-Phase-5 row would look, and the ONLY way to
+// construct one for this test.
+test('synergy-stage-gate (i): CR-02 — a stage-change request against an initiative with NO stage value (unmigrated row) is refused with 500, never silently advanced to the target stage with no gate check', async () => {
+  const deal = freshDeal('deal_syngi');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const dealDbPath = dbFiles.dealDbPath(deal.id);
+  const conn = dbFiles.openDbFile(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    const item = {
+      id: 'syn_unmigrated', title: 'Pre-migration row', category: 'cost',
+      targetM: 0, realizedM: 0, owner: '', runRateM: 0, phasing: [], baselines: [],
+      createdAt: new Date().toISOString(),
+      // Deliberately NO `stage` key — mirrors an unmigrated WR-04 row.
+    };
+    conn.prepare('INSERT INTO synergyInitiatives (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+      .run(item.id, null, 0, JSON.stringify(item));
+    conn.pragma('wal_checkpoint(TRUNCATE)');
+  } finally {
+    conn.close();
+  }
+
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    // The exact exploit payload from the review: jump straight to captured
+    // with a reason string, no owner, no phased target, no realized value.
+    const res = await postJSON(base, '/api/synergies/syn_unmigrated/stage', karenToken, { targetStage: 'captured', reason: 'x' });
+    assert.notStrictEqual(res.status, 200, 'a stage-change request against an unmigrated row must NEVER succeed — this is the whole gate-bypass bug');
+    assert.strictEqual(res.status, 500, 'an unrecognized current stage must fail closed with a clear server error, not silently coerce to a backward move');
+
+    const listRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const list = await listRes.json();
+    const stored = list.find((s) => s.id === 'syn_unmigrated');
+    assert.notStrictEqual(stored.stage, 'captured', 'the row must NOT have been silently advanced to captured with no owner, no phased target and no realized value');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
 // ============================================================= Plan 03 ==
 // Task 2: D-12/D-13/D-14 baseline history + the pinned deal case, D-15
 // re-baseline authz (the CR-01-lesson two-identity 200/403 proof).
