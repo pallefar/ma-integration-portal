@@ -3091,9 +3091,16 @@ const RAMP_CURVES = {
 // `num()` helper below (parseFloat, NaN -> 0, clamp negative to 0, round to
 // one decimal) — pulled out to module scope because generatePhasingRows()
 // and the phasing sub-routes need it outside any single handler's closure.
+// WR-02: reject non-finite results (e.g. parseFloat('1e400') === Infinity,
+// well within SynMoneyUnion's 20-char string cap) rather than letting them
+// through — Math.round(Infinity * 10) / 10 stays Infinity, which
+// JSON.stringify() silently serializes as `null`, corrupting the stored
+// figure with no 400/warning anywhere. isNaN(v) alone did not catch this,
+// since Infinity is not NaN.
 function roundSynergyMoney(v) {
   const n = parseFloat(v);
-  return isNaN(n) ? 0 : Math.max(0, Math.round(n * 10) / 10);
+  if (!isFinite(n)) return 0;
+  return Math.max(0, Math.round(n * 10) / 10);
 }
 
 // SYN-01/D-01/D-03/D-05/D-24: generates horizonYears*12 consecutive monthly
@@ -3405,7 +3412,14 @@ app.post('/api/synergies', (req, res) => {
   const b = req.body || {};
   const db = readDb();
   const lane = synergyLane(db);
-  const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : Math.max(0, Math.round(n * 10) / 10); };
+  // WR-02: this local closure used to duplicate roundSynergyMoney()'s
+  // rounding contract independently (isNaN-only, no isFinite guard) rather
+  // than calling the shared helper — so fixing roundSynergyMoney() alone
+  // left this route's targetM/realizedM/runRateM/costPlannedM fields still
+  // vulnerable to the same Infinity-serializes-to-null corruption on both
+  // the create and update branches below. Delegates to the shared,
+  // now-fixed helper instead of re-implementing it.
+  const num = roundSynergyMoney;
   if (b.id) {
     const item = lane.find(s => s.id === b.id);
     if (!item) return res.status(404).json({ error: 'Initiative not found.' });
@@ -5283,6 +5297,10 @@ module.exports.generatePhasingRows = generatePhasingRows;
 module.exports.monthHasArrived = monthHasArrived;
 module.exports.synergyRollupFields = synergyRollupFields;
 module.exports.RAMP_CURVES = RAMP_CURVES;
+// WR-02: exposed for the same pure-function unit-check rationale — a test
+// can assert the non-finite guard directly against overflow inputs like
+// '1e400', without needing an HTTP round-trip.
+module.exports.roundSynergyMoney = roundSynergyMoney;
 // D-07/D-11: exposed so a test can assert this copy and
 // validators/workstream.js's own independent SYN_STAGES copy (plus the
 // client's third copy, read as text) all agree — same rationale as

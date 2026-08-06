@@ -364,3 +364,71 @@ test('synergy-cost (i): both new routes are registered — each returns 200, 400
     server.close();
   }
 });
+
+// WR-02: parseFloat('1e400') is Infinity (well within SynMoneyUnion's
+// 20-char string cap), and Math.round(Infinity * 10) / 10 stayed Infinity —
+// which JSON.stringify() silently serializes as `null`, corrupting the
+// stored figure with no 400/warning anywhere. isNaN() alone never caught
+// this, since Infinity is not NaN.
+test('synergy-cost (unit j): WR-02 — roundSynergyMoney rejects non-finite results (overflow strings/numbers) and returns 0, never Infinity', () => {
+  assert.strictEqual(app.roundSynergyMoney('1e400'), 0, 'an overflow string must round to 0, never Infinity');
+  assert.strictEqual(app.roundSynergyMoney(Infinity), 0, 'a direct Infinity input must round to 0');
+  assert.strictEqual(app.roundSynergyMoney(-Infinity), 0, 'a direct -Infinity input must round to 0 (also clamped non-negative)');
+  assert.strictEqual(app.roundSynergyMoney('12.345'), 12.3, 'an ordinary finite value must still round correctly');
+  assert.strictEqual(app.roundSynergyMoney('not-a-number'), 0, 'a non-numeric string must still round to 0 (pre-existing NaN contract)');
+});
+
+test('synergy-cost (http j): WR-02 — POST /api/synergies create with an overflow-string amountM (targetM/realizedM/runRateM/costPlannedM) stores 0, never `null` (Infinity would serialize as null over JSON)', async () => {
+  const token = await setupDeal('deal_syncostj');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    // runRateM is deliberately absent from the create-branch item literal
+    // (server.js only ever sets it via the dedicated generate-phasing route
+    // or the update branch below) — this test exercises exactly the fields
+    // create actually applies: targetM, realizedM, costPlannedM.
+    const createRes = await postJSON(base, '/api/synergies', token, {
+      title: 'Overflow on create', category: 'cost',
+      targetM: '1e400', realizedM: '1e400', costPlannedM: '1e400',
+    });
+    assert.strictEqual(createRes.status, 201);
+    const { initiative } = await createRes.json();
+    assert.strictEqual(initiative.targetM, 0, 'targetM must not corrupt to null');
+    assert.strictEqual(initiative.realizedM, 0, 'realizedM must not corrupt to null');
+    assert.strictEqual(initiative.costPlannedM, 0, 'costPlannedM must not corrupt to null');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
+test('synergy-cost (http k): WR-02 — POST /api/synergies update branch with an overflow-string runRateM (below committed, no reason needed) stores 0, never `null`; a cost-entries amountM overflow does the same', async () => {
+  const token = await setupDeal('deal_syncostk');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Overflow on update', category: 'cost' });
+    const { initiative } = await createRes.json();
+
+    // The base upsert route's own local `num` closure used to duplicate
+    // roundSynergyMoney()'s pre-fix buggy contract independently — patching
+    // the shared helper alone would NOT have closed this path.
+    const updateRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, runRateM: '1e400' });
+    assert.strictEqual(updateRes.status, 200);
+    const updateBody = await updateRes.json();
+    assert.strictEqual(updateBody.initiative.runRateM, 0, 'an overflow-string runRateM on the update branch must not corrupt to null');
+
+    const costRes = await postJSON(base, `/api/synergies/${initiative.id}/cost-entries`, token, { date: '2025-01-01', amountM: '1e400' });
+    assert.strictEqual(costRes.status, 200);
+    const costBody = await costRes.json();
+    const entry = costBody.initiative.costEntries[costBody.initiative.costEntries.length - 1];
+    assert.strictEqual(entry.amountM, 0, 'an overflow-string cost-entry amountM must not corrupt to null');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
