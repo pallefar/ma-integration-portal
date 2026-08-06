@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Synergy Value Capture
 status: planning
-stopped_at: Phase 5 context gathered — 23 decisions across 6 areas, ready to plan
-last_updated: "2026-08-06T03:35:30.404Z"
+stopped_at: Phase 5 UI-SPEC approved
+last_updated: "2026-08-06T04:04:38.662Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 5 discuss complete — 05-CONTEXT.md written, ready to plan
+last_activity_desc: Phase 5 UI-SPEC approved — ready to plan
 progress:
   total_phases: 7
   completed_phases: 4  # 1-4 executed; Phase 1 formal close deferred to release-cut (01-VERIFICATION.md still untracked)
@@ -180,6 +180,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T03:35:30.389Z
-Stopped at: Phase 5 context gathered — 23 decisions across 6 areas, ready to plan
-Resume file: .planning/phases/05-synergy-value-capture/05-CONTEXT.md
+Last session: 2026-08-06T04:04:38.648Z
+Stopped at: Phase 5 UI-SPEC approved
+Resume file: .planning/phases/05-synergy-value-capture/05-UI-SPEC.md
