@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Synergy Value Capture
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-08-06T06:31:02.845Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-08-06T07:04:40.020Z"
 last_activity: 2026-08-06
 last_activity_desc: Phase 5 execution started
 progress:
   total_phases: 7
   completed_phases: 4  # 1-4 executed; Phase 1 formal close deferred to release-cut (01-VERIFICATION.md still untracked)
   total_plans: 30
-  completed_plans: 23
+  completed_plans: 24
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 5 (Synergy Value Capture) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-08-06 — Phase 5 execution started
 
-Progress: [████████░░] 77%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -83,6 +83,7 @@ Progress: [████████░░] 77%
 | Phase 04 P09 | 18min | 2 tasks | 6 files |
 | Phase 04 P10 | 45min | 2 tasks | 6 files |
 | Phase 05 P01 | 16min | 3 tasks | 5 files |
+| Phase 05 P02 | 7min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -149,6 +150,9 @@ Recent decisions affecting current work:
 - [Phase ?]: D-04/D-06/D-25 implemented per 05-CONTEXT.md: phasing row identity is its month string; regeneration replaces item.phasing wholesale, never merges
 - [Phase ?]: Malformed :month is a route param the body schema can't see — the handler reuses isValidMonth() before the row-lookup 404 to satisfy the 400-not-404 acceptance criterion
 - [Phase ?]: Rule 1 fix: card-head .syn-realized-input handler now alerts on a rejected write (D-04 400 once phased) instead of failing silently
+- [Phase ?]: D-07/D-11 implemented as a one-way hard cutover per the Task 1 checkpoint decision (user selected 'proceed' 2026-08-06): no read-time compatibility shim anywhere, legacy values refused not coerced, all three independent code copies bound by an anti-drift test rather than review
+- [Phase ?]: data/ma-portal.db's -shm sidecar was ALSO chmod 444 (not just the .db file itself) — discovered only when the first migration attempt failed with 'attempt to write a readonly database' even after chmod u+w on the .db file alone
+- [Phase ?]: i18n migration only manufactures a translation for the two label keys whose meaning is unchanged (validated: untouched; captured: carried verbatim from the old syn.st_realized value); idea and committed get English text only, relying on transitions.js's fallback-to-English contract for DE/ZH/CS
 
 ### Pending Todos
 
@@ -184,6 +188,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T06:31:02.833Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-08-06T07:04:40.009Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
