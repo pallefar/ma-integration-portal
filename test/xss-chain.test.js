@@ -97,3 +97,146 @@ test('xss-chain (a6): escapeHtml neutralizes markup when treated as a pure funct
   assert.doesNotThrow(() => escapeHtml(undefined));
   assert.doesNotThrow(() => escapeHtml(null));
 });
+
+// ===========================================================================
+// Group (b) — Task 2 — F2: three-copy sanitizer separator-class widening
+// ===========================================================================
+
+const { sanitizeHtml } = require(SANITIZE_HTML_PATH);
+const pageLayoutJs = fs.readFileSync(PAGE_LAYOUT_PATH, 'utf8');
+const transitionsJs = fs.readFileSync(TRANSITIONS_PATH, 'utf8');
+
+// (b1) Neutralization — six variants of the slash-separated handler shape.
+// The forward slash is a valid HTML attribute separator; the pre-fix regex
+// required whitespace before the handler name, so `<img/onerror=...>` (and
+// its quoting/case/doubled-slash variants) passed through untouched.
+const BYPASS_VARIANTS = [
+  { label: 'unquoted, single slash', payload: '<img/onerror=alert(1)>' },
+  { label: 'double-quoted, single slash', payload: '<img/onerror="alert(1)">' },
+  { label: "single-quoted, single slash", payload: "<img/onerror='alert(1)'>" },
+  { label: 'unquoted, doubled slash', payload: '<img//onerror=alert(1)>' },
+  { label: 'mixed-case handler name, unquoted, single slash', payload: '<img/OnErRor=alert(1)>' },
+  { label: 'mixed-case handler name, double-quoted, single slash', payload: '<svg/OnLoad="alert(1)">' },
+];
+
+test('xss-chain (b1): lib/sanitizeHtml.js neutralizes all six slash-separated handler bypass variants', () => {
+  for (const { label, payload } of BYPASS_VARIANTS) {
+    const result = sanitizeHtml(payload);
+    assert.ok(!/on\w+\s*=/i.test(result), `bypass NOT neutralized (${label}): input=${JSON.stringify(payload)} output=${JSON.stringify(result)}`);
+  }
+});
+
+test('xss-chain (b1-whitespace): the pre-existing whitespace-separated shapes stay neutralized after widening the class', () => {
+  const whitespaceVariants = [
+    '<img src=x onerror=alert(1)>',
+    '<img src=x onerror="alert(1)">',
+    "<img src=x onerror='alert(1)'>",
+  ];
+  for (const payload of whitespaceVariants) {
+    const result = sanitizeHtml(payload);
+    assert.ok(!/on\w+\s*=/i.test(result), `pre-existing whitespace-separated bypass regressed: input=${JSON.stringify(payload)} output=${JSON.stringify(result)}`);
+  }
+});
+
+// (b2) Benign survival — an over-aggressive regex that eats a legitimate
+// attribute would be its own bug, so this half of the proof is not optional.
+const BENIGN_STRINGS = [
+  { label: 'paragraph with a class attribute', value: '<p class="foo">Hello</p>' },
+  { label: 'anchor with a rooted path href', value: '<a href="/playbook/hr-ma-guidebook.pdf">Guide</a>' },
+  { label: 'checkbox input with an id', value: '<input type="checkbox" id="chk-1">' },
+  { label: 'real shipped i18n string containing a strong tag (en/intexc.buddy_li1)', value: '<strong>Mentor Selection Criteria:</strong> High performers with at least 3 years at TE.' },
+];
+
+test('xss-chain (b2): ordinary markup round-trips byte-identical through the widened sanitizer', () => {
+  for (const { label, value } of BENIGN_STRINGS) {
+    const result = sanitizeHtml(value);
+    assert.strictEqual(result, value, `benign markup was altered (${label}): input=${JSON.stringify(value)} output=${JSON.stringify(result)}`);
+  }
+});
+
+// (b3) Corpus differential — every string value shipped in db.json (i18n
+// strings across en/de/zh/cs, plus the 3 page bodies) must sanitize
+// byte-identically before and after the widened separator class. The
+// FROZEN_PRE_FIX_SANITIZE function below is the exact pre-fix regex chain
+// (whitespace-only separator), inlined so this comparison never drifts if
+// lib/sanitizeHtml.js changes again later.
+function frozenPreFixSanitize(value) {
+  const s = typeof value === 'string' ? value : '';
+  return s
+    .replace(/<\/?(?:script|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/(=\s*["']?\s*)(?:javascript|vbscript)\s*:/gi, '$1');
+}
+
+test('xss-chain (b3): db.json corpus differential — zero divergences between the widened and pre-fix sanitizer across every shipped content value', () => {
+  const db = JSON.parse(fs.readFileSync(DB_JSON_PATH, 'utf8'));
+  const corpus = [];
+
+  const langs = Object.keys(db.i18n && db.i18n.strings ? db.i18n.strings : {});
+  for (const lang of langs) {
+    for (const [key, value] of Object.entries(db.i18n.strings[lang])) {
+      if (typeof value === 'string') corpus.push({ source: `i18n.${lang}.${key}`, value });
+    }
+  }
+  for (const page of db.pages || []) {
+    if (page.body && typeof page.body === 'object') {
+      for (const [lang, value] of Object.entries(page.body)) {
+        if (typeof value === 'string') corpus.push({ source: `pages.${page.slug}.body.${lang}`, value });
+      }
+    } else if (typeof page.body === 'string') {
+      corpus.push({ source: `pages.${page.slug}.body`, value: page.body });
+    }
+  }
+
+  assert.ok(corpus.length >= 3000, `corpus walk found only ${corpus.length} string values — expected at least 3,000; the walk may be silently empty`);
+
+  const divergences = [];
+  for (const { source, value } of corpus) {
+    const before = frozenPreFixSanitize(value);
+    const after = sanitizeHtml(value);
+    if (before !== after) divergences.push({ source, before, after });
+  }
+
+  assert.strictEqual(divergences.length, 0, `${divergences.length} shipped content value(s) diverged after widening the separator class (first: ${JSON.stringify(divergences[0])}) — this is a genuine content regression to inspect, not test noise`);
+});
+
+// (b4) Anti-drift — mirrors test/dd-findings.test.js's RAID_LEVELS three-copy
+// guard: extract the handler-strip replace lines from all three files and
+// assert they stay byte-identical (after trimming indentation) forever.
+function extractHandlerStripLines(sourceText) {
+  return sourceText
+    .split('\n')
+    .filter((line) => line.includes('.replace(') && line.includes('on\\w+'))
+    .map((line) => line.trim());
+}
+
+test('xss-chain (b4): all three sanitizer copies carry byte-identical handler-strip rules (anti-drift)', () => {
+  const fromSanitizeHtml = extractHandlerStripLines(fs.readFileSync(SANITIZE_HTML_PATH, 'utf8'));
+  const fromPageLayout = extractHandlerStripLines(pageLayoutJs);
+  const fromTransitions = extractHandlerStripLines(transitionsJs);
+
+  const namedSequences = {
+    'lib/sanitizeHtml.js': fromSanitizeHtml,
+    'public/js/page-layout.js': fromPageLayout,
+    'public/js/transitions.js': fromTransitions,
+  };
+  for (const [file, lines] of Object.entries(namedSequences)) {
+    assert.strictEqual(lines.length, 3, `expected exactly 3 handler-strip replace lines in ${file}, found ${lines.length}`);
+    for (const line of lines) {
+      assert.ok(line.includes('[\\s/]on\\w+'), `${file} handler-strip line does not carry the widened [\\s/] separator class: ${line}`);
+    }
+  }
+
+  assert.deepStrictEqual(
+    fromPageLayout,
+    fromSanitizeHtml,
+    'public/js/page-layout.js and lib/sanitizeHtml.js are independent hand-maintained copies of the same handler-strip rule that must be kept in sync by hand — they have drifted apart',
+  );
+  assert.deepStrictEqual(
+    fromTransitions,
+    fromSanitizeHtml,
+    'public/js/transitions.js and lib/sanitizeHtml.js are independent hand-maintained copies of the same handler-strip rule that must be kept in sync by hand — they have drifted apart',
+  );
+});

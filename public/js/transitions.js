@@ -3328,11 +3328,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // <input>…), so we can't blanket-escape them. Instead strip the dangerous bits
     // before innerHTML: script/iframe/object/embed tags, inline on*= handlers, and
     // javascript:/vbscript: URL schemes. (Defence-in-depth alongside the CSP.)
+    // The leading class covers both whitespace AND the forward slash as a valid
+    // HTML attribute separator (e.g. <img/onerror=...>) — a whitespace-only
+    // class lets that shape pass through untouched.
     const stripDangerousHtml = (s) => String(s == null ? '' : s)
       .replace(/<\/?(?:script|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '')
-      .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
-      .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
-      .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+      .replace(/[\s/]on\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/[\s/]on\w+\s*=\s*'[^']*'/gi, '')
+      .replace(/[\s/]on\w+\s*=\s*[^\s>]+/gi, '')
       .replace(/(=\s*["']?\s*)(?:javascript|vbscript)\s*:/gi, '$1');
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const v = t(el.getAttribute('data-i18n'), lang);

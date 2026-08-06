@@ -11,11 +11,14 @@
   // body) before innerHTML: script/iframe/object/embed tags, inline on*= handlers,
   // and javascript:/vbscript: schemes. Benign rich markup is preserved. Defence-in-
   // depth alongside the CSP; DOMPurify is the recommended robust upgrade.
+  // The leading class covers both whitespace AND the forward slash as a valid
+  // HTML attribute separator (e.g. <img/onerror=...>) — a whitespace-only
+  // class lets that shape pass through untouched.
   const sanitize = (s) => String(s == null ? '' : s)
     .replace(/<\/?(?:script|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '')
-    .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
-    .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/[\s/]on\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/[\s/]on\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/[\s/]on\w+\s*=\s*[^\s>]+/gi, '')
     .replace(/(=\s*["']?\s*)(?:javascript|vbscript)\s*:/gi, '$1');
   // L() resolves an i18n {en,de,..} value (or plain string) for the active language.
   const makeL = (lang) => (v) => (v && typeof v === 'object') ? (v[lang] || v.en || Object.values(v).find(Boolean) || '') : (v || '');
