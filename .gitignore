@@ -54,3 +54,15 @@ slidedeck interaction/
 
 # graphify build output (regenerable via `graphify update .`; persistent copy lives in .planning/graphs/)
 graphify-out/
+
+# Outbound email log (runtime-generated, real-deal correspondence — this repo
+# is PUBLIC): server.js's own /api/admin/download-zip exclusion list already
+# treats this directory as secret-bearing and writes real outbound comms
+# into it at runtime. Uses the CONTENTS-glob form (dir/*), not the bare
+# directory form — git cannot re-include a file whose parent directory is
+# itself excluded, so the bare form would silently untrack the one
+# pre-existing demo email below. That file is referenced by a communications
+# record in the committed data/demo.db and db.json, and the demonstration
+# showcase (CLAUDE.md Constraints) must keep working, so it stays tracked.
+public/sent_emails/*
+!public/sent_emails/comm_1783454326531.html
