@@ -180,7 +180,17 @@ Plans:
   4. A synergy initiative can be linked to the integration task(s) that deliver it.
   5. An initiative that hasn't been confirmed recently is visibly flagged as stale rather than presented as current.
 
-**Plans**: TBD
+**Plans:** 8 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Tracer: monthly phasing end-to-end (ramp auto-fill, derived rollup totals, arrived-month entry)
+- [ ] 05-02-PLAN.md — Stage-vocabulary hard cutover across three code copies and both committed databases
+- [ ] 05-03-PLAN.md — Stage gates, baseline history with a pinned deal case, and re-baseline authz
+- [ ] 05-04-PLAN.md — Cost-to-achieve and task linkage (server)
+- [ ] 05-05-PLAN.md — Staleness model, per-deal settings, and the server-computed rollup
+- [ ] 05-06-PLAN.md — Client: stage control and baseline history panel
+- [ ] 05-07-PLAN.md — Client: cost, task progress, staleness, rollup tiles, and the deal-home nudge
+- [ ] 05-08-PLAN.md — Hand-tuned demo seed and the two blocking human verification walks
 
 ### Phase 6: Org Design & Talent Retention
 
