@@ -1,7 +1,7 @@
 ---
 phase: 5
 slug: synergy-value-capture
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-08-06
@@ -98,6 +98,27 @@ app's warning language.
 
 Accent reserved for: the primary "Generate phasing rows" button, the active Synergy Tracker tab underline, and the
 `.syn-fill` rollup progress bar gradient start — identical scope to today, nothing new added to the 10% band.
+
+---
+
+## Visual Hierarchy (focal point)
+
+Checker Dimension-2 resolution — what draws the eye first, by context:
+
+- **Page level (Synergy Tracker tab):** the four rollup stat tiles are the primary visual anchor — the only
+  25.6px/800 numerals on the page. The card list reads second; the accent-colored "Generate phasing rows" CTA
+  appears only inside an expanded card, so it never competes with the rollup at page level.
+- **Collapsed card:** the stage pill (+ staleness badge when present) is the primary control and the first-read
+  element after the title; `.syn-money` stays the right-edge anchor exactly as today.
+- **Expanded card:** the monthly phasing grid is the primary content area — first sub-section in DOM order, the
+  only scrollable region, and holder of the sole accent-colored button. Baseline history and cost-to-achieve are
+  deliberately quieter (micro-label typography, no accent) so the grid keeps focus.
+
+Typography-FLAG disposition (checker Dimension 4): the recommendation to re-space 11.5/12.8/13.75px was **declined
+with reason** — all three sizes are lifted verbatim from the existing codebase (0.72/0.8/0.86rem appear 57 times in
+`style.css` and in `renderSynergy()` itself); re-spacing them would make this phase's components inconsistent with
+every neighboring surface. Hierarchy within the dense sub-components is carried by weight (600 vs 800), case and
+color, per the app's established convention, not by size steps.
 
 ---
 
@@ -272,23 +293,44 @@ Replace the current 2-figure (`Realized` / `Deal target`) `#syn-rollup` card wit
 > Empty-state and error-state COPY live in `## Copywriting Contract` above — this section covers
 > state coverage and REFERENCES those rows rather than restating the copy (de-dup).
 
-Applicable state considerations resolved: 11 covered, 2 backstop, 0 unresolved
+Probe run 2026-08-06 (engine `ui-consideration-probe.cjs`, 7 elements E1 stage control / E2 phasing grid /
+E3 baseline history / E4 cost list / E5 task progress / E6 staleness / E7 rollup — 49 applicable considerations).
+Disposition accepted by the user 2026-08-06. **Resolved: 33 covered, 2 backstop, 14 dismissed, 0 unresolved.**
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
-| empty | Phasing grid before ramp generation | ✅ covered | Renders the "No phasing rows yet" empty state (Copywriting Contract), not an empty grid shell |
-| empty | Cost-to-achieve list | ✅ covered | Renders "No actual costs logged yet." instead of an empty `.syn-cost-list` |
-| empty | Task linkage, zero linked tasks | ✅ covered | Renders "No tasks linked yet." instead of "0 of 0 tasks done" per Component Contract §5 |
-| empty | Rollup stale-split line, zero stale initiatives | ✅ covered | Sentence is omitted entirely rather than rendering "$0M unconfirmed" (Component Contract §7) |
-| zero-one-many | Baseline history, 1 entry (deal case only) vs many | ✅ covered | Deal case always pinned first regardless of count; list below it is empty until the first re-baseline (Component Contract §3) |
-| zero-one-many | Linked tasks, 1 vs many | ✅ covered | "N of M tasks done" phrasing scales to any N/M without pluralization edge cases (numeric, not grammatical) |
-| overflow | Baseline reason text, long strings | ✅ covered | Truncated to one line with full text in `title` attribute, matching the existing `.ex-src` truncation convention |
-| overflow | 36-row phasing grid, desktop | ✅ covered | Fixed `max-height:360px` scroll container with sticky header, not unbounded page growth (Component Contract §2) |
-| overflow | 36-row phasing grid, mobile | ✅ covered | 4-month default window + "Show all 36 months" expansion, stacked cards not horizontal scroll (Component Contract §2) |
-| long-text | Initiative title in collapsed card | ✅ covered | Unchanged from existing `.syn-title` behavior — no truncation today, none added; titles wrap (pre-existing, not a regression risk introduced by this phase) |
-| partial | Stage advancement mid-gate (e.g. `committed` attempted with no owner set) | ✅ covered | D-08 gate rejects server-side with a stated reason; surfaced via `window.alert(reason)` per Copywriting Contract, pill does not change |
-| populated | Card expand/collapse state surviving a full-list re-render triggered by an unrelated edit | 🧪 backstop | Requires `state.synExpanded` to persist across `renderSynergy()` calls (Component Contract §2) — needs an explicit interaction test (expand card A, edit realized-value on card B, assert card A still expanded); no static/visual check alone proves this |
-| loading | Initial `GET /api/synergies` fetch before first render | 🧪 backstop | No loading skeleton specified — existing `renderSynergy()` runs after `Promise.all` resolves with no interim state; acceptable given the existing pattern has none today, but the planner should confirm this is not a regression before shipping (page currently shows a blank tab pane, not a spinner, for well under a second on local SQLite) |
+| empty | E2 phasing grid before ramp generation | ✅ covered | Renders the "No phasing rows yet" empty state (Copywriting Contract), not an empty grid shell |
+| empty | E4 cost-to-achieve list | ✅ covered | Renders "No actual costs logged yet." instead of an empty `.syn-cost-list` |
+| empty | E5 task linkage, zero linked tasks | ✅ covered | Renders "No tasks linked yet." instead of "0 of 0 tasks done" per Component Contract §5 |
+| empty | E6 zero stale initiatives | ✅ covered | Badge absent, deal-home banner absent, rollup stale-split sentence omitted (Component Contract §6/§7) |
+| empty | E3 baseline history, brand-new initiative with no baseline yet | ✅ covered | *(authored by probe)* Section renders one empty-state line "No baseline yet — created with the first phased target"; the Deal-case v1 entry is stamped when the first phased target is generated |
+| empty | E7 rollup with zero initiatives | ✅ covered | *(authored by probe)* Tiles render $0.0M and the progress bar 0% — matches today's rollup behavior with an empty lane; stale sentence omitted |
+| empty | E1 stage control | ✖ dismissed | An initiative always has a stage (server defaults `idea` on create) — a stage-less pill is unreachable |
+| loading | E2/E7 initial `GET /api/synergies` fetch before first render | 🧪 backstop | No loading skeleton specified — existing `renderSynergy()` runs after `Promise.all` resolves with no interim state; matches today's pattern (blank tab pane well under a second on local SQLite). Planner should confirm not a regression; user declined upgrading to a skeleton requirement 2026-08-06 |
+| loading | E1/E3/E4/E5/E6 | ✖ dismissed | No independent async loads — all render from the single already-fetched synergies payload; the stage menu opens from local state |
+| error | E1 stage advance rejected (D-08 gate) | ✅ covered | Server's stated reason shown verbatim via `window.alert(reason)`; pill does not change (Copywriting Contract) |
+| error | E2 generate-rows / E3 re-baseline / E4 add-delete cost / E6 confirm-current write failures | ✅ covered | Same alert-with-reason error contract (Copywriting Contract) — every rejected write produces visible feedback, never silent |
+| error | E7 rollup when the fetch itself fails | ✅ covered | *(authored by probe)* Existing `.catch(function(){return []})` degrades to the empty render (zeros) — pre-existing pattern, unchanged by this phase |
+| populated | E1 pill + caret with current stage checkmarked · E2 36-row grid · E3 row anatomy · E4 row anatomy · E6 badge+tooltip · E7 four tiles | ✅ covered | Specified in Component Contract §1–§7 |
+| populated | E2 card expand/collapse state surviving a full-list re-render triggered by an unrelated edit | 🧪 backstop | Requires `state.synExpanded` to persist across `renderSynergy()` calls (Component Contract §2) — needs an explicit interaction test (expand card A, edit realized-value on card B, assert card A still expanded); no static/visual check alone proves this |
+| partial | E1 stage advancement mid-gate (e.g. `committed` attempted with no owner set) | ✅ covered | D-08 gate rejects server-side with a stated reason (see error rows); the partial state is the reason text itself |
+| partial | E2 grid rows with zero/edited mixed values | ✅ covered | Rows render whatever values exist — zero is a legitimate value, rows are individually editable (D-05) |
+| partial | E4 cost entry without optional note | ✅ covered | Row renders date + amount, note simply absent |
+| partial | E7 cost incurred with no realized value (negative net) | ✅ covered | Net benefit renders in destructive color — a real, expected early-deal state, not an error (Component Contract §7) |
+| partial | E3 baseline entry missing its reason · E6 threshold unset | ✖ dismissed | Unreachable: reason is schema-required (D-09/D-13); threshold always has the 30-day default (D-17) |
+| overflow | E2 36-row grid, desktop | ✅ covered | Fixed `max-height:360px` scroll container with sticky header (Component Contract §2) |
+| overflow | E2 36-row grid, mobile | ✅ covered | 4-month default window + "Show all 36 months" stacked-card expansion, no horizontal scroll (Component Contract §2) |
+| overflow | E3 baseline reason text | ✅ covered | One-line truncation with full text in `title`, matching the existing `.ex-src` convention |
+| overflow | E3/E4 lists at many entries | ✅ covered | *(authored by probe)* Inline growth accepted — realistic volumes are small (<10 baselines, <20 cost entries); Deal-case pinned row keeps orientation in a long baseline list |
+| overflow | E1 stage menu · E5 progress line · E6 badge · E7 tiles | ✖ dismissed | Fixed content: menu is always exactly 4 rows; progress text is short numeric; tiles wrap 2×2 on mobile via existing flex-wrap |
+| zero-one-many | E3 baseline history, 1 entry (deal case only) vs many | ✅ covered | Deal case always pinned first regardless of count; list below it is empty until the first re-baseline (§3) |
+| zero-one-many | E5 linked tasks 1 vs many | ✅ covered | "N of M tasks done" numeric phrasing scales without pluralization edge cases |
+| zero-one-many | E2 rows (horizon configurable, D-03) · E4 entries · E6 stale count in deal-home banner · E7 stale split | ✅ covered | Grid renders N rows as generated; cost list any N; nudge banner counts mine-scoped stale items like the DD nudge; stale sentence omitted at zero |
+| zero-one-many | E1 stages | ✖ dismissed | Fixed cardinality — always exactly 4 stages |
+| long-text | E3 baseline reason | ✅ covered | See overflow row — truncate + `title` |
+| long-text | E4 cost-entry note | ✅ covered | *(authored by probe)* Same one-line-truncate + `title` tooltip convention as baseline reasons |
+| long-text | Initiative title in collapsed card | ✅ covered | Unchanged from existing `.syn-title` wrap behavior — pre-existing, no regression introduced |
+| long-text | E1 stage labels · E2 numeric cells · E5 numeric line · E6 date tooltip | ✖ dismissed | Fixed vocabulary / numeric-only content — no free text can reach these surfaces |
 
 <!-- Status vocabulary (locked by probe-core projectTruths):
      ✅ covered   → a plain truth string lifted into must_haves.truths
@@ -328,11 +370,13 @@ this UI ships, each render as a **convincing, fully-populated card** — not a p
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+Verified by gsd-ui-checker 2026-08-06 — **UI-SPEC VERIFIED, 4 PASS / 2 FLAG (non-blocking), 0 BLOCK.**
 
-**Approval:** pending
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: FLAG → resolved (Visual Hierarchy section added post-check)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: FLAG → declined with reason (sizes are lifted verbatim from the existing codebase — 57 occurrences in `style.css`; re-spacing would break app-wide consistency; see Visual Hierarchy section)
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+
+**Approval:** APPROVED
