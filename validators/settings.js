@@ -94,7 +94,17 @@ const SettingsUpdateSchema = z.object({
   // write until now. Without both keys enumerated here, zod's object parse
   // silently strips them and the per-deal configurability D-03/D-17 promise
   // fails invisibly.
-  synergyStaleDays: z.union([z.number(), z.string().max(10)]).optional(),
+  // WR-03: capped at 365 days on the top end — an unbounded value had the
+  // IDENTICAL effect synergyStaleDays()'s own comment warns against for the
+  // near-zero direction (T-05-27): a huge configured value makes every
+  // initiative read as fresh forever, permanently suppressing SYN-05's
+  // governance signal. Deliberately NO floor added here (unlike CR-01's
+  // synergyHorizonYears bound) — the reader's own `configured > 0` check
+  // already handles the near-zero direction, and test/synergy-staleness.test.js
+  // legitimately relies on sub-1-day thresholds to make a just-created item
+  // read as stale without waiting real time. D-17's per-deal configurability
+  // (any positive value) is preserved — only the ceiling is new.
+  synergyStaleDays: z.union([z.number().max(365), z.string().max(10)]).optional(),
   // CR-01: bounded 1-15 years — an unbounded value let generatePhasingRows()
   // synchronously allocate horizonYears*12 rows on the request thread,
   // hanging/OOM-crashing the single-threaded process for every deal on the

@@ -315,6 +315,35 @@ test('synergy-staleness (j): a non-positive or non-numeric threshold falls back 
   assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 45 } }), 45, 'a valid positive threshold must be honored');
 });
 
+// WR-03: an unbounded synergyStaleDays had the IDENTICAL effect the reader's
+// own comment warns against for the near-zero direction (T-05-27) — a huge
+// configured value makes every initiative read as fresh forever, silently
+// suppressing SYN-05's governance signal. D-17's per-deal configurability is
+// preserved; only the ceiling is new.
+test('synergy-staleness (q): WR-03 — a huge configured threshold clamps to the 365-day ceiling at read time, never suppressing the staleness signal permanently', () => {
+  assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 999999999 } }), 365, 'a huge stored threshold must clamp to the 365-day ceiling');
+  assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 365 } }), 365, 'exactly the ceiling must pass through unchanged');
+  assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 364 } }), 364, 'just under the ceiling must pass through unchanged');
+});
+
+test('synergy-staleness (r): WR-03 — POST /api/settings with an out-of-range synergyStaleDays (e.g. 999999999) is refused with 400 by the schema, before any value can reach the settings singleton', async () => {
+  const token = await setupDeal('deal_synstalr');
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const res = await postJSON(base, '/api/settings', token, { synergyStaleDays: 999999999 });
+    assert.strictEqual(res.status, 400, 'an out-of-range synergyStaleDays must be refused by the schema, not silently accepted');
+
+    const validRes = await postJSON(base, '/api/settings', token, { synergyStaleDays: 90 });
+    assert.strictEqual(validRes.status, 200, 'an in-range synergyStaleDays must still be accepted');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, token);
+    server.close();
+  }
+});
+
 test('synergy-staleness (k): a configured short threshold on the deal changes the returned stale flags to match, not the 30-day default (D-17 configurability)', async () => {
   const token = await setupDeal('deal_synstalk');
   const server = app.listen(0);

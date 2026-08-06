@@ -3285,9 +3285,15 @@ function synergyCostFields(item) {
 // falls back to the default rather than producing a nonsensical verdict, or
 // (per T-05-27) letting a hostile value suppress the signal by making every
 // item permanently fresh.
+// WR-03: capped at 365 defensively, in addition to the schema bound in
+// validators/settings.js's SettingsUpdateSchema — this reader is the second
+// belt-and-braces layer (mirrors synergyHorizonYears()'s CR-01 fix), since a
+// value already stored before the schema bound shipped must not be able to
+// suppress the staleness signal permanently.
 function synergyStaleDays(db) {
   const configured = db.settings && db.settings.synergyStaleDays;
-  return typeof configured === 'number' && isFinite(configured) && configured > 0 ? configured : 30;
+  const n = typeof configured === 'number' && isFinite(configured) && configured > 0 ? configured : 30;
+  return Math.min(n, 365);
 }
 
 // SYN-05/D-16/D-17: an initiative's own confirmation clock, judged against a
