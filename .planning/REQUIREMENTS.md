@@ -136,6 +136,16 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | RPT-02 | Phase 7: IMO Reporting & Exports | Pending |
 | RPT-03 | Phase 7: IMO Reporting & Exports | Pending |
 | RPT-04 | Phase 7: IMO Reporting & Exports | Pending |
+| HOST-01 | — Deferred (shared-host milestone) | Deferred |
+| HOST-02 | — Deferred (shared-host milestone) | Deferred |
+| HOST-03 | — Deferred (shared-host milestone) | Deferred |
+| HARD-01 | — Deferred (later hardening) | Deferred |
+| HARD-02 | — Deferred (later hardening) | Deferred |
+| HARD-03 | — Deferred (later hardening) | Deferred |
+
+**Deferred requirements** are listed above so traceability stays complete: they are
+acknowledged, explicitly out of this milestone's roadmap (see the *Deferred* section),
+and carry no phase. They are NOT dropped work.
 
 **Coverage:**
 
@@ -145,4 +155,4 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 
 ---
 *Requirements defined: 2026-07-23*
-*Last updated: 2026-07-23 after roadmap creation — traceability populated, coverage count corrected to 32*
+*Last updated: 2026-08-06 — Phase 5 (SYN-01…05) closed; the 6 deferred post-milestone IDs (HOST-01…03, HARD-01…03) added to traceability so the table stops reading as if they were lost*

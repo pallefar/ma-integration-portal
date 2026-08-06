@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Mandatory Auth & Roles** - Promote `PORTAL_AUTH` to mandatory, with full route coverage and role enforcement (completed 2026-07-31)
 - [x] **Phase 3: Deal Isolation, Audit Log & Write Validation** - File-per-deal isolation from demo data, an audit trail on every write, and schema validation on every write (completed 2026-08-02)
 - [x] **Phase 4: Due Diligence Workspace** - New-deal setup wizard (guided onboarding incl. readiness assessments), DD request lists, findings register, and server-side clean-room access control (completed 2026-08-03)
-- [ ] **Phase 5: Synergy Value Capture** - Baseline, phasing, cost-to-achieve and confidence stage-gating on synergy initiatives
+- [x] **Phase 5: Synergy Value Capture** - Baseline, phasing, cost-to-achieve and confidence stage-gating on synergy initiatives (completed 2026-08-06)
 - [ ] **Phase 6: Org Design & Talent Retention** - Organisation structure, redundancy decisions, and a flight-risk register
 - [ ] **Phase 7: IMO Reporting & Exports** - CSV/JSON data export and a generated steering-committee pack
 
@@ -180,7 +180,7 @@ Plans:
   4. A synergy initiative can be linked to the integration task(s) that deliver it.
   5. An initiative that hasn't been confirmed recently is visibly flagged as stale rather than presented as current.
 
-**Plans:** 8/8 plans executed
+**Plans:** 8/8 plans complete
 
 Plans:
 **Wave 1**
@@ -253,6 +253,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
-| 5. Synergy Value Capture | 8/8 | In Progress|  |
+| 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |
