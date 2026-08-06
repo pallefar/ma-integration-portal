@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Synergy Value Capture
 status: executing
-stopped_at: Completed 05-03-PLAN.md
-last_updated: "2026-08-06T07:22:17.140Z"
+stopped_at: Completed 05-04-PLAN.md
+last_updated: "2026-08-06T07:32:41.293Z"
 last_activity: 2026-08-06
 last_activity_desc: Phase 5 execution started
 progress:
   total_phases: 7
   completed_phases: 4  # 1-4 executed; Phase 1 formal close deferred to release-cut (01-VERIFICATION.md still untracked)
   total_plans: 30
-  completed_plans: 25
+  completed_plans: 26
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 5 (Synergy Value Capture) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-08-06 — Phase 5 execution started
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 87%
 
 ## Performance Metrics
 
@@ -85,6 +85,7 @@ Progress: [████████░░] 83%
 | Phase 05 P01 | 16min | 3 tasks | 5 files |
 | Phase 05 P02 | 7min | 3 tasks | 6 files |
 | Phase 05 P03 | ~16min | 2 tasks | 3 files |
+| Phase 5 P4 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -156,6 +157,8 @@ Recent decisions affecting current work:
 - [Phase ?]: i18n migration only manufactures a translation for the two label keys whose meaning is unchanged (validated: untouched; captured: carried verbatim from the old syn.st_realized value); idea and committed get English text only, relying on transitions.js's fallback-to-English contract for DE/ZH/CS
 - [Phase ?]: [Phase 5 Plan 03] Base upsert's runRateM/curveShape were schema-accepted since Plan 01 but never applied by the update-branch handler — wired in as part of D-13's forced-re-baseline path (Rule 2), since D-13's own behavior block requires this path to exist
 - [Phase ?]: [Phase 5 Plan 03] D-15 re-baseline authz (isAdminOrIlRequest) deliberately excludes the X-Admin-Token break-glass path isAdminRequest() accepts — an unattributed token would defeat the governance meaning of a baseline record; role guard runs as the rebaseline handler's first statement, before the 404 lookup, proven by a four-identity 200/200/403/403 test with the identical payload
+- [Phase ?]: [Phase 5 Plan 04] isValidCalendarDate replicated locally in validators/workstream.js (validators/dd.js does not export it) mirroring the existing isValidMonth local-idiom convention
+- [Phase ?]: [Phase 5 Plan 04] Task 2's taskIds server/schema implementation landed inside Task 1's commit (both needed the identical validate-before-mutate restructuring of the same code region); Task 2's own commit is test-file-only
 
 ### Pending Todos
 
@@ -191,6 +194,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T07:22:17.128Z
-Stopped at: Completed 05-03-PLAN.md
+Last session: 2026-08-06T07:32:41.282Z
+Stopped at: Completed 05-04-PLAN.md
 Resume file: None

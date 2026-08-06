@@ -180,7 +180,7 @@ Plans:
   4. A synergy initiative can be linked to the integration task(s) that deliver it.
   5. An initiative that hasn't been confirmed recently is visibly flagged as stale rather than presented as current.
 
-**Plans:** 3/8 plans executed
+**Plans:** 4/8 plans executed
 
 Plans:
 **Wave 1**
@@ -197,7 +197,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 05-04-PLAN.md — Cost-to-achieve and task linkage (server)
+- [x] 05-04-PLAN.md — Cost-to-achieve and task linkage (server)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -253,6 +253,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 2. Mandatory Auth & Roles | 3/3 | Complete    | 2026-07-31 |
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
-| 5. Synergy Value Capture | 3/8 | In Progress|  |
+| 5. Synergy Value Capture | 4/8 | In Progress|  |
 | 6. Org Design & Talent Retention | 0/TBD | Not started | - |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |

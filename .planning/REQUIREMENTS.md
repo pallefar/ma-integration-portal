@@ -46,9 +46,9 @@
 ### Synergy Value Capture
 
 - [x] **SYN-01**: A synergy initiative carries a baseline, a phased/ramped target over time, and realized value tracked against that phasing (not a single target-vs-realized pair)
-- [ ] **SYN-02**: A synergy initiative records its cost-to-achieve alongside its target value
+- [x] **SYN-02**: A synergy initiative records its cost-to-achieve alongside its target value
 - [x] **SYN-03**: A synergy initiative moves through confidence stage-gates (idea → validated → committed → captured), with baseline history preserved when values change
-- [ ] **SYN-04**: A synergy initiative can be linked to the integration task(s) that deliver it
+- [x] **SYN-04**: A synergy initiative can be linked to the integration task(s) that deliver it
 - [ ] **SYN-05**: Synergy status carries a staleness signal so an un-updated initiative is visibly flagged rather than silently trusted
 
 ### IMO Reporting & Exports
@@ -125,9 +125,9 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | DD-05 | Phase 4: Due Diligence Workspace | Complete |
 | WIZ-01 | Phase 4: Due Diligence Workspace | Complete |
 | SYN-01 | Phase 5: Synergy Value Capture | Complete |
-| SYN-02 | Phase 5: Synergy Value Capture | Pending |
+| SYN-02 | Phase 5: Synergy Value Capture | Complete |
 | SYN-03 | Phase 5: Synergy Value Capture | Complete |
-| SYN-04 | Phase 5: Synergy Value Capture | Pending |
+| SYN-04 | Phase 5: Synergy Value Capture | Complete |
 | SYN-05 | Phase 5: Synergy Value Capture | Pending |
 | ORG-01 | Phase 6: Org Design & Talent Retention | Pending |
 | ORG-02 | Phase 6: Org Design & Talent Retention | Pending |
