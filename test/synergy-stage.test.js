@@ -168,7 +168,7 @@ test('synergy-stage (e): POST /api/synergies carrying a retired legacy stage val
   }
 });
 
-test('synergy-stage (f): an existing initiative can be advanced through the update branch by writing `stage`, and a retired legacy value is refused there too', async () => {
+test('synergy-stage (f): T-05-13 — POST /api/synergies carrying a `stage` key on the update branch is refused with 400 and the stored stage is unchanged; the dedicated stage route has no bypass', async () => {
   const deal = freshDeal('deal_synsf');
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
@@ -185,19 +185,236 @@ test('synergy-stage (f): an existing initiative can be advanced through the upda
     const { initiative } = await createRes.json();
     assert.strictEqual(initiative.stage, 'idea');
 
-    const advanceRes = await fetch(`${base}/api/synergies`, {
+    const bypassRes = await fetch(`${base}/api/synergies`, {
       method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: initiative.id, stage: 'validated' }),
     });
-    assert.strictEqual(advanceRes.status, 200);
-    const advanced = await advanceRes.json();
-    assert.strictEqual(advanced.initiative.stage, 'validated');
+    assert.strictEqual(bypassRes.status, 400, 'a valid stage value on the base upsert update branch must still be refused — no bypass route');
 
-    const legacyRes = await fetch(`${base}/api/synergies`, {
-      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: initiative.id, stage: 'planned' }),
-    });
-    assert.strictEqual(legacyRes.status, 400, 'an update carrying a retired legacy stage value must also be refused, not coerced');
+    const listRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const list = await listRes.json();
+    const stored = list.find((s) => s.id === initiative.id);
+    assert.strictEqual(stored.stage, 'idea', 'the stored stage must be unchanged after the refused bypass attempt');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+// ============================================================= Plan 03 ==
+// Task 1: D-08 hard stage gates, D-09 reasoned backward movement.
+// ============================================================================
+
+// Small file-local helper (NOT extracted to a shared module — matches this
+// file's own established convention above) to cut boilerplate across the
+// stage-gate tests below, which each need several sequential POSTs.
+function postJSON(base, path, token, body) {
+  return fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+}
+
+test('synergy-stage-gate (a): advancing to committed with an owner and a phased target (run-rate + start month) succeeds; advancing to captured with realized value in an arrived month succeeds', async () => {
+  const deal = freshDeal('deal_synga');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Ramp me', category: 'cost', owner: 'Karen Owner' });
+    const { initiative } = await createRes.json();
+
+    const phaseRes = await postJSON(base, `/api/synergies/${initiative.id}/generate-phasing`, karenToken, { runRateM: 2, startMonth: '2020-01', curveShape: 'linear' });
+    assert.strictEqual(phaseRes.status, 200);
+
+    const toValidated = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'validated' });
+    assert.strictEqual(toValidated.status, 200);
+
+    const toCommitted = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'committed' });
+    assert.strictEqual(toCommitted.status, 200, 'owner + run-rate + start month must satisfy the committed gate');
+
+    const realizedRes = await postJSON(base, `/api/synergies/${initiative.id}/phasing/2020-01`, karenToken, { realizedM: 1 });
+    assert.strictEqual(realizedRes.status, 200);
+
+    const toCaptured = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'captured' });
+    assert.strictEqual(toCaptured.status, 200, 'realized value in an arrived month must satisfy the captured gate');
+    const capturedBody = await toCaptured.json();
+    assert.strictEqual(capturedBody.initiative.stage, 'captured');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-stage-gate (b): advancing to committed with an empty owner is refused with 400 naming the missing owner, and the persisted stage (read back via GET) is unchanged', async () => {
+  const deal = freshDeal('deal_syngb');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'No owner', category: 'cost' });
+    const { initiative } = await createRes.json();
+    assert.strictEqual(initiative.owner, '');
+
+    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'committed' });
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.match(body.error, /owner/i, 'the refusal reason must name the missing owner');
+
+    const listRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const list = await listRes.json();
+    assert.strictEqual(list.find((s) => s.id === initiative.id).stage, 'idea', 'a refused advance must leave the persisted stage unchanged');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-stage-gate (c): advancing to committed with an owner but no run-rate/start month is refused with 400 naming the missing phased target', async () => {
+  const deal = freshDeal('deal_syngc');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Owner only', category: 'cost', owner: 'Karen Owner' });
+    const { initiative } = await createRes.json();
+
+    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'committed' });
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.match(body.error, /phased target/i, 'the refusal reason must name the missing phased target');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-stage-gate (d): advancing to captured with zero realized value anywhere is refused with 400', async () => {
+  const deal = freshDeal('deal_syngd');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Zero realized', category: 'cost', owner: 'Karen Owner' });
+    const { initiative } = await createRes.json();
+    await postJSON(base, `/api/synergies/${initiative.id}/generate-phasing`, karenToken, { runRateM: 2, startMonth: '2020-01', curveShape: 'linear' });
+    await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'committed' });
+
+    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'captured' });
+    assert.strictEqual(res.status, 400);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-stage-gate (e): defence-in-depth — stageGateFailure() refuses captured when the only non-zero realized value sits in a future month (unreachable via the normal write path, asserted directly against the exported pure function)', () => {
+  const futureMonth = new Date(Date.now() + 1000 * 60 * 60 * 24 * 400).toISOString().slice(0, 7); // > 1 year out
+  const item = {
+    stage: 'committed', owner: 'Karen Owner', runRateM: 2, startMonth: '2020-01',
+    phasing: [{ month: futureMonth, targetM: 1, realizedM: 5 }],
+  };
+  const failure = app.stageGateFailure(item, 'captured');
+  assert.ok(failure, 'a future-month-only realized value must not satisfy the captured gate');
+});
+
+test('synergy-stage-gate (f): moving backward requires a non-empty reason — no reason and a whitespace-only reason both 400 with no baseline entry appended; a real reason succeeds and appends one carrying the reason and the pre-change stage', async () => {
+  const deal = freshDeal('deal_syngf');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Demote me', category: 'cost' });
+    const { initiative } = await createRes.json();
+    await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'validated' });
+
+    const noReasonRes = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'idea' });
+    assert.strictEqual(noReasonRes.status, 400);
+
+    const whitespaceRes = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'idea', reason: '   ' });
+    assert.strictEqual(whitespaceRes.status, 400, 'a whitespace-only reason must be refused exactly like an empty one');
+
+    const afterRefusalsRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const afterRefusals = await afterRefusalsRes.json();
+    const storedAfterRefusals = afterRefusals.find((s) => s.id === initiative.id);
+    assert.strictEqual(storedAfterRefusals.stage, 'validated', 'a refused demotion must leave the persisted stage unchanged');
+    assert.strictEqual((storedAfterRefusals.baselines || []).length, 0, 'no refused demotion may append a baseline entry');
+
+    const realReasonRes = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'idea', reason: 'De-scoped pending re-review' });
+    assert.strictEqual(realReasonRes.status, 200);
+    const demoted = await realReasonRes.json();
+    assert.strictEqual(demoted.initiative.stage, 'idea');
+    assert.strictEqual(demoted.initiative.baselines.length, 1);
+    assert.strictEqual(demoted.initiative.baselines[0].reason, 'De-scoped pending re-review');
+    assert.strictEqual(demoted.initiative.baselines[0].stage, 'validated', 'the baseline entry must carry the PRE-CHANGE stage');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-stage-gate (g): requesting the stage an initiative already holds is a 200 no-op — no state change, no baseline entry, no lastConfirmedAt stamp', async () => {
+  const deal = freshDeal('deal_syngg');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Same stage', category: 'cost' });
+    const { initiative } = await createRes.json();
+    assert.strictEqual(initiative.lastConfirmedAt, undefined);
+
+    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'idea' });
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.initiative.stage, 'idea');
+    assert.strictEqual((body.initiative.baselines || []).length, 0);
+    assert.strictEqual(body.initiative.lastConfirmedAt, undefined, 'a same-stage no-op must not stamp lastConfirmedAt');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('synergy-stage-gate (h): a targetStage outside the four-value vocabulary is refused with 400 by the schema', async () => {
+  const deal = freshDeal('deal_syngh');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Bad target', category: 'cost' });
+    const { initiative } = await createRes.json();
+
+    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, karenToken, { targetStage: 'realized' });
+    assert.strictEqual(res.status, 400);
   } finally {
     sessionsDb.deleteSession(runtimeConn, karenToken);
     server.close();

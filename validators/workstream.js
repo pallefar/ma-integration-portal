@@ -205,6 +205,19 @@ registerSchema('POST', '/api/synergies/:id/generate-phasing', GeneratePhasingSch
 // same edit as the route (server.js) is what keeps the route from 500ing.
 registerSchema('POST', '/api/synergies/:id/phasing/:month', PhasingMonthSchema);
 
+// D-08/D-09: the dedicated stage-move route's body — targetStage is the ONE
+// required field (against the same SYN_STAGES vocabulary above, so an
+// out-of-enum target 400s at the schema layer before the handler's own
+// stageGateFailure() ever runs); reason is optional at the schema layer
+// because it is only REQUIRED for a backward move — that conditional
+// requirement is server.js's own job (it knows the current vs. target
+// ordinal), not something a shape-only schema can express.
+const StageChangeSchema = z.object({
+  targetStage: z.enum(SYN_STAGES),
+  reason: z.string().trim().max(TEXT_MAX).optional(),
+});
+registerSchema('POST', '/api/synergies/:id/stage', StageChangeSchema);
+
 // ---------------------------------------------------------------------------
 // RAID entries — upsert (POST-create-only route; no id-present update path
 // exists for RAID per server.js — kept consistent with the other three
@@ -286,4 +299,5 @@ module.exports = {
   PhasingRowSchema,
   GeneratePhasingSchema,
   PhasingMonthSchema,
+  StageChangeSchema,
 };

@@ -3127,6 +3127,40 @@ function monthHasArrived(month) {
   return month <= new Date().toISOString().slice(0, 7);
 }
 
+// D-08: ordinal lookup DERIVED from SYN_STAGES — never a fifth hand-written
+// copy of the vocabulary. { idea: 0, validated: 1, committed: 2, captured: 3 }.
+const STAGE_ORDER = SYN_STAGES.reduce((acc, stage, i) => { acc[stage] = i; return acc; }, {});
+
+// D-08: minimal hard gates, enforced server-side, with a stated rejection
+// reason. Because the gates are cumulative confidence levels, a jump
+// straight to a later stage (e.g. idea -> captured) must satisfy EVERY gate
+// between the current ordinal and the target ordinal, not only the target's
+// own — this is why the loop below walks every intervening stage rather
+// than switching on targetStage alone. Returns the user-facing reason string
+// (this is what the client alerts verbatim) when blocked, null when allowed.
+function stageGateFailure(item, targetStage) {
+  const fromOrdinal = STAGE_ORDER[item.stage];
+  const toOrdinal = STAGE_ORDER[targetStage];
+  for (let ord = fromOrdinal + 1; ord <= toOrdinal; ord++) {
+    const stage = SYN_STAGES[ord];
+    if (stage === 'committed') {
+      const owner = String(item.owner || '').trim();
+      if (!owner) return 'Advancing to committed requires an owner to be set.';
+      const hasPhasedTarget = (item.runRateM || 0) > 0 && !!item.startMonth;
+      if (!hasPhasedTarget) return 'Advancing to committed requires a phased target — a run-rate and a start month.';
+    }
+    if (stage === 'captured') {
+      // D-06/D-08: realized value counted ONLY from months passing
+      // monthHasArrived() — reusing the one arrival implementation rather
+      // than a second that could disagree.
+      const rows = Array.isArray(item.phasing) ? item.phasing : [];
+      const hasArrivedRealizedValue = rows.some((row) => (row.realizedM || 0) > 0 && monthHasArrived(row.month));
+      if (!hasArrivedRealizedValue) return 'Advancing to captured requires realized value recorded in at least one arrived month.';
+    }
+  }
+  return null;
+}
+
 // SYN-01/D-04: targetM/realizedM become the derived rollup of an
 // initiative's phasing rows once any exist; an initiative with zero rows
 // keeps today's independently-writable pair, passed through unchanged.
@@ -3172,7 +3206,13 @@ app.post('/api/synergies', (req, res) => {
     if (b.category !== undefined) item.category = b.category === 'cost' ? 'cost' : 'revenue';
     if (b.targetM !== undefined) item.targetM = num(b.targetM);
     if (b.realizedM !== undefined) item.realizedM = num(b.realizedM);
-    if (b.stage !== undefined) item.stage = b.stage;
+    // D-08/T-05-13: the stage gate has no bypass — a stage change must go
+    // through the dedicated POST /api/synergies/:id/stage route, which alone
+    // evaluates stageGateFailure() and appends a reasoned demotion baseline
+    // (D-09). No other field on this generic edit may set the stage.
+    if (b.stage !== undefined) {
+      return res.status(400).json({ error: 'Stage changes must go through POST /api/synergies/:id/stage.' });
+    }
     writeDb(db);
     return res.json({ success: true, initiative: item });
   }
@@ -3270,6 +3310,68 @@ app.post('/api/synergies/:id/phasing/:month', (req, res) => {
   item.targetM = rollup.targetM;
   item.realizedM = rollup.realizedM;
 
+  writeDb(db);
+  res.json({ success: true, initiative: item });
+});
+
+// SYN-03/D-08/D-09: the ONLY route that may move an initiative's stage —
+// the base upsert refuses a `stage` key outright (above), so this gate has
+// no bypass. A same-stage request is a no-op 200 (no write, no baseline
+// entry). A forward move runs stageGateFailure() and 400s with its exact
+// reason on a block (this is the string the client alerts verbatim). A
+// backward move (de-scoping) requires a non-empty trimmed reason (D-09) and
+// records it in the initiative's baseline history alongside the pre-change
+// stage.
+app.post('/api/synergies/:id/stage', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+
+  const targetStage = b.targetStage;
+  const reason = String(b.reason || '').trim();
+  const currentOrdinal = STAGE_ORDER[item.stage];
+  const targetOrdinal = STAGE_ORDER[targetStage];
+
+  if (targetOrdinal === currentOrdinal) {
+    return res.json({ success: true, initiative: item });
+  }
+
+  if (targetOrdinal > currentOrdinal) {
+    const failure = stageGateFailure(item, targetStage);
+    if (failure) return res.status(400).json({ error: failure });
+    item.stage = targetStage;
+  } else {
+    if (!reason) {
+      return res.status(400).json({ error: 'A reason is required to move an initiative backward to an earlier stage.' });
+    }
+    // D-09/D-12: record the pre-change stage and the reason in the
+    // initiative's baseline history before applying the demotion. This
+    // inline shape is generalized into pushBaseline() by the next task
+    // (D-12/D-13/D-14) — the version-derivation and deep-copy rules already
+    // match that shape exactly so the later refactor is behavior-neutral.
+    item.baselines = Array.isArray(item.baselines) ? item.baselines : [];
+    const maxVersion = item.baselines.reduce((max, entry) => Math.max(max, entry.version || 0), 0);
+    item.baselines.push({
+      id: newId('bl'),
+      version: maxVersion + 1,
+      at: new Date().toISOString(),
+      by: req.portalUser.username,
+      stage: item.stage,
+      runRateM: item.runRateM,
+      startMonth: item.startMonth,
+      curveShape: item.curveShape,
+      targetCurve: (Array.isArray(item.phasing) ? item.phasing : []).map((row) => ({ month: row.month, targetM: row.targetM })),
+      reason,
+    });
+    item.stage = targetStage;
+  }
+
+  // D-16: a stage change is a real value change — stamp lastConfirmedAt here
+  // so no stage change can leave the confirmation clock behind. Plan 05 owns
+  // the staleness READER; this write side is stamped now regardless.
+  item.lastConfirmedAt = new Date().toISOString();
   writeDb(db);
   res.json({ success: true, initiative: item });
 });
@@ -4792,3 +4894,8 @@ module.exports.RAMP_CURVES = RAMP_CURVES;
 // client's third copy, read as text) all agree — same rationale as
 // RAID_LEVELS above.
 module.exports.SYN_STAGES = SYN_STAGES;
+// D-08: exposed for the same pure-function unit-check rationale — a test can
+// assert stageGateFailure()'s reasons directly against a constructed
+// initiative object, without booting the HTTP server for every gate case.
+module.exports.STAGE_ORDER = STAGE_ORDER;
+module.exports.stageGateFailure = stageGateFailure;
