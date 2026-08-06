@@ -3036,7 +3036,7 @@ app.get('/api/checklist-templates', (req, res) => {
 
 // =====================================================================
 // Synergy tracker — initiatives with $M targets vs realized, lifecycle
-// identified → validated → planned → executing → realized.
+// idea → validated → committed → captured (D-07).
 // =====================================================================
 function synergyLane(db) {
   const isCustom = db.settings && db.settings.demoMode === false;
@@ -3044,7 +3044,16 @@ function synergyLane(db) {
   db.synergyInitiatives = db.synergyInitiatives || [];
   return db.synergyInitiatives;
 }
-const SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
+// D-07/D-11: four ordered confidence stages — an INDEPENDENT COPY of
+// validators/workstream.js's own SYN_STAGES and public/js/execution.js's
+// own SYN_STAGES, mirroring the RAID_LEVELS/D-26 lockstep-copy convention
+// (validators/workstream.js:139-147 below). All THREE MUST move together;
+// a partial edit is this repository's documented repeat failure mode. This
+// is a one-way cutover (D-07/D-11): the retired five-value vocabulary
+// (identified/validated/planned/executing/realized) is refused, never
+// coerced — enforced by test/synergy-stage.test.js's cross-file anti-drift
+// assertion, never by review alone.
+const SYN_STAGES = ['idea', 'validated', 'committed', 'captured'];
 
 // SYN-01/D-05/D-24: fixed year-end cumulative-attainment checkpoints per
 // curve shape — cost back-loads savings validation (30/70/100), revenue
@@ -3163,7 +3172,7 @@ app.post('/api/synergies', (req, res) => {
     if (b.category !== undefined) item.category = b.category === 'cost' ? 'cost' : 'revenue';
     if (b.targetM !== undefined) item.targetM = num(b.targetM);
     if (b.realizedM !== undefined) item.realizedM = num(b.realizedM);
-    if (b.status !== undefined) item.status = b.status;
+    if (b.stage !== undefined) item.stage = b.stage;
     writeDb(db);
     return res.json({ success: true, initiative: item });
   }
@@ -3178,7 +3187,7 @@ app.post('/api/synergies', (req, res) => {
     realizedM: num(b.realizedM),
     owner: String(b.owner || '').slice(0, 120),
     workstreamId: String(b.workstreamId || 'ws_imo').slice(0, 60),
-    status: SYN_STATUSES.includes(b.status) ? b.status : 'identified',
+    stage: SYN_STAGES.includes(b.stage) ? b.stage : SYN_STAGES[0],
     notes: String(b.notes || '').slice(0, 600),
     createdAt: new Date().toISOString()
   };
@@ -4778,3 +4787,8 @@ module.exports.generatePhasingRows = generatePhasingRows;
 module.exports.monthHasArrived = monthHasArrived;
 module.exports.synergyRollupFields = synergyRollupFields;
 module.exports.RAMP_CURVES = RAMP_CURVES;
+// D-07/D-11: exposed so a test can assert this copy and
+// validators/workstream.js's own independent SYN_STAGES copy (plus the
+// client's third copy, read as text) all agree — same rationale as
+// RAID_LEVELS above.
+module.exports.SYN_STAGES = SYN_STAGES;

@@ -109,9 +109,21 @@ registerSchema('POST', '/api/integration-tasks/from-remediation', FromRemediatio
 
 // ---------------------------------------------------------------------------
 // Synergy initiatives — upsert by id, title required (create) / enum-checked
-// status (update), same shape-preserving rationale as tasks above.
+// stage (update), same shape-preserving rationale as tasks above.
 // ---------------------------------------------------------------------------
-const SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
+// D-07/D-11: four ordered confidence stages — an INDEPENDENT COPY of
+// server.js's own SYN_STAGES (the synergy route handlers' create-default and
+// update-branch guard) and public/js/execution.js's own SYN_STAGES, mirroring
+// the RAID_LEVELS/D-26 lockstep-copy convention below. The three MUST move
+// together: a partial change here without the matching server.js/client edit
+// would let this schema disagree with the handler about what a valid stage
+// is. One-way cutover (D-07/D-11): the retired five-value vocabulary
+// (identified/validated/planned/executing/realized) is refused by
+// z.enum(SYN_STAGES) below, never coerced — no read-time compatibility shim
+// anywhere. Do NOT import server.js's array — the independent-copy
+// convention is deliberate and test/synergy-stage.test.js's anti-drift
+// assertion is what binds all three.
+const SYN_STAGES = ['idea', 'validated', 'committed', 'captured'];
 
 // SYN-01/D-24: month-shape validator mirroring validators/dd.js's
 // isValidCalendarDate .refine() idiom — a phasing row's identity is its
@@ -165,7 +177,7 @@ const SynergyUpsertSchema = z.object({
   realizedM: SynMoneyUnion.optional(),
   owner: z.string().trim().max(NAME_MAX).optional(),
   workstreamId: z.string().trim().max(60).optional(),
-  status: z.enum(SYN_STATUSES).optional(),
+  stage: z.enum(SYN_STAGES).optional(),
   notes: z.string().trim().max(TEXT_MAX).optional(),
   // SYN-01/D-01: the ramp inputs, also stamped by the dedicated
   // generate-phasing route — accepted here too since the base upsert schema
@@ -264,6 +276,7 @@ module.exports = {
   InstantiateTasksSchema,
   FromRemediationSchema,
   SynergyUpsertSchema,
+  SYN_STAGES,
   RaidUpsertSchema,
   ModuleUpsertSchema,
   ReorderWidgetsSchema,

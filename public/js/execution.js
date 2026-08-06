@@ -33,9 +33,21 @@
   // .syn-show-all-link click handler — same never-reset-wholesale rule.
   var state = { tasks: [], template: null, wsFilter: null, synergies: [], raid: [], raidFilter: null, synExpanded: {}, synShowAll: {} };
 
-  var SYN_STATUSES = ['identified', 'validated', 'planned', 'executing', 'realized'];
-  var SYN_LABELS = { identified: 'Identified', validated: 'Validated', planned: 'Planned', executing: 'Executing', realized: 'Realized' };
-  var SYN_COLORS = { identified: '#8a8f92', validated: '#475569', planned: '#C77700', executing: '#167987', realized: '#3f7a37' };
+  // D-07/D-11: four ordered confidence stages — an INDEPENDENT COPY of
+  // server.js's own SYN_STAGES and validators/workstream.js's own SYN_STAGES,
+  // mirroring the RAID_LEVELS/D-26 lockstep-copy convention used elsewhere in
+  // this codebase. All THREE MUST move together — a partial edit here is
+  // this repository's documented repeat failure mode; test/synergy-stage
+  // .test.js's cross-file anti-drift assertion is what binds them, not
+  // review alone. One-way cutover (D-07/D-11): the retired five-value
+  // vocabulary never re-enters this file.
+  var SYN_STAGES = ['idea', 'validated', 'committed', 'captured'];
+  // UI-SPEC Copywriting Contract: the four stage label keys' English text.
+  var SYN_LABELS = { idea: 'Idea', validated: 'Validated', committed: 'Committed', captured: 'Captured' };
+  // UI-SPEC stage-badge palette: grey/slate/amber/green — all four hex
+  // values already present in this file's retired SYN_COLORS, so no new
+  // colour enters the codebase.
+  var SYN_COLORS = { idea: '#8a8f92', validated: '#475569', committed: '#C77700', captured: '#3f7a37' };
   // D-05: the three named ramp shapes, verbatim per UI-SPEC's Copywriting
   // Contract — labels state each curve's checkpoints so the choice is
   // self-explanatory without a separate legend.
@@ -342,7 +354,7 @@
         + '<div class="syn-head"><div style="flex:1;min-width:0;"><div class="syn-title">' + esc(s.title) + '</div>'
         + '<div class="syn-meta">'
         + '<span class="syn-cat ' + esc(s.category) + '" data-i18n="syn.cat_' + esc(s.category) + '">' + (s.category === 'cost' ? 'Cost' : 'Revenue') + '</span>'
-        + '<button class="ex-status syn-status" style="background:' + (SYN_COLORS[s.status] || '#8a8f92') + ';min-width:96px;" data-i18n="syn.st_' + esc(s.status) + '">' + (SYN_LABELS[s.status] || s.status) + '</button>'
+        + '<button class="ex-status syn-status" style="background:' + (SYN_COLORS[s.stage] || '#8a8f92') + ';min-width:96px;" data-i18n="syn.st_' + esc(s.stage) + '">' + (SYN_LABELS[s.stage] || s.stage) + '</button>'
         + (wsDef ? '<span>' + (wsDef.icon || '') + ' <span data-i18n="' + esc(wsDef.labelKey || '') + '">' + esc(wsDef.label) + '</span></span>' : '')
         + (s.owner ? '<span>👤 ' + esc(s.owner) + '</span>' : '')
         + '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: <input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (s.realizedM || 0) + '"></span>'
@@ -361,10 +373,10 @@
       card.querySelector('.syn-status').addEventListener('click', function () {
         var item = state.synergies.find(function (s) { return s.id === id; });
         if (!item) return;
-        var next = SYN_STATUSES[(SYN_STATUSES.indexOf(item.status) + 1) % SYN_STATUSES.length];
-        fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, status: next }) })
+        var next = SYN_STAGES[(SYN_STAGES.indexOf(item.stage) + 1) % SYN_STAGES.length];
+        fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, stage: next }) })
           .then(function (r) { return r.json(); })
-          .then(function (res) { if (res && res.success) { item.status = next; renderSynergy(); applyI18n(); } });
+          .then(function (res) { if (res && res.success) { item.stage = next; renderSynergy(); applyI18n(); } });
       });
       // SYN-01/UI-SPEC §2: writes state.synExpanded — the ONLY place in
       // this file that assigns to it. Toggling re-renders the whole list,
