@@ -51,3 +51,6 @@ HR M&A Guidebook_03.2026.pptx
 
 # Source slide deck (served copies committed under public/overview-deck/)
 slidedeck interaction/
+
+# graphify build output (regenerable via `graphify update .`; persistent copy lives in .planning/graphs/)
+graphify-out/
