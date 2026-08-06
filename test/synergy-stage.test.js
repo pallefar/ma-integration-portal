@@ -850,3 +850,64 @@ test('synergy-stage-ui (g): the stage menu adds and removes both the Escape-key 
     'both removeEventListener calls must be inside the cleanup function that closeSynStageMenu() invokes');
 });
 
+test('synergy-stage-ui (h): renderBaselines() selects the version-1 baseline entry explicitly and renders it before the remaining entries, rather than relying on array order', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function renderBaselines\(item\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(fnMatch, 'renderBaselines must be defined');
+  const body = fnMatch[0];
+  assert.match(body, /baselines\.find\(function \(b\) \{ return b\.version === 1; \}\);/, 'the deal case must be located by an explicit version === 1 lookup, never assumed to be array index 0');
+  assert.match(body, /\[dealCase\]\.concat\(rest\)/, 'the deal case must be concatenated FIRST, ahead of the remaining newest-first-sorted entries');
+});
+
+test('synergy-stage-ui (i): the re-baseline button is emitted only inside a window.__portalUser role conditional, and no disabled-attribute variant is emitted for any other role', () => {
+  const src = readClientSrc();
+  assert.match(src, /window\.__portalUser && \(window\.__portalUser\.role === 'admin' \|\| window\.__portalUser\.role === 'hrbp'\)/,
+    'the re-baseline conditional must check window.__portalUser and exactly the two permitted role strings');
+  assert.ok(!src.includes('syn-rebaseline-btn" disabled'), 'no disabled-attribute variant of the re-baseline button may be emitted — absent for other roles, not disabled');
+});
+
+test('synergy-stage-ui (j): the re-baseline click handler returns without issuing a fetch when the trimmed prompt result is empty', () => {
+  const src = readClientSrc();
+  const handlerMatch = src.match(/rebaselineBtn\.addEventListener\('click', function \(\) \{([\s\S]*?)\n {8}\}\);/);
+  assert.ok(handlerMatch, 'a .syn-rebaseline-btn click handler must be attached');
+  const body = handlerMatch[1];
+  assert.match(body, /window\.prompt\(/);
+  assert.match(body, /if \(reason === null\) return;/);
+  assert.match(body, /reason = reason\.trim\(\);/);
+  assert.match(body, /if \(!reason\) return;/);
+  const abortIdx = body.indexOf('if (!reason) return;');
+  const fetchIdx = body.indexOf('fetch(');
+  assert.ok(abortIdx > -1 && fetchIdx > abortIdx, 'the fetch must be ordered strictly after the empty-reason abort check');
+  assert.match(body, /\} else \{[\s\S]*?synAlertFailure\(res\);/, 'the handler\'s non-success branch must call the shared failure helper');
+});
+
+test('synergy-stage-ui (k): public/execution.html declares .syn-baselines and .syn-baseline-row rules', () => {
+  const html = readExecutionHtml();
+  assert.ok(html.split('\n').some((l) => l.includes('.syn-baselines{')), '.syn-baselines rule must exist in public/execution.html');
+  assert.ok(html.split('\n').some((l) => l.includes('.syn-baseline-row{')), '.syn-baseline-row rule must exist in public/execution.html');
+});
+
+test('synergy-stage-ui (l): every dynamic value in the baseline row markup passes through the file\'s escaping helper', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function renderBaselines\(item\) \{[\s\S]*?\n {2}\}/);
+  const body = fnMatch[0];
+  assert.match(body, /esc\(formatBaselineDate\(b\.at\)\)/, 'the baseline date must pass through esc()');
+  assert.match(body, /esc\(b\.by \|\| ''\)/, 'the actor name must pass through esc()');
+  assert.match(body, /esc\(b\.runRateM/, 'the run-rate figure must pass through esc()');
+  assert.match(body, /esc\(reasonText\)/, 'the reason text must pass through esc() (both in the markup body and its title attribute)');
+  assert.match(body, /esc\(SYN_LABELS\[b\.stage\] \|\| b\.stage \|\| ''\)/, 'the stage-dot title text must pass through esc()');
+});
+
+test('synergy-stage-ui (m): renderBaselines() emits an explanatory line, not an empty list container, when the baselines array is empty', () => {
+  const src = readClientSrc();
+  const fnMatch = src.match(/function renderBaselines\(item\) \{[\s\S]*?\n {2}\}/);
+  const body = fnMatch[0];
+  assert.match(body, /if \(baselines\.length === 0\) \{/, 'an explicit empty-array branch must exist');
+  assert.match(body, /syn\.no_baseline/, 'the empty branch must render the no-baseline-yet copy key, not an empty list shell');
+});
+
+test('synergy-stage-ui (n): the baseline reason carries a title attribute holding its full untruncated text, matching the existing truncation convention', () => {
+  const src = readClientSrc();
+  assert.match(src, /class="syn-baseline-reason" title="' \+ esc\(reasonText\) \+ '"/, 'the reason span must carry a title attribute set to the escaped full reason text');
+});
+

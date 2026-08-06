@@ -336,6 +336,7 @@
       + '<button class="btn btn-primary syn-generate-btn" type="button" data-i18n="syn.generate_btn">Generate phasing rows</button>'
       + '</div>'
       + gridHtml
+      + renderBaselines(s)
       + '</div>';
   }
 
@@ -455,6 +456,73 @@
         if (menu.parentNode) menu.parentNode.removeChild(menu);
       }
     };
+  }
+
+  // ------------------------------------------------------ baseline history --
+
+  function formatBaselineDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // UI-SPEC §3/D-12/D-14/D-15: renders the deal case (version 1, located
+  // explicitly rather than assumed to be array index 0) pinned first, every
+  // remaining entry newest-first beneath it, and the re-baseline control —
+  // absent from the markup entirely for any role other than admin/hrbp
+  // (D-15's authz split: this is the cosmetic half, the route is the real
+  // control, per DD-04 precedent).
+  function renderBaselines(item) {
+    var baselines = Array.isArray(item.baselines) ? item.baselines : [];
+    var canRebaseline = !!(window.__portalUser && (window.__portalUser.role === 'admin' || window.__portalUser.role === 'hrbp'));
+    var rebaselineBtn = canRebaseline
+      ? '<button type="button" class="btn btn-secondary syn-rebaseline-btn" data-i18n="syn.rebaseline_btn">Re-baseline this initiative</button>'
+      : '';
+
+    if (baselines.length === 0) {
+      // UI-E3 empty: no baseline yet — the deal case is stamped the first
+      // time this initiative gets a phased target, not before.
+      return '<div class="syn-baselines">'
+        + '<div class="syn-section-label" data-i18n="syn.baselines_heading">Baseline history</div>'
+        + '<div class="ex-empty" data-i18n="syn.no_baseline">No baseline yet — the deal case is created with the first phased target.</div>'
+        + rebaselineBtn
+        + '</div>';
+    }
+
+    // D-14: locate version 1 EXPLICITLY (never assume array order/index 0)
+    // and render it first; every remaining entry renders newest-first
+    // beneath it, and the deal case keeps first position regardless of how
+    // many later baselines accumulate.
+    var dealCase = baselines.find(function (b) { return b.version === 1; });
+    var rest = baselines.filter(function (b) { return b !== dealCase; })
+      .slice()
+      .sort(function (a, b) { return (b.version || 0) - (a.version || 0); });
+    var ordered = dealCase ? [dealCase].concat(rest) : rest;
+
+    var rows = ordered.map(function (b) {
+      var isDealCase = !!dealCase && b === dealCase;
+      var dateOrLabel = isDealCase
+        ? '<span class="syn-baseline-label" data-i18n="syn.baseline_dealcase">Deal case</span><span class="syn-baseline-date">' + esc(formatBaselineDate(b.at)) + '</span>'
+        : '<span class="syn-baseline-date">' + esc(formatBaselineDate(b.at)) + '</span>';
+      var dot = '<span class="syn-baseline-dot" style="background:' + (SYN_COLORS[b.stage] || '#8a8f92') + ';" title="' + esc(SYN_LABELS[b.stage] || b.stage || '') + '"></span>';
+      var reasonText = b.reason || '';
+      // UI-E3 overflow/long-text: one-line truncation via CSS, full text in
+      // a title attribute — matches the existing .ex-src truncation
+      // convention. Every dynamic value here passes through esc().
+      return '<div class="syn-baseline-row">'
+        + dateOrLabel
+        + dot
+        + '<span class="syn-baseline-actor">' + esc(b.by || '') + '</span>'
+        + '<span class="syn-baseline-runrate">$' + esc(b.runRateM != null ? b.runRateM : 0) + 'M</span>'
+        + '<span class="syn-baseline-reason" title="' + esc(reasonText) + '">' + esc(reasonText) + '</span>'
+        + '</div>';
+    }).join('');
+
+    return '<div class="syn-baselines">'
+      + '<div class="syn-section-label" data-i18n="syn.baselines_heading">Baseline history</div>'
+      + rows
+      + rebaselineBtn
+      + '</div>';
   }
 
   function renderSynergy() {
@@ -600,6 +668,33 @@
           });
         });
       });
+      // UI-SPEC §3/D-15: rendered only for admin/hrbp (renderBaselines()'s
+      // own conditional) — absent from the markup for any other role, so
+      // there is nothing to wire for them. The route enforcement
+      // (isAdminOrIlRequest) is the real control regardless.
+      var rebaselineBtn = card.querySelector('.syn-rebaseline-btn');
+      if (rebaselineBtn) {
+        rebaselineBtn.addEventListener('click', function () {
+          // D-15/UI-SPEC: same reason-prompt flow as a backward stage
+          // move — a cancelled prompt or an empty trimmed reason aborts
+          // entirely, no request is ever sent.
+          var reason = window.prompt('Reason for re-baselining this initiative:');
+          if (reason === null) return;
+          reason = reason.trim();
+          if (!reason) return;
+          fetch('/api/synergies/' + encodeURIComponent(id) + '/rebaseline', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason })
+          }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res && res.success) {
+              var idx = state.synergies.findIndex(function (s) { return s.id === id; });
+              if (idx !== -1) state.synergies[idx] = res.initiative;
+              renderSynergy(); applyI18n();
+            } else {
+              synAlertFailure(res);
+            }
+          });
+        });
+      }
       // SYN-01/UI-SPEC §2: writes state.synShowAll — the mobile-grid
       // analogue of the expand-toggle write above, and the ONLY place in
       // this file that assigns to it.
