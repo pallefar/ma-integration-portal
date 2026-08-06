@@ -436,6 +436,77 @@ test('synergy-stage-gate (h): a targetStage outside the four-value vocabulary is
 // bypassing the create-time schema (which always enum-validates `stage`) —
 // exactly how a real pre-Phase-5 row would look, and the ONLY way to
 // construct one for this test.
+test('synergy-stage-gate (G-05-01): CREATE cannot mint an initiative at a gated stage — POST /api/synergies with stage=captured must clear the SAME D-08 gates as every other stage-setting route', async () => {
+  // The create branch enum-checked `stage` but never called stageGateFailure(),
+  // so `{stage:'captured', realizedM:2.5}` minted a brand-new initiative with no
+  // owner, no phased target and no arrived-month evidence — and the fabricated
+  // value flowed straight into GET /api/synergies/rollup's grossRealizedM
+  // (live-reproduced: 0.9 -> 3.4). The /stage route and the upsert UPDATE branch
+  // were both gated; only creation was missed. Enum membership proves a value is
+  // spelled correctly, never that it was earned.
+  const deal = freshDeal('deal_syng501');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const forged = await postJSON(base, '/api/synergies', karenToken, {
+      title: 'Forged captured initiative', category: 'cost',
+      stage: 'captured', realizedM: 2.5, targetM: 2.5,
+    });
+    assert.strictEqual(forged.status, 400, 'creating directly at captured must be refused by the D-08 gate, not merely enum-checked');
+    const forgedBody = await forged.json();
+    // Walking idea -> captured evaluates EVERY intervening gate, so the first
+    // unmet one (committed's owner) is what the caller is told — the same
+    // walk-all-ordinals semantics the /stage route uses. What matters is that
+    // a gate ran at all on the create path; the captured-specific gate is
+    // exercised below with an item that clears committed.
+    assert.match(String(forgedBody.error), /owner|committed|captured/i, 'the refusal must name the gate that failed');
+
+    const noOwner = await postJSON(base, '/api/synergies', karenToken, {
+      title: 'Forged committed initiative', category: 'cost', stage: 'committed',
+    });
+    assert.strictEqual(noOwner.status, 400, 'creating directly at committed must be refused without an owner');
+    const noOwnerBody = await noOwner.json();
+    assert.match(String(noOwnerBody.error), /owner/i, 'the refusal must name the missing owner');
+
+    // A gated stage is STRUCTURALLY unreachable at create time: the create
+    // branch persists no runRateM/startMonth (those are set by
+    // /generate-phasing) and no phasing rows, so committed's phased-target
+    // gate and captured's arrived-month gate can never be satisfied by a
+    // create payload no matter what it carries. Supplying them in the body
+    // changes nothing — proving the gate reads persisted state, not caller
+    // input. A gated stage must be EARNED via /stage after the initiative
+    // actually has phasing.
+    const withRampFields = await postJSON(base, '/api/synergies', karenToken, {
+      title: 'Ramp fields in body', category: 'cost', stage: 'committed',
+      owner: 'Karen Owner', runRateM: 4, startMonth: '2020-01',
+    });
+    assert.strictEqual(withRampFields.status, 400, 'ramp fields in the create body must not satisfy the phased-target gate');
+    const rampBody = await withRampFields.json();
+    assert.match(String(rampBody.error), /phased target|run-rate/i, 'the refusal must name the unmet phased-target gate');
+
+    // The gate must not over-reach: the two ungated stages stay freely creatable.
+    for (const stage of ['idea', 'validated']) {
+      const ok = await postJSON(base, '/api/synergies', karenToken, { title: 'New ' + stage, category: 'cost', stage });
+      assert.strictEqual(ok.status, 201, stage + ' carries no D-08 gate and must remain creatable');
+      const okBody = await ok.json();
+      assert.strictEqual(okBody.initiative.stage, stage, stage + ' must be preserved on create');
+    }
+
+    // No forged row was persisted by the two refusals.
+    const listRes = await fetch(`${base}/api/synergies`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const list = await listRes.json();
+    assert.strictEqual(list.filter((s) => String(s.title).startsWith('Forged')).length, 0, 'a refused create must add no row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
 test('synergy-stage-gate (i): CR-02 — a stage-change request against an initiative with NO stage value (unmigrated row) is refused with 409, never silently advanced to the target stage with no gate check', async () => {
   const deal = freshDeal('deal_syngi');
   registerDeal(deal);

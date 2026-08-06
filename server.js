@@ -3532,6 +3532,33 @@ app.post('/api/synergies', (req, res) => {
     taskIds: createdTaskIds,
     createdAt: new Date().toISOString()
   };
+  // D-08/SYN-03 (G-05-01): the CREATE path must clear the SAME stage gates as
+  // every other route that can set a stage. Enum membership alone is NOT a
+  // gate — it only proves the value is spelled correctly. Without this, a
+  // caller could POST {stage:'captured', realizedM:2.5} and mint a brand-new
+  // initiative with no owner, no phased target and no arrived-month evidence,
+  // whose fabricated value flows straight into GET /api/synergies/rollup's
+  // grossRealizedM — the steerco headline D-18/D-21 exist to make trustworthy
+  // (live-reproduced: rollup 0.9 -> 3.4). The /stage route and the upsert
+  // UPDATE branch were both gated; only creation was missed.
+  //
+  // Evaluated against the fully-built item so the gate sees exactly the state
+  // that would be persisted. `idea` and `validated` carry no gate and stay
+  // freely creatable; `committed`/`captured` must be EARNED via the /stage
+  // route once the initiative actually has an owner, phasing and realized
+  // value — which is what "moves through confidence stage-gates" means.
+  //
+  // NOTE the `{ ...item, stage: SYN_STAGES[0] }` argument — it is load-bearing,
+  // not defensive noise. stageGateFailure() walks `STAGE_ORDER[item.stage] + 1
+  // .. toOrdinal`, so passing the item as-is (whose stage ALREADY equals the
+  // target on this path) makes fromOrdinal === toOrdinal and the loop body
+  // never executes — a silent no-op that would look like a gate in review and
+  // enforce nothing. Evaluating from the baseline stage walks every
+  // intervening gate, which is what a create-at-`captured` must clear.
+  if (item.stage !== SYN_STAGES[0]) {
+    const createGateFailure = stageGateFailure({ ...item, stage: SYN_STAGES[0] }, item.stage);
+    if (createGateFailure) return res.status(400).json({ error: createGateFailure });
+  }
   lane.push(item);
   writeDb(db);
   res.status(201).json({ success: true, initiative: item });
