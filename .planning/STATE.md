@@ -4,16 +4,16 @@ milestone: v2.0.1
 milestone_name: milestone
 current_phase: 5
 current_phase_name: Synergy Value Capture
-status: executing
-stopped_at: Completed 05-07-PLAN.md
-last_updated: "2026-08-06T08:16:30.412Z"
+status: verifying
+stopped_at: Completed 05-08-PLAN.md — Phase 5 (Synergy Value Capture) fully executed 8/8
+last_updated: "2026-08-06T09:10:32.098Z"
 last_activity: 2026-08-06
 last_activity_desc: Phase 5 execution started
 progress:
   total_phases: 7
   completed_phases: 4  # 1-4 executed; Phase 1 formal close deferred to release-cut (01-VERIFICATION.md still untracked)
   total_plans: 30
-  completed_plans: 29
+  completed_plans: 30
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 Phase: 5 (Synergy Value Capture) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-06 — Phase 5 execution started
 
-Progress: [██████████] 97%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -89,6 +89,7 @@ Progress: [██████████] 97%
 | Phase 5 P05 | ~12min | 2 tasks | 4 files |
 | Phase 05 P06 | ~12.5min | 2 tasks | 3 files |
 | Phase 05-synergy-value-capture P07 | ~20min | 3 tasks | 3 files |
+| Phase 05 P08 | ~57min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -166,6 +167,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5 Plan 05] synergyHorizonYears added to SettingsUpdateSchema alongside synergyStaleDays — the reader has existed since Plan 01 but the write-side schema key was missing, silently stripping it on every settings write (D-03 configurability was broken invisibly until now)
 - [Phase ?]: [Phase 5 Plan 06] Task 1 and Task 2 built together but committed separately by temporarily withholding renderBaselines()/CSS/tests from Task 1's commit and restoring for Task 2 — true per-task atomicity rather than a combined commit, both intermediate (326/326) and final (333/333) states verified green
 - [Phase ?]: Deal-home stale-synergy nudge attaches to the Diligence progress heading (located by text-content lookup, not DOM position); confirm-current success handler intentionally replaces local item with the route's raw response, matching Plan 06's stage/rebaseline convention
+- [Phase ?]: [Phase 5 Plan 08] Hand-tuned demo seed distributes five synergy initiatives across all four SYN-03 stages with full ramped phasing, a second baseline, a deliberately stale confirmation stamp, cost entries and task links (D-10); dev-test debris removed from data/demo.db by the seed script's own idempotent allowlist-delete pass
+- [Phase ?]: [Phase 5 Plan 08] Wave-8 regression walk caught a real dead-on-load bug (0e778f5): 05-07's task-progress insert over-closed .syn-head, orphaning .syn-expand-toggle as a card sibling and aborting every synergy card's wiring loop — invisible to the 358-test suite, found only by a live browser walk
+- [Phase ?]: [Phase 5 Plan 08] Follow-up seed tweak (0a88dc9, user-approved): syn_seed_5's startMonth moved 5 months earlier (not runRateM raised) so its already-arrived window clears roundSynergyMoney's rounding threshold, giving the D-18 unconfirmed-split sentence a real non-zero figure ($0.9M realized, $0.3M unconfirmed) instead of a degenerate $0.0M
 
 ### Pending Todos
 
@@ -201,6 +205,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T08:16:30.401Z
-Stopped at: Completed 05-07-PLAN.md
+Last session: 2026-08-06T09:10:32.081Z
+Stopped at: Completed 05-08-PLAN.md — Phase 5 (Synergy Value Capture) fully executed 8/8
 Resume file: None
