@@ -3229,6 +3229,43 @@ function synergyCostFields(item) {
   return { costIncurredM, netBenefitM };
 }
 
+// SYN-05/D-17: staleness threshold in days, read from the deal's own
+// settings singleton, defaulting to 30 — mirrors synergyHorizonYears()'s
+// shape exactly. A non-positive, non-finite or non-numeric configured value
+// falls back to the default rather than producing a nonsensical verdict, or
+// (per T-05-27) letting a hostile value suppress the signal by making every
+// item permanently fresh.
+function synergyStaleDays(db) {
+  const configured = db.settings && db.settings.synergyStaleDays;
+  return typeof configured === 'number' && isFinite(configured) && configured > 0 ? configured : 30;
+}
+
+// SYN-05/D-16/D-17: an initiative's own confirmation clock, judged against a
+// caller-supplied instant. `nowMs` is a PARAMETER, never read internally —
+// this is what lets a caller capture Date.now() ONCE per request and judge
+// every initiative in that request against the identical instant, so two
+// initiatives sharing a lastConfirmedAt always receive the same verdict and
+// no item can flip mid-loop. Falls back to `createdAt` when `lastConfirmedAt`
+// is absent; when NEITHER parses to a finite timestamp this reports NOT
+// STALE rather than defaulting an unknown-age item to stale — a false stale
+// badge on every legacy row (carrying neither field) would train the reader
+// to ignore the signal entirely. Strictly greater than the threshold is the
+// boundary contract: exactly `staleDays` days old is not yet stale.
+function isSynergyStale(item, staleDays, nowMs) {
+  const raw = (item && item.lastConfirmedAt) || (item && item.createdAt);
+  const parsed = Date.parse(raw);
+  if (!isFinite(parsed)) return false;
+  return (nowMs - parsed) > (staleDays * 86400000);
+}
+
+// SYN-05/D-16: an EXPLICIT ALLOWLIST of the fields that constitute a real
+// value change on the base upsert — title and notes are deliberately
+// excluded (a typo fix must not make a six-week-old forecast look
+// confirmed). Expressed as an allowlist rather than a denylist of the two
+// excluded fields so a future field added to the upsert defaults to NOT
+// stamping unless explicitly added here too.
+const SYNERGY_STAMPING_FIELDS = ['runRateM', 'curveShape', 'startMonth', 'costPlannedM', 'costExpectedMonth', 'category', 'owner', 'workstreamId', 'taskIds'];
+
 // SYN-04/D-22/T-05-18: validates every supplied taskIds entry against the
 // bound deal's OWN task lane (taskLane(db), resolved by the Phase 3
 // session-bound resolver) BEFORE any mutation — an id from another deal or a
@@ -3268,6 +3305,10 @@ app.post('/api/synergies', (req, res) => {
   if (b.id) {
     const item = lane.find(s => s.id === b.id);
     if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+    // SYN-05/D-16: computed from the RAW body before any mutation below —
+    // whether this edit touches ANY field in the SYNERGY_STAMPING_FIELDS
+    // allowlist. Title and notes are deliberately absent from that list.
+    const changesStampingField = SYNERGY_STAMPING_FIELDS.some((k) => b[k] !== undefined);
     // Validate before mutating the shared readDb() cache (see task update).
     // VAL-01: status enum membership is now owned exclusively by
     // validators/workstream.js's SynergyUpsertSchema (z.enum); the
@@ -3321,11 +3362,21 @@ app.post('/api/synergies', (req, res) => {
     }
     if (b.runRateM !== undefined) item.runRateM = num(b.runRateM);
     if (b.curveShape !== undefined) item.curveShape = b.curveShape;
+    // SYN-05/D-16: startMonth was schema-accepted since Plan 01 but never
+    // applied by this update branch (schema/handler drift, mirroring Plan
+    // 03's identical runRateM/curveShape finding) — wired in here since
+    // SYN-05's stamping allowlist names it as a real value-change field, and
+    // a field that can never actually change must not be listed among the
+    // fields that refresh the confirmation clock.
+    if (b.startMonth !== undefined) item.startMonth = b.startMonth;
     // SYN-02/D-20/D-21: ordinary plan fields — unlike runRateM/curveShape
     // above, a costPlannedM/costExpectedMonth change never triggers D-13's
     // forced re-baseline regardless of stage.
     if (b.costPlannedM !== undefined) item.costPlannedM = num(b.costPlannedM);
     if (b.costExpectedMonth !== undefined) item.costExpectedMonth = b.costExpectedMonth;
+    // SYN-05/D-16: stamp the confirmation clock LAST, after every field
+    // mutation above, so it reflects the fully-applied state of this edit.
+    if (changesStampingField) item.lastConfirmedAt = new Date().toISOString();
     writeDb(db);
     return res.json({ success: true, initiative: item });
   }
@@ -3478,6 +3529,9 @@ app.post('/api/synergies/:id/phasing/:month', (req, res) => {
       return res.status(400).json({ error: 'Month ' + row.month + ' has not arrived yet — realized value cannot be entered until this month begins.' });
     }
     row.realizedM = roundSynergyMoney(b.realizedM);
+    // SYN-05/D-16: a realized-value write is a real value change — stamp the
+    // confirmation clock here so no realized entry can leave it behind.
+    item.lastConfirmedAt = new Date().toISOString();
   }
   if (b.targetM !== undefined) {
     row.targetM = roundSynergyMoney(b.targetM);
@@ -3561,6 +3615,24 @@ app.post('/api/synergies/:id/rebaseline', (req, res) => {
   if (!reason) return res.status(400).json({ error: 'A reason is required to re-baseline.' });
 
   pushBaseline(item, req, reason);
+  item.lastConfirmedAt = new Date().toISOString();
+  writeDb(db);
+  res.json({ success: true, initiative: item });
+});
+
+// SYN-05/D-16: the ONLY route whose purpose is stamping lastConfirmedAt as a
+// deliberate confirmation act. ConfirmCurrentSchema accepts no fields, so
+// there is no field on this request through which a title or a note could
+// ride along with a confirmation. This handler assigns EXACTLY ONE field
+// (lastConfirmedAt) and touches nothing else — a reviewer can verify by
+// inspection that a confirmation and a content edit can never be the same
+// request.
+app.post('/api/synergies/:id/confirm-current', (req, res) => {
+  const db = readDb();
+  const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+
   item.lastConfirmedAt = new Date().toISOString();
   writeDb(db);
   res.json({ success: true, initiative: item });
@@ -5089,3 +5161,8 @@ module.exports.SYN_STAGES = SYN_STAGES;
 // initiative object, without booting the HTTP server for every gate case.
 module.exports.STAGE_ORDER = STAGE_ORDER;
 module.exports.stageGateFailure = stageGateFailure;
+// SYN-05: exposed for the same pure-function unit-check rationale — a test
+// can drive the boundary and fallback cases directly against a controlled
+// nowMs, without booting the HTTP server for every case.
+module.exports.isSynergyStale = isSynergyStale;
+module.exports.synergyStaleDays = synergyStaleDays;

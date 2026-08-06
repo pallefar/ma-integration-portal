@@ -282,6 +282,15 @@ const RebaselineSchema = z.object({
 });
 registerSchema('POST', '/api/synergies/:id/rebaseline', RebaselineSchema);
 
+// D-16: the confirm-current route accepts NO FIELDS — this is the structural
+// half of D-16's guarantee. There is no field on this request through which
+// a title or a note could ride along with a confirmation, so a confirmation
+// and a content edit can never be the same request. Matches the shape of
+// this file's other empty-body registrations (EmptyBodySchema) but is kept
+// as its own named schema per this plan's artifact roster.
+const ConfirmCurrentSchema = z.object({});
+registerSchema('POST', '/api/synergies/:id/confirm-current', ConfirmCurrentSchema);
+
 // ---------------------------------------------------------------------------
 // RAID entries — upsert (POST-create-only route; no id-present update path
 // exists for RAID per server.js — kept consistent with the other three
@@ -366,4 +375,5 @@ module.exports = {
   StageChangeSchema,
   RebaselineSchema,
   CostEntrySchema,
+  ConfirmCurrentSchema,
 };
