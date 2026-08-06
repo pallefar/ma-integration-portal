@@ -183,13 +183,36 @@ Plans:
 **Plans:** 8 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 05-01-PLAN.md — Tracer: monthly phasing end-to-end (ramp auto-fill, derived rollup totals, arrived-month entry)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 05-02-PLAN.md — Stage-vocabulary hard cutover across three code copies and both committed databases
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 05-03-PLAN.md — Stage gates, baseline history with a pinned deal case, and re-baseline authz
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 05-04-PLAN.md — Cost-to-achieve and task linkage (server)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 05-05-PLAN.md — Staleness model, per-deal settings, and the server-computed rollup
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 05-06-PLAN.md — Client: stage control and baseline history panel
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 05-07-PLAN.md — Client: cost, task progress, staleness, rollup tiles, and the deal-home nudge
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 05-08-PLAN.md — Hand-tuned demo seed and the two blocking human verification walks
 
 ### Phase 6: Org Design & Talent Retention
