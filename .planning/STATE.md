@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 6
 current_phase_name: Org Design & Talent Retention
 status: planning
-stopped_at: Completed 05-08-PLAN.md — Phase 5 (Synergy Value Capture) fully executed 8/8
-last_updated: "2026-08-06T19:22:06.326Z"
+stopped_at: Phase 6 context gathered
+last_updated: "2026-08-06T20:03:15.753Z"
 last_activity: 2026-08-06
 last_activity_desc: Phase 5 complete, transitioned to Phase 6
 progress:
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 5 — Synergy Value Capture
+**Current focus:** Phase 6 — Org Design & Talent Retention
 
 ## Current Position
 
@@ -206,6 +206,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T09:10:32.081Z
-Stopped at: Completed 05-08-PLAN.md — Phase 5 (Synergy Value Capture) fully executed 8/8
-Resume file: None
+Last session: 2026-08-06T20:03:15.734Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-org-design-talent-retention/06-CONTEXT.md
