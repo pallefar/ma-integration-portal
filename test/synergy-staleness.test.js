@@ -557,6 +557,80 @@ test('synergy-staleness-ui (h): the retained percent-of-target bar still uses th
   assert.match(body, /class="syn-fill"/, 'the progress bar fill must reuse the pre-existing .syn-fill class');
 });
 
+// ------------------------------------------ Plan 07: deal-home nudge UI --
+//
+// Source-level assertions against public/js/deal-home.js — a live browser
+// walk is deferred to Plan 08's human checkpoint (per this plan's own
+// <verification> block), so these tests are what proves the nudge's
+// independence from the due-diligence page's own owner-nudge function
+// (D-19, corrected location per 05-RESEARCH.md Finding #7/Pitfall 2), its
+// textContent-only discipline, its zero/absent early return, and the
+// rollup fetch's degradation branch, ahead of that walk.
+
+function readDealHomeSrc() {
+  return fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'deal-home.js'), 'utf8');
+}
+
+test('synergy-staleness-ui (i): public/js/deal-home.js contains no assignment to an innerHTML property, preserving its stated textContent-only discipline', () => {
+  const src = readDealHomeSrc();
+  assert.ok(!/\.innerHTML\s*=/.test(src), 'no element\'s innerHTML may be assigned anywhere in this file');
+});
+
+test('synergy-staleness-ui (j): renderStaleSynergyNudge() returns early when the caller-scoped stale count is zero or absent', () => {
+  const src = readDealHomeSrc();
+  const fnMatch = src.match(/function renderStaleSynergyNudge\(wrap, rollup\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(fnMatch, 'renderStaleSynergyNudge must be defined');
+  const body = fnMatch[0];
+  assert.match(body, /var mineStale = \(rollup && rollup\.mine && rollup\.mine\.staleCount\) \|\| 0;/, 'the count must default to 0 when rollup, rollup.mine, or rollup.mine.staleCount is absent');
+  const guardIdx = body.indexOf('if (mineStale <= 0) return;');
+  assert.ok(guardIdx > -1, 'an early return on a non-positive count must exist');
+  assert.ok(guardIdx < body.indexOf('findSectionHeading'), 'the early return must be ordered BEFORE any DOM work — a zero/absent count produces no badge and no banner at all');
+});
+
+test('synergy-staleness-ui (k): the dismissal storage key is distinct from the due-diligence nudge\'s key', () => {
+  const src = readDealHomeSrc();
+  assert.match(src, /'syn_nudge_dismissed'/, 'a synergy-specific dismissal key must be used');
+  assert.ok(!src.includes('dd_nudge_dismissed'), 'the due-diligence page\'s own dismissal key must never appear in this file');
+});
+
+test('synergy-staleness-ui (l): public/js/deal-home.js contains no reference to the due-diligence nudge function and no import of that file', () => {
+  const src = readDealHomeSrc();
+  // A prose comment mentioning the due-diligence page's discipline for
+  // documentation purposes (pre-existing in this file's header, unrelated
+  // to this plan) is fine — what must never exist is an actual import of
+  // that file or a call to its nudge functions.
+  assert.ok(!/require\([^)]*due-diligence[^)]*\)/.test(src), 'deal-home.js must not require/import due-diligence.js');
+  assert.ok(!/script[^>]*src=["'][^"']*due-diligence\.js/.test(src), 'deal-home.js must not <script>-tag due-diligence.js');
+  assert.ok(!/renderOwnerNudge\(/.test(src), 'deal-home.js must never call renderOwnerNudge()');
+  assert.ok(!/loadOwnerNudge\(/.test(src), 'deal-home.js must never call loadOwnerNudge()');
+});
+
+test('synergy-staleness-ui (m): the banner and badge element ids are distinct from the due-diligence nudge\'s ids, and each is created only when not already present', () => {
+  const src = readDealHomeSrc();
+  assert.match(src, /'syn-nudge-badge'/);
+  assert.match(src, /'syn-nudge-banner'/);
+  assert.ok(!src.includes('dd-nudge-badge'), 'the due-diligence page\'s own badge id must never appear in this file');
+  assert.ok(!src.includes('dd-nudge-banner'), 'the due-diligence page\'s own banner id must never appear in this file');
+  assert.match(src, /!document\.getElementById\('syn-nudge-badge'\)/, 'the badge must be created only when an element with that id is not already present');
+  assert.match(src, /if \(document\.getElementById\('syn-nudge-banner'\)\) return;/, 'the banner must be created only when an element with that id is not already present');
+});
+
+test('synergy-staleness-ui (n): the rollup fetch added to renderDealHome() carries a degradation branch matching the three existing fetches', () => {
+  const src = readDealHomeSrc();
+  const fnMatch = src.match(/function renderDealHome\(dealId\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(fnMatch, 'renderDealHome must be defined');
+  const body = fnMatch[0];
+  assert.match(body, /fetch\('\/api\/synergies\/rollup'\)\.then\(function \(r\) \{ return r\.json\(\); \}\)\.catch\(function \(\) \{ return null; \}\)/, 'the rollup fetch must degrade the same way as the assessment-status/dd-summary fetches (a failed fetch yields null, best-effort)');
+  assert.match(body, /renderStaleSynergyNudge\(wrap, rollup\);/, 'the nudge must be called alongside the three existing panel renders');
+});
+
+test('synergy-staleness-ui (o): window.makeBannerDismissible is called guarded by a typeof check', () => {
+  const src = readDealHomeSrc();
+  const occurrences = (src.match(/makeBannerDismissible/g) || []).length;
+  assert.ok(occurrences >= 1, 'makeBannerDismissible must be referenced at least once');
+  assert.match(src, /typeof window\.makeBannerDismissible === 'function'/, 'the call must be guarded by a typeof check, matching the due-diligence page\'s own defensive pattern');
+});
+
 test('synergy-staleness (q): GET /api/synergies returns items in the lane\'s stored insertion order (ordering)', async () => {
   const token = await setupDeal('deal_synstalq');
   const server = app.listen(0);

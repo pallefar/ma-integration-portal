@@ -183,10 +183,80 @@
     wrap.appendChild(section);
   }
 
+  // D-19/UI-SPEC §6: locate a REAL, already-rendered panel heading by its
+  // own text content, rather than assuming DOM order or inventing a
+  // top-level heading this file does not otherwise produce (the file
+  // builds per-panel headings only — the plan's own instruction: "pick a
+  // real element it produces rather than assuming one").
+  function findSectionHeading(wrap, titleText) {
+    var headings = wrap.querySelectorAll('.deal-home-section-title');
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].textContent === titleText) return headings[i];
+    }
+    return null;
+  }
+
+  // D-19/UI-SPEC §6: the stale-synergy nudge — a heading badge plus a
+  // dismissible warning banner for the CALLER'S OWN stale synergy
+  // initiatives, sourced from GET /api/synergies/rollup's caller-scoped
+  // mine.staleCount (Plan 05). AUTHORED following the due-diligence page's
+  // established owner-nudge shape (a heading badge + a session-scoped
+  // dismissible .page-banner--warning raised through the shared
+  // window.makeBannerDismissible helper) — that page's own nudge function
+  // is NEVER called, imported or extended here: its DOM selectors exist
+  // only on the due-diligence page, and this deal-home surface had no
+  // nudge code at all before this plan (05-RESEARCH.md Finding #7 /
+  // Pitfall 2 — the concrete failure mode this instruction avoids). This
+  // banner STACKS as an additional banner alongside that other nudge —
+  // never merges text into it — so the two surfaces stay independent.
+  function renderStaleSynergyNudge(wrap, rollup) {
+    var mineStale = (rollup && rollup.mine && rollup.mine.staleCount) || 0;
+    if (mineStale <= 0) return;
+
+    var heading = findSectionHeading(wrap, 'Diligence progress');
+    if (heading && !document.getElementById('syn-nudge-badge')) {
+      // Inline styling only — no CSS file is in this plan's declared file
+      // scope (files_modified: public/js/deal-home.js only) — matching the
+      // due-diligence page's own established pattern for a JS-injected
+      // badge/pill.
+      var badge = el('span', { text: String(mineStale) });
+      badge.id = 'syn-nudge-badge';
+      badge.style.cssText = 'display:inline-block;margin-left:.6rem;font-size:.68rem;font-weight:800;padding:.15rem .55rem;border-radius:999px;background:#C77700;color:#fff;vertical-align:middle;';
+      heading.appendChild(badge);
+    }
+
+    if (document.getElementById('syn-nudge-banner')) return;
+    try {
+      if (sessionStorage.getItem('syn_nudge_dismissed') === 'true') return;
+    } catch (e) { /* sessionStorage unavailable — fall through and still show it */ }
+
+    var main = document.querySelector('.main-content') || document.querySelector('main');
+    if (!main) return;
+
+    var banner = el('div', { className: 'page-banner page-banner--warning' });
+    banner.id = 'syn-nudge-banner';
+    banner.setAttribute('role', 'status');
+    var body = el('div', { className: 'page-banner-body' });
+    var msg = el('span', {
+      className: 'page-banner-msg',
+      text: 'You have ' + mineStale + (mineStale === 1
+        ? ' synergy initiative that has not been confirmed recently'
+        : ' synergy initiatives that have not been confirmed recently') + '.',
+    });
+    body.appendChild(msg);
+    banner.appendChild(body);
+    main.insertBefore(banner, main.firstChild);
+    if (typeof window.makeBannerDismissible === 'function') {
+      window.makeBannerDismissible(banner, 'syn_nudge_dismissed', 'session');
+    }
+  }
+
   /** Entry point — called by public/js/dashboard.js's deal-bound branch.
-   * Fetches all three sources, then renders all three panels once every
-   * fetch has resolved (best-effort: a single failed fetch renders that
-   * panel's own empty state rather than blanking the whole page). */
+   * Fetches all four sources, then renders all three panels plus the
+   * stale-synergy nudge once every fetch has resolved (best-effort: a
+   * single failed fetch renders that panel's own empty state, or — for
+   * the rollup — simply omits the nudge, rather than blanking the whole
+   * page). */
   function renderDealHome(dealId) {
     var container = document.getElementById('deal-home');
     if (!container) return;
@@ -198,16 +268,19 @@
       fetch('/api/deals').then(function (r) { return r.json(); }).catch(function () { return []; }),
       fetch('/api/assessment-status').then(function (r) { return r.json(); }).catch(function () { return null; }),
       fetch('/api/dd/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch('/api/synergies/rollup').then(function (r) { return r.json(); }).catch(function () { return null; }),
     ]).then(function (results) {
       var deals = Array.isArray(results[0]) ? results[0] : [];
       var statusData = results[1];
       var summary = results[2];
+      var rollup = results[3];
       var deal = deals.filter(function (d) { return d.id === dealId; })[0] || null;
 
       wrap.textContent = '';
       renderSetupChecklist(wrap, deal);
       renderReadiness(wrap, statusData);
       renderDiligence(wrap, summary);
+      renderStaleSynergyNudge(wrap, rollup);
     });
   }
 
