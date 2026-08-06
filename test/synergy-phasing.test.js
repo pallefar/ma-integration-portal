@@ -587,7 +587,11 @@ test('synergy-phasing (source c): the regenerate handler calls window.confirm be
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
   const handlerStart = src.indexOf("genBtn.addEventListener('click', function () {");
   assert.ok(handlerStart !== -1, 'the generate button click handler must exist');
-  const handlerEnd = src.indexOf("card.querySelector('.syn-realized-input').addEventListener", handlerStart);
+  // WR-05: the boundary marker moved when the header-input wiring gained a
+  // null-guard (var headerRealizedInput = ...; if (headerRealizedInput) {...}),
+  // but it is still the very next handler-wiring block after the generate
+  // handler, so it remains a valid slice boundary.
+  const handlerEnd = src.indexOf("var headerRealizedInput = card.querySelector('.syn-head .syn-realized-input');", handlerStart);
   assert.ok(handlerEnd !== -1 && handlerEnd > handlerStart, 'the next handler after the generate handler must be found to bound the slice');
   const handlerSrc = src.slice(handlerStart, handlerEnd);
 
@@ -604,4 +608,32 @@ test('synergy-phasing (source d): the empty-phasing state renders the exact "No 
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
   const occurrences = src.match(/No phasing rows yet/g) || [];
   assert.strictEqual(occurrences.length, 1, 'the empty-state heading copy must appear exactly once');
+});
+
+// WR-05: the header-level "Realized $M" input used to render unconditionally
+// for every card, regardless of s.phasing.length — once phasing rows exist,
+// server.js's D-04 guard unconditionally refuses that route's write with
+// 400, so the control was guaranteed to error on every use, sitting right
+// next to the correct read-only rollup figure. Asserted at the source level
+// (this file's established convention for public/js/execution.js, which is
+// not require()-able under node:test) that the input is now gated on
+// exactly the same condition the server enforces, and that the click
+// wiring is null-safe for the case where the input is absent.
+test('synergy-phasing (source e): WR-05 — the header-level "Realized $M" input is gated on s.phasing.length, matching D-04\'s exact server-side rule, and a read-only figure renders once phasing rows exist', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+  assert.match(
+    src,
+    /\(Array\.isArray\(s\.phasing\) && s\.phasing\.length > 0\s*\n\s*\? '<span><span data-i18n="syn\.realized_lbl">Realized \$M<\/span>: \$' \+ \(s\.realizedM \|\| 0\) \+ '<\/span>'\s*\n\s*: '<span><span data-i18n="syn\.realized_lbl">Realized \$M<\/span>: <input type="number" class="syn-realized-input"/,
+    'the header-level realized control must branch on the exact same condition (phasing rows present) D-04 enforces server-side — an editable input only when unphased, a read-only figure when phased'
+  );
+});
+
+test('synergy-phasing (source f): WR-05 — the header realized-input click wiring is null-guarded, so a phased-and-unexpanded card (where the input does not exist in the DOM) never throws attaching a listener to null', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'execution.js'), 'utf8');
+  const declIdx = src.indexOf("var headerRealizedInput = card.querySelector('.syn-head .syn-realized-input');");
+  assert.ok(declIdx !== -1, 'the header-input lookup must be scoped to .syn-head, never matching a per-month .syn-detail grid cell');
+  const guardIdx = src.indexOf('if (headerRealizedInput) {', declIdx);
+  assert.ok(guardIdx !== -1 && guardIdx < declIdx + 200, 'the lookup must be immediately null-guarded before .addEventListener is called');
+  const addListenerIdx = src.indexOf('headerRealizedInput.addEventListener(', guardIdx);
+  assert.ok(addListenerIdx !== -1 && addListenerIdx > guardIdx, 'the addEventListener call must be inside the null guard');
 });

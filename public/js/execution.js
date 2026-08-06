@@ -710,7 +710,17 @@
         + '<button type="button" class="btn btn-secondary syn-confirm-btn" data-i18n="syn.confirm_current">Confirm current</button>'
         + (wsDef ? '<span>' + (wsDef.icon || '') + ' <span data-i18n="' + esc(wsDef.labelKey || '') + '">' + esc(wsDef.label) + '</span></span>' : '')
         + (s.owner ? '<span>👤 ' + esc(s.owner) + '</span>' : '')
-        + '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: <input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (s.realizedM || 0) + '"></span>'
+        // WR-05: once phasing rows exist, D-04 refuses this route's write
+        // unconditionally (server.js: "edit targetM/realizedM per month on
+        // the phasing grid, not on the initiative directly") — an input
+        // here was guaranteed to error on every use, sitting right next to
+        // the correct read-only rollup figure (.syn-realized below). Gated
+        // on the exact same condition the server enforces, so an editable
+        // input only ever appears where the write can actually succeed; a
+        // phased card shows the figure read-only instead.
+        + (Array.isArray(s.phasing) && s.phasing.length > 0
+          ? '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: $' + (s.realizedM || 0) + '</span>'
+          : '<span><span data-i18n="syn.realized_lbl">Realized $M</span>: <input type="number" class="syn-realized-input" min="0" step="0.1" value="' + (s.realizedM || 0) + '"></span>')
         + '</div>'
         + renderTaskProgress(s)
         // Close the flex column ONLY — .syn-money and .ex-del stay inside
@@ -810,23 +820,32 @@
           });
         });
       }
-      card.querySelector('.syn-realized-input').addEventListener('change', function (ev) {
-        var val = parseFloat(ev.target.value) || 0;
-        fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, realizedM: val }) })
-          .then(function (r) { return r.json(); })
-          .then(function (res) {
-            if (res && res.success) {
-              var item = state.synergies.find(function (s) { return s.id === id; });
-              if (item) item.realizedM = res.initiative.realizedM;
-              renderSynergy(); applyI18n();
-            } else {
-              // Rule 1 fix: once an initiative has phasing rows, D-04
-              // refuses this direct write with 400 — this field must not
-              // fail silently (UI-SPEC's "never silently fail" contract).
-              window.alert(res && res.error);
-            }
-          });
-      });
+      // WR-05: the header input is now gated (above) on the item having no
+      // phasing rows, so it may not exist in the DOM at all — scoped to
+      // .syn-head so this NEVER mistakenly matches a per-month grid cell
+      // when the card is both phased AND expanded (in that state the header
+      // input is absent by design, and .syn-head contains no .syn-detail
+      // descendants, so this selector still correctly finds nothing).
+      var headerRealizedInput = card.querySelector('.syn-head .syn-realized-input');
+      if (headerRealizedInput) {
+        headerRealizedInput.addEventListener('change', function (ev) {
+          var val = parseFloat(ev.target.value) || 0;
+          fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, realizedM: val }) })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+              if (res && res.success) {
+                var item = state.synergies.find(function (s) { return s.id === id; });
+                if (item) item.realizedM = res.initiative.realizedM;
+                renderSynergy(); applyI18n();
+              } else {
+                // Rule 1 fix: once an initiative has phasing rows, D-04
+                // refuses this direct write with 400 — this field must not
+                // fail silently (UI-SPEC's "never silently fail" contract).
+                window.alert(res && res.error);
+              }
+            });
+        });
+      }
       // SYN-01/D-06/D-25: per-month grid cell handlers — scoped to
       // .syn-detail so they never collide with the card-head
       // .syn-realized-input above (different DOM subtree, same reused CSS
