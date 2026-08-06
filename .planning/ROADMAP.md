@@ -209,7 +209,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 05-07-PLAN.md — Client: cost, task progress, staleness, rollup tiles, and the deal-home nudge
+- [x] 05-07-PLAN.md — Client: cost, task progress, staleness, rollup tiles, and the deal-home nudge
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
