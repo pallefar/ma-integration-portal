@@ -485,8 +485,15 @@ function isAdminRequest(req) {
 // the X-Admin-Token break-glass path isAdminRequest() accepts: D-15's rule
 // is about an ATTRIBUTED human role, and an unattributed token would defeat
 // the governance meaning of the baseline record.
+// WR-01: the comment above stated the exclusion but the implementation only
+// checked req.portalUser.role — the consolidated /api gate (above) sets
+// req.portalUser.role === 'admin' for the X-Admin-Token break-glass path
+// too (sessionId: null in that case, non-null for every real session, per
+// db/sessions.js's findSession()), so the exclusion the comment promised was
+// not actually enforced. Checking sessionId !== null closes that gap and
+// makes the code match its own documented intent.
 function isAdminOrIlRequest(req) {
-  return !!(req.portalUser && ['admin', 'hrbp'].includes(req.portalUser.role));
+  return !!(req.portalUser && req.portalUser.sessionId !== null && ['admin', 'hrbp'].includes(req.portalUser.role));
 }
 
 // Tiny in-memory login throttle: scrypt is deliberately expensive, so cap
@@ -5295,3 +5302,9 @@ module.exports.synergyStaleDays = synergyStaleDays;
 // can assert the [1, 15] clamp directly against a constructed db.settings
 // object, without needing an HTTP round-trip through the schema.
 module.exports.synergyHorizonYears = synergyHorizonYears;
+// WR-01: exposed for the same pure-function unit-check rationale — a test
+// can assert the X-Admin-Token break-glass exclusion directly against a
+// constructed req.portalUser object (sessionId: null, mirroring the
+// consolidated /api gate's exact shape for that path), without standing up
+// a real ADMIN_TOKEN-configured HTTP server.
+module.exports.isAdminOrIlRequest = isAdminOrIlRequest;

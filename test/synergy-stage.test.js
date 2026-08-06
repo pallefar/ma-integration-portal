@@ -778,6 +778,29 @@ test('synergy-baseline (h): grep-level guard — isAdminOrIlRequest is defined o
   assert.strictEqual(callSites, 2, 'isAdminOrIlRequest(req) must appear exactly twice: its own definition signature and its one call site in the re-baseline route');
 });
 
+// WR-01: the function's own comment states it "Deliberately does NOT honour
+// the X-Admin-Token break-glass path isAdminRequest() accepts", but the
+// implementation used to check only req.portalUser.role — true for the
+// break-glass identity too (role: 'admin', sessionId: null, per the
+// consolidated /api gate). Asserted directly against the exported pure
+// function with a constructed req, mirroring the break-glass shape exactly,
+// rather than standing up a real ADMIN_TOKEN-configured HTTP server.
+test('synergy-baseline (i): WR-01 — isAdminOrIlRequest excludes the X-Admin-Token break-glass identity (sessionId: null) even though its role is "admin", matching the function\'s own documented intent', () => {
+  const breakGlassReq = { portalUser: { username: 'admin-token', role: 'admin', sessionId: null, dealId: null } };
+  assert.strictEqual(app.isAdminOrIlRequest(breakGlassReq), false, 'the break-glass token identity must be excluded despite role === "admin" — D-15 requires an ATTRIBUTED human role');
+
+  const adminSessionReq = { portalUser: { username: 'admin', role: 'admin', sessionId: 'real-session-hash', dealId: 'deal_x' } };
+  assert.strictEqual(app.isAdminOrIlRequest(adminSessionReq), true, 'a real admin session must still be allowed');
+
+  const hrbpSessionReq = { portalUser: { username: 'karen', role: 'hrbp', sessionId: 'real-session-hash', dealId: 'deal_x' } };
+  assert.strictEqual(app.isAdminOrIlRequest(hrbpSessionReq), true, 'a real hrbp (Integration Lead) session must still be allowed');
+
+  const pmoSessionReq = { portalUser: { username: 'pmo', role: 'pmo', sessionId: 'real-session-hash', dealId: 'deal_x' } };
+  assert.strictEqual(app.isAdminOrIlRequest(pmoSessionReq), false, 'pmo must still be refused regardless of sessionId');
+
+  assert.strictEqual(app.isAdminOrIlRequest({ portalUser: null }), false, 'a null portalUser (unauthenticated) must be refused');
+});
+
 // ------------------------------------------- Task 3: migration script --
 
 const { migrateSynergyStages } = require('../scripts/migrate-synergy-stages.js');
