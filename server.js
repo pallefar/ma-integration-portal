@@ -3099,7 +3099,14 @@ function generatePhasingRows(runRateM, startMonth, curveShape, horizonYears) {
   const checkpoints = RAMP_CURVES[curveShape] || RAMP_CURVES.linear;
   const [startYear, startMon] = String(startMonth).split('-').map(Number);
   const rate = roundSynergyMoney(runRateM);
-  const totalRows = Math.max(0, horizonYears | 0) * 12;
+  // CR-01: a SECOND, independent clamp on the row count — belt and braces
+  // alongside synergyHorizonYears()'s own [1, 15] clamp, since the settings
+  // route is not the only way a value could land here (a future caller
+  // passing horizonYears directly, bypassing the settings singleton
+  // entirely, must still be bounded before the synchronous allocation loop
+  // below runs).
+  const clampedHorizonYears = Math.min(Math.max(horizonYears | 0, 0), 15);
+  const totalRows = clampedHorizonYears * 12;
   const rows = [];
   for (let i = 1; i <= totalRows; i++) {
     const absMonthIndex = (startMon - 1) + (i - 1);
@@ -3126,9 +3133,16 @@ function generatePhasingRows(runRateM, startMonth, curveShape, horizonYears) {
 // SYN-01/D-03: horizon length in years, read from the deal's own settings
 // singleton, defaulting to 3 — the settings key itself is registered in
 // Plan 05; this reader tolerates its absence today rather than throwing.
+// CR-01: clamped to [1, 15] defensively, in addition to the schema bound in
+// validators/settings.js's SettingsUpdateSchema — this reader is the second
+// belt-and-braces layer, since a value already stored before the schema
+// bound shipped (or written through any future non-validated path) must not
+// let generatePhasingRows() allocate an unbounded number of monthly rows on
+// the single-threaded request thread.
 function synergyHorizonYears(db) {
   const configured = db.settings && db.settings.synergyHorizonYears;
-  return typeof configured === 'number' && configured > 0 ? configured : 3;
+  const n = typeof configured === 'number' && isFinite(configured) ? configured : 3;
+  return Math.min(Math.max(n, 1), 15);
 }
 
 // SYN-01/D-06: wall-clock "has this month started" check, mirroring
@@ -5227,3 +5241,7 @@ module.exports.stageGateFailure = stageGateFailure;
 // nowMs, without booting the HTTP server for every case.
 module.exports.isSynergyStale = isSynergyStale;
 module.exports.synergyStaleDays = synergyStaleDays;
+// CR-01: exposed for the same pure-function unit-check rationale — a test
+// can assert the [1, 15] clamp directly against a constructed db.settings
+// object, without needing an HTTP round-trip through the schema.
+module.exports.synergyHorizonYears = synergyHorizonYears;

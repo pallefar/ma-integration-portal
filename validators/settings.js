@@ -95,7 +95,14 @@ const SettingsUpdateSchema = z.object({
   // silently strips them and the per-deal configurability D-03/D-17 promise
   // fails invisibly.
   synergyStaleDays: z.union([z.number(), z.string().max(10)]).optional(),
-  synergyHorizonYears: z.union([z.number(), z.string().max(10)]).optional(),
+  // CR-01: bounded 1-15 years — an unbounded value let generatePhasingRows()
+  // synchronously allocate horizonYears*12 rows on the request thread,
+  // hanging/OOM-crashing the single-threaded process for every deal on the
+  // shared host (CLAUDE.md: "the data layer must be concurrency-safe from
+  // day one"). server.js's synergyHorizonYears() reader clamps defensively
+  // too, since this schema alone cannot bound a value already stored before
+  // this fix shipped.
+  synergyHorizonYears: z.union([z.number().min(1).max(15), z.string().max(10)]).optional(),
 });
 registerSchema('POST', '/api/settings', SettingsUpdateSchema);
 

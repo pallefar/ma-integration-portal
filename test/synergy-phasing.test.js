@@ -140,6 +140,55 @@ test('synergy-phasing (unit f): monthHasArrived is true for the current and past
   assert.strictEqual(app.monthHasArrived(nextMonth), false);
 });
 
+// CR-01: an unbounded synergyHorizonYears setting let any pmo/hrbp/admin
+// caller crash the shared single-threaded process by requesting an absurd
+// phasing horizon (generatePhasingRows() allocated horizonYears*12 rows
+// synchronously on the request thread). Fixed with a schema bound
+// (validators/settings.js) AND a defensive reader-side clamp (server.js's
+// synergyHorizonYears()) AND a third clamp inside generatePhasingRows()
+// itself — belt and braces, since the settings route is not the only way a
+// value can land in the settings singleton.
+test('synergy-phasing (unit g): CR-01 — generatePhasingRows clamps an absurd horizonYears to 15 years (180 rows), never allocating an unbounded row count', () => {
+  const rows = app.generatePhasingRows(1, '2026-01', 'linear', 2000);
+  assert.strictEqual(rows.length, 180, 'a 2000-year horizon must be clamped to the 15-year ceiling (15*12 rows), not allocate 24,000 rows');
+});
+
+test('synergy-phasing (unit h): CR-01 — synergyHorizonYears(db) clamps an already-stored out-of-range value to [1, 15], and falls back to the default 3 for non-numeric/absent configuration', () => {
+  assert.strictEqual(app.synergyHorizonYears({ settings: { synergyHorizonYears: 100000000 } }), 15, 'a huge stored value must clamp to the 15-year ceiling');
+  assert.strictEqual(app.synergyHorizonYears({ settings: { synergyHorizonYears: 0 } }), 1, 'a zero stored value must clamp to the 1-year floor');
+  assert.strictEqual(app.synergyHorizonYears({ settings: { synergyHorizonYears: -5 } }), 1, 'a negative stored value must clamp to the 1-year floor');
+  assert.strictEqual(app.synergyHorizonYears({ settings: {} }), 3, 'an absent value must default to 3');
+  assert.strictEqual(app.synergyHorizonYears({ settings: { synergyHorizonYears: 'not-a-number' } }), 3, 'a non-numeric stored value must default to 3');
+  assert.strictEqual(app.synergyHorizonYears({ settings: { synergyHorizonYears: 7 } }), 7, 'an in-range value must pass through unchanged');
+});
+
+test('synergy-phasing (http l): CR-01 — POST /api/settings with an out-of-range synergyHorizonYears (e.g. 2000) is refused with 400 by the schema, before any value can reach the settings singleton', async () => {
+  const deal = freshDeal('deal_synhorz');
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const res = await fetch(`${base}/api/settings`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ synergyHorizonYears: 2000 }),
+    });
+    assert.strictEqual(res.status, 400, 'an out-of-range synergyHorizonYears must be refused by the schema, not silently accepted');
+
+    const validRes = await fetch(`${base}/api/settings`, {
+      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ synergyHorizonYears: 5 }),
+    });
+    assert.strictEqual(validRes.status, 200, 'an in-range synergyHorizonYears must still be accepted');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
 // ------------------------------------------------------------------- http --
 
 async function createInitiative(base, token, overrides) {
