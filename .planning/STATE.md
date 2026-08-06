@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Synergy Value Capture
 status: executing
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-08-06T05:30:57.551Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-08-06T06:31:02.845Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 5 discuss complete (23 decisions), 05-CONTEXT.md written
+last_activity_desc: Phase 5 execution started
 progress:
   total_phases: 7
   completed_phases: 4  # 1-4 executed; Phase 1 formal close deferred to release-cut (01-VERIFICATION.md still untracked)
   total_plans: 30
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 05 — Synergy Value Capture
+**Current focus:** Phase 5 — Synergy Value Capture
 
 ## Current Position
 
-Phase: 5 — Synergy Value Capture
-Plan: Not started
+Phase: 5 (Synergy Value Capture) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-08-06 — Phase 5 discuss complete (23 decisions), 05-CONTEXT.md written
+Last activity: 2026-08-06 — Phase 5 execution started
 
-Progress: [██████████] 100%
+Progress: [████████░░] 77%
 
 ## Performance Metrics
 
@@ -82,6 +82,7 @@ Progress: [██████████] 100%
 | Phase 04 P08 | ~70min | 3 tasks | 8 files |
 | Phase 04 P09 | 18min | 2 tasks | 6 files |
 | Phase 04 P10 | 45min | 2 tasks | 6 files |
+| Phase 05 P01 | 16min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 4 Plan 08, user decision at checkpoint] D-22 amended to match the actual Phase-3 resolver: an archived deal is a full freeze (no reads, no writes, no listing, for anyone) not read-only-with-retained-access as originally written; no code changed, decision text corrected
 - [Phase ?]: G-04-10 closed: DealSetupSchema's step made optional with a refine enforcing 'name a step, or mark completion with no step data'; the setup route's completion-only branch passes existing steps through unchanged instead of fabricating a stamp for a skipped step.
 - [Phase ?]: G-04-8 closed: server-side duplicate-create guard (createdBy + exact name + exact target + outstanding setup) plus client-side resume-on-entry bootstrap using setup.steps as the cursor; source-level, live browser walk deferred to user
+- [Phase ?]: D-04/D-06/D-25 implemented per 05-CONTEXT.md: phasing row identity is its month string; regeneration replaces item.phasing wholesale, never merges
+- [Phase ?]: Malformed :month is a route param the body schema can't see — the handler reuses isValidMonth() before the row-lookup 404 to satisfy the 400-not-404 acceptance criterion
+- [Phase ?]: Rule 1 fix: card-head .syn-realized-input handler now alerts on a rejected write (D-04 400 once phased) instead of failing silently
 
 ### Pending Todos
 
@@ -180,6 +184,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T04:04:38.648Z
-Stopped at: Phase 5 UI-SPEC approved
-Resume file: .planning/phases/05-synergy-value-capture/05-UI-SPEC.md
+Last session: 2026-08-06T06:31:02.833Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
