@@ -13,6 +13,13 @@
     .org-hero{ margin-bottom:1.25rem; }
     .org-hero h1{ font-size:1.9rem; color:var(--te-dark-teal); margin:0 0 .35rem; }
     .org-hero p{ color:var(--text-secondary); max-width:820px; line-height:1.55; margin:0; }
+    /* Design Tension 4: two plain-text toggle labels — absent entirely
+       (never a disabled pair) when the capability probe carries no
+       restricted key; no fixed width so a longer translation reflows. */
+    .org-state-switch{ display:flex; gap:.9rem; margin-top:.6rem; }
+    .org-state-switch:empty{ margin-top:0; }
+    .org-state-switch-label{ font-size:.68rem; font-weight:800; color:var(--text-dim); cursor:pointer; padding-bottom:.15rem; border-bottom:2px solid transparent; }
+    .org-state-switch-label--active{ color:var(--te-dark-teal); border-bottom-color:var(--te-dark-teal); }
     .org-node{ position:relative; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.65rem .9rem; margin-bottom:.5rem; }
     .org-node[data-depth="0"]{ box-shadow:var(--shadow-sm); }
     .org-node-row{ display:flex; align-items:flex-start; gap:.5rem; flex-wrap:wrap; }
@@ -22,6 +29,8 @@
     .org-node-level{ display:inline-block; font-size:.64rem; font-weight:800; background:var(--bg-light); color:var(--text-dim); border-radius:12px; padding:.15rem .55rem; margin-right:.5rem; }
     .org-node-occupant{ font-size:.78rem; color:var(--text-dim); margin-left:.4rem; }
     .org-node-vacant{ font-style:italic; }
+    .org-node-delete{ margin-left:auto; background:none; border:none; cursor:pointer; font-size:.7rem; font-weight:700; color:var(--text-dim); padding:.1rem .3rem; }
+    .org-node-delete:hover{ color:#EF4444; }
     /* Design Tension 1/2: indent rail as a left border on the children
        container; Tension 2's indent cap stops added padding past depth 6
        (--cap-desktop), tightened to depth 3 below 768px (--cap-narrow,
@@ -78,8 +87,10 @@
         <div class="org-hero">
           <h1>Org Design</h1>
           <p>The organization structure — vacant and filled positions, mapped current state.</p>
+          <div id="org-state-switch" class="org-state-switch"></div>
         </div>
         <div id="org-search" class="org-search"></div>
+        <div id="org-delete-error" class="org-add-error"></div>
         <div id="org-tree"></div>
         <div id="org-unassigned" class="org-unassigned"></div>
         <div id="org-add"></div>
@@ -87,6 +98,6 @@
     </main>
   </div>
 
-  <script src="/js/org.js?v=1784900004"></script>
+  <script src="/js/org.js?v=1784900005"></script>
 </body>
 </html>

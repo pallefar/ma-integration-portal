@@ -4024,6 +4024,87 @@ app.post('/api/org/positions', (req, res) => {
   res.status(201).json({ success: true, position: item });
 });
 
+// 06-02: the "equivalent probe" UI-SPEC Design Tension 3 allows in place of
+// GET /api/org/summary (which cannot exist until Plan 07 — its restricted
+// tier tallies decisions and flight-risk entries Plans 04/05 create). The
+// restricted capability key is assigned ONLY inside the granted branch,
+// never from a ternary and never as false, so serialisation OMITS the key
+// entirely for an uncleared caller — mirrors GET /api/dd/summary's
+// filter-before-tally/absent-not-zeroed rule (server.js's DD summary route,
+// above); Plan 07's GET /api/org/summary uses the identical grant check.
+// This is defence in depth only — the server refusal on the write/read
+// routes above and below is the actual control, not this probe's shape.
+app.get('/api/org/capabilities', (req, res) => {
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const capabilities = {};
+  if (accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    capabilities.targetOrgDesign = true;
+  }
+  res.json(capabilities);
+});
+
+// D-04 tier 1: same hr-area write clearance as POST /api/org/positions
+// above. Clones every current-state row into a NEW target-state row with a
+// fresh id (per this phase's identity model — the two states are separate
+// records with no shared identity, never a mutated original). Refuses with
+// 400 while the target design already holds any row, making the action
+// idempotent-by-refusal rather than silently doubling a large design on a
+// repeated click or a replayed request (T-06-14).
+app.post('/api/org/positions/copy-to-target', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to edit the org design.' });
+  }
+  const lane = orgPositionsLane(db);
+  const existingTarget = lane.filter((p) => p.state === orgValidators.ORG_STATE_TARGET);
+  if (existingTarget.length) {
+    return res.status(400).json({ error: 'The target design is not empty — clear it before copying current state again.' });
+  }
+  const currentRows = lane.filter((p) => p.state === orgValidators.ORG_STATE_CURRENT);
+  // Old-id-to-new-id map built in one pass BEFORE any clone is constructed,
+  // so every clone (including one whose reportsToId names a row later in
+  // this same array) can resolve its parent's clone id.
+  const idMap = {};
+  currentRows.forEach((p) => { idMap[p.id] = newId('pos'); });
+  const clones = currentRows.map((p) => ({
+    id: idMap[p.id],
+    title: p.title,
+    level: p.level,
+    employeeId: p.employeeId,
+    reportsToId: p.reportsToId ? (idMap[p.reportsToId] || null) : null,
+    state: orgValidators.ORG_STATE_TARGET,
+    createdAt: new Date().toISOString(),
+  }));
+  clones.forEach((c) => lane.push(c));
+  writeDb(db);
+  res.json({ success: true, count: clones.length, positions: clones });
+});
+
+// D-04 tier 1: same hr-area write clearance. Refuses with 400 while any row
+// still reports to this position, naming the count — never cascades, so no
+// part of an org design is removed outside the operator's field of view
+// (the reassignment requirement is surfaced by the confirmation dialog's
+// copy on the client, not silently handled here).
+app.delete('/api/org/positions/:id', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to edit the org design.' });
+  }
+  const lane = orgPositionsLane(db);
+  const idx = lane.findIndex((p) => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Position not found.' });
+  const target = lane[idx];
+  const directReports = lane.filter((p) => p.reportsToId === target.id);
+  if (directReports.length) {
+    return res.status(400).json({ error: `This position has ${directReports.length} direct report(s) — reassign them before deleting.` });
+  }
+  lane.splice(idx, 1);
+  writeDb(db);
+  res.json({ success: true });
+});
+
 // =====================================================================
 // Due Diligence workspace (DD-01/DD-04) — request items scoped to one of
 // db/accessPolicy.js's eight fixed functional areas, guarded end-to-end by

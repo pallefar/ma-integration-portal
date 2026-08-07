@@ -1,9 +1,14 @@
 /**
  * Org Design workspace (ORG-01) — renders exactly the positions the server
- * returned for the signed-in caller (GET /api/org/positions), current state
- * only. This page holds NO client-side list of "every possible state" — an
- * uncleared caller never sees a target-state control, a target-state fetch,
- * or a target-state row, because the server never returns one to it (D-07).
+ * returned for the signed-in caller (GET /api/org/positions). This page
+ * holds NO client-side list of "every possible state": an uncleared caller
+ * never sees a target-state control, a target-state fetch, or a
+ * target-state row, because the current/target switch and every
+ * target-state request are constructed ONLY inside the branch guarded by
+ * GET /api/org/capabilities' restricted key — absent for that caller, so
+ * the branch is never reached (D-07, Design Tension 4). Each state switch
+ * re-fetches from the server; the two states are never combined into one
+ * client-held payload and filtered locally.
  *
  * T-06-08: every user-facing string (position title, occupant name) is
  * written with textContent, never assigned as markup — org content is MNPI
@@ -14,6 +19,15 @@
   'use strict';
 
   var state = { positions: [], employees: [] };
+
+  // 'current' | 'target' — which state the tree currently displays. Held in
+  // a plain JS variable (Surface Contract 3), not persisted server-side.
+  // The switch and every target-state request are constructed ONLY inside
+  // the branch guarded by capabilities.targetOrgDesign below — for an
+  // uncleared or errored capability probe this stays {} forever, so the
+  // switch never renders and viewState never leaves 'current'.
+  var viewState = 'current';
+  var capabilities = {};
 
   // Module-level, declared exactly once, never reassigned to a fresh Set
   // instance — an unrelated re-render (e.g. after the add form submits)
@@ -50,15 +64,23 @@
   }
 
   function load() {
+    // The capability probe fires alongside the positions/employees fetch —
+    // a Promise.all fan-out, same idiom deal-home.js uses for its own
+    // multi-source panel loads. Any failure (including the probe itself)
+    // resets capabilities to {}, the fail-closed state, so the switch is
+    // never briefly visible and then withdrawn (Tension 4).
     return Promise.all([
       fetch('/api/org/positions').then(function (r) { return r.json(); }),
       fetch('/api/employees').then(function (r) { return r.json(); }),
+      fetch('/api/org/capabilities').then(function (r) { return r.json(); }),
     ]).then(function (results) {
       state.positions = Array.isArray(results[0]) ? results[0] : [];
       state.employees = Array.isArray(results[1]) ? results[1] : [];
+      capabilities = (results[2] && typeof results[2] === 'object') ? results[2] : {};
     }).catch(function () {
       state.positions = [];
       state.employees = [];
+      capabilities = {};
     });
   }
 
@@ -66,6 +88,37 @@
     if (!employeeId) return '';
     var match = state.employees.filter(function (e) { return e.id === employeeId; })[0];
     return (match && match.name) || '';
+  }
+
+  // Re-fetches positions for whichever state is currently displayed. The
+  // `state=target` query string is constructed ONLY inside the branch
+  // guarded by capabilities.targetOrgDesign — an uncleared or errored probe
+  // can never reach this branch, so no client code path constructs a
+  // target-state request without a server-granted capability.
+  function reloadPositionsForViewState() {
+    var url = '/api/org/positions';
+    if (viewState === 'target' && capabilities.targetOrgDesign) {
+      url = '/api/org/positions?state=target';
+    }
+    return fetch(url).then(function (r) { return r.json(); }).then(function (positions) {
+      state.positions = Array.isArray(positions) ? positions : [];
+    }).catch(function () {
+      state.positions = [];
+    });
+  }
+
+  function showDeleteError(message) {
+    var el2 = document.getElementById('org-delete-error');
+    if (!el2) return;
+    el2.textContent = message;
+    el2.style.display = 'block';
+  }
+
+  function clearDeleteError() {
+    var el2 = document.getElementById('org-delete-error');
+    if (!el2) return;
+    el2.textContent = '';
+    el2.style.display = 'none';
   }
 
   // Groups the flat list on reportsToId — every row whose parent is missing
@@ -150,6 +203,40 @@
     main.appendChild(occupant);
 
     row.appendChild(main);
+
+    var deleteBtn = el('button', { className: 'org-node-delete', text: 'Delete' });
+    deleteBtn.type = 'button';
+    deleteBtn.addEventListener('click', function () {
+      // Copywriting Contract's destructive-confirmation gate runs first;
+      // the {N}-direct-report count is interpolated afterwards, into the
+      // error surface below, using the SERVER-reported count from a
+      // refusal — never a client-guessed number.
+      if (!window.confirm('Delete position? This cannot be undone.')) return;
+      clearDeleteError();
+      deleteBtn.disabled = true;
+      fetch('/api/org/positions/' + node.position.id, { method: 'DELETE' })
+        .then(function (r) {
+          return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            showDeleteError((result.data && result.data.error) || 'Could not delete that position.');
+            deleteBtn.disabled = false;
+            return;
+          }
+          return reloadPositionsForViewState().then(function () {
+            renderTree();
+            renderUnassigned();
+            renderAddForm();
+          });
+        })
+        .catch(function () {
+          showDeleteError('Could not delete that position.');
+          deleteBtn.disabled = false;
+        });
+    });
+    row.appendChild(deleteBtn);
+
     article.appendChild(row);
 
     // The children container is constructed ONLY inside this branch — a
@@ -221,10 +308,39 @@
     if (!wrap) return;
     wrap.textContent = '';
     if (!state.positions.length) {
-      var heading = el('p', { className: 'org-empty', text: 'No positions mapped yet' });
-      var body = el('p', { className: 'org-empty', text: 'Add positions manually, or paste a roster to populate the structure at once.' });
-      wrap.appendChild(heading);
-      wrap.appendChild(body);
+      wrap.appendChild(el('p', { className: 'org-empty', text: 'No positions mapped yet' }));
+      // Surface Contract 3: switching to Target with zero rows gets its own
+      // body copy plus a copy-from-current action — never a silent blank
+      // page. The 'current' empty state (Copywriting Contract) is
+      // unchanged.
+      if (viewState === 'target') {
+        wrap.appendChild(el('p', { className: 'org-empty', text: 'No target design started yet. Positions copied from current state, or added new, will appear here.' }));
+        var copyBtn = el('button', { className: 'btn btn-secondary', text: 'Copy from current' });
+        copyBtn.type = 'button';
+        copyBtn.addEventListener('click', function () {
+          copyBtn.disabled = true;
+          fetch('/api/org/positions/copy-to-target', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          }).then(function (r) {
+            return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+          }).then(function (result) {
+            copyBtn.disabled = false;
+            if (!result.ok) return;
+            // Refresh the tree from the copy response itself — the newly
+            // created target rows — rather than a second round trip.
+            state.positions = Array.isArray(result.data.positions) ? result.data.positions : [];
+            renderTree();
+            renderUnassigned();
+          }).catch(function () {
+            copyBtn.disabled = false;
+          });
+        });
+        wrap.appendChild(copyBtn);
+      } else {
+        wrap.appendChild(el('p', { className: 'org-empty', text: 'Add positions manually, or paste a roster to populate the structure at once.' }));
+      }
       return;
     }
     var tree = buildTree(state.positions);
@@ -316,6 +432,46 @@
     wrap.appendChild(list);
   }
 
+  // Design Tension 4: two plain-text toggle labels, not an animated switch
+  // component (none exists in this codebase). Renders only after the
+  // capability probe resolves (called from load().then(...) below) so the
+  // switch is never briefly visible and then withdrawn — and it is absent
+  // entirely, not a disabled pair, when the probe carries no restricted key.
+  function renderStateSwitch() {
+    var wrap = document.getElementById('org-state-switch');
+    if (!wrap) return;
+    wrap.textContent = '';
+    if (!capabilities.targetOrgDesign) return;
+
+    var currentLabel = el('span', { className: 'org-state-switch-label', text: 'Current' });
+    var targetLabel = el('span', { className: 'org-state-switch-label', text: 'Target' });
+    if (viewState === 'current') currentLabel.classList.add('org-state-switch-label--active');
+    else targetLabel.classList.add('org-state-switch-label--active');
+
+    currentLabel.addEventListener('click', function () { switchViewState('current'); });
+    targetLabel.addEventListener('click', function () { switchViewState('target'); });
+
+    wrap.appendChild(currentLabel);
+    wrap.appendChild(targetLabel);
+  }
+
+  // Re-fetches from the server for the newly selected state — never fetches
+  // both states and filters locally (shipping target-state rows to a client
+  // that then hides them is exactly the pattern the clean-room rules
+  // forbid). Guarded by the same capability check reloadPositionsForViewState()
+  // itself carries, as defence in depth against a stray call site.
+  function switchViewState(next) {
+    if (!capabilities.targetOrgDesign) return;
+    if (next === viewState) return;
+    viewState = next;
+    reloadPositionsForViewState().then(function () {
+      renderStateSwitch();
+      renderTree();
+      renderUnassigned();
+      renderAddForm();
+    });
+  }
+
   function renderLoading() {
     var wrap = document.getElementById('org-tree');
     if (!wrap) return;
@@ -391,6 +547,10 @@
         title: titleInput.value,
         level: levelInput.value,
         reportsToId: document.getElementById('org-add-reportsto').value || null,
+        // Adds to whichever state is currently displayed — the reportsTo
+        // options above are already drawn from state.positions for that
+        // same state, so a cross-state parent reference can't be offered.
+        state: viewState,
       };
       fetch('/api/org/positions', {
         method: 'POST',
@@ -406,7 +566,7 @@
         }
         titleInput.value = '';
         levelInput.value = '';
-        return load().then(function () {
+        return reloadPositionsForViewState().then(function () {
           renderTree();
           renderAddForm();
           renderUnassigned();
@@ -426,6 +586,7 @@
     renderLoading();
     load().then(function () {
       renderSearch();
+      renderStateSwitch();
       renderTree();
       renderUnassigned();
       renderAddForm();

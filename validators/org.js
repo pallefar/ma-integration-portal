@@ -10,7 +10,7 @@
 'use strict';
 
 const { z } = require('zod');
-const { registerSchema } = require('./index');
+const { registerSchema, EmptyBodySchema } = require('./index');
 
 const TEXT_MAX = 300;
 const ID_MAX = 120;
@@ -45,8 +45,21 @@ const OrgPositionUpsertSchema = z.object({
 
 registerSchema('POST', '/api/org/positions', OrgPositionUpsertSchema);
 
+// POST /api/org/positions/copy-to-target (06-02) — the request body carries
+// no fields at all (the server derives every clone from the already-stored
+// current-state rows); an empty-object schema is the honest shape, matching
+// EmptyBodySchema's own role for the other no-payload write routes below.
+const OrgCopyToTargetSchema = z.object({});
+registerSchema('POST', '/api/org/positions/copy-to-target', OrgCopyToTargetSchema);
+
+// DELETE /api/org/positions/:id (06-02) — no request body; an unregistered
+// write route fails closed with a 500 (VAL-01), so this registration is
+// required for the route to ever return anything but that fail-closed 500.
+registerSchema('DELETE', '/api/org/positions/:id', EmptyBodySchema);
+
 module.exports = {
   OrgPositionUpsertSchema,
+  OrgCopyToTargetSchema,
   ORG_STATE_CURRENT,
   ORG_STATE_TARGET,
   ORG_STATES,
