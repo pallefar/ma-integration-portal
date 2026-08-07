@@ -173,6 +173,20 @@ const FlightRiskUpsertSchema = z.object({
 registerSchema('POST', '/api/org/flight-risk', FlightRiskUpsertSchema);
 registerSchema('DELETE', '/api/org/flight-risk/:id', EmptyBodySchema);
 
+// POST /api/org/flight-risk/:id/convert (06-06, D-15) — two optional
+// booleans naming the task/RAID conversion targets, closed with a
+// `.refine()` requiring at least one to be true — identical shape to
+// validators/dd.js's DdFindingConvertSchema, the route this one mirrors.
+const FlightRiskConvertSchema = z.object({
+  toTask: z.boolean().optional(),
+  toRaid: z.boolean().optional(),
+}).refine((data) => data.toTask === true || data.toRaid === true, {
+  message: 'At least one of toTask or toRaid must be true.',
+  path: ['toTask'],
+});
+
+registerSchema('POST', '/api/org/flight-risk/:id/convert', FlightRiskConvertSchema);
+
 module.exports = {
   OrgPositionUpsertSchema,
   OrgCopyToTargetSchema,
@@ -184,4 +198,5 @@ module.exports = {
   OrgDecisionSchema,
   ORG_DECISION_TYPES,
   FlightRiskUpsertSchema,
+  FlightRiskConvertSchema,
 };

@@ -4530,6 +4530,88 @@ app.delete('/api/org/flight-risk/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// D-15 (06-06): one-click conversion of a flight-risk register entry into a
+// pre-filled Day-1 task and/or RAID entry, bidirectionally linked and
+// deduped by a stable 'org-flightrisk:<entryId>' source string so
+// re-clicking is a no-op — structurally mirrors
+// POST /api/dd/findings/:id/convert above (task/RAID lookup-then-create,
+// link-array append, single conditional write), with the DD area-clearance
+// gate swapped for this register's own D-04 tier-2 role gate + hr grant.
+// This exact source prefix is what GET /api/raid's provenance resolver
+// (Due Diligence section below) branches on — produced here in exactly one
+// place, never reconstructed elsewhere.
+app.post('/api/org/flight-risk/:id/convert', (req, res) => {
+  if (!isAdminOrIlRequest(req)) {
+    return res.status(403).json({ error: 'Only admin and the Integration Lead can convert a flight-risk entry.' });
+  }
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to convert entries in the flight-risk register.' });
+  }
+  const lane = orgFlightRiskLane(db);
+  const entry = lane.find((r) => r.id === req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Flight-risk entry not found.' });
+
+  const source = 'org-flightrisk:' + entry.id;
+  const employee = employeeRosterLane(db).find((e) => e.id === entry.employeeId);
+  const employeeName = employee ? employee.name : 'Unknown employee';
+  let mutated = false;
+  let task = null;
+  let raidEntry = null;
+
+  if (b.toTask) {
+    const tLane = taskLane(db);
+    task = tLane.find((t) => t.source === source) || null;
+    if (!task) {
+      task = {
+        id: newId('task'),
+        title: `${employeeName} — retention risk mitigation`,
+        workstreamId: 'ws_hr',
+        phase: 'day1',
+        owner: entry.owner || '',
+        due: '',
+        status: 'todo',
+        source,
+        createdAt: new Date().toISOString(),
+      };
+      tLane.push(task);
+      mutated = true;
+    }
+    if (!entry.linkedTaskIds.includes(task.id)) { entry.linkedTaskIds.push(task.id); mutated = true; }
+  }
+
+  if (b.toRaid) {
+    const rLane = raidLane(db);
+    raidEntry = rLane.find((r) => r.source === source) || null;
+    if (!raidEntry) {
+      raidEntry = {
+        id: newId('raid'),
+        type: 'risk',
+        title: `${employeeName} — retention risk`,
+        // D-16: copied VERBATIM from the entry's level — no mapping table,
+        // no clamping, mirroring the DD conversion route's identical rule
+        // for the identical reason: a critical retention risk must not
+        // arrive in the RAID log as a high one.
+        severity: entry.riskLevel,
+        owner: entry.owner || '',
+        workstreamId: 'ws_hr',
+        status: 'open',
+        notes: entry.notes || entry.mitigation || '',
+        source,
+        createdAt: new Date().toISOString(),
+      };
+      rLane.push(raidEntry);
+      mutated = true;
+    }
+    if (!entry.linkedRaidIds.includes(raidEntry.id)) { entry.linkedRaidIds.push(raidEntry.id); mutated = true; }
+  }
+
+  if (mutated) writeDb(db);
+  res.json({ success: true, task, raid: raidEntry, entry });
+});
+
 // =====================================================================
 // Due Diligence workspace (DD-01/DD-04) — request items scoped to one of
 // db/accessPolicy.js's eight fixed functional areas, guarded end-to-end by

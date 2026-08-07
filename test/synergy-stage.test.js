@@ -853,12 +853,13 @@ test('synergy-baseline (h): grep-level guard — isAdminOrIlRequest is defined o
   // decision surface (POST /api/org/decisions' own write gate, and
   // GET /api/org/capabilities' governance capability key) + two call sites in
   // 06-05's flight-risk register (POST /api/org/flight-risk and
-  // DELETE /api/org/flight-risk/:id) — five separate tier-2 governance routes
-  // reusing the same helper rather than each re-implementing its own
-  // ['admin','hrbp'] check inline. This count grows by one every time a new
-  // route adopts the shared helper; the point of this test is that the
-  // DEFINITION count above never grows past 1.
-  assert.strictEqual(callSites, 6, 'isAdminOrIlRequest(req) must appear exactly six times: its own definition signature, the re-baseline route\'s call site, the org-decisions/capabilities routes\' two call sites, and the flight-risk register\'s two call sites');
+  // DELETE /api/org/flight-risk/:id) + one call site in 06-06's flight-risk
+  // conversion route (POST /api/org/flight-risk/:id/convert) — six separate
+  // tier-2 governance routes reusing the same helper rather than each
+  // re-implementing its own ['admin','hrbp'] check inline. This count grows
+  // by one every time a new route adopts the shared helper; the point of
+  // this test is that the DEFINITION count above never grows past 1.
+  assert.strictEqual(callSites, 7, 'isAdminOrIlRequest(req) must appear exactly seven times: its own definition signature, the re-baseline route\'s call site, the org-decisions/capabilities routes\' two call sites, the flight-risk register\'s two call sites, and the flight-risk conversion route\'s call site');
 });
 
 // WR-01: the function's own comment states it "Deliberately does NOT honour
