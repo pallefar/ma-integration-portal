@@ -1119,3 +1119,149 @@ test('org-positions (oo): the committed demo database carries the seeded org lan
     db.close();
   }
 });
+
+// -----------------------------------------------------------------------
+// Plan 08, Task 2 (continuation) — walk-finding-driven regression tests.
+// A live browser-automation pass of the Task 2 walk script surfaced five
+// findings (F1-F5); this block proves each fix at the level available to
+// this repo (no jsdom harness exists here, so client-render contracts are
+// verified at the source level, mirroring every other org.js test above).
+// -----------------------------------------------------------------------
+
+test('org-positions (pp) [F1]: seedDefaultExpansion() seeds a position id at most ONCE, so a manual collapse at depth 0/1 survives a later re-render', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const fnMatch = src.match(/function seedDefaultExpansion\(tree\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'seedDefaultExpansion() must exist');
+  const body = fnMatch[0];
+  // The bug: expandedIds.add() called unconditionally for every depth-0/1
+  // node on every render pass, so the toggle's own delete-then-renderTree()
+  // sequence re-added the id it had just removed in the same tick. The fix
+  // must guard the add behind a once-only marker that is itself set true
+  // the first (and only the first) time a given id is seen.
+  assert.match(
+    body,
+    /if\s*\(\s*!seededPositionIds\[node\.position\.id\]\s*\)\s*\{[\s\S]*?expandedIds\.add\(node\.position\.id\);[\s\S]*?seededPositionIds\[node\.position\.id\]\s*=\s*true;[\s\S]*?\}/,
+    'expandedIds.add() must be guarded by a once-only seededPositionIds marker — an unconditional add on every render pass silently undoes a manual collapse at depth 0/1 (T-06-08 Plan 08 walk finding F1)',
+  );
+  // The guard hash itself must be declared exactly once, module-level, as a
+  // plain object — never a second Set (this file holds exactly one Set
+  // instance, proven by test (r) above).
+  assert.match(src, /var seededPositionIds\s*=\s*\{\s*\}/, 'seededPositionIds must be declared as a plain-object hash');
+});
+
+test('org-positions (qq) [F3]: GET /api/org/decisions is fetched ONLY inside the branch guarded by the already-resolved capabilities.targetOrgDesign — never unconditionally alongside the capability probe itself', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const loadMatch = src.match(/function load\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(loadMatch, 'load() must exist');
+  const body = loadMatch[0];
+  // Exactly one fetch call to the decisions endpoint inside load().
+  const decisionsFetchOccurrences = (body.match(/fetch\('\/api\/org\/decisions'\)/g) || []).length;
+  assert.strictEqual(decisionsFetchOccurrences, 1, 'load() must issue exactly one GET /api/org/decisions fetch');
+  // It must NOT sit inside the initial Promise.all alongside the
+  // capabilities probe (that fan-out must resolve first) — the decisions
+  // fetch must appear textually AFTER the capabilities assignment and
+  // after an `if (!capabilities.targetOrgDesign)` early-return guard.
+  const capsAssignIdx = body.indexOf('capabilities = ');
+  const guardIdx = body.indexOf('if (!capabilities.targetOrgDesign)');
+  const decisionsFetchIdx = body.indexOf("fetch('/api/org/decisions')");
+  assert.ok(capsAssignIdx !== -1 && guardIdx !== -1 && decisionsFetchIdx !== -1, 'load() must resolve capabilities, then guard, then conditionally fetch decisions');
+  assert.ok(
+    capsAssignIdx < guardIdx && guardIdx < decisionsFetchIdx,
+    'the decisions fetch must be positioned AFTER capabilities has resolved and AFTER the targetOrgDesign guard — an uncleared caller must issue zero requests to a route the server would only 403, not one console error per page load (T-06-08 Plan 08 walk finding F3)',
+  );
+});
+
+test('org-positions (rr) [F3]: the decision badge and the Decisions history toggle are constructed ONLY inside the capabilities.targetOrgDesign branch in renderNode() — never unconditionally', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const fnMatch = src.match(/function renderNode\(node, depth, searchActive, relevantIds\)\s*\{[\s\S]*?\n    return article;\n  \}/);
+  assert.ok(fnMatch, 'renderNode() must exist');
+  const body = fnMatch[0];
+  assert.match(
+    body,
+    /if\s*\(capabilities\.targetOrgDesign\)\s*\{[\s\S]*?org-node-decision[\s\S]*?\}/,
+    'the decision badge must be constructed only inside an `if (capabilities.targetOrgDesign)` branch — UI-SPEC Design Tension 3 states decision badges are never inserted into the DOM for an uncleared member (T-06-08 Plan 08 walk finding F3)',
+  );
+  assert.match(
+    body,
+    /if\s*\(capabilities\.targetOrgDesign\)\s*\{[\s\S]*?org-node-history-toggle[\s\S]*?\}/,
+    'the Decisions history toggle must be constructed only inside an `if (capabilities.targetOrgDesign)` branch — an uncleared caller must never be shown a working toggle into a decision log the server would refuse to return',
+  );
+});
+
+test('org-positions (ss) [F5]: orgSummaryFor() against the committed demo database gives karen (the seeded owner) a positive mine.unmitigatedFlightRisks count — the D-22 owner nudge must fire on seeded data', () => {
+  const DEMO_DB_PATH = path.join(__dirname, '..', 'data', 'demo.db');
+  const Database = require('better-sqlite3');
+  const rawDb = new Database(DEMO_DB_PATH, { readonly: true });
+  try {
+    const db = {
+      orgPositions: rawDb.prepare('SELECT data FROM orgPositions').all().map((r) => JSON.parse(r.data)),
+      orgDecisions: rawDb.prepare('SELECT data FROM orgDecisions').all().map((r) => JSON.parse(r.data)),
+      orgFlightRisks: rawDb.prepare('SELECT data FROM orgFlightRisks').all().map((r) => JSON.parse(r.data)),
+    };
+    const deal = { memberGrants: {}, members: ['karen'] };
+    const karen = { username: 'karen', role: 'hrbp' }; // hrbp short-circuits accessPolicy's area grant, same as the seed's own BASELINE_ACTOR persona
+    const summary = app.orgSummaryFor(db, deal, karen);
+    assert.ok(summary.restricted, 'karen (hrbp) must be granted the restricted tier');
+    assert.ok(
+      summary.restricted.mine.unmitigatedFlightRisks > 0,
+      'karen must own at least one unmitigated high/critical flight-risk entry on the seeded demo data — a display-name owner ("Karen Peterson") can never match `req.portalUser.username` ("karen"), which is why this was 0 before the fix (T-06-08 Plan 08 walk finding F5)',
+    );
+  } finally {
+    rawDb.close();
+  }
+});
+
+test('org-positions (tt) [F5]: the committed demo database\'s seeded flight-risk owners are literal usernames, never a display name', () => {
+  const DEMO_DB_PATH = path.join(__dirname, '..', 'data', 'demo.db');
+  const Database = require('better-sqlite3');
+  const db = new Database(DEMO_DB_PATH, { readonly: true });
+  try {
+    const risks = db.prepare("SELECT data FROM orgFlightRisks WHERE id LIKE 'orgseed_%'").all().map((r) => JSON.parse(r.data));
+    assert.ok(risks.length > 0, 'the seed must have written flight-risk rows');
+    risks.forEach((r) => {
+      assert.strictEqual(r.owner, 'karen', `orgFlightRisks row ${r.id} must carry the literal username 'karen' as owner, not a display name`);
+    });
+  } finally {
+    db.close();
+  }
+});
+
+// F2 (i18n re-apply on dynamic render) and F4 (decision badge no longer
+// occludes card content) — cheap source-level checks extending coverage
+// beyond the F1/F3/F5 tests the plan explicitly named.
+
+test('org-positions (uu) [F2]: renderTree() and renderStateSwitch() re-apply i18n after every dynamic render, and the switch labels carry data-i18n', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  assert.match(src, /function applyI18n\(\)\s*\{\s*if\s*\(window\.applyPortalI18n\)\s*window\.applyPortalI18n\(\);\s*\}/, 'org.js must define a local applyI18n() re-apply helper, mirroring execution.js/assessments.js\'s established idiom');
+  const treeFnMatch = src.match(/function renderTree\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(treeFnMatch, 'renderTree() must exist');
+  assert.match(treeFnMatch[0], /applyI18n\(\);/, 'renderTree() must call applyI18n() so dynamically-inserted decision badges/history pills are translated even when the language dictionary loaded before this page\'s async render completed');
+  const switchFnMatch = src.match(/function renderStateSwitch\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(switchFnMatch, 'renderStateSwitch() must exist');
+  assert.match(switchFnMatch[0], /currentLabel\.setAttribute\('data-i18n',\s*'org\.switch_current'\)/, 'the Current switch label must carry a data-i18n attribute');
+  assert.match(switchFnMatch[0], /targetLabel\.setAttribute\('data-i18n',\s*'org\.switch_target'\)/, 'the Target switch label must carry a data-i18n attribute');
+  assert.match(switchFnMatch[0], /applyI18n\(\);/, 'renderStateSwitch() must call applyI18n() after inserting the labels');
+});
+
+test('org-positions (vv) [F2]: deal-home.js re-applies i18n after rendering the org panel\'s translated decision-type labels', () => {
+  const DEAL_HOME_JS_PATH = path.join(__dirname, '..', 'public', 'js', 'deal-home.js');
+  const src = fs.readFileSync(DEAL_HOME_JS_PATH, 'utf8');
+  const renderDealHomeMatch = src.match(/function renderDealHome\(dealId\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(renderDealHomeMatch, 'renderDealHome() must exist');
+  assert.match(
+    renderDealHomeMatch[0],
+    /if\s*\(window\.applyPortalI18n\)\s*window\.applyPortalI18n\(\);/,
+    'renderDealHome() must re-apply i18n after its Promise.all render pass — the org panel\'s decision-type labels carry data-i18n but are built after transitions.js\'s own one-time apply already ran',
+  );
+});
+
+test('org-positions (ww) [F4]: the decision badge no longer sits at a fixed absolute position — it participates in layout flow inside its own wrapper', () => {
+  const orgHtmlSrc = fs.readFileSync(path.join(__dirname, '..', 'public', 'org.html'), 'utf8');
+  const ruleMatch = orgHtmlSrc.match(/\.org-node-decision\{([^}]*)\}/);
+  assert.ok(ruleMatch, '.org-node-decision rule must exist');
+  assert.ok(!ruleMatch[1].includes('position:absolute'), '.org-node-decision must not be absolute-positioned — an absolute top-right pill occluded the Delete button and the occupant name at several widths (T-06-08 Plan 08 walk finding F4)');
+  assert.match(orgHtmlSrc, /\.org-node-decision-wrap\{[^}]*text-align:right[^}]*\}/, 'a right-aligned wrapper rule for the decision badge must exist so it renders on its own line, never overlapping the interactive row below it');
+
+  const orgJsSrc = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  assert.match(orgJsSrc, /className:\s*'org-node-decision-wrap'/, 'org.js must construct the decision badge inside the org-node-decision-wrap container');
+});
