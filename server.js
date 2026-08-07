@@ -3846,8 +3846,61 @@ const RAID_TYPES = ['risk', 'issue', 'decision', 'dependency'];
 const RAID_LEVELS = ['low', 'medium', 'high', 'critical'];
 const RAID_STATUSES = ['open', 'mitigating', 'closed'];
 
+// T-06-42/D-17 (06-06): closes the Phase-4 accepted risk (T-04-21, proven
+// live once — converting a Legal DD finding republished its title and
+// notes through this unfiltered log to a member cleared only for HR).
+// GET /api/raid below gates each entry on the functional area its OWN
+// PROVENANCE resolves to, never on the entry's workstreamId and never via
+// db/accessPolicy.js's generic filterByAreaGrant() list helper — that
+// helper keys on `item.area`, and RAID rows carry NO area field at all
+// (only workstreamId), so a naive reuse would evaluate every entry's
+// membership as `undefined` in the granted set, which is false for every
+// possible set including the full admin set: FAIL-CLOSED-TO-USELESS,
+// emptying the log for every caller, admin included. That failure looks
+// correct from the restricted side (an uncleared-user test still passes)
+// while silently breaking the open side — the opposite failure mode of a
+// leak, and just as dangerous to a real deal team.
+//
+// The workstream field is deliberately NEVER used as the clearance key
+// either: DD_AREA_WORKSTREAM (Due Diligence section, below) is a
+// many-to-one mapping — financial AND tax both fold into ws_finance, legal
+// AND complianceEsg both fold into ws_legal — so a workstream id cannot be
+// inverted back to the area that produced it without guessing wrong
+// roughly half the time that collision applies.
+//
+// An entry whose provenance resolves to null (manually created with an
+// empty source, or orphaned because its originating record was since
+// deleted) is returned UNFILTERED — general RAID content is not MNPI; only
+// content republished FROM a restricted source is gated, and an orphaned
+// link degrades to unlinked rather than becoming permanently invisible to
+// everyone including admin (T-06-45).
+function resolveRaidEntryClearanceArea(entry, db) {
+  const source = entry && entry.source;
+  if (!source) return null;
+  const ddMatch = /^dd-finding:(.+)$/.exec(source);
+  if (ddMatch) {
+    const finding = ddFindingsLane(db).find((f) => f.id === ddMatch[1]);
+    return finding ? finding.area : null;
+  }
+  // Retention clearance is always the fixed `hr` area regardless of which
+  // workstream a converted flight-risk entry was filed under (D-15's
+  // conversion route, above, never sets a workstream-derived area here).
+  if (source.indexOf('org-flightrisk:') === 0) return 'hr';
+  return null;
+}
+
 app.get('/api/raid', (req, res) => {
-  res.json(raidLane(readDb()));
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  // Resolved once here, not re-derived per entry — resolveRaidEntryClearanceArea's
+  // own ddFindingsLane(db) calls below are then just reference reads
+  // against this already-materialized array.
+  ddFindingsLane(db);
+  const visible = raidLane(db).filter((entry) => {
+    const area = resolveRaidEntryClearanceArea(entry, db);
+    return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
+  });
+  res.json(visible);
 });
 
 app.post('/api/raid', (req, res) => {
@@ -6114,3 +6167,8 @@ module.exports.positionGraphFailure = positionGraphFailure;
 // agrees with validators/org.js's and public/js/org.js's own copies.
 module.exports.ORG_DECISION_TYPES = ORG_DECISION_TYPES;
 module.exports.derivedDecisionFor = derivedDecisionFor;
+// D-17 (06-06): exposed for the same pure-function unit-check rationale —
+// a test can drive the orphaned-provenance case (originating finding
+// deleted from a hand-built lane) directly, without needing a live DELETE
+// sequence against a real finding first.
+module.exports.resolveRaidEntryClearanceArea = resolveRaidEntryClearanceArea;

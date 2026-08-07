@@ -554,25 +554,29 @@ test('dd-findings (o): a member uncleared for the finding\'s area gets the unifo
   }
 });
 
-test('dd-findings (p): the convert control discloses the whole-deal-team audience via textContent, not markup', () => {
-  // T-04-21: this threat was accepted as "the convert control states that the
-  // created task or entry is visible to the whole deal team" — but no such
-  // disclosure existed anywhere in the client. /api/raid and
-  // /api/integration-tasks are NOT clearance-filtered like the DD routes are
-  // (see dd-findings (o) above and server.js:3126-3128), so converting a
-  // finding silently republishes its title/notes to every deal member. This
-  // is a source-level assertion, not an HTTP round-trip, because the
+test('dd-findings (p): the convert control discloses the TRUE, now-restricted audience via textContent, not markup — the stale whole-deal-team claim is gone', () => {
+  // T-04-21, CLOSED by D-17 (06-06 Task 2): this threat was originally
+  // accepted as "the convert control states that the created task or entry
+  // is visible to the whole deal team" — but GET /api/raid is no longer
+  // unfiltered (server.js's resolveRaidEntryClearanceArea() now gates a
+  // converted entry on its originating finding's own functional area), so
+  // that disclosure became FACTUALLY WRONG the instant the filter shipped.
+  // This is a source-level assertion, not an HTTP round-trip, because the
   // disclosure is a client-rendered UI element with no server-observable
   // side effect — a regression here would not be caught by any API test.
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'due-diligence.js'), 'utf8');
   assert.ok(
-    src.includes('whole deal team'),
-    'the finding-row convert control must disclose that conversion makes the entry visible to the whole deal team (T-04-21) — this text has been removed or reworded',
+    !src.includes('whole deal team'),
+    'the superseded "whole deal team" disclosure must no longer appear anywhere in the client — D-17 makes it false',
   );
-  const noteLine = src.split('\n').find((line) => line.includes('whole deal team'));
-  assert.ok(noteLine, 'expected to locate the exact line carrying the whole-deal-team disclosure text');
+  assert.ok(
+    src.includes('visible only to members cleared for this area'),
+    'the finding-row convert control must disclose the TRUE, now-restricted audience',
+  );
+  const noteLine = src.split('\n').find((line) => line.includes('visible only to members cleared for this area'));
+  assert.ok(noteLine, 'expected to locate the exact line carrying the corrected disclosure text');
   assert.ok(
     /text\s*:/.test(noteLine),
-    "the whole-deal-team disclosure must be assigned via the el() helper's `text:` property (textContent), never via innerHTML or another markup sink",
+    "the corrected disclosure must be assigned via the el() helper's `text:` property (textContent), never via innerHTML or another markup sink",
   );
 });

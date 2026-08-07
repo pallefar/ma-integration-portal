@@ -315,14 +315,17 @@
       });
     }
 
-    // T-04-21: clean-room disclosure. Conversion copies title+notes into the
-    // shared RAID/task lanes, which are NOT clearance-filtered like the DD
-    // routes are — so this must render for every row, converted or not, so
-    // the operator (who IS cleared here) makes an informed, deliberate call
-    // before widening the audience.
+    // T-04-21, CLOSED by D-17 (06-06 Task 2): conversion copies title+notes
+    // into the shared RAID/task lanes, which were previously unfiltered for
+    // every deal member. GET /api/raid now gates each converted entry on
+    // the originating finding's own functional area (server.js's
+    // resolveRaidEntryClearanceArea()), so this note still renders for
+    // every row — converted or not, so the operator makes an informed call
+    // — but its wording must state the TRUE, now-restricted audience rather
+    // than the pre-filter claim of an unrestricted, deal-wide audience.
     convertRow.appendChild(el('span', {
       className: 'dd-finding-convert-note',
-      text: 'Visible to the whole deal team once created — not only members cleared for this area.',
+      text: 'Creates a linked Day-1 task and/or RAID entry, visible only to members cleared for this area.',
     }));
 
     row.appendChild(convertRow);

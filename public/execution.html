@@ -113,6 +113,15 @@
     .raid-type.dependency{ background:rgba(100,116,139,.12); color:#475569; border:1px solid rgba(100,116,139,.3); }
     .raid-lvl{ font-size:.64rem; font-weight:800; }
     .raid-lvl.high{ color:#C0392B; } .raid-lvl.medium{ color:#C77700; } .raid-lvl.low{ color:#3f7a37; }
+    /* T-06-49: the severity enum was widened to four values in Phase 4 but
+       this rule set was left at three, so a critical-severity RAID entry
+       (reachable today via POST /api/dd/findings/:id/convert, and via this
+       plan's own flight-risk conversion route) rendered unstyled. Reuses
+       the existing critical colour from .page-banner--critical's title
+       (public/css/style.css) rather than inventing a fifth palette entry;
+       font-weight 900 is heavier than the .high rule's inherited 800 so a
+       critical badge is distinguishable from a high one at this size. */
+    .raid-lvl.critical{ color:#9C2A17; font-weight:900; }
     .raid-fbtn{ border:1px solid var(--border-color); background:var(--card-bg,#fff); border-radius:20px; font-family:inherit; font-size:.74rem; font-weight:700; color:var(--text-dim); padding:.3rem .8rem; cursor:pointer; }
     .raid-fbtn.active{ background:var(--te-dark-teal); border-color:var(--te-dark-teal); color:#fff; }
     /* workstream rollup */
