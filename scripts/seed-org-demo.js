@@ -225,13 +225,26 @@ const DECISION_SEEDS = [
 // sensing R&D engineers approached by competitors") — D-15's concrete
 // justifying case — and is deliberately left with empty linkedRaidIds/
 // linkedTaskIds so the conversion button is demonstrable rather than
-// pre-clicked. -----------------------------------------------------------
+// pre-clicked.
+//
+// `owner` is BASELINE_ACTOR (the literal username 'karen'), NOT a display
+// name — this is the field GET /api/org/summary's orgSummaryFor() (and
+// GET /api/dd/summary's identical `mine`-scoping idiom) compares against
+// `req.portalUser.username` via `String(r.owner || '').trim() === myUsername`
+// (server.js), the SAME convention every other owner-scoped field in this
+// app already follows (test/org-summary.test.js's and
+// test/org-flight-risk-audit.test.js's own fixtures use owner: 'karen'/
+// 'admin' literally, never a display name). Plan 08 Task 2 walk finding F5:
+// this previously read 'Karen Peterson' (the display name) — a value that
+// can never equal any session's username — so karen's own
+// mine.unmitigatedFlightRisks stayed 0 on seeded data and the D-22 owner
+// nudge never fired no matter how the demo was walked. -----------------
 const FLIGHT_RISK_SEEDS = [
   {
     id: 'orgseed_risk_alex',
     employeeId: EMP_ALEX,
     riskLevel: 'critical',
-    owner: 'Karen Peterson',
+    owner: BASELINE_ACTOR,
     mitigation: '', // deliberately empty
     notes: 'Direct counterpart to the RAID log’s "Key sensing R&D engineers approached by competitors" risk — Alex has been named specifically by two recruiters since the acquisition announced. No counter-offer has been made yet.',
     linkedTaskIds: [],
@@ -242,7 +255,7 @@ const FLIGHT_RISK_SEEDS = [
     id: 'orgseed_risk_michael',
     employeeId: EMP_MICHAEL,
     riskLevel: 'high',
-    owner: 'Karen Peterson',
+    owner: BASELINE_ACTOR,
     mitigation: '', // deliberately empty
     notes: 'Uncertainty over the combined Commercial function’s reporting line and comp structure is fueling flight risk — a competitor approached him directly in early June.',
     linkedTaskIds: [],
@@ -253,7 +266,7 @@ const FLIGHT_RISK_SEEDS = [
     id: 'orgseed_risk_sarah',
     employeeId: EMP_SARAH,
     riskLevel: 'medium',
-    owner: 'Karen Peterson',
+    owner: BASELINE_ACTOR,
     mitigation: 'Retention bonus (18-month cliff) approved 2026-07-20; expanded scope confirmed in writing to include TE’s existing sensor engineering org.',
     notes: 'Flagged after an informal exit conversation in late June; the retention package and expanded mandate addressed her stated concerns.',
     linkedTaskIds: [],
