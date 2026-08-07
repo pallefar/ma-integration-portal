@@ -90,7 +90,7 @@
        Surface Contract 5). The badge is a FILLED PILL only — the card
        border-accent channel stays reserved for flight-risk severity
        (Plan 05) so the two vocabularies never compete for the same visual
-       channel. No width/max-width/overflow/text-overflow anywhere in this
+       channel. No fixed width and no clipping rule anywhere in this
        block — a longer translation must reflow the pill, never clip it,
        because the label IS the decision (i18n contract). */
     .org-node-decision{ position:absolute; top:.55rem; right:.65rem; flex:none; font-size:.64rem; font-weight:800; border-radius:12px; padding:.18rem .6rem; }
@@ -113,6 +113,30 @@
     .org-dec-form select, .org-dec-form textarea, .org-dec-form input{ padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; }
     .org-dec-form textarea{ resize:vertical; }
     .org-dec-form-error{ display:none; font-size:.76rem; color:#C0392B; }
+    /* Flight-risk register (06-05, D-15/D-16, UI-SPEC Design Tension 5 /
+       Surface Contract 6). On the TREE card, severity is a BORDER-ACCENT
+       (.org-node-risk) — reusing .dd-item--overdue's exact idiom
+       (border-color + inset box-shadow, due-diligence.html:21) — never a
+       second pill, so it never competes with the decision badge's filled-
+       pill channel for the same corner. The register's own row mirrors
+       .raid-row verbatim (execution.html:108); the level renders as a
+       small text label (.org-risk-lvl, mirroring .raid-lvl verbatim,
+       execution.html:114-115) since there is no competing badge on this
+       standalone row. No fixed width and no clipping rule anywhere
+       in this block — a longer translation must reflow, never clip. */
+    .org-node-risk{ border-color:#C0392B; box-shadow:inset 0 0 0 1px rgba(192,57,43,.35); }
+    .org-risk-register{ margin-top:1rem; }
+    .org-risk-register-heading{ font-size:.85rem; font-weight:800; color:var(--te-dark-teal); margin:0 0 .4rem; }
+    .org-risk-row{ display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-bottom:.45rem; }
+    .org-risk-person{ font-size:.86rem; font-weight:600; color:var(--text-primary); }
+    .org-risk-lvl{ font-size:.64rem; font-weight:800; }
+    .org-risk-lvl.high{ color:#C0392B; } .org-risk-lvl.critical{ color:#C0392B; } .org-risk-lvl.medium{ color:#C77700; } .org-risk-lvl.low{ color:#3f7a37; }
+    .org-risk-owner{ font-size:.78rem; color:var(--text-dim); }
+    .org-risk-mitigation{ flex-basis:100%; font-size:.78rem; color:var(--text-primary); line-height:1.4; margin:0; }
+    .org-risk-form{ display:flex; flex-direction:column; gap:.5rem; background:var(--card-bg,#fff); border:1px dashed var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-top:.6rem; }
+    .org-risk-form select, .org-risk-form textarea, .org-risk-form input{ padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; }
+    .org-risk-form textarea{ resize:vertical; }
+    .org-risk-form-error{ display:none; font-size:.76rem; color:#C0392B; }
   </style>
 </head>
 <body>
@@ -144,10 +168,11 @@
         <div id="org-unassigned" class="org-unassigned"></div>
         <div id="org-add"></div>
         <div id="org-import"></div>
+        <div id="org-risk-register" class="org-risk-register"></div>
       </div>
     </main>
   </div>
 
-  <script src="/js/org.js?v=1784900007"></script>
+  <script src="/js/org.js?v=1784900008"></script>
 </body>
 </html>

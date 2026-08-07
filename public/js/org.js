@@ -18,7 +18,7 @@
 (function () {
   'use strict';
 
-  var state = { positions: [], employees: [], decisions: [] };
+  var state = { positions: [], employees: [], decisions: [], flightRisks: [] };
 
   // 'current' | 'target' — which state the tree currently displays. Held in
   // a plain JS variable (Surface Contract 3), not persisted server-side.
@@ -125,6 +125,20 @@
     return state.decisions.filter(function (d) { return d.positionId === positionId; });
   }
 
+  // UI-SPEC Design Tension 5: severity reaches the TREE as a border-accent
+  // (.org-node-risk), never a second pill — only high/critical entries get
+  // the accent (low/medium render with the card's normal border), so a
+  // 200-node tree does not become a wall of colored borders and the accent
+  // means "needs attention" rather than "has a row". Does not read, key on
+  // or order by any employee engagement field (fairness prohibition, this
+  // plan's threat register T-06-41) — only employeeId and riskLevel.
+  function hasHighCriticalFlightRisk(employeeId) {
+    if (!employeeId) return false;
+    return state.flightRisks.some(function (r) {
+      return r.employeeId === employeeId && (r.riskLevel === 'high' || r.riskLevel === 'critical');
+    });
+  }
+
   function el(tag, opts) {
     var node = document.createElement(tag);
     opts = opts || {};
@@ -158,11 +172,29 @@
       state.employees = Array.isArray(results[1]) ? results[1] : [];
       capabilities = (results[2] && typeof results[2] === 'object') ? results[2] : {};
       state.decisions = Array.isArray(results[3]) ? results[3] : [];
+
+      // ORG-03 (06-05): the flight-risk register is READ-restricted behind
+      // the SAME capability Plan 02 established for target-state org
+      // structure (capabilities.targetOrgDesign, the hr area grant) — no
+      // second read-tier key is introduced. Fetched ONLY when that
+      // capability is present, and ONLY here, once per page visit: a
+      // successful GET /api/org/flight-risk writes an audit row by decision
+      // (D-03), so an uncleared caller's ordinary page load must issue
+      // NEITHER this fetch nor the denial event it would otherwise trigger.
+      if (capabilities.targetOrgDesign) {
+        return fetch('/api/org/flight-risk').then(function (r) { return r.json(); }).then(function (risks) {
+          state.flightRisks = Array.isArray(risks) ? risks : [];
+        }).catch(function () {
+          state.flightRisks = [];
+        });
+      }
+      state.flightRisks = [];
     }).catch(function () {
       state.positions = [];
       state.employees = [];
       capabilities = {};
       state.decisions = [];
+      state.flightRisks = [];
     });
   }
 
@@ -400,6 +432,13 @@
     // active, so the operator keeps their bearings on the rest of the tree.
     if (searchActive && !relevantIds[node.position.id]) {
       article.classList.add('org-node--dim');
+    }
+
+    // Design Tension 5: the border-accent severity channel — co-renders
+    // alongside the decision badge below (two different visual grammars,
+    // never two pills competing for the same corner).
+    if (hasHighCriticalFlightRisk(node.position.employeeId)) {
+      article.classList.add('org-node-risk');
     }
 
     // UI-SPEC Design Tension 5: the decision badge is a FILLED PILL, top-
@@ -701,6 +740,175 @@
       list.appendChild(row);
     });
     wrap.appendChild(list);
+  }
+
+  // -----------------------------------------------------------------------
+  // Flight-risk register (ORG-03, 06-05, D-15/D-16, UI-SPEC Surface
+  // Contract 6). READ-restricted behind capabilities.targetOrgDesign (the
+  // SAME hr-area-grant capability Plan 02 established), rendered structurally
+  // absent — no DOM subtree at all — for an uncleared caller. The entry form
+  // is gated on capabilities.recordOrgDecisions, Plan 04's EXISTING
+  // governance-capability key, reused verbatim rather than adding a second
+  // governance key — POST/DELETE /api/org/flight-risk enforce the identical
+  // isAdminOrIlRequest(req)+hr-grant gate server-side that
+  // POST /api/org/decisions does.
+  // -----------------------------------------------------------------------
+
+  // Styled like the existing .raid-row idiom (execution.html:108) — flex
+  // row, card background, border, radius 10px. The risk level renders as a
+  // small text label (.org-risk-lvl, mirroring .raid-lvl verbatim,
+  // execution.html:114-115), since there is no competing decision badge on
+  // this standalone register row (Design Tension 5).
+  function buildFlightRiskRow(entry) {
+    var row = el('div', { className: 'org-risk-row' });
+    row.appendChild(el('span', {
+      className: 'org-risk-person',
+      text: employeeNameFor(entry.employeeId) || entry.employeeId,
+    }));
+    row.appendChild(el('span', { className: 'org-risk-lvl ' + (entry.riskLevel || ''), text: entry.riskLevel }));
+    if (entry.owner) row.appendChild(el('span', { className: 'org-risk-owner', text: entry.owner }));
+    // An entry with no mitigation OMITS this element entirely — the SAME
+    // structural-absence discipline the decision-history panel's
+    // effectiveDate already established (never a placeholder character).
+    // This is a first-class state, not a defect: it is exactly what the
+    // unmitigated high/critical owner nudge (D-22) keys on. Renders as a
+    // normal wrapping block, no clamp, no ellipsis (long-text contract).
+    if (entry.mitigation) {
+      row.appendChild(el('p', { className: 'org-risk-mitigation', text: entry.mitigation }));
+    }
+    return row;
+  }
+
+  // Person (linked to the roster, required), risk level (select, no
+  // preselected value), owner (required text), mitigation (optional
+  // textarea) — D-04's write-restricted absence-not-disable rule mirrors
+  // §5's record-a-decision form exactly.
+  function buildFlightRiskForm() {
+    var form = el('form', { className: 'org-risk-form' });
+
+    var personSelect = document.createElement('select');
+    personSelect.className = 'org-risk-form-person';
+    var blankPerson = el('option', { text: 'Select a person…' });
+    blankPerson.value = '';
+    personSelect.appendChild(blankPerson);
+    state.employees.forEach(function (e) {
+      var opt = el('option', { text: e.name || e.id });
+      opt.value = e.id;
+      personSelect.appendChild(opt);
+    });
+    form.appendChild(personSelect);
+
+    var levelSelect = document.createElement('select');
+    levelSelect.className = 'org-risk-form-level';
+    // No option preselected (UI Considerations, flight-risk-form/empty) —
+    // a risk level must never be recorded by accident.
+    var blankLevel = el('option', { text: 'Select a risk level…' });
+    blankLevel.value = '';
+    levelSelect.appendChild(blankLevel);
+    ['low', 'medium', 'high', 'critical'].forEach(function (level) {
+      var opt = el('option', { text: level.charAt(0).toUpperCase() + level.slice(1) });
+      opt.value = level;
+      levelSelect.appendChild(opt);
+    });
+    form.appendChild(levelSelect);
+
+    var ownerInput = document.createElement('input');
+    ownerInput.type = 'text';
+    ownerInput.className = 'org-risk-form-owner';
+    ownerInput.placeholder = 'Owner (required)';
+    form.appendChild(ownerInput);
+
+    var mitigationInput = document.createElement('textarea');
+    mitigationInput.className = 'org-risk-form-mitigation';
+    mitigationInput.placeholder = 'Mitigation (optional)';
+    mitigationInput.rows = 3;
+    form.appendChild(mitigationInput);
+
+    var submit = el('button', { className: 'btn btn-primary', text: 'Add flight-risk entry' });
+    submit.type = 'submit';
+    form.appendChild(submit);
+
+    var error = el('div', { className: 'org-risk-form-error' });
+    form.appendChild(error);
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      error.textContent = '';
+      error.style.display = 'none';
+      submit.disabled = true;
+      fetch('/api/org/flight-risk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: personSelect.value,
+          riskLevel: levelSelect.value,
+          owner: ownerInput.value,
+          mitigation: mitigationInput.value || undefined,
+        }),
+      }).then(function (r) {
+        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+      }).then(function (result) {
+        submit.disabled = false;
+        if (!result.ok) {
+          // Explicit visible display value, never '' — the Phase-4-Wave-7
+          // countermeasure (Copywriting Contract).
+          error.textContent = (result.data && result.data.error) || 'Could not add that flight-risk entry.';
+          error.style.display = 'block';
+          return;
+        }
+        personSelect.value = '';
+        levelSelect.value = '';
+        ownerInput.value = '';
+        mitigationInput.value = '';
+        // Refresh from the server, never by patching local state — mirrors
+        // the decision form's own re-fetch-after-write convention.
+        return fetch('/api/org/flight-risk').then(function (r2) { return r2.json(); }).then(function (risks) {
+          state.flightRisks = Array.isArray(risks) ? risks : [];
+          renderFlightRiskRegister();
+          renderTree();
+        });
+      }).catch(function () {
+        submit.disabled = false;
+        error.textContent = 'Could not add that flight-risk entry.';
+        error.style.display = 'block';
+      });
+    });
+
+    return form;
+  }
+
+  function renderFlightRiskRegister() {
+    var wrap = document.getElementById('org-risk-register');
+    if (!wrap) return;
+    wrap.textContent = '';
+    // Structurally absent for an uncleared caller — not built at all.
+    if (!capabilities.targetOrgDesign) return;
+
+    // Zero-one-many: the singular/plural entry copy pattern, per the
+    // Copywriting Contract and this surface's own UI Considerations row.
+    wrap.appendChild(el('h3', {
+      className: 'org-risk-register-heading',
+      text: state.flightRisks.length + ' flight-risk ' + (state.flightRisks.length === 1 ? 'entry' : 'entries'),
+    }));
+
+    if (!state.flightRisks.length) {
+      wrap.appendChild(el('p', { className: 'org-empty', text: 'No flight-risk entries yet.' }));
+    } else {
+      state.flightRisks.forEach(function (entry) {
+        wrap.appendChild(buildFlightRiskRow(entry));
+      });
+    }
+
+    if (capabilities.recordOrgDecisions) {
+      wrap.appendChild(buildFlightRiskForm());
+    }
+  }
+
+  function renderRiskRegisterLoading() {
+    var wrap = document.getElementById('org-risk-register');
+    if (!wrap) return;
+    wrap.textContent = '';
+    wrap.appendChild(el('p', { className: 'org-empty', text: 'Loading organization…' }));
   }
 
   // Design Tension 4: two plain-text toggle labels, not an animated switch
@@ -1088,6 +1296,7 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     renderLoading();
+    renderRiskRegisterLoading();
     load().then(function () {
       renderSearch();
       renderStateSwitch();
@@ -1095,6 +1304,7 @@
       renderUnassigned();
       renderAddForm();
       renderImportSection();
+      renderFlightRiskRegister();
     });
   });
 })();
