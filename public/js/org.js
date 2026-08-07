@@ -55,6 +55,37 @@
   var INDENT_CAP_DESKTOP = 6;
   var INDENT_CAP_NARROW = 3;
 
+  // D-14: the THIRD of three independent copies of the five-value decision
+  // vocabulary — server.js's own ORG_DECISION_TYPES is the first,
+  // validators/org.js's is the second. Declared as a single plain array
+  // literal on ONE statement (never built by a function call or spread) —
+  // test/org-decisions.test.js's anti-drift block reads this file as TEXT
+  // and extracts this exact declaration with a regex. Used below (and by
+  // Plan 06-04 Task 3's rendering) to build the decision-type select's
+  // options and to map a value to its badge class and its i18n key.
+  var ORG_DECISION_TYPES = ['retain', 'redeploy', 'in-selection', 'redundant', 'open'];
+
+  // UI-SPEC Design Tension 5's exact per-value palette: the badge is a
+  // filled pill, never a border-accent (that channel is reserved for
+  // flight-risk severity, Plan 05) — the CSS class selects the fill/text
+  // color pair, applied in public/org.html.
+  var ORG_DECISION_BADGE_CLASS = {
+    retain: 'org-dec-badge--retain',
+    redeploy: 'org-dec-badge--redeploy',
+    'in-selection': 'org-dec-badge--in-selection',
+    redundant: 'org-dec-badge--redundant',
+    open: 'org-dec-badge--open',
+  };
+
+  // Builds the badge's i18n key by concatenation, the SAME precedent
+  // public/js/execution.js:1008 uses for the RAID severity badge
+  // ('raid.lvl_' + severity) — the hyphenated 'in-selection' value becomes
+  // an underscore in its key (org.dec_in_selection), per this plan's own
+  // recorded planner discretion.
+  function orgDecisionI18nKey(value) {
+    return 'org.dec_' + String(value || '').replace(/-/g, '_');
+  }
+
   function el(tag, opts) {
     var node = document.createElement(tag);
     opts = opts || {};

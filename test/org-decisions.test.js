@@ -396,3 +396,144 @@ test('org-decisions: no decision field is stored on a position — a created pos
   }
 });
 
+// ============================================================= Task 2 ====
+// Three-copy anti-drift, append-only proof, and the derived-current
+// contract.
+// ===========================================================================
+
+test('org-decisions-drift: server.js, validators/org.js and public/js/org.js all hold the identical ordered five-value decision vocabulary', () => {
+  const expected = ['retain', 'redeploy', 'in-selection', 'redundant', 'open'];
+
+  assert.deepStrictEqual(app.ORG_DECISION_TYPES, expected, 'server.js ORG_DECISION_TYPES must be the exact ordered five-value vocabulary');
+  assert.deepStrictEqual(orgValidators.ORG_DECISION_TYPES, expected, 'validators/org.js ORG_DECISION_TYPES must be the exact ordered five-value vocabulary');
+
+  const clientSrc = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  const match = clientSrc.match(/var ORG_DECISION_TYPES\s*=\s*(\[[^\]]*\]);/);
+  assert.ok(match, 'public/js/org.js must declare a var ORG_DECISION_TYPES = [...] array literal on one statement');
+  const clientTypes = JSON.parse(match[1].replace(/'/g, '"'));
+  assert.deepStrictEqual(clientTypes, expected, 'public/js/org.js ORG_DECISION_TYPES must be the exact ordered five-value vocabulary');
+
+  // Cross-file agreement, not just each-matches-expected independently — a
+  // synchronised-but-wrong triple would still pass the three checks above.
+  assert.deepStrictEqual(app.ORG_DECISION_TYPES, orgValidators.ORG_DECISION_TYPES);
+  assert.deepStrictEqual(orgValidators.ORG_DECISION_TYPES, clientTypes);
+});
+
+test('org-decisions-append-only: three decisions recorded for one position leave the log at exactly three entries; the first two are byte-identical to their creation response; no update/delete path exists', async () => {
+  const deal = makeFourIdentityDeal('deal_odao');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const posRes = await postJSON(base, '/api/org/positions', adminToken, { title: 'Append-Only Probe' });
+    const { position } = await posRes.json();
+
+    const r1 = await (await postJSON(base, '/api/org/decisions', adminToken, { positionId: position.id, type: 'in-selection', rationale: 'First: under review.' })).json();
+    const r2 = await (await postJSON(base, '/api/org/decisions', adminToken, { positionId: position.id, type: 'redeploy', rationale: 'Second: redeployed elsewhere.' })).json();
+    await postJSON(base, '/api/org/decisions', adminToken, { positionId: position.id, type: 'retain', rationale: 'Third: reversed, retained.' });
+
+    const listRes = await fetch(`${base}/api/org/decisions?positionId=${position.id}`, { headers: { Cookie: cookieHeader(adminToken) } });
+    const list = await listRes.json();
+    assert.strictEqual(list.length, 3, 'the log must hold exactly three entries for this position');
+
+    const stored1 = list.find((d) => d.id === r1.decision.id);
+    const stored2 = list.find((d) => d.id === r2.decision.id);
+    assert.deepStrictEqual(stored1, r1.decision, 'the first entry must be byte-identical to its own creation response');
+    assert.deepStrictEqual(stored2, r2.decision, 'the second entry must be byte-identical to its own creation response');
+
+    const delRes = await fetch(`${base}/api/org/decisions/${r1.decision.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(adminToken) } });
+    assert.notStrictEqual(Math.floor(delRes.status / 100), 2, 'DELETE against a decision entry must not succeed');
+    const putRes = await fetch(`${base}/api/org/decisions/${r1.decision.id}`, {
+      method: 'PUT', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'retain' }),
+    });
+    assert.notStrictEqual(Math.floor(putRes.status / 100), 2, 'PUT against a decision entry must not succeed');
+
+    const afterList = await (await fetch(`${base}/api/org/decisions?positionId=${position.id}`, { headers: { Cookie: cookieHeader(adminToken) } })).json();
+    assert.strictEqual(afterList.length, 3, 'the log must be unchanged after the failed DELETE/PUT attempts');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
+test('org-decisions-derived-current: the derived current decision is the latest by decidedAt after three entries; null for a position with none; unchanged log length after the position is deleted', async () => {
+  const deal = makeFourIdentityDeal('deal_oddc');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const posRes = await postJSON(base, '/api/org/positions', adminToken, { title: 'Derived-Current Probe' });
+    const { position } = await posRes.json();
+
+    await postJSON(base, '/api/org/decisions', adminToken, { positionId: position.id, type: 'in-selection', rationale: 'One.' });
+    await postJSON(base, '/api/org/decisions', adminToken, { positionId: position.id, type: 'redeploy', rationale: 'Two.' });
+    const third = await (await postJSON(base, '/api/org/decisions', adminToken, { positionId: position.id, type: 'retain', rationale: 'Three — the latest.' })).json();
+
+    const list = await (await fetch(`${base}/api/org/decisions?positionId=${position.id}`, { headers: { Cookie: cookieHeader(adminToken) } })).json();
+    const derived = app.derivedDecisionFor(list, position.id);
+    assert.strictEqual(derived.id, third.decision.id, 'the derived current decision must be the latest entry by decidedAt');
+
+    const otherPosRes = await postJSON(base, '/api/org/positions', adminToken, { title: 'Never Decided' });
+    const { position: otherPosition } = await otherPosRes.json();
+    assert.strictEqual(app.derivedDecisionFor(list, otherPosition.id), null, 'a position with no decisions must derive to null');
+
+    // FLAGGED PLANNER ASSUMPTION, pinned as a test: deleting the decided-upon
+    // position leaves the log length UNCHANGED (append-only survives the
+    // position's own deletion) — but the derivation for that now-absent
+    // position id is excluded from any rollup over the LIVE positions lane,
+    // by construction: a rollup only ever calls derivedDecisionFor() for
+    // ids present in that lane, and the deleted position's id is no longer
+    // in it.
+    const delRes = await fetch(`${base}/api/org/positions/${position.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(adminToken) } });
+    assert.strictEqual(delRes.status, 200);
+    const afterList = await (await fetch(`${base}/api/org/decisions?positionId=${position.id}`, { headers: { Cookie: cookieHeader(adminToken) } })).json();
+    assert.strictEqual(afterList.length, 3, 'the decisions lane length for the deleted position must be unchanged — the log retains the orphaned entries verbatim');
+
+    const livePositions = await (await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(adminToken) } })).json();
+    assert.ok(!livePositions.some((p) => p.id === position.id), 'the deleted position must be absent from the live positions lane');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
+test('org-decisions-privacy: a redundant decision recorded against a linked employee never reaches that employee\'s own roster record', async () => {
+  const deal = makeFourIdentityDeal('deal_odpriv');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const importRes = await postJSON(base, '/api/org/positions/import', adminToken, {
+      rows: [{ title: 'Privacy Probe Role', name: 'Privacy Probe Person', email: 'privacy.probe@example.com' }],
+    });
+    const importBody = await importRes.json();
+    assert.strictEqual(importRes.status, 201);
+    const createdPosition = importBody.positions[0];
+
+    await postJSON(base, '/api/org/decisions', adminToken, {
+      positionId: createdPosition.id, employeeId: createdPosition.employeeId, type: 'redundant', rationale: 'Role eliminated in the target design.',
+    });
+
+    const employeesRes = await fetch(`${base}/api/employees`, { headers: { Cookie: cookieHeader(adminToken) } });
+    const employees = await employeesRes.json();
+    const employee = employees.find((e) => e.id === createdPosition.employeeId);
+    assert.ok(employee, 'the imported employee must be present in the roster route\'s response');
+    const serialised = JSON.stringify(employee);
+
+    const decisionKeys = Object.keys(employee).filter((k) => /decision|risk/i.test(k));
+    assert.deepStrictEqual(decisionKeys, [], `the employee object must carry no decision/risk-typed key; found: ${decisionKeys.join(', ')}`);
+
+    ['retain', 'redeploy', 'in-selection', 'redundant', 'open'].forEach((value) => {
+      assert.ok(!serialised.includes(value), `the serialised employee record must not contain the vocabulary value "${value}"`);
+    });
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
