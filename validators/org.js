@@ -57,9 +57,41 @@ registerSchema('POST', '/api/org/positions/copy-to-target', OrgCopyToTargetSchem
 // required for the route to ever return anything but that fail-closed 500.
 registerSchema('DELETE', '/api/org/positions/:id', EmptyBodySchema);
 
+// POST /api/org/positions/import (D-09/D-10) — the bulk paste importer's
+// wire shape. Each row's `title` is REQUIRED (the key must be present) but
+// deliberately carries no `.min()` floor here: an empty-after-trim title
+// (e.g. an all-whitespace paste cell) is left for server.js's handler to
+// catch as a `{row, message}` problem naming the offending row index — a
+// schema-level `.min()` failure would 400 through the generic
+// formatIssues() path with no row index, which is not the all-or-nothing
+// contract's per-row error list this route promises. `reportsTo`/`name`/
+// `email` are optional trimmed strings; resolution (title-keyed parent,
+// email/name-keyed employee link) is entirely server.js's job, not this
+// schema's. The 500-row cap is what stands between an operator's paste and
+// an unbounded allocation (T-06-17) — it carries its own message so the
+// coverage test can assert the limit is actually named in the 400 body.
+const ORG_IMPORT_MAX_ROWS = 500;
+
+const OrgImportRowSchema = z.object({
+  title: z.string().trim().max(TEXT_MAX),
+  level: z.string().trim().max(120).optional(),
+  reportsTo: z.string().trim().max(TEXT_MAX).optional(),
+  name: z.string().trim().max(TEXT_MAX).optional(),
+  email: z.string().trim().max(TEXT_MAX).optional(),
+});
+
+const OrgPositionImportSchema = z.object({
+  state: z.enum(ORG_STATES).optional(),
+  rows: z.array(OrgImportRowSchema).max(ORG_IMPORT_MAX_ROWS, `A paste cannot exceed ${ORG_IMPORT_MAX_ROWS} rows.`),
+});
+
+registerSchema('POST', '/api/org/positions/import', OrgPositionImportSchema);
+
 module.exports = {
   OrgPositionUpsertSchema,
   OrgCopyToTargetSchema,
+  OrgPositionImportSchema,
+  ORG_IMPORT_MAX_ROWS,
   ORG_STATE_CURRENT,
   ORG_STATE_TARGET,
   ORG_STATES,

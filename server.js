@@ -4105,6 +4105,177 @@ app.delete('/api/org/positions/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// D-09/D-10: bulk paste import. Same D-04 tier-1 hr-grant write clearance as
+// the routes above. ALL-OR-NOTHING (per this plan's objective — an org chart
+// is a graph, and importing the good rows while dropping the bad ones would
+// silently re-root every child of a dropped row at the top level, producing
+// a tree that LOOKS complete while being structurally wrong): a full
+// validation pass over every row runs BEFORE any mutation, collecting every
+// problem rather than stopping at the first one, and a non-empty problem
+// list touches nothing. `reportsTo` resolves by TITLE — first against the
+// other rows in the SAME paste, then against existing positions in the
+// requested state; a duplicate title inside one paste is refused because
+// title-based parent resolution is undecidable when two rows share a title.
+app.post('/api/org/positions/import', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to edit the org design.' });
+  }
+  const requestedState = b.state === orgValidators.ORG_STATE_TARGET
+    ? orgValidators.ORG_STATE_TARGET
+    : orgValidators.ORG_STATE_CURRENT;
+  const lane = orgPositionsLane(db);
+  const rows = Array.isArray(b.rows) ? b.rows : [];
+
+  // ---- Pass 1: VALIDATE EVERYTHING before any mutation --------------------
+  const problems = [];
+  const titleToRowIndex = new Map(); // lowercased title -> the FIRST row index it appeared at
+  rows.forEach((row, idx) => {
+    const title = String(row.title || '').trim();
+    if (!title) {
+      problems.push({ row: idx, message: 'Position title is required.' });
+      return;
+    }
+    const key = title.toLowerCase();
+    if (titleToRowIndex.has(key)) {
+      problems.push({ row: idx, message: `Duplicate title "${title}" also appears at row ${titleToRowIndex.get(key)}.` });
+      return;
+    }
+    titleToRowIndex.set(key, idx);
+  });
+  // Existing positions in the requested state, keyed by lowercased title —
+  // the SECOND resolution tier for reportsTo, after the paste's own titles.
+  const existingByTitle = new Map();
+  lane.filter((p) => p.state === requestedState).forEach((p) => {
+    existingByTitle.set(String(p.title || '').trim().toLowerCase(), p);
+  });
+  rows.forEach((row, idx) => {
+    const reportsTo = String(row.reportsTo || '').trim();
+    if (!reportsTo) return;
+    const key = reportsTo.toLowerCase();
+    if (titleToRowIndex.has(key) && titleToRowIndex.get(key) !== idx) return; // resolves within the paste
+    if (existingByTitle.has(key)) return; // resolves against an existing position
+    problems.push({ row: idx, message: `reportsTo "${reportsTo}" does not match any other row in this paste or any existing ${requestedState}-state position.` });
+  });
+
+  if (problems.length) {
+    return res.status(400).json({ error: 'The paste could not be imported — every offending row is listed below, and nothing was created.', problems });
+  }
+
+  // ---- Pass 2: resolve employee links (staged, not yet attached to db) ---
+  // IDENTICAL isCustom predicate to GET/POST /api/employees, so an imported
+  // person lands in the exact lane those routes read/write.
+  const isCustom = db.settings && db.settings.demoMode === false;
+  const employeeList = isCustom ? (db.customEmployees || []) : (db.employees || []);
+  const stagedEmployees = []; // new employee rows, attached to db only after the graph self-check below passes
+  const employeeCache = new Map(); // per-request cache: one paste-key -> one employee id, so two rows naming the same person produce one employee
+  function resolveEmployeeId(row) {
+    const name = String(row.name || '').trim();
+    const email = String(row.email || '').trim();
+    if (!name && !email) return null;
+    const cacheKey = email ? `email:${email.toLowerCase()}` : `name:${name}`;
+    if (employeeCache.has(cacheKey)) return employeeCache.get(cacheKey);
+
+    // D-09: email case-insensitively when the row carries one, else exact name.
+    let existing = null;
+    if (email) {
+      const emailLower = email.toLowerCase();
+      existing = employeeList.find((e) => (e.email || '').toLowerCase() === emailLower)
+        || stagedEmployees.find((e) => (e.email || '').toLowerCase() === emailLower);
+    } else {
+      existing = employeeList.find((e) => e.name === name)
+        || stagedEmployees.find((e) => e.name === name);
+    }
+
+    let employeeId;
+    if (existing) {
+      employeeId = existing.id;
+    } else {
+      // Identity fields only — the SAME field shape POST /api/employees
+      // builds MINUS the demo gamification fields (points/badge/
+      // bonusPoints/completedLessons): ISO-02 already hard-gates those
+      // mechanics out of a real deal, so an imported real-deal person never
+      // carries dead gamification data on a governance record.
+      const newEmployee = {
+        id: newId('emp'),
+        name,
+        email,
+        role: '',
+        department: '',
+        company: '',
+        lang: 'en',
+        isLeader: false,
+        leaderRole: 'None',
+        buddyName: '',
+        buddyEmail: '',
+      };
+      stagedEmployees.push(newEmployee);
+      employeeId = newEmployee.id;
+    }
+    employeeCache.set(cacheKey, employeeId);
+    return employeeId;
+  }
+
+  // ---- Pass 3: build the positions, two sub-passes ------------------------
+  // Sub-pass A: allocate an id for every row and build a title-to-new-id map
+  // BEFORE any position object is built, so a row whose reportsTo names a
+  // row LATER in the array can still resolve it.
+  const rowIds = rows.map(() => newId('pos'));
+  const titleToNewId = new Map();
+  rows.forEach((row, idx) => {
+    titleToNewId.set(String(row.title || '').trim().toLowerCase(), rowIds[idx]);
+  });
+  // Sub-pass B: build each position, resolving reportsToId through the
+  // paste's own map first, the existing-position lookup second.
+  const newPositions = rows.map((row, idx) => {
+    const title = String(row.title || '').trim();
+    const reportsTo = String(row.reportsTo || '').trim();
+    let reportsToId = null;
+    if (reportsTo) {
+      const key = reportsTo.toLowerCase();
+      if (titleToNewId.has(key) && titleToNewId.get(key) !== rowIds[idx]) {
+        reportsToId = titleToNewId.get(key);
+      } else if (existingByTitle.has(key)) {
+        reportsToId = existingByTitle.get(key).id;
+      }
+    }
+    return {
+      id: rowIds[idx],
+      title,
+      level: String(row.level || '').trim(),
+      reportsToId,
+      employeeId: resolveEmployeeId(row),
+      state: requestedState,
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  // ---- Final self-check: run the SAME graph-integrity guard every other --
+  // write route uses, against the lane as it would look with every new row
+  // present, before a single byte is written.
+  const mergedLane = lane.concat(newPositions);
+  for (const p of newPositions) {
+    const graphFailure = positionGraphFailure(mergedLane, p);
+    if (graphFailure) {
+      return res.status(400).json({ error: `Import refused — ${graphFailure} Nothing was created.` });
+    }
+  }
+
+  // ---- Mutate ---------------------------------------------------------
+  if (isCustom) { db.customEmployees = employeeList; } else { db.employees = employeeList; }
+  stagedEmployees.forEach((e) => employeeList.push(e));
+  newPositions.forEach((p) => lane.push(p));
+  writeDb(db);
+  res.status(201).json({
+    success: true,
+    createdPositions: newPositions.length,
+    createdEmployees: stagedEmployees.length,
+    positions: newPositions,
+  });
+});
+
 // =====================================================================
 // Due Diligence workspace (DD-01/DD-04) — request items scoped to one of
 // db/accessPolicy.js's eight fixed functional areas, guarded end-to-end by
