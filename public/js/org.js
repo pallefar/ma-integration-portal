@@ -255,19 +255,34 @@
     return children('__root__');
   }
 
-  // Adds default-expanded ids for every depth below DEFAULT_EXPAND_DEPTH
-  // (2 — depths 0 and 1) into the shared expandedIds Set. Called on every
-  // render pass — it only ADDS ids (Set.add is idempotent), it never clears
-  // or replaces the Set, so a node the operator manually collapsed at
-  // depth 0/1 stays collapsed across an unrelated re-render just as much as
-  // a manually EXPANDED deep node stays expanded. New nodes appearing at
-  // depth 0/1 (e.g. right after being added) pick up the default
-  // automatically.
+  // Tracks which position ids have ALREADY had the default-expansion rule
+  // applied — a plain hash (NOT a second Set; this file holds exactly one
+  // Set instance, expandedIds above), keyed the same way searchForcedIds
+  // and historyOpenIds already are.
+  //
+  // Plan 08 Task 2 walk finding F1: seedDefaultExpansion() used to call
+  // expandedIds.add() unconditionally for EVERY depth-0/1 node on EVERY
+  // render pass. Because the collapse toggle's own click handler does
+  // `expandedIds.delete(id)` immediately followed by `renderTree()`, that
+  // delete was undone in the very same tick — seedDefaultExpansion() ran
+  // again inside the new renderTree() call and re-added the id it had just
+  // been asked to remove, making the toggle a silent no-op at depth 0/1.
+  // The seeded-once guard below fixes that: a position id is added to
+  // expandedIds at most once, ever, so a manual collapse survives every
+  // later re-render exactly like a manually EXPANDED deep node already
+  // does. A genuinely NEW position at depth 0/1 (freshly added, or newly
+  // visible after switching current/target state) is still seen for the
+  // first time here and still picks up the default automatically.
+  var seededPositionIds = {};
+
   function seedDefaultExpansion(tree) {
     function seed(nodes, depth) {
       if (depth >= DEFAULT_EXPAND_DEPTH) return;
       nodes.forEach(function (node) {
-        expandedIds.add(node.position.id);
+        if (!seededPositionIds[node.position.id]) {
+          expandedIds.add(node.position.id);
+          seededPositionIds[node.position.id] = true;
+        }
         seed(node.children, depth + 1);
       });
     }
