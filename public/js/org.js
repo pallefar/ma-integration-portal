@@ -496,6 +496,27 @@
     return select;
   }
 
+  // D-09: the position's employee link, editable from the add/edit form —
+  // a select populated from the already-fetched state.employees (no new
+  // fetch), with an explicit unlinked option FIRST so a vacant position
+  // stays the default. This changes the link stored on position.employeeId;
+  // the occupant's name is still shown in exactly one place, the tree
+  // card's existing occupant slot (renderNode above) — this control does
+  // not introduce a second place a person's name is stored.
+  function buildEmployeeSelect() {
+    var select = document.createElement('select');
+    select.id = 'org-add-employee';
+    var none = el('option', { text: 'Vacant (no occupant)' });
+    none.value = '';
+    select.appendChild(none);
+    state.employees.forEach(function (e) {
+      var opt = el('option', { text: e.name || e.id });
+      opt.value = e.id;
+      select.appendChild(opt);
+    });
+    return select;
+  }
+
   function buildLevelDatalist() {
     var datalist = document.createElement('datalist');
     datalist.id = 'org-level-suggestions';
@@ -533,6 +554,7 @@
     form.appendChild(buildLevelDatalist());
 
     form.appendChild(buildReportsToSelect());
+    form.appendChild(buildEmployeeSelect());
 
     var submit = el('button', { className: 'btn btn-primary', text: 'Add position' });
     submit.type = 'submit';
@@ -550,6 +572,9 @@
         title: titleInput.value,
         level: levelInput.value,
         reportsToId: document.getElementById('org-add-reportsto').value || null,
+        // D-09: null for the unlinked option, the employee id otherwise —
+        // never a free-text name.
+        employeeId: document.getElementById('org-add-employee').value || null,
         // Adds to whichever state is currently displayed — the reportsTo
         // options above are already drawn from state.positions for that
         // same state, so a cross-state parent reference can't be offered.

@@ -5014,9 +5014,31 @@ app.post('/api/employees', (req, res) => {
 });
 
 // DELETE Employee
+//
+// D-09: the orphan guard — this handler's first guard of any kind, for any
+// cross-reference. Before this task it was a blind, unconditional filter-
+// and-write. Refuses (400, naming the affected position count and the
+// first one's title) rather than cascading or nulling the link, while ANY
+// org position (current OR target state) still points at this employee via
+// employeeId. This is the UI-SPEC §Surface Contract 4 resolution of a
+// decision 06-CONTEXT.md delegated to Claude's discretion; the
+// §Copywriting "The position they occupy will become vacant" confirm
+// string is deliberately NOT used for this case, because the delete does
+// not proceed — nothing becomes vacant, the caller must unlink or delete
+// the position(s) first. Kept inside THIS route (not a helper shared with
+// the org section above) because /api/employees is reachable by pmo as
+// well as admin/hrbp through the default write policy (ROLE_WRITE_POLICY /
+// DEFAULT_WRITE_ROLES) — a guard living only in the org lane's own callers
+// would miss every one of those.
 app.delete('/api/employees/:id', (req, res) => {
   const { id } = req.params;
   const db = readDb();
+  const occupied = orgPositionsLane(db).filter((p) => p.employeeId === id);
+  if (occupied.length) {
+    return res.status(400).json({
+      error: `This employee occupies ${occupied.length} position(s), including "${occupied[0].title}" — unlink them from the employee, or delete the position(s), before deleting this employee.`,
+    });
+  }
   if (db.settings && db.settings.demoMode === false) {
     db.customEmployees = (db.customEmployees || []).filter(e => e.id !== id);
   } else {

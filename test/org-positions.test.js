@@ -1030,3 +1030,16 @@ test('org-positions (kk): the add/edit form\'s employee-link select offers an ex
     'the employee-link select must be populated from the already-fetched state.employees list, not a new fetch',
   );
 });
+
+test('org-positions (ll): the employee orphan guard\'s early return precedes DELETE /api/employees/:id\'s array filter, so the refusal path never reaches a write', () => {
+  const SERVER_JS_PATH = path.join(__dirname, '..', 'server.js');
+  const src = fs.readFileSync(SERVER_JS_PATH, 'utf8');
+  const handlerMatch = src.match(/app\.delete\('\/api\/employees\/:id',[\s\S]*?\n\}\);/);
+  assert.ok(handlerMatch, 'DELETE /api/employees/:id handler must be found in server.js');
+  const handlerSrc = handlerMatch[0];
+  const guardIdx = handlerSrc.indexOf('if (occupied.length)');
+  const filterIdx = handlerSrc.indexOf('.filter(e => e.id !== id)');
+  assert.ok(guardIdx !== -1, 'the guard\'s occupied.length check must exist in the handler');
+  assert.ok(filterIdx !== -1, 'the employee-removal filter must exist in the handler');
+  assert.ok(guardIdx < filterIdx, 'the guard\'s early return must precede the array filter that removes the row');
+});
