@@ -12,6 +12,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+const ORG_JS_PATH = path.join(__dirname, '..', 'public', 'js', 'org.js');
+
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-org-positions-'));
 process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
 process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
@@ -472,4 +474,43 @@ test('org-positions (q): re-parenting a position to its own descendant returns 4
     sessionsDb.deleteSession(runtimeConn, pmoToken);
     server.close();
   }
+});
+
+// -----------------------------------------------------------------------
+// Task 1: the collapsible indented tree — source-level assertions on
+// public/js/org.js, matching this task's own acceptance criteria (no DOM
+// test harness like jsdom exists in this repo, so the client-render
+// contract is verified at the source level, mirroring
+// test/org-access-policy.test.js's own "defence-in-depth" source check).
+// -----------------------------------------------------------------------
+
+test('org-positions (r): public/js/org.js declares the expanded-id Set exactly once and never reassigns it', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const freshSetOccurrences = (src.match(/new Set\(/g) || []).length;
+  assert.strictEqual(freshSetOccurrences, 1, 'exactly one `new Set(` construction must exist — the single expandedIds declaration; any second occurrence would be a reassignment or a competing Set');
+  assert.match(src, /var expandedIds\s*=\s*new Set\(\)/, 'the expanded-id Set must be declared as module-level `expandedIds`');
+  assert.ok(!/expandedIds\s*=\s*new Set\(/.test(src.replace(/var expandedIds\s*=\s*new Set\(\);/, '')), 'expandedIds must never be reassigned to a fresh Set after its declaration');
+});
+
+test('org-positions (s): the children container is constructed only inside the branch guarded by isExpanded', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  assert.match(
+    src,
+    /if\s*\(hasChildren\s*&&\s*isExpanded\)\s*\{[\s\S]*?org-node-children[\s\S]*?\}/,
+    'the org-node-children construction must sit inside an `if (hasChildren && isExpanded)` branch, so a collapsed node emits no children container at all',
+  );
+  // Guard against a second, unconditional construction of the same class
+  // elsewhere in the file (which would defeat the structural-absence
+  // discipline even if the guarded one above also exists).
+  const childrenClassOccurrences = (src.match(/className:\s*'org-node-children'/g) || []).length;
+  assert.strictEqual(childrenClassOccurrences, 1, 'org-node-children must be constructed from exactly one call site');
+});
+
+test('org-positions (t): the level chip is appended only when the position carries a non-empty level', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  assert.match(
+    src,
+    /if\s*\(node\.position\.level\)\s*\{[\s\S]*?org-node-level[\s\S]*?\}/,
+    'the level chip must be constructed inside an `if (node.position.level)` guard so it renders at every depth that has one, not unconditionally',
+  );
 });

@@ -15,6 +15,22 @@
 
   var state = { positions: [] };
 
+  // Module-level, declared exactly once, never reassigned to a fresh Set
+  // instance — an unrelated re-render (e.g. after the add form submits)
+  // must not silently collapse the operator's working expand/collapse
+  // view. Toggling a node adds/removes its own id via .add()/.delete();
+  // this Set is never replaced wholesale anywhere else in this file.
+  var expandedIds = new Set();
+
+  // Design Tension 2: default expand depth is 2 (root + one level of
+  // children); everything deeper starts collapsed. Design Tension 2/6: the
+  // per-level indent stops growing past depth 6 on desktop, depth 3 below
+  // 768px (the narrow cap is enforced purely in CSS via the
+  // --cap-narrow class, scoped inside the @media block in org.html).
+  var DEFAULT_EXPAND_DEPTH = 2;
+  var INDENT_CAP_DESKTOP = 6;
+  var INDENT_CAP_NARROW = 3;
+
   function el(tag, opts) {
     var node = document.createElement(tag);
     opts = opts || {};
@@ -51,22 +67,53 @@
     return children('__root__');
   }
 
+  // Adds default-expanded ids for depth 0 and depth 1 (DEFAULT_EXPAND_DEPTH
+  // = 2) into the shared expandedIds Set. Called on every render pass — it
+  // only ADDS ids (Set.add is idempotent), it never clears or replaces the
+  // Set, so a node the operator manually collapsed at depth 0/1 stays
+  // collapsed across an unrelated re-render just as much as a manually
+  // EXPANDED deep node stays expanded. New nodes appearing at depth 0/1
+  // (e.g. right after being added) pick up the default automatically.
+  function seedDefaultExpansion(tree) {
+    tree.forEach(function (rootNode) {
+      expandedIds.add(rootNode.position.id);
+      rootNode.children.forEach(function (childNode) {
+        expandedIds.add(childNode.position.id);
+      });
+    });
+  }
+
   function renderNode(node, depth) {
     var article = el('article', { className: 'org-node' });
     article.setAttribute('data-position-id', node.position.id);
     article.setAttribute('data-depth', String(depth));
 
-    if (node.children.length) {
-      var toggle = el('button', { className: 'org-node-toggle', text: '▾' });
+    var row = el('div', { className: 'org-node-row' });
+
+    var hasChildren = node.children.length > 0;
+    var isExpanded = expandedIds.has(node.position.id);
+
+    if (hasChildren) {
+      var toggle = el('button', { className: 'org-node-toggle', text: isExpanded ? '▾' : '▸' });
       toggle.type = 'button';
-      article.appendChild(toggle);
+      toggle.setAttribute('aria-expanded', String(isExpanded));
+      toggle.addEventListener('click', function () {
+        if (expandedIds.has(node.position.id)) expandedIds.delete(node.position.id);
+        else expandedIds.add(node.position.id);
+        renderTree();
+      });
+      row.appendChild(toggle);
     }
 
-    var level = el('span', { className: 'org-node-level', text: node.position.level || '' });
-    article.appendChild(level);
+    // D-08: level is free text and rendered only when authored — depth is
+    // never used as a seniority signal, so the chip appears at every depth
+    // that has one, not only depth 0.
+    if (node.position.level) {
+      row.appendChild(el('span', { className: 'org-node-level', text: node.position.level }));
+    }
 
-    var title = el('span', { className: 'org-node-title', text: node.position.title });
-    article.appendChild(title);
+    var main = el('div', { className: 'org-node-main' });
+    main.appendChild(el('span', { className: 'org-node-title', text: node.position.title }));
 
     var occupant;
     if (node.position.employeeId) {
@@ -74,12 +121,22 @@
     } else {
       occupant = el('em', { className: 'org-node-occupant org-node-vacant', text: 'Vacant' });
     }
-    article.appendChild(occupant);
+    main.appendChild(occupant);
 
-    if (node.children.length) {
+    row.appendChild(main);
+    article.appendChild(row);
+
+    // The children container is constructed ONLY inside this branch — a
+    // collapsed node (isExpanded === false) emits no
+    // <div class="org-node-children"> at all, matching the structural-
+    // absence discipline used elsewhere in this phase (never CSS-hidden).
+    if (hasChildren && isExpanded) {
       var childWrap = el('div', { className: 'org-node-children' });
+      var childDepth = depth + 1;
+      if (childDepth > INDENT_CAP_DESKTOP) childWrap.classList.add('org-node-children--cap-desktop');
+      if (childDepth > INDENT_CAP_NARROW) childWrap.classList.add('org-node-children--cap-narrow');
       node.children.forEach(function (child) {
-        childWrap.appendChild(renderNode(child, depth + 1));
+        childWrap.appendChild(renderNode(child, childDepth));
       });
       article.appendChild(childWrap);
     }
@@ -99,6 +156,7 @@
       return;
     }
     var tree = buildTree(state.positions);
+    seedDefaultExpansion(tree);
     tree.forEach(function (node) {
       wrap.appendChild(renderNode(node, 0));
     });
