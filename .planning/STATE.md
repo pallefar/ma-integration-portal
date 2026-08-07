@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: org-design-talent-retention
 status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-08-07T20:06:33.038Z"
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-08-07T20:27:12.820Z"
 last_activity: 2026-08-07
 progress:
   total_phases: 7
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 06 (org-design-talent-retention) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-08-07
 
@@ -93,6 +93,7 @@ Progress: [████████░░] 84%
 | Phase 05 P08 | ~57min | 3 tasks | 5 files |
 | Phase 06 P01 | 45min | 3 tasks | 9 files |
 | Phase 06 P02 | ~120min | 3 tasks | 6 files |
+| Phase 06 P03 | ~60min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -179,6 +180,10 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 6 Plan 02] Manual add form now tags a new position with state: viewState (Rule 1 fix) — otherwise adding while viewing Target would create a current-state row offered a target-state parent, guaranteed to fail positionGraphFailure()'s cross-state check
 - [Phase ?]: [Phase 6 Plan 02] Non-matching search siblings are de-emphasised (not hidden) per this plan's own explicit wording, superseding 06-UI-SPEC.md Design Tension 2's earlier 'collapsed/hidden' prose
 - [Phase ?]: [Phase 6 Plan 02] GET /api/org/capabilities is the UI-SPEC-named 'equivalent probe' standing in for Plan 07's not-yet-buildable GET /api/org/summary — same hr-grant check and absent-not-zeroed response shape Plan 07 will reuse
+- [Phase ?]: [Phase 6 Plan 03] The bulk import route's title schema deliberately carries no zod .min() floor — an empty-after-trim title is caught by the handler's own VALIDATE-EVERYTHING pass instead, so its 400 can name the offending row index, which a schema-level rejection could not do
+- [Phase ?]: [Phase 6 Plan 03] Employee matching for the importer is if/else, not OR-fallback: a row carrying an email matches ONLY by email (case-insensitive); a row with no email matches by exact name — matches the UI-SPEC's literal 'matched (email case-insensitively, else exact name)' wording
+- [Phase ?]: [Phase 6 Plan 03] New employee rows created by the importer gained an 'email' field — absent from POST /api/employees' existing shape — since D-09's email-based dedup requires somewhere to store it; harmless addition, ignored by every pre-existing code path that doesn't know about it
+- [Phase ?]: [Phase 6 Plan 03] The employee orphan guard lives inline in DELETE /api/employees/:id, not a helper shared with the org section, because /api/employees is reachable by pmo as well as admin/hrbp through the default write policy — a guard living only in the org lane's own callers would miss those callers
 
 ### Pending Todos
 
@@ -218,6 +223,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-07T20:06:33.028Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-08-07T20:27:12.810Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
