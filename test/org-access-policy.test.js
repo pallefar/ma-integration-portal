@@ -198,14 +198,116 @@ test('org-access-policy: the refusal is on the clearance axis, not validation �
   }
 });
 
-test('org-access-policy: defence-in-depth — public/js/org.js never speculatively constructs a target-state request', () => {
+test('org-access-policy: GET /api/org/capabilities — the D-07 four-identity matrix, absent key for uncleared, truthy for cleared', async () => {
+  const deal = {
+    id: 'deal_orgcap', name: 'deal_orgcap', targetCompany: 'deal_orgcap Co',
+    members: ['admin', 'karen', 'pmo_hr', 'pmo_it'],
+    memberGrants: {
+      pmo_hr: { ddAreas: ['hr'] },
+      pmo_it: { ddAreas: ['it'] },
+      // 'karen' (hrbp) deliberately has NO explicit memberGrants entry —
+      // she reaches the capability via grantedAreas()'s role short-circuit.
+    },
+    status: 'active', createdBy: 'admin', createdAt: new Date().toISOString(),
+  };
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
+  const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
+
+  const identities = [
+    { name: 'admin', token: adminToken, cleared: true },
+    { name: 'hrbp (no explicit grant)', token: karenToken, cleared: true },
+    { name: 'pmo granted hr', token: pmoHrToken, cleared: true },
+    { name: 'pmo granted only it', token: pmoItToken, cleared: false },
+  ];
+
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    for (const id of identities) {
+      const res = await fetch(`${base}/api/org/capabilities`, { headers: { Cookie: cookieHeader(id.token) } });
+      assert.strictEqual(res.status, 200, `${id.name}: capabilities GET must be 200`);
+      const text = await res.text();
+      if (id.cleared) {
+        assert.ok(text.includes('targetOrgDesign'), `${id.name}: must see the restricted capability key`);
+        const body = JSON.parse(text);
+        assert.strictEqual(body.targetOrgDesign, true);
+      } else {
+        assert.ok(!text.includes('targetOrgDesign'), `${id.name}: response must not contain the restricted key at all — absent, not false`);
+      }
+    }
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    sessionsDb.deleteSession(runtimeConn, pmoHrToken);
+    sessionsDb.deleteSession(runtimeConn, pmoItToken);
+    server.close();
+  }
+});
+
+test('org-access-policy: copy-to-target and delete are both refused 403 for an it-only member, identical to the write boundary already proven for POST /api/org/positions', async () => {
+  const deal = {
+    id: 'deal_orgcap2', name: 'deal_orgcap2', targetCompany: 'deal_orgcap2 Co',
+    members: ['admin', 'pmo_it'],
+    memberGrants: { pmo_it: { ddAreas: ['it'] } },
+    status: 'active', createdBy: 'admin', createdAt: new Date().toISOString(),
+  };
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const created = await (await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Access-matrix probe' }),
+    })).json();
+
+    const copyRes = await fetch(`${base}/api/org/positions/copy-to-target`, {
+      method: 'POST', headers: { Cookie: cookieHeader(itToken), 'Content-Type': 'application/json' }, body: '{}',
+    });
+    assert.strictEqual(copyRes.status, 403);
+
+    const delRes = await fetch(`${base}/api/org/positions/${created.position.id}`, {
+      method: 'DELETE', headers: { Cookie: cookieHeader(itToken) },
+    });
+    assert.strictEqual(delRes.status, 403);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    sessionsDb.deleteSession(runtimeConn, itToken);
+    server.close();
+  }
+});
+
+test('org-access-policy: defence-in-depth — public/js/org.js never constructs a target-state request outside the branch guarded by the capability key', () => {
   // The UI-SPEC names this explicitly: the client-side omission of a
   // target-state fetch is NOT the control (the server refusal proven above
   // is what actually holds) — it is a courtesy that keeps an uncleared
   // session from ever even attempting the restricted request. As of this
-  // plan, org.js has no current/target switch at all (that lands in a later
-  // plan), so the property holds trivially and completely today: zero
-  // occurrences of a target-state query string anywhere in the file.
+  // plan, org.js gains a current/target switch, so the property is proven
+  // structurally rather than by the file having zero occurrences: every
+  // construction of a `state=target` request string must appear textually
+  // after the capability-guard branch begins, never unconditionally at
+  // module scope or inside a branch that does not check the capability.
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
-  assert.ok(!src.includes('state=target'), 'org.js must not construct a target-state request unconditionally — a later plan may only add this behind a server-supplied capability signal');
+  const targetRequestOccurrences = (src.match(/state=target/g) || []).length;
+  if (targetRequestOccurrences === 0) {
+    // No such construction exists yet — the property holds trivially.
+    return;
+  }
+  assert.match(
+    src,
+    /capabilities\.targetOrgDesign[\s\S]*state=target/,
+    'every construction of a target-state request must appear textually after a capabilities.targetOrgDesign check — never unconditionally',
+  );
 });

@@ -543,3 +543,277 @@ test('org-positions (w): the no-match copy and the unassigned heading each appea
   assert.strictEqual(headingOccurrences, 1, 'the "Unassigned employees (" heading must appear exactly once');
   assert.match(src, /'Unassigned employees \(' \+ unassigned\.length \+ '\)'/, 'the heading must interpolate a bare count in the same expression');
 });
+
+// -----------------------------------------------------------------------
+// Task 3: the capability probe, copy-to-target, and the guarded delete —
+// every case in this task's <behavior> block.
+// -----------------------------------------------------------------------
+
+test('org-positions (x): GET /api/org/capabilities returns a truthy restricted key for an hr-granted member and NO key at all for an other-area member', async () => {
+  const deal = freshDeal('deal_orgx', { memberGrants: { pmo_hr: { ddAreas: ['hr'] }, pmo_it: { ddAreas: ['it'] } }, members: ['pmo_hr', 'pmo_it', 'admin'] });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const hrToken = newSession('pmo_hr', 'pmo'); bindDeal(hrToken, deal.id);
+  const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const hrRes = await fetch(`${base}/api/org/capabilities`, { headers: { Cookie: cookieHeader(hrToken) } });
+    assert.strictEqual(hrRes.status, 200);
+    const hrBody = await hrRes.json();
+    assert.ok(hrBody.targetOrgDesign, 'the hr-granted caller must see a truthy restricted capability key');
+
+    const itRes = await fetch(`${base}/api/org/capabilities`, { headers: { Cookie: cookieHeader(itToken) } });
+    assert.strictEqual(itRes.status, 200);
+    const itText = await itRes.text();
+    assert.ok(!itText.includes('targetOrgDesign'), 'the it-only caller\'s response must not contain the restricted key at all, absent not false');
+    const itBody = JSON.parse(itText);
+    assert.strictEqual(itBody.targetOrgDesign, undefined);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, hrToken);
+    sessionsDb.deleteSession(runtimeConn, itToken);
+    server.close();
+  }
+});
+
+test('org-positions (y): POST /api/org/positions/copy-to-target clones every current position with a new id, remaps reportsToId through the clone map, and never mutates a current row', async () => {
+  const deal = freshDeal('deal_orgy', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    async function create(body) {
+      const res = await fetch(`${base}/api/org/positions`, {
+        method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return (await res.json()).position;
+    }
+
+    const root = await create({ title: 'VP Engineering' });
+    const child = await create({ title: 'Director', reportsToId: root.id });
+
+    const copyRes = await fetch(`${base}/api/org/positions/copy-to-target`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' }, body: '{}',
+    });
+    assert.strictEqual(copyRes.status, 200);
+    const copyBody = await copyRes.json();
+    assert.strictEqual(copyBody.count, 2);
+
+    const listRes = await fetch(`${base}/api/org/positions?state=target`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const targetList = await listRes.json();
+    assert.strictEqual(targetList.length, 2);
+
+    const clonedRoot = targetList.find((p) => p.title === 'VP Engineering');
+    const clonedChild = targetList.find((p) => p.title === 'Director');
+    assert.notStrictEqual(clonedRoot.id, root.id, 'the clone must carry a NEW id, not the source id');
+    assert.notStrictEqual(clonedChild.id, child.id, 'the clone must carry a NEW id, not the source id');
+    assert.strictEqual(clonedChild.reportsToId, clonedRoot.id, 'the clone\'s reportsToId must point at the CLONE of its source\'s parent');
+    assert.notStrictEqual(clonedChild.reportsToId, root.id, 'the clone\'s reportsToId must never point at the original current-state parent id');
+
+    const currentListRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const currentList = await currentListRes.json();
+    const stillCurrentRoot = currentList.find((p) => p.id === root.id);
+    const stillCurrentChild = currentList.find((p) => p.id === child.id);
+    assert.ok(stillCurrentRoot, 'the current-state root must be unchanged and still present');
+    assert.strictEqual(stillCurrentChild.reportsToId, root.id, 'the current-state child\'s reportsToId must be untouched by the copy');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (z): a second copy-to-target call is refused with 400 while the target design is not empty, and creates no additional rows', async () => {
+  const deal = freshDeal('deal_orgz', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Only current position' }),
+    });
+
+    const firstCopy = await fetch(`${base}/api/org/positions/copy-to-target`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' }, body: '{}',
+    });
+    assert.strictEqual(firstCopy.status, 200);
+
+    const beforeSecond = await (await fetch(`${base}/api/org/positions?state=target`, { headers: { Cookie: cookieHeader(pmoToken) } })).json();
+
+    const secondCopy = await fetch(`${base}/api/org/positions/copy-to-target`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' }, body: '{}',
+    });
+    assert.strictEqual(secondCopy.status, 400);
+    const secondBody = await secondCopy.json();
+    assert.match(secondBody.error, /not empty/i);
+
+    const afterSecond = await (await fetch(`${base}/api/org/positions?state=target`, { headers: { Cookie: cookieHeader(pmoToken) } })).json();
+    assert.strictEqual(afterSecond.length, beforeSecond.length, 'the target-state row count must be unchanged after the refused second copy');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (aa): copy-to-target is refused with 403 for a member without the hr grant, and creates no target row', async () => {
+  const deal = freshDeal('deal_orgaa', { memberGrants: { pmo_it: { ddAreas: ['it'] } }, members: ['pmo_it', 'admin'] });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Seed current position' }),
+    });
+
+    const res = await fetch(`${base}/api/org/positions/copy-to-target`, {
+      method: 'POST', headers: { Cookie: cookieHeader(itToken), 'Content-Type': 'application/json' }, body: '{}',
+    });
+    assert.strictEqual(res.status, 403);
+
+    const targetList = await (await fetch(`${base}/api/org/positions?state=target`, { headers: { Cookie: cookieHeader(adminToken) } })).json();
+    assert.deepStrictEqual(targetList, [], 'a refused copy must create no target row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    sessionsDb.deleteSession(runtimeConn, itToken);
+    server.close();
+  }
+});
+
+test('org-positions (bb): DELETE /api/org/positions/:id is refused with 400 and names the direct-report count while reports exist; the row survives', async () => {
+  const deal = freshDeal('deal_orgbb', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    async function create(body) {
+      const res = await fetch(`${base}/api/org/positions`, {
+        method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return (await res.json()).position;
+    }
+
+    const manager = await create({ title: 'Manager with two reports' });
+    await create({ title: 'Report one', reportsToId: manager.id });
+    await create({ title: 'Report two', reportsToId: manager.id });
+
+    const delRes = await fetch(`${base}/api/org/positions/${manager.id}`, {
+      method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) },
+    });
+    assert.strictEqual(delRes.status, 400);
+    const delBody = await delRes.json();
+    assert.match(delBody.error, /2/, 'the refusal message must name the direct-report count');
+
+    const listRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const list = await listRes.json();
+    assert.ok(list.some((p) => p.id === manager.id), 'the position must survive a refused delete');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (cc): DELETE succeeds once direct reports are reassigned, removing exactly that row', async () => {
+  const deal = freshDeal('deal_orgcc', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    async function create(body) {
+      const res = await fetch(`${base}/api/org/positions`, {
+        method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return (await res.json()).position;
+    }
+    async function update(body) {
+      const res = await fetch(`${base}/api/org/positions`, {
+        method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return (await res.json()).position;
+    }
+
+    const grandparent = await create({ title: 'Grandparent' });
+    const manager = await create({ title: 'Manager', reportsToId: grandparent.id });
+    const report = await create({ title: 'Report', reportsToId: manager.id });
+
+    await update({ id: report.id, reportsToId: grandparent.id });
+
+    const delRes = await fetch(`${base}/api/org/positions/${manager.id}`, {
+      method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) },
+    });
+    assert.strictEqual(delRes.status, 200);
+
+    const listRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const list = await listRes.json();
+    assert.ok(!list.some((p) => p.id === manager.id), 'the deleted position must be gone');
+    assert.strictEqual(list.length, 2, 'exactly the deleted row must be removed');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (dd): DELETE is refused with 403 for a member without the hr grant', async () => {
+  const deal = freshDeal('deal_orgdd', { memberGrants: { pmo_it: { ddAreas: ['it'] } }, members: ['pmo_it', 'admin'] });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const created = await (await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Uncleared-delete probe' }),
+    })).json();
+
+    const delRes = await fetch(`${base}/api/org/positions/${created.position.id}`, {
+      method: 'DELETE', headers: { Cookie: cookieHeader(itToken) },
+    });
+    assert.strictEqual(delRes.status, 403);
+
+    const listRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(adminToken) } });
+    const list = await listRes.json();
+    assert.ok(list.some((p) => p.id === created.position.id), 'the position must survive a refused delete');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    sessionsDb.deleteSession(runtimeConn, itToken);
+    server.close();
+  }
+});
