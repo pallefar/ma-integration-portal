@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: org-design-talent-retention
 status: executing
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-08-07T21:17:31.525Z"
+stopped_at: Completed 06-06-PLAN.md
+last_updated: "2026-08-07T21:37:55.540Z"
 last_activity: 2026-08-07
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 38
-  completed_plans: 35
-  percent: 92
+  completed_plans: 36
+  percent: 95
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 06 (org-design-talent-retention) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-08-07
 
-Progress: [█████████░] 92%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -96,6 +96,7 @@ Progress: [█████████░] 92%
 | Phase 06 P03 | ~60min | 3 tasks | 6 files |
 | Phase 06 P04 | ~50min | 3 tasks | 6 files |
 | Phase 06 P05 | ~70min | 3 tasks | 7 files |
+| Phase 06 P06 | ~95min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -192,6 +193,10 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 6 Plan 05] The flight-risk read fetch (public/js/org.js) is issued conditionally — only when the caller already holds the hr capability — unlike the unconditional fetch pattern load() uses for positions/employees/decisions, because a successful GET /api/org/flight-risk writes an audit row (D-03) and the others do not
 - [Phase ?]: [Phase 6 Plan 05] The flight-risk entry form reuses Plan 04's existing recordOrgDecisions capability key rather than adding a second governance key, since POST /api/org/decisions and POST /api/org/flight-risk share the identical isAdminOrIlRequest(req)+hr-grant gate
 - [Phase ?]: [Phase 6 Plan 05] GET /api/org/flight-risk records the codebase's first read-side security event (D-03) — both a denial and a successful read now write exactly one audit row, proven scoped to the register alone against three sibling reads (positions, capabilities, decisions)
+- [Phase ?]: [Phase 6 Plan 06] resolveRaidEntryClearanceArea() is NEW access-control code, not a reuse of filterByAreaGrant() — that helper keys on item.area, which RAID rows do not carry, so a naive reuse would empty the RAID log for every caller including admin (fail-closed-to-useless, not a leak)
+- [Phase ?]: [Phase 6 Plan 06] The workstream field is never used as the RAID clearance key — DD_AREA_WORKSTREAM is many-to-one (financial+tax -> ws_finance, legal+complianceEsg -> ws_legal) and cannot be inverted
+- [Phase ?]: [Phase 6 Plan 06] An orphaned RAID provenance link (originating finding deleted) resolves to null/unlinked rather than staying withheld from everyone — proven by a previously-excluded caller gaining visibility after deletion
+- [Phase ?]: [Phase 6 Plan 06] Flight-risk conversion source prefix is the literal 'org-flightrisk:<id>' (06-RESEARCH.md Assumptions Log A1, planner discretion), distinguishable from the DD finding 'dd-finding:' prefix for the outbound RAID filter to branch on
 
 ### Pending Todos
 
@@ -231,6 +236,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-07T21:17:31.518Z
-Stopped at: Completed 06-05-PLAN.md
+Last session: 2026-08-07T21:37:55.530Z
+Stopped at: Completed 06-06-PLAN.md
 Resume file: None
