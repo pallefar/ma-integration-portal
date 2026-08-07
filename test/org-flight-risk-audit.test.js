@@ -429,3 +429,132 @@ test('org-flight-risk: grep-level guard — recordSecurityEvent has two new call
   assert.strictEqual((codeOnly.match(/recordSecurityEvent/g) || []).length, 0, 'db/accessPolicy.js must hold zero FUNCTIONAL recordSecurityEvent call sites (comment-only mentions are not an audit dependency)');
 });
 
+// ============================================================= Task 2 ====
+// Audit scoping, encoding round-trip, and the same-collection concurrency
+// proof.
+// ===========================================================================
+
+test('org-flight-risk-scoping: reading current-state positions, the capability probe, and the decisions list each append zero rows carrying either register action name', async () => {
+  const deal = makeFourIdentityDeal('deal_ofrscope');
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const before = countByActions(deal.id, ['org-flightrisk-access-denied', 'org-flightrisk-read']);
+    await getJSON(base, '/api/org/positions', karenToken);
+    await getJSON(base, '/api/org/capabilities', karenToken);
+    await getJSON(base, '/api/org/decisions', karenToken);
+    assert.strictEqual(
+      countByActions(deal.id, ['org-flightrisk-access-denied', 'org-flightrisk-read']),
+      before,
+      'D-03\'s "scoped to the register only" must hold — none of these three non-register reads may add a flight-risk audit row',
+    );
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
+    server.close();
+  }
+});
+
+test('org-flight-risk-encoding: a mitigation containing a script-tag payload and an owner containing multi-byte characters and combining marks round-trip byte-identical', async () => {
+  const deal = makeFourIdentityDeal('deal_ofrenc');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const employee = await createEmployee(base, adminToken, 'Encoding Target');
+
+    const dangerousMitigation = '<script>alert(1)</script> retention plan under review';
+    // Multi-byte characters (CJK) plus a combining mark (é = "é" via
+    // combining acute accent) — proves no truncation and no normalization
+    // mangling on the write path.
+    const multiByteOwner = 'Kärsten 张伟 éclair';
+
+    const res = await postJSON(base, '/api/org/flight-risk', adminToken, {
+      employeeId: employee.id, riskLevel: 'high', owner: multiByteOwner, mitigation: dangerousMitigation,
+    });
+    assert.strictEqual(res.status, 201);
+    const { entry } = await res.json();
+    assert.strictEqual(entry.mitigation, dangerousMitigation, 'the stored mitigation must round-trip byte-identical — write-time sanitization is owned by the validation pipeline, not this route, and this field is deliberately plain text, not markup-bearing');
+    assert.strictEqual(entry.owner, multiByteOwner, 'the stored owner must round-trip byte-identical, with no truncation and no mangling of multi-byte characters or combining marks');
+
+    const listRes = await getJSON(base, '/api/org/flight-risk', adminToken);
+    const list = await listRes.json();
+    const stored = list.find((e) => e.id === entry.id);
+    assert.strictEqual(stored.mitigation, dangerousMitigation);
+    assert.strictEqual(stored.owner, multiByteOwner);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
+test('org-flight-risk-encoding: source-level — public/js/org.js renders through a text-content sink, never an HTML-markup sink', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  assert.strictEqual((src.match(/innerHTML/g) || []).length, 0, 'org.js must contain zero innerHTML sinks — a stored script-tag payload\'s inertness is a property of the render path, not of write-time escaping alone');
+});
+
+test('org-flight-risk-concurrency: two simultaneous creates for two different people both land — the same-collection lost-update race is closed', async () => {
+  const deal = makeFourIdentityDeal('deal_ofrconc');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const employeeA = await createEmployee(base, adminToken, 'Concurrent Writer A Target');
+    const employeeB = await createEmployee(base, adminToken, 'Concurrent Writer B Target');
+
+    // Fired without awaiting the first — this is the interleave that would
+    // reproduce a lost-update race under a naive diff-against-live-state
+    // merge (see db/store.js's snapshot-tagged transactional merge).
+    const [resA, resB] = await Promise.all([
+      postJSON(base, '/api/org/flight-risk', adminToken, { employeeId: employeeA.id, riskLevel: 'high', owner: 'Writer A' }),
+      postJSON(base, '/api/org/flight-risk', adminToken, { employeeId: employeeB.id, riskLevel: 'high', owner: 'Writer B' }),
+    ]);
+    assert.strictEqual(resA.status, 201);
+    assert.strictEqual(resB.status, 201);
+    const { entry: entryA } = await resA.json();
+    const { entry: entryB } = await resB.json();
+
+    const listRes = await getJSON(base, '/api/org/flight-risk', adminToken);
+    const list = await listRes.json();
+    assert.strictEqual(list.length, 2, 'both concurrent creates must survive — no lost update');
+    assert.ok(list.some((e) => e.id === entryA.id), 'writer A\'s entry must survive');
+    assert.ok(list.some((e) => e.id === entryB.id), 'writer B\'s entry must survive');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
+test('org-flight-risk-concurrency: a simultaneous flight-risk write and position write both land — the merge is per-collection, not whole-database last-writer-wins', async () => {
+  const deal = makeFourIdentityDeal('deal_ofrconcmix');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const employee = await createEmployee(base, adminToken, 'Mixed Concurrency Target');
+
+    const [riskRes, posRes] = await Promise.all([
+      postJSON(base, '/api/org/flight-risk', adminToken, { employeeId: employee.id, riskLevel: 'critical', owner: 'admin' }),
+      postJSON(base, '/api/org/positions', adminToken, { title: 'Concurrently-added position' }),
+    ]);
+    assert.strictEqual(riskRes.status, 201);
+    assert.strictEqual(posRes.status, 201);
+
+    const riskListRes = await getJSON(base, '/api/org/flight-risk', adminToken);
+    const riskList = await riskListRes.json();
+    assert.strictEqual(riskList.length, 1, 'the flight-risk collection must hold the concurrently-created entry');
+
+    const posListRes = await getJSON(base, '/api/org/positions', adminToken);
+    const posList = await posListRes.json();
+    assert.strictEqual(posList.length, 1, 'the positions collection must hold the concurrently-created position');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
