@@ -13,7 +13,7 @@
 (function () {
   'use strict';
 
-  var state = { positions: [] };
+  var state = { positions: [], employees: [] };
 
   // Module-level, declared exactly once, never reassigned to a fresh Set
   // instance — an unrelated re-render (e.g. after the add form submits)
@@ -21,6 +21,16 @@
   // view. Toggling a node adds/removes its own id via .add()/.delete();
   // this Set is never replaced wholesale anywhere else in this file.
   var expandedIds = new Set();
+
+  // Current search text (lowercased, trimmed) — '' means search is
+  // inactive. searchForcedIds is a plain hash (not a second Set — this
+  // file holds exactly one Set instance) tracking ONLY the node ids that
+  // THIS search pass force-expanded via an ancestor-of-match, so clearing
+  // the input can release exactly those ids and fall back to the default
+  // expand depth rather than leaving every ancestor of a former match
+  // pinned open.
+  var searchQuery = '';
+  var searchForcedIds = {};
 
   // Design Tension 2: default expand depth is 2 (root + one level of
   // children); everything deeper starts collapsed. Design Tension 2/6: the
@@ -40,11 +50,22 @@
   }
 
   function load() {
-    return fetch('/api/org/positions').then(function (r) { return r.json(); }).then(function (positions) {
-      state.positions = Array.isArray(positions) ? positions : [];
+    return Promise.all([
+      fetch('/api/org/positions').then(function (r) { return r.json(); }),
+      fetch('/api/employees').then(function (r) { return r.json(); }),
+    ]).then(function (results) {
+      state.positions = Array.isArray(results[0]) ? results[0] : [];
+      state.employees = Array.isArray(results[1]) ? results[1] : [];
     }).catch(function () {
       state.positions = [];
+      state.employees = [];
     });
+  }
+
+  function employeeNameFor(employeeId) {
+    if (!employeeId) return '';
+    var match = state.employees.filter(function (e) { return e.id === employeeId; })[0];
+    return (match && match.name) || '';
   }
 
   // Groups the flat list on reportsToId — every row whose parent is missing
@@ -83,10 +104,15 @@
     });
   }
 
-  function renderNode(node, depth) {
+  function renderNode(node, depth, searchActive, relevantIds) {
     var article = el('article', { className: 'org-node' });
     article.setAttribute('data-position-id', node.position.id);
     article.setAttribute('data-depth', String(depth));
+    // De-emphasise (not remove) a non-matching sibling while a search is
+    // active, so the operator keeps their bearings on the rest of the tree.
+    if (searchActive && !relevantIds[node.position.id]) {
+      article.classList.add('org-node--dim');
+    }
 
     var row = el('div', { className: 'org-node-row' });
 
@@ -117,7 +143,7 @@
 
     var occupant;
     if (node.position.employeeId) {
-      occupant = el('span', { className: 'org-node-occupant', text: node.position.employeeId });
+      occupant = el('span', { className: 'org-node-occupant', text: employeeNameFor(node.position.employeeId) || node.position.employeeId });
     } else {
       occupant = el('em', { className: 'org-node-occupant org-node-vacant', text: 'Vacant' });
     }
@@ -136,12 +162,58 @@
       if (childDepth > INDENT_CAP_DESKTOP) childWrap.classList.add('org-node-children--cap-desktop');
       if (childDepth > INDENT_CAP_NARROW) childWrap.classList.add('org-node-children--cap-narrow');
       node.children.forEach(function (child) {
-        childWrap.appendChild(renderNode(child, childDepth));
+        childWrap.appendChild(renderNode(child, childDepth, searchActive, relevantIds));
       });
       article.appendChild(childWrap);
     }
 
     return article;
+  }
+
+  // Case-insensitive substring match against title, level and the
+  // occupant's resolved name — client-side only, over the already-fetched
+  // tree data (no new search endpoint).
+  function positionMatchesQuery(position, query) {
+    var haystack = [position.title || '', position.level || '', employeeNameFor(position.employeeId)]
+      .join(' ')
+      .toLowerCase();
+    return haystack.indexOf(query) !== -1;
+  }
+
+  // Walks the tree once, computing which node ids are "relevant" (a direct
+  // match or an ancestor of one) and force-expanding every ancestor of a
+  // match into the shared expandedIds Set (tracked via searchForcedIds so a
+  // later clear can release exactly these ids). Returns the id of the
+  // first match encountered in document order, for scroll-into-view.
+  function computeSearchState(tree, query) {
+    var relevantIds = {};
+    var firstMatchId = null;
+
+    function walk(nodes, ancestorChain) {
+      var subtreeHasMatch = false;
+      nodes.forEach(function (node) {
+        var isMatch = positionMatchesQuery(node.position, query);
+        if (isMatch && !firstMatchId) firstMatchId = node.position.id;
+        var childChain = ancestorChain.concat([node.position.id]);
+        var childHasMatch = walk(node.children, childChain);
+        if (isMatch || childHasMatch) {
+          relevantIds[node.position.id] = true;
+          subtreeHasMatch = true;
+        }
+        if (isMatch) {
+          ancestorChain.forEach(function (ancestorId) {
+            if (!expandedIds.has(ancestorId)) {
+              expandedIds.add(ancestorId);
+              searchForcedIds[ancestorId] = true;
+            }
+          });
+        }
+      });
+      return subtreeHasMatch;
+    }
+
+    walk(tree, []);
+    return { relevantIds: relevantIds, firstMatchId: firstMatchId };
   }
 
   function renderTree() {
@@ -157,9 +229,91 @@
     }
     var tree = buildTree(state.positions);
     seedDefaultExpansion(tree);
+
+    var searchActive = !!searchQuery;
+    var searchState = { relevantIds: {}, firstMatchId: null };
+    if (searchActive) {
+      searchState = computeSearchState(tree, searchQuery);
+      if (!searchState.firstMatchId) {
+        wrap.appendChild(el('p', { className: 'org-empty', text: 'No positions match your search.' }));
+        return;
+      }
+    }
+
     tree.forEach(function (node) {
-      wrap.appendChild(renderNode(node, 0));
+      wrap.appendChild(renderNode(node, 0, searchActive, searchState.relevantIds));
     });
+
+    if (searchActive && searchState.firstMatchId) {
+      var matchEl = wrap.querySelector('[data-position-id="' + searchState.firstMatchId + '"]');
+      if (matchEl) matchEl.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function renderSearch() {
+    var wrap = document.getElementById('org-search');
+    if (!wrap) return;
+    wrap.textContent = '';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'org-search-input';
+    input.className = 'org-search-input';
+    input.placeholder = 'Search positions or people…';
+    input.value = searchQuery;
+    // Filters the already-fetched tree client-side — no fetch call here,
+    // there is no server-side search endpoint (Design Tension 2).
+    input.addEventListener('input', function () {
+      var nextQuery = input.value.trim().toLowerCase();
+      if (!nextQuery && searchQuery) {
+        // Clearing restores the pre-search expansion default rather than
+        // leaving every ancestor of the former match pinned open — release
+        // ONLY the ids THIS search forced, never a manually-expanded one.
+        Object.keys(searchForcedIds).forEach(function (id) { expandedIds.delete(id); });
+        searchForcedIds = {};
+      }
+      searchQuery = nextQuery;
+      renderTree();
+    });
+    wrap.appendChild(input);
+  }
+
+  // Membership is computed by excluding employeeIds already referenced by
+  // a position's employeeId in the currently displayed state — no second
+  // server call. Vacant positions stay inline in the tree (D-05); this
+  // bucket is exclusively people with no position at all.
+  function computeUnassignedEmployees() {
+    var assignedIds = {};
+    state.positions.forEach(function (p) {
+      if (p.employeeId) assignedIds[p.employeeId] = true;
+    });
+    return state.employees.filter(function (e) { return !assignedIds[e.id]; });
+  }
+
+  function renderUnassigned() {
+    var wrap = document.getElementById('org-unassigned');
+    if (!wrap) return;
+    wrap.textContent = '';
+    var unassigned = computeUnassignedEmployees();
+    wrap.appendChild(el('h3', { className: 'org-unassigned-heading', text: 'Unassigned employees (' + unassigned.length + ')' }));
+    if (!unassigned.length) {
+      wrap.appendChild(el('p', { className: 'org-empty', text: 'No unassigned employees.' }));
+      return;
+    }
+    var list = el('div', { className: 'org-unassigned-list' });
+    unassigned.forEach(function (e) {
+      var row = el('div', { className: 'org-unassigned-row' });
+      // Each row shows the fields the record actually has; an absent field
+      // is omitted entirely, never rendered as an em-dash placeholder.
+      if (e.name) row.appendChild(el('span', { className: 'org-unassigned-name', text: e.name }));
+      var metaParts = [];
+      if (e.role) metaParts.push(e.role);
+      if (e.department) metaParts.push(e.department);
+      if (metaParts.length) {
+        row.appendChild(el('span', { className: 'org-unassigned-meta', text: metaParts.join(' · ') }));
+      }
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
   }
 
   function renderLoading() {
@@ -255,6 +409,7 @@
         return load().then(function () {
           renderTree();
           renderAddForm();
+          renderUnassigned();
         });
       }).catch(function () {
         error.textContent = 'Could not add that position.';
@@ -270,7 +425,9 @@
   document.addEventListener('DOMContentLoaded', function () {
     renderLoading();
     load().then(function () {
+      renderSearch();
       renderTree();
+      renderUnassigned();
       renderAddForm();
     });
   });

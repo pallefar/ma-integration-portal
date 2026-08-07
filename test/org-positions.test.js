@@ -514,3 +514,32 @@ test('org-positions (t): the level chip is appended only when the position carri
     'the level chip must be constructed inside an `if (node.position.level)` guard so it renders at every depth that has one, not unconditionally',
   );
 });
+
+// -----------------------------------------------------------------------
+// Task 2: search and the unassigned-employees bucket — source-level
+// assertions on public/js/org.js.
+// -----------------------------------------------------------------------
+
+test('org-positions (u): the search filter operates on already-fetched data and issues no fetch call', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const searchHandlerMatch = src.match(/input\.addEventListener\('input',\s*function\s*\(\)\s*\{[\s\S]*?\n    \}\);/);
+  assert.ok(searchHandlerMatch, 'a search input change handler must exist');
+  assert.ok(!searchHandlerMatch[0].includes('fetch('), 'the search handler must not issue a fetch call — it filters the already-fetched tree data client-side');
+});
+
+test('org-positions (v): the unassigned-employees bucket is computed by excluding employeeIds referenced by positions, not a second server call', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const fnMatch = src.match(/function computeUnassignedEmployees\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'a dedicated computeUnassignedEmployees() function must exist');
+  assert.ok(!fnMatch[0].includes('fetch('), 'computing unassigned membership must not issue a second server call');
+  assert.ok(fnMatch[0].includes('employeeId'), 'membership must be computed against positions\' employeeId references');
+});
+
+test('org-positions (w): the no-match copy and the unassigned heading each appear exactly once, the heading with a count interpolation', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const noMatchOccurrences = (src.match(/No positions match your search\./g) || []).length;
+  assert.strictEqual(noMatchOccurrences, 1, 'the no-match copy must appear exactly once');
+  const headingOccurrences = (src.match(/Unassigned employees \(/g) || []).length;
+  assert.strictEqual(headingOccurrences, 1, 'the "Unassigned employees (" heading must appear exactly once');
+  assert.match(src, /'Unassigned employees \(' \+ unassigned\.length \+ '\)'/, 'the heading must interpolate a bare count in the same expression');
+});

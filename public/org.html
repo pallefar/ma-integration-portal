@@ -34,6 +34,20 @@
     .org-add input[type="text"]{ flex:1; min-width:200px; }
     .org-add-error{ display:none; width:100%; font-size:.76rem; color:#C0392B; margin-top:.2rem; }
     .org-empty{ font-size:.8rem; color:var(--text-dim); font-style:italic; padding:.4rem 0; }
+    /* Search (Design Tension 2): single-line field styled like
+       .dd-add input[type="text"] (due-diligence.html:27-28); non-matching
+       siblings are de-emphasised via .org-node--dim rather than removed. */
+    .org-search{ margin-bottom:.6rem; }
+    .org-search-input{ width:100%; padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; box-sizing:border-box; }
+    .org-node--dim{ opacity:.45; }
+    /* Unassigned employees (Design Tension 2): a flat list, deliberately
+       not a tree — these records have no position and therefore no parent. */
+    .org-unassigned{ margin-top:1rem; }
+    .org-unassigned-heading{ font-size:.85rem; font-weight:800; color:var(--te-dark-teal); margin:0 0 .4rem; }
+    .org-unassigned-list{ display:flex; flex-direction:column; gap:.3rem; }
+    .org-unassigned-row{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:baseline; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:8px; padding:.4rem .65rem; font-size:.78rem; }
+    .org-unassigned-name{ font-weight:600; color:var(--text-primary); min-width:0; }
+    .org-unassigned-meta{ color:var(--text-dim); font-size:.72rem; min-width:0; }
     /* Design Tension 6: narrow-width org tree — card padding shrinks, and
        the indent cap tightens from depth 6 to depth 3 (3 * 1.25rem = 60px),
        leaving room for card content at a 320px viewport. */
@@ -65,12 +79,14 @@
           <h1>Org Design</h1>
           <p>The organization structure — vacant and filled positions, mapped current state.</p>
         </div>
+        <div id="org-search" class="org-search"></div>
         <div id="org-tree"></div>
+        <div id="org-unassigned" class="org-unassigned"></div>
         <div id="org-add"></div>
       </div>
     </main>
   </div>
 
-  <script src="/js/org.js?v=1784900003"></script>
+  <script src="/js/org.js?v=1784900004"></script>
 </body>
 </html>
