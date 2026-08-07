@@ -357,12 +357,76 @@
     }
   }
 
+  // D-22/UI-SPEC §8: the flight-risk owner nudge — a heading badge plus a
+  // dismissible warning banner for unmitigated high/critical flight-risk
+  // entries the CALLER owns, sourced from GET /api/org/summary's restricted
+  // caller-scoped block (Task 1). Follows renderStaleSynergyNudge()'s shape
+  // ABOVE strictly as a PATTERN, not as shared code — that function's own
+  // comment states it must never be called, imported or extended for a
+  // second nudge, so this is an independent function with its OWN element
+  // ids and its OWN sessionStorage key, inserted so it STACKS as an
+  // additional banner alongside the synergy nudge rather than merging text
+  // into it.
+  //
+  // Sourced STRICTLY from summary.restricted.mine.unmitigatedFlightRisks —
+  // returns immediately (no badge, no banner) when the restricted key is
+  // absent, when the caller-scoped block is absent, or when the count is
+  // not greater than zero. This is the D-20 absence rule applied to a
+  // nudge: the nudge must be ABSENT, not zero, for an uncleared caller and
+  // for a caller who owns none — a retention nudge that fires on bad or
+  // partial data (e.g. a failed fetch degrading `summary` to null) is worse
+  // than one that does not fire at all.
+  function renderFlightRiskNudge(wrap, summary) {
+    if (!summary || !Object.prototype.hasOwnProperty.call(summary, 'restricted')) return;
+    var restricted = summary.restricted;
+    if (!restricted || !restricted.mine) return;
+    var mineUnmitigated = restricted.mine.unmitigatedFlightRisks || 0;
+    if (mineUnmitigated <= 0) return;
+
+    var heading = findSectionHeading(wrap, 'Organisation');
+    if (heading && !document.getElementById('org-risk-nudge-badge')) {
+      var badge = el('span', { text: String(mineUnmitigated) });
+      badge.id = 'org-risk-nudge-badge';
+      badge.style.cssText = 'display:inline-block;margin-left:.6rem;font-size:.68rem;font-weight:800;padding:.15rem .55rem;border-radius:999px;background:#C0392B;color:#fff;vertical-align:middle;';
+      heading.appendChild(badge);
+    }
+
+    if (document.getElementById('org-risk-nudge-banner')) return;
+    try {
+      if (sessionStorage.getItem('org_risk_nudge_dismissed') === 'true') return;
+    } catch (e) { /* sessionStorage unavailable — fall through and still show it */ }
+
+    var main = document.querySelector('.main-content') || document.querySelector('main');
+    if (!main) return;
+
+    var banner = el('div', { className: 'page-banner page-banner--warning' });
+    banner.id = 'org-risk-nudge-banner';
+    banner.setAttribute('role', 'status');
+    var body = el('div', { className: 'page-banner-body' });
+    var msg = el('span', {
+      className: 'page-banner-msg',
+      text: 'You have ' + mineUnmitigated + (mineUnmitigated === 1
+        ? ' unmitigated high/critical flight-risk entry you own'
+        : ' unmitigated high/critical flight-risk entries you own') + '.',
+    });
+    body.appendChild(msg);
+    banner.appendChild(body);
+    // Inserted at main.firstChild exactly like the existing stale-synergy
+    // nudge banner above — the two banners STACK (each insertion pushes
+    // the previous one down), never merge text, and each dismisses
+    // independently via its own sessionStorage key.
+    main.insertBefore(banner, main.firstChild);
+    if (typeof window.makeBannerDismissible === 'function') {
+      window.makeBannerDismissible(banner, 'org_risk_nudge_dismissed', 'session');
+    }
+  }
+
   /** Entry point — called by public/js/dashboard.js's deal-bound branch.
-   * Fetches all five sources, then renders all four panels plus the
-   * stale-synergy nudge once every fetch has resolved (best-effort: a
-   * single failed fetch renders that panel's own empty state, or — for
-   * a rollup — simply omits its nudge, rather than blanking the whole
-   * page). */
+   * Fetches all five sources, then renders all four panels plus both
+   * nudges (stale-synergy, flight-risk) once every fetch has resolved
+   * (best-effort: a single failed fetch renders that panel's own empty
+   * state, or — for a rollup — simply omits its nudge, rather than
+   * blanking the whole page). */
   function renderDealHome(dealId) {
     var container = document.getElementById('deal-home');
     if (!container) return;
@@ -389,6 +453,7 @@
       renderReadiness(wrap, statusData);
       renderDiligence(wrap, summary);
       renderOrgPanel(wrap, orgSummary);
+      renderFlightRiskNudge(wrap, orgSummary);
       renderStaleSynergyNudge(wrap, rollup);
     });
   }

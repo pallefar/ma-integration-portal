@@ -431,5 +431,75 @@ test('org-summary (source): dashboard.html\'s .org-summary-restricted rule carri
 });
 
 test('org-summary (source): the deal-home script\'s cache stamp was bumped', () => {
-  assert.ok(dashboardHtml.includes('/js/deal-home.js?v=1784700002'), 'the deal-home.js cache stamp must be bumped past its Phase-5 value');
+  assert.ok(dashboardHtml.includes('/js/deal-home.js?v=1784700003'), 'the deal-home.js cache stamp must be bumped past its Phase-5 value');
+});
+
+// =============================================================== Task 3 ===
+// Source-level assertions on the flight-risk owner nudge
+// (public/js/deal-home.js's renderFlightRiskNudge) — D-22.
+// ============================================================================
+
+test('org-summary (source): renderFlightRiskNudge returns early when the restricted key is absent, and uses element ids distinct from the existing nudge', () => {
+  const fnMatch = dealHomeJs.match(/function renderFlightRiskNudge[\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'renderFlightRiskNudge must be present');
+  const fnSrc = fnMatch[0];
+  assert.ok(/hasOwnProperty\.call\(summary,\s*['"]restricted['"]\)/.test(fnSrc), 'the nudge must guard on the restricted key\'s presence, mirroring renderOrgPanel\'s own D-20 discipline');
+  assert.ok(/if\s*\(![\s\S]{0,80}return;/.test(fnSrc), 'the function must return early rather than rendering on absent/partial data');
+  assert.ok(fnSrc.includes("'org-risk-nudge-badge'"), 'the nudge badge id must be its own, distinct from the synergy nudge\'s syn-nudge-badge');
+  assert.ok(fnSrc.includes("'org-risk-nudge-banner'"), 'the nudge banner id must be its own, distinct from the synergy nudge\'s syn-nudge-banner');
+  assert.ok(!fnSrc.includes('syn-nudge'), 'the new nudge must reference none of the existing nudge\'s element ids');
+});
+
+test('org-summary (source): the existing stale-synergy nudge function is not called from, imported into, or modified by the new one', () => {
+  const fnMatch = dealHomeJs.match(/function renderFlightRiskNudge[\s\S]*?\n  \}/);
+  const fnSrc = fnMatch[0];
+  assert.ok(!fnSrc.includes('renderStaleSynergyNudge'), 'renderFlightRiskNudge must never call renderStaleSynergyNudge');
+  // renderStaleSynergyNudge's own body must be byte-for-byte unchanged in
+  // shape — it is still declared exactly once, and still carries its
+  // original element ids untouched.
+  const staleFnCount = (dealHomeJs.match(/function renderStaleSynergyNudge/g) || []).length;
+  assert.strictEqual(staleFnCount, 1, 'renderStaleSynergyNudge must remain declared exactly once — not duplicated or wrapped');
+  assert.ok(dealHomeJs.includes("'syn-nudge-badge'") && dealHomeJs.includes("'syn-nudge-banner'"), 'the existing nudge\'s own element ids must still be present, untouched');
+});
+
+test('org-summary (source): the nudge locates its heading through the existing text-matching findSectionHeading lookup, not DOM position or a numeric index', () => {
+  const fnMatch = dealHomeJs.match(/function renderFlightRiskNudge[\s\S]*?\n  \}/);
+  const fnSrc = fnMatch[0];
+  assert.ok(/findSectionHeading\(wrap,\s*['"]Organisation['"]\)/.test(fnSrc), 'the nudge must call findSectionHeading(wrap, \'Organisation\') — the org panel\'s own exact heading text');
+  assert.ok(!/childNodes\[\d+\]|children\[\d+\]|querySelector\(['"]\.deal-home-section-title['"]\)(?!\w)/.test(fnSrc), 'the nudge must never locate its heading by DOM position or a numeric index');
+});
+
+test('org-summary (source): the new banner is raised with its own session storage key, distinct from the existing nudge\'s', () => {
+  const fnMatch = dealHomeJs.match(/function renderFlightRiskNudge[\s\S]*?\n  \}/);
+  const fnSrc = fnMatch[0];
+  assert.ok(fnSrc.includes("'org_risk_nudge_dismissed'"), 'the nudge must use its own sessionStorage key');
+  assert.ok(!fnSrc.includes('syn_nudge_dismissed'), 'the nudge must never reference the existing nudge\'s sessionStorage key');
+  assert.ok(/makeBannerDismissible\(banner,\s*['"]org_risk_nudge_dismissed['"],\s*['"]session['"]\)/.test(fnSrc), 'the nudge must call window.makeBannerDismissible with the same call signature and its own key');
+});
+
+test('org-summary (source): the nudge is called from renderDealHome with the same summary object the panel consumed', () => {
+  const entryMatch = dealHomeJs.match(/function renderDealHome[\s\S]*?\n  \}/);
+  assert.ok(entryMatch, 'renderDealHome must be present');
+  assert.ok(/renderOrgPanel\(wrap,\s*orgSummary\)[\s\S]{0,120}renderFlightRiskNudge\(wrap,\s*orgSummary\)/.test(entryMatch[0]), 'renderFlightRiskNudge must be called after renderOrgPanel, passing the same orgSummary object');
+});
+
+test('org-summary (source): the client\'s own greater-than-zero guard — not a missing field — is what suppresses the nudge for a cleared caller who owns none', async () => {
+  const deal = makeFourIdentityDeal('deal_osk');
+  const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const { body } = await getSummary(base, pmoHrToken);
+    assert.ok(Object.prototype.hasOwnProperty.call(body, 'restricted'), 'the restricted key must be present for a cleared caller');
+    assert.strictEqual(body.restricted.mine.unmitigatedFlightRisks, 0, 'a cleared caller who owns no unmitigated entry gets a zero count, not an absent field');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoHrToken);
+    server.close();
+  }
+
+  const fnMatch = dealHomeJs.match(/function renderFlightRiskNudge[\s\S]*?\n  \}/);
+  const fnSrc = fnMatch[0];
+  assert.ok(/mineUnmitigated\s*<=\s*0\)\s*return;/.test(fnSrc), 'the client must guard on a greater-than-zero count client-side — the server already sends a genuine zero, not an absent field, for this case');
 });
