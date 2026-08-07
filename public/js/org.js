@@ -711,6 +711,7 @@
       } else {
         wrap.appendChild(el('p', { className: 'org-empty', text: 'Add positions manually, or paste a roster to populate the structure at once.' }));
       }
+      applyI18n();
       return;
     }
     var tree = buildTree(state.positions);
@@ -722,6 +723,7 @@
       searchState = computeSearchState(tree, searchQuery);
       if (!searchState.firstMatchId) {
         wrap.appendChild(el('p', { className: 'org-empty', text: 'No positions match your search.' }));
+        applyI18n();
         return;
       }
     }
@@ -734,6 +736,14 @@
       var matchEl = wrap.querySelector('[data-position-id="' + searchState.firstMatchId + '"]');
       if (matchEl) matchEl.scrollIntoView({ block: 'nearest' });
     }
+
+    // Plan 08 Task 2 walk finding F2: re-applies i18n over the tree just
+    // rendered — the decision badges and history pills carry data-i18n but
+    // were built after transitions.js's own one-time [data-i18n] pass
+    // already ran, so a non-EN language stored before this page loads
+    // otherwise never reaches them. Mirrors execution.js's own applyI18n()
+    // after every render idiom.
+    applyI18n();
   }
 
   function renderSearch() {
@@ -1073,6 +1083,14 @@
 
     var currentLabel = el('span', { className: 'org-state-switch-label', text: 'Current' });
     var targetLabel = el('span', { className: 'org-state-switch-label', text: 'Target' });
+    // Plan 08 Task 2 walk finding F2: the UI-SPEC's Copywriting Contract
+    // lists these as translated labels, but neither carried a data-i18n
+    // attribute at all — a longer/shorter DE/ZH label could never reach
+    // them regardless of the dictionary's contents. English text already
+    // set above via el() stands as the fall-back-to-English contract's own
+    // default if a translation is absent for the active language.
+    currentLabel.setAttribute('data-i18n', 'org.switch_current');
+    targetLabel.setAttribute('data-i18n', 'org.switch_target');
     if (viewState === 'current') currentLabel.classList.add('org-state-switch-label--active');
     else targetLabel.classList.add('org-state-switch-label--active');
 
@@ -1081,6 +1099,7 @@
 
     wrap.appendChild(currentLabel);
     wrap.appendChild(targetLabel);
+    applyI18n();
   }
 
   // Re-fetches from the server for the newly selected state — never fetches

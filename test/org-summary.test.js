@@ -431,7 +431,12 @@ test('org-summary (source): dashboard.html\'s .org-summary-restricted rule carri
 });
 
 test('org-summary (source): the deal-home script\'s cache stamp was bumped', () => {
-  assert.ok(dashboardHtml.includes('/js/deal-home.js?v=1784700003'), 'the deal-home.js cache stamp must be bumped past its Phase-5 value');
+  // Plan 08 Task 2's walk-finding fixes (F2) touched public/js/deal-home.js
+  // again, bumping this stamp a second time past Plan 07's own bump — this
+  // assertion tracks the CURRENT stamp, not a frozen historical one, so it
+  // stays meaningful as a "was this file re-cached after being edited"
+  // check rather than pinning a single Plan-07-only value forever.
+  assert.ok(dashboardHtml.includes('/js/deal-home.js?v=1784700004'), 'the deal-home.js cache stamp must be bumped past its Plan-07 value');
 });
 
 // =============================================================== Task 3 ===

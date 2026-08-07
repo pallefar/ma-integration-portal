@@ -455,6 +455,17 @@
       renderOrgPanel(wrap, orgSummary);
       renderFlightRiskNudge(wrap, orgSummary);
       renderStaleSynergyNudge(wrap, rollup);
+
+      // Plan 08 Task 2 walk finding F2: the org panel's five decision-type
+      // labels (renderOrgPanel above) carry data-i18n, but this whole panel
+      // is built asynchronously AFTER transitions.js's own one-time
+      // [data-i18n] pass already ran at i18n-dictionary-fetch time — a
+      // fresh page load with a non-EN language already stored otherwise
+      // leaves them in English forever. Mirrors the SAME
+      // `if (window.applyPortalI18n) window.applyPortalI18n();` idiom
+      // already established in public/js/dashboard.js/execution.js/
+      // assessments.js/app.js/employee.js — never a new pattern.
+      if (window.applyPortalI18n) window.applyPortalI18n();
     });
   }
 

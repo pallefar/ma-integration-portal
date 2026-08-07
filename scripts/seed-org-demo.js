@@ -267,12 +267,21 @@ const FLIGHT_RISK_SEEDS = [
 // fallback-to-English contract, mirroring scripts/seed-synergy-demo.js's own
 // NEW_LABELS precedent. Keys/format match public/js/org.js's
 // orgDecisionI18nKey() ('org.dec_' + value.replace(/-/g, '_')) exactly.
+//
+// Plan 08 Task 2 walk finding F2: the two current/target switch-label keys
+// (org.switch_current/org.switch_target) are added here too — public/js/
+// org.js now tags those spans with data-i18n (they previously carried none
+// at all), and these two entries give that markup a real translation in
+// every shipped language rather than relying solely on the fall-back-to-
+// English contract for a control every cleared session sees.
 const NEW_LABELS = {
   'org.dec_retain': { en: 'Retain', de: 'Halten', zh: '保留', cs: 'Ponechat' },
   'org.dec_redeploy': { en: 'Redeploy', de: 'Versetzen', zh: '调岗', cs: 'Přeřadit' },
   'org.dec_in_selection': { en: 'In Selection', de: 'Im Auswahlverfahren', zh: '甄选中', cs: 'Ve výběru' },
   'org.dec_redundant': { en: 'Redundant', de: 'Freigesetzt', zh: '裁减', cs: 'Nadbytečný' },
   'org.dec_open': { en: 'Open', de: 'Offen', zh: '待定', cs: 'Otevřeno' },
+  'org.switch_current': { en: 'Current', de: 'Aktuell', zh: '当前', cs: 'Aktuální' },
+  'org.switch_target': { en: 'Target', de: 'Ziel', zh: '目标', cs: 'Cílový' },
 };
 
 /**
