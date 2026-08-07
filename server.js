@@ -4034,11 +4034,21 @@ app.post('/api/org/positions', (req, res) => {
 // above); Plan 07's GET /api/org/summary uses the identical grant check.
 // This is defence in depth only — the server refusal on the write/read
 // routes above and below is the actual control, not this probe's shape.
+// 06-04 (D-04 tier 2, Surface Contract §5): a SECOND restricted key,
+// assigned ONLY when the caller is IL/admin (the SAME governance role check
+// the decisions POST route itself runs, below) — never a ternary, never
+// `false`, so this key too is OMITTED entirely for every other cleared-but-
+// non-IL member. The record-a-decision form is rendered client-side ONLY
+// inside the branch guarded by this key's presence; this omission is a
+// courtesy, not the control — the write route's own gate is.
 app.get('/api/org/capabilities', (req, res) => {
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const capabilities = {};
   if (accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
     capabilities.targetOrgDesign = true;
+  }
+  if (isAdminOrIlRequest(req)) {
+    capabilities.recordOrgDecisions = true;
   }
   res.json(capabilities);
 });

@@ -537,3 +537,87 @@ test('org-decisions-privacy: a redundant decision recorded against a linked empl
     server.close();
   }
 });
+
+// ============================================================= Task 3 ====
+// Decision badge, history panel, and the absent-not-disabled record form.
+// ===========================================================================
+
+test('org-decisions-ui: no innerHTML sink exists anywhere in public/js/org.js', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  const count = (src.match(/innerHTML/g) || []).length;
+  assert.strictEqual(count, 0, 'public/js/org.js must contain zero innerHTML sinks — MNPI org content is textContent-only');
+});
+
+test('org-decisions-ui: the .org-node-decision rule carries no width, max-width, overflow or text-overflow declaration', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'org.html'), 'utf8');
+  const match = src.match(/\.org-node-decision\{([^}]*)\}/);
+  assert.ok(match, '.org-node-decision rule must exist in public/org.html');
+  const body = match[1];
+  ['width', 'max-width', 'overflow', 'text-overflow'].forEach((prop) => {
+    assert.ok(!body.includes(prop + ':'), `.org-node-decision must not declare "${prop}" — a longer translation must reflow the pill, never clip it`);
+  });
+});
+
+test('org-decisions-ui: the decision badge\'s data-i18n key is built by concatenation from the vocabulary value, matching the RAID severity precedent', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  assert.match(src, /orgDecisionI18nKey/, 'org.js must declare an i18n-key-building helper');
+  assert.match(src, /'org\.dec_'\s*\+/, 'the i18n key must be built by string concatenation with the "org.dec_" prefix, mirroring execution.js\'s "raid.lvl_" + severity precedent');
+  assert.match(src, /data-i18n/, 'the badge/select/history-row elements must carry data-i18n attributes');
+});
+
+test('org-decisions-ui: the record-a-decision form is constructed only inside a branch testing the governance capability key, and no decision-form control is ever set disabled as a clearance affordance', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  const buildCallMatch = src.match(/if \(capabilities\.recordOrgDecisions\) \{\s*panel\.appendChild\(buildDecisionForm\(position\)\);/);
+  assert.ok(buildCallMatch, 'buildDecisionForm(position) must be called only inside a branch testing capabilities.recordOrgDecisions');
+
+  // The ONLY `disabled` assignments anywhere in the file must be the
+  // in-flight (submit-while-request-outstanding) idiom already established
+  // for the add-form/import-form/delete-button, never a clearance gate —
+  // proven by requiring every `.disabled = ` occurrence to sit on a
+  // variable named `submit`, `deleteBtn`, `copyBtn` or `importBtn`
+  // (the existing loading-state controls), never a decision-form-specific
+  // clearance flag like `typeSelect.disabled` or `rationaleInput.disabled`.
+  const disabledAssignments = src.match(/\w+\.disabled\s*=\s*(true|false)/g) || [];
+  disabledAssignments.forEach((assignment) => {
+    assert.match(assignment, /^(submit|deleteBtn|copyBtn|importBtn)\.disabled/, `unexpected disabled assignment "${assignment}" — decision-form clearance must be absence, never a disabled control`);
+  });
+});
+
+test('org-decisions-ui: the governance-confirmation string containing the legal-and-severance sentence is invoked on the redundant and redeploy paths', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  assert.match(src, /legal and severance consequences/, 'the legal-and-severance sentence must appear verbatim');
+  const guardMatch = src.match(/if \(type === 'redundant' \|\| type === 'redeploy'\) \{\s*confirmMessage \+= ' This is a governance record with legal and severance consequences[^']*';\s*\}/);
+  assert.ok(guardMatch, 'the legal-and-severance sentence must be appended ONLY when type is redundant or redeploy');
+});
+
+test('org-decisions-ui: GET /api/org/capabilities — the governance capability key is truthy for admin/hrbp and absent (not false) for a cleared-but-non-IL member', async () => {
+  const deal = makeFourIdentityDeal('deal_odcap');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const adminRes = await fetch(`${base}/api/org/capabilities`, { headers: { Cookie: cookieHeader(adminToken) } });
+    const adminText = await adminRes.text();
+    assert.ok(adminText.includes('recordOrgDecisions'), 'admin must see the governance capability key');
+    assert.strictEqual(JSON.parse(adminText).recordOrgDecisions, true);
+
+    const karenRes = await fetch(`${base}/api/org/capabilities`, { headers: { Cookie: cookieHeader(karenToken) } });
+    const karenText = await karenRes.text();
+    assert.ok(karenText.includes('recordOrgDecisions'), 'hrbp (Integration Lead) must see the governance capability key');
+
+    // The area-cleared-but-non-IL member: sees targetOrgDesign (hr grant)
+    // but NOT recordOrgDecisions — the capability probe's response,
+    // serialised, must not contain the governance key name at all.
+    const pmoHrRes = await fetch(`${base}/api/org/capabilities`, { headers: { Cookie: cookieHeader(pmoHrToken) } });
+    const pmoHrText = await pmoHrRes.text();
+    assert.ok(pmoHrText.includes('targetOrgDesign'), 'the hr-granted pmo must still see the tier-1 targetOrgDesign key');
+    assert.ok(!pmoHrText.includes('recordOrgDecisions'), 'the hr-granted-but-non-IL pmo response must not contain the governance capability key name at all — absent, not false');
+  } finally {
+    [adminToken, karenToken, pmoHrToken].forEach((t) => sessionsDb.deleteSession(runtimeConn, t));
+    server.close();
+  }
+});

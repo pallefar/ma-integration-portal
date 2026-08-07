@@ -86,6 +86,33 @@
       .org-node{ padding:.5rem .65rem; }
       .org-node-children.org-node-children--cap-narrow{ padding-left:0; }
     }
+    /* Decision register (06-04, D-13/D-14, UI-SPEC Design Tension 5 /
+       Surface Contract 5). The badge is a FILLED PILL only — the card
+       border-accent channel stays reserved for flight-risk severity
+       (Plan 05) so the two vocabularies never compete for the same visual
+       channel. No width/max-width/overflow/text-overflow anywhere in this
+       block — a longer translation must reflow the pill, never clip it,
+       because the label IS the decision (i18n contract). */
+    .org-node-decision{ position:absolute; top:.55rem; right:.65rem; flex:none; font-size:.64rem; font-weight:800; border-radius:12px; padding:.18rem .6rem; }
+    .org-dec-badge--retain{ background:rgba(63,122,55,.12); color:#3f7a37; }
+    .org-dec-badge--redeploy{ background:rgba(59,130,246,.12); color:var(--status-info,#3B82F6); }
+    .org-dec-badge--in-selection{ background:rgba(233,131,0,.12); color:var(--te-orange); }
+    .org-dec-badge--redundant{ background:rgba(192,57,43,.1); color:#C0392B; }
+    .org-dec-badge--open{ background:var(--bg-light); color:var(--text-dim); }
+    .org-node-history-toggle{ background:none; border:none; cursor:pointer; font-size:.7rem; font-weight:700; color:var(--text-dim); padding:.1rem .4rem; }
+    .org-node-history-toggle:hover{ color:var(--te-dark-teal); }
+    .org-dec-history{ margin-top:.6rem; padding-top:.5rem; border-top:1px dashed var(--border-color); }
+    .org-dec-history-heading{ font-size:.78rem; font-weight:800; color:var(--te-dark-teal); margin:0 0 .4rem; }
+    /* Reduced-size pill inside a history row — same modifier classes as
+       .org-node-decision, smaller base sizing only. */
+    .org-dec-row{ display:flex; flex-wrap:wrap; align-items:baseline; gap:.5rem; font-size:.78rem; padding:.35rem 0; border-bottom:1px dashed var(--border-color); }
+    .org-dec-row-type{ flex:none; font-size:.6rem; font-weight:800; border-radius:10px; padding:.12rem .5rem; }
+    .org-dec-row-rationale{ flex-basis:100%; color:var(--text-primary); line-height:1.4; }
+    .org-dec-row-meta{ color:var(--text-dim); font-size:.7rem; }
+    .org-dec-form{ display:flex; flex-direction:column; gap:.5rem; background:var(--card-bg,#fff); border:1px dashed var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-top:.6rem; }
+    .org-dec-form select, .org-dec-form textarea, .org-dec-form input{ padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; }
+    .org-dec-form textarea{ resize:vertical; }
+    .org-dec-form-error{ display:none; font-size:.76rem; color:#C0392B; }
   </style>
 </head>
 <body>
@@ -121,6 +148,6 @@
     </main>
   </div>
 
-  <script src="/js/org.js?v=1784900006"></script>
+  <script src="/js/org.js?v=1784900007"></script>
 </body>
 </html>

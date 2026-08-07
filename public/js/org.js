@@ -18,7 +18,7 @@
 (function () {
   'use strict';
 
-  var state = { positions: [], employees: [] };
+  var state = { positions: [], employees: [], decisions: [] };
 
   // 'current' | 'target' — which state the tree currently displays. Held in
   // a plain JS variable (Surface Contract 3), not persisted server-side.
@@ -45,6 +45,14 @@
   // pinned open.
   var searchQuery = '';
   var searchForcedIds = {};
+
+  // 06-04 Task 3: which position ids currently have their decision-history
+  // panel open — a plain hash (NOT a second Set; this file holds exactly
+  // one Set instance, expandedIds above), keyed the same way
+  // searchForcedIds already is. Survives every re-render the same way
+  // expandedIds does, since renderTree() rebuilds the whole DOM from
+  // scratch on every state change.
+  var historyOpenIds = {};
 
   // Design Tension 2: default expand depth is 2 (root + one level of
   // children); everything deeper starts collapsed. Design Tension 2/6: the
@@ -86,6 +94,37 @@
     return 'org.dec_' + String(value || '').replace(/-/g, '_');
   }
 
+  // English display text — the badge/select/history/confirmation copy for
+  // every one of the five values. Ships as English text now, relying on
+  // transitions.js's documented fall-back-to-English contract; DE/ZH/CS
+  // translations land in Plan 08 keyed by orgDecisionI18nKey() above.
+  // Copywriting Contract: never abbreviate or substitute an abstraction for
+  // the vocabulary word — "Redundant" and "Redeploy" are spelled out in
+  // full everywhere, including inside the governance confirmation.
+  var ORG_DECISION_LABELS = {
+    retain: 'Retain',
+    redeploy: 'Redeploy',
+    'in-selection': 'In Selection',
+    redundant: 'Redundant',
+    open: 'Open',
+  };
+
+  // Mirrors server.js's derivedDecisionFor() exactly (D-13): the entry with
+  // the latest decidedAt for this position, or null when there are none.
+  // Reads from the already-fetched state.decisions — no per-position fetch,
+  // matching this phase's "no new search endpoint" simplicity precedent.
+  function derivedDecisionForClient(positionId) {
+    var forPosition = state.decisions.filter(function (d) { return d.positionId === positionId; });
+    if (!forPosition.length) return null;
+    return forPosition.reduce(function (latest, d) {
+      return (!latest || d.decidedAt > latest.decidedAt) ? d : latest;
+    }, null);
+  }
+
+  function decisionsForPosition(positionId) {
+    return state.decisions.filter(function (d) { return d.positionId === positionId; });
+  }
+
   function el(tag, opts) {
     var node = document.createElement(tag);
     opts = opts || {};
@@ -100,18 +139,30 @@
     // multi-source panel loads. Any failure (including the probe itself)
     // resets capabilities to {}, the fail-closed state, so the switch is
     // never briefly visible and then withdrawn (Tension 4).
+    //
+    // 06-04: GET /api/org/decisions joins the same fan-out. It is
+    // hr-grant-restricted (D-01/D-02) — for an uncleared caller it 403s and
+    // resolves to a non-array JSON body, so `Array.isArray` below falls
+    // back to `[]` exactly like a network failure would. Every position's
+    // badge then derives to the harmless 'open' default (Surface Contract
+    // §5's "no gap state on the card" — open IS one of the five values),
+    // never a fabricated retain/redeploy/in-selection/redundant value, so
+    // this fallback discloses nothing about the true, restricted decision.
     return Promise.all([
       fetch('/api/org/positions').then(function (r) { return r.json(); }),
       fetch('/api/employees').then(function (r) { return r.json(); }),
       fetch('/api/org/capabilities').then(function (r) { return r.json(); }),
+      fetch('/api/org/decisions').then(function (r) { return r.json(); }),
     ]).then(function (results) {
       state.positions = Array.isArray(results[0]) ? results[0] : [];
       state.employees = Array.isArray(results[1]) ? results[1] : [];
       capabilities = (results[2] && typeof results[2] === 'object') ? results[2] : {};
+      state.decisions = Array.isArray(results[3]) ? results[3] : [];
     }).catch(function () {
       state.positions = [];
       state.employees = [];
       capabilities = {};
+      state.decisions = [];
     });
   }
 
@@ -191,6 +242,156 @@
     seed(tree, 0);
   }
 
+  // UI-SPEC Surface Contract §5: reverse-chronological row list, dashed-
+  // bottom rows matching .dd-vdr-row (due-diligence.html), each carrying
+  // the type pill (reduced size), the rationale as a normal wrapping block
+  // (no clamp/ellipsis), who decided, when, and the effective date —
+  // effectiveDate omitted entirely (not a placeholder) when absent. The
+  // heading carries a bare count, correct at 0/1/many. Empty and error both
+  // render "No decisions recorded yet." (see load()'s own comment on why a
+  // 403 and a genuinely empty log are indistinguishable here by design).
+  function buildDecisionHistoryPanel(position) {
+    var panel = el('div', { className: 'org-dec-history' });
+    var entries = decisionsForPosition(position.id).slice().sort(function (a, b) {
+      return String(b.decidedAt || '').localeCompare(String(a.decidedAt || ''));
+    });
+    panel.appendChild(el('h4', { className: 'org-dec-history-heading', text: 'Decisions (' + entries.length + ')' }));
+
+    if (!entries.length) {
+      panel.appendChild(el('p', { className: 'org-empty', text: 'No decisions recorded yet.' }));
+    } else {
+      entries.forEach(function (entry) {
+        var row = el('div', { className: 'org-dec-row' });
+        var pill = el('span', {
+          className: 'org-dec-row-type ' + (ORG_DECISION_BADGE_CLASS[entry.type] || ''),
+          text: ORG_DECISION_LABELS[entry.type] || entry.type,
+        });
+        pill.setAttribute('data-i18n', orgDecisionI18nKey(entry.type));
+        row.appendChild(pill);
+        row.appendChild(el('span', { className: 'org-dec-row-rationale', text: entry.rationale || '' }));
+        var metaParts = [];
+        if (entry.decidedBy) metaParts.push(entry.decidedBy);
+        if (entry.decidedAt) metaParts.push(new Date(entry.decidedAt).toLocaleString());
+        // effectiveDate is OMITTED from the row when absent — never a
+        // placeholder character (UI Considerations, decision-history/partial).
+        if (entry.effectiveDate) metaParts.push('Effective ' + entry.effectiveDate);
+        if (metaParts.length) {
+          row.appendChild(el('span', { className: 'org-dec-row-meta', text: metaParts.join(' · ') }));
+        }
+        panel.appendChild(row);
+      });
+    }
+
+    // Surface Contract §5/D-04: the record-a-decision form is rendered ONLY
+    // inside the branch guarded by the server-supplied governance
+    // capability key — for every other cleared member it is not
+    // constructed at all, not disabled. This omission is a courtesy; the
+    // ACTUAL control is POST /api/org/decisions' own isAdminOrIlRequest(req)
+    // gate (server.js).
+    if (capabilities.recordOrgDecisions) {
+      panel.appendChild(buildDecisionForm(position));
+    }
+
+    return panel;
+  }
+
+  // Record-a-decision form (D-13/D-14): a closed-vocabulary select with NO
+  // option preselected (a deliberate non-default so 'retain' is never
+  // recorded by accident), a required rationale textarea, and an optional
+  // effectiveDate date input. Never abbreviates or substitutes an
+  // abstraction for the vocabulary word — the option text, the badge and
+  // the confirmation all spell out "Redundant"/"Redeploy" in full.
+  function buildDecisionForm(position) {
+    var form = el('form', { className: 'org-dec-form' });
+
+    var typeSelect = document.createElement('select');
+    typeSelect.className = 'org-dec-form-type';
+    var blank = el('option', { text: 'Select a decision…' });
+    blank.value = '';
+    typeSelect.appendChild(blank);
+    ORG_DECISION_TYPES.forEach(function (value) {
+      var opt = el('option', { text: ORG_DECISION_LABELS[value] || value });
+      opt.value = value;
+      opt.setAttribute('data-i18n', orgDecisionI18nKey(value));
+      typeSelect.appendChild(opt);
+    });
+    form.appendChild(typeSelect);
+
+    var rationaleInput = document.createElement('textarea');
+    rationaleInput.className = 'org-dec-form-rationale';
+    rationaleInput.placeholder = 'Rationale (required)';
+    rationaleInput.rows = 3;
+    form.appendChild(rationaleInput);
+
+    var effectiveDateInput = document.createElement('input');
+    effectiveDateInput.type = 'date';
+    effectiveDateInput.className = 'org-dec-form-effective';
+    form.appendChild(effectiveDateInput);
+
+    var submit = el('button', { className: 'btn btn-primary', text: 'Record decision' });
+    submit.type = 'submit';
+    form.appendChild(submit);
+
+    var error = el('div', { className: 'org-dec-form-error' });
+    form.appendChild(error);
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      error.textContent = '';
+      error.style.display = 'none';
+
+      var type = typeSelect.value;
+      var rationale = rationaleInput.value;
+      var label = ORG_DECISION_LABELS[type] || type;
+
+      // Copywriting Contract's governance-confirmation gate: the SAME
+      // "Record '{label}' decision for {position title}?" opener for every
+      // one of the five values, but ONLY redundant/redeploy carry the
+      // legal and severance consequences sentence — applied on write,
+      // never softened. Aborts ENTIRELY (no fetch at all) on cancel.
+      var confirmMessage = "Record '" + label + "' decision for " + position.title + '?';
+      if (type === 'redundant' || type === 'redeploy') {
+        confirmMessage += ' This is a governance record with legal and severance consequences — confirm before submitting.';
+      }
+      if (!window.confirm(confirmMessage)) return;
+
+      submit.disabled = true;
+      fetch('/api/org/decisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          positionId: position.id,
+          type: type,
+          rationale: rationale,
+          effectiveDate: effectiveDateInput.value || undefined,
+        }),
+      }).then(function (r) {
+        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+      }).then(function (result) {
+        submit.disabled = false;
+        if (!result.ok) {
+          error.textContent = (result.data && result.data.error) || 'Could not record that decision.';
+          error.style.display = 'block';
+          return;
+        }
+        // Refresh the history and the card badge from the server, never by
+        // patching local state — the response body carries only the ONE
+        // new entry, not the position's full derived-current picture.
+        return fetch('/api/org/decisions').then(function (r2) { return r2.json(); }).then(function (decisions) {
+          state.decisions = Array.isArray(decisions) ? decisions : [];
+          renderTree();
+          renderUnassigned();
+        });
+      }).catch(function () {
+        submit.disabled = false;
+        error.textContent = 'Could not record that decision.';
+        error.style.display = 'block';
+      });
+    });
+
+    return form;
+  }
+
   function renderNode(node, depth, searchActive, relevantIds) {
     var article = el('article', { className: 'org-node' });
     article.setAttribute('data-position-id', node.position.id);
@@ -200,6 +401,20 @@
     if (searchActive && !relevantIds[node.position.id]) {
       article.classList.add('org-node--dim');
     }
+
+    // UI-SPEC Design Tension 5: the decision badge is a FILLED PILL, top-
+    // right of the card — `.org-node{ position:relative; }` (org.html)
+    // already gives this absolute-positioned child its containing block.
+    // Every position always carries a badge (open is itself one of the
+    // five values — see load()'s own comment on the absent-decisions
+    // fallback), so this is never wrapped in a presence check.
+    var decisionType = (derivedDecisionForClient(node.position.id) || {}).type || 'open';
+    var decisionBadge = el('span', {
+      className: 'org-node-decision ' + (ORG_DECISION_BADGE_CLASS[decisionType] || ''),
+      text: ORG_DECISION_LABELS[decisionType] || decisionType,
+    });
+    decisionBadge.setAttribute('data-i18n', orgDecisionI18nKey(decisionType));
+    article.appendChild(decisionBadge);
 
     var row = el('div', { className: 'org-node-row' });
 
@@ -238,6 +453,16 @@
 
     row.appendChild(main);
 
+    var historyBtn = el('button', { className: 'org-node-history-toggle', text: 'Decisions' });
+    historyBtn.type = 'button';
+    historyBtn.setAttribute('aria-expanded', String(!!historyOpenIds[node.position.id]));
+    historyBtn.addEventListener('click', function () {
+      if (historyOpenIds[node.position.id]) delete historyOpenIds[node.position.id];
+      else historyOpenIds[node.position.id] = true;
+      renderTree();
+    });
+    row.appendChild(historyBtn);
+
     var deleteBtn = el('button', { className: 'org-node-delete', text: 'Delete' });
     deleteBtn.type = 'button';
     deleteBtn.addEventListener('click', function () {
@@ -272,6 +497,18 @@
     row.appendChild(deleteBtn);
 
     article.appendChild(row);
+
+    // Decision-history panel — constructed ONLY when open (same structural-
+    // absence discipline as the children container below), never CSS-
+    // hidden. Reads state.decisions (already fetched by load()) filtered
+    // to this position — no per-click fetch, matching this phase's
+    // established "no new endpoint" simplicity. A caller uncleared to view
+    // decisions and a position with a genuinely empty log render the
+    // IDENTICAL empty copy — the same anti-enumeration graceful-
+    // degradation convention DD-04 established (catch-to-empty-state).
+    if (historyOpenIds[node.position.id]) {
+      article.appendChild(buildDecisionHistoryPanel(node.position));
+    }
 
     // The children container is constructed ONLY inside this branch — a
     // collapsed node (isExpanded === false) emits no
