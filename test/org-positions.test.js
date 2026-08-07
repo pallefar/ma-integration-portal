@@ -817,3 +817,216 @@ test('org-positions (dd): DELETE is refused with 403 for a member without the hr
     server.close();
   }
 });
+
+// -----------------------------------------------------------------------
+// Task 3: the employee orphan guard (D-09) — DELETE /api/employees/:id's
+// first guard of any kind, for any cross-reference. Genuinely new logic:
+// prior to this task the handler was a blind, unconditional filter-and-
+// write with no guard whatsoever.
+// -----------------------------------------------------------------------
+
+async function createEmployeeFor(base, token, overrides) {
+  const res = await fetch(`${base}/api/employees`, {
+    method: 'POST', headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ name: 'Orphan Guard Subject', role: 'Engineer', department: 'R&D' }, overrides)),
+  });
+  const body = await res.json();
+  return body.employee;
+}
+
+async function createPositionFor(base, token, overrides) {
+  const res = await fetch(`${base}/api/org/positions`, {
+    method: 'POST', headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ title: 'Orphan Guard Position' }, overrides)),
+  });
+  const body = await res.json();
+  return body.position;
+}
+
+test('org-positions (ee): DELETE /api/employees/:id for an employee occupying one position returns 400 naming that position\'s title, and the employee survives', async () => {
+  const deal = freshDeal('deal_orgee', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Held Position' });
+    const position = await createPositionFor(base, pmoToken, { title: 'VP Occupied', employeeId: employee.id });
+
+    const delRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(delRes.status, 400);
+    const delBody = await delRes.json();
+    assert.match(delBody.error, /VP Occupied/, 'the refusal must name the occupied position\'s title');
+
+    const empRes = await fetch(`${base}/api/employees`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const employees = await empRes.json();
+    assert.ok(employees.some((e) => e.id === employee.id), 'the employee must survive the refused delete');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (ff): the SAME delete succeeds (200) once the position\'s employeeId is cleared', async () => {
+  const deal = freshDeal('deal_orgff', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Soon Unlinked' });
+    const position = await createPositionFor(base, pmoToken, { title: 'VP Soon Vacant', employeeId: employee.id });
+
+    const blockedRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(blockedRes.status, 400);
+
+    await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: position.id, employeeId: null }),
+    });
+
+    const delRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(delRes.status, 200);
+
+    const empRes = await fetch(`${base}/api/employees`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const employees = await empRes.json();
+    assert.ok(!employees.some((e) => e.id === employee.id), 'the employee must be removed once unlinked');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (gg): the SAME delete succeeds (200) once the occupied position itself is deleted', async () => {
+  const deal = freshDeal('deal_orggg', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Position Deleted' });
+    const position = await createPositionFor(base, pmoToken, { title: 'VP To Be Deleted', employeeId: employee.id });
+
+    const blockedRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(blockedRes.status, 400);
+
+    const posDelRes = await fetch(`${base}/api/org/positions/${position.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(posDelRes.status, 200);
+
+    const delRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(delRes.status, 200);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (hh): an employee occupying positions in BOTH current and target state is refused, and the message reflects more than one position', async () => {
+  const deal = freshDeal('deal_orghh', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Dual State Occupant' });
+    await createPositionFor(base, pmoToken, { title: 'VP Current Seat', employeeId: employee.id, state: 'current' });
+    await createPositionFor(base, pmoToken, { title: 'VP Target Seat', employeeId: employee.id, state: 'target' });
+
+    const delRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(delRes.status, 400);
+    const delBody = await delRes.json();
+    assert.match(delBody.error, /2/, 'the refusal must reflect that more than one position is affected');
+
+    const empRes = await fetch(`${base}/api/employees`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const employees = await empRes.json();
+    assert.ok(employees.some((e) => e.id === employee.id), 'the employee must survive the refused delete');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (ii): an employee occupying no position is still deletable (200) — the guard is not a blanket block', async () => {
+  const deal = freshDeal('deal_orgii', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Unoccupied Roster Member' });
+
+    const delRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(delRes.status, 200);
+
+    const empRes = await fetch(`${base}/api/employees`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const employees = await empRes.json();
+    assert.ok(!employees.some((e) => e.id === employee.id), 'the employee must be removed');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (jj): the guard runs before removal — a refused delete leaves the roster length AND ids byte-identical', async () => {
+  const deal = freshDeal('deal_orgjj', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const other = await createEmployeeFor(base, pmoToken, { name: 'Bystander' });
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Roster Length Subject' });
+    await createPositionFor(base, pmoToken, { title: 'VP Length Check', employeeId: employee.id });
+
+    const beforeRes = await fetch(`${base}/api/employees`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const before = await beforeRes.json();
+
+    const delRes = await fetch(`${base}/api/employees/${employee.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(pmoToken) } });
+    assert.strictEqual(delRes.status, 400);
+
+    const afterRes = await fetch(`${base}/api/employees`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const after = await afterRes.json();
+    assert.strictEqual(after.length, before.length, 'the roster length must be unchanged');
+    assert.deepStrictEqual(after.map((e) => e.id).sort(), before.map((e) => e.id).sort(), 'the roster ids must be byte-identical');
+    assert.ok(other, 'the bystander employee must exist for this comparison to be meaningful');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+// Task 3: the position link picker — source-level assertions on
+// public/js/org.js.
+test('org-positions (kk): the add/edit form\'s employee-link select offers an explicit unlinked option first, and reads from the already-fetched employees list', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  assert.match(src, /org-add-employee/, 'an employee-link select must exist in the add/edit form');
+  assert.match(
+    src,
+    /state\.employees\.forEach/,
+    'the employee-link select must be populated from the already-fetched state.employees list, not a new fetch',
+  );
+});
