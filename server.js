@@ -44,6 +44,7 @@ require('./validators/people'); // ditto
 require('./validators/assessment'); // ditto
 require('./validators/settings'); // ditto
 require('./validators/dd'); // ditto
+const orgValidators = require('./validators/org'); // provides ORG_STATE_CURRENT/ORG_STATE_TARGET below, plus its own registerSchema() side effect
 const wizardValidators = require('./validators/wizard'); // provides DEAL_SETUP_STEPS below, plus its own registerSchema() side effect
 
 
@@ -3895,6 +3896,92 @@ app.post('/api/raid', (req, res) => {
   lane.push(item);
   writeDb(db);
   res.status(201).json({ success: true, entry: item });
+});
+
+// =====================================================================
+// Org Design (ORG-01) — the position registry, split into a `current`/
+// `target` state per D-06 (a position's identity is its own id; `state` is
+// a discriminator on ONE record, never a link between two). `current` is
+// open to any deal member (D-01, D-07); `target` sits behind the existing
+// `hr` DD-area grant (D-02) — an area-cleared member, not only IL/admin
+// (D-04, tier 1). Every route resolves the caller's FULL deal object via
+// controlStore.getDeal() (never just req.dealContext, which carries only
+// the id/kind) because accessPolicy needs deal.memberGrants/deal.members
+// to decide clearance.
+// =====================================================================
+
+// Flat lane helpers, deliberately with NO demoMode/isCustom branch — see
+// ddRequestLane()'s identical comment below: these three collections are
+// deal-DB-native, never demo-shadow-laned.
+function orgPositionsLane(db) {
+  db.orgPositions = db.orgPositions || [];
+  return db.orgPositions;
+}
+function orgDecisionsLane(db) {
+  db.orgDecisions = db.orgDecisions || [];
+  return db.orgDecisions;
+}
+function orgFlightRiskLane(db) {
+  db.orgFlightRisks = db.orgFlightRisks || [];
+  return db.orgFlightRisks;
+}
+
+// D-07: the requested state normalises to the target string ONLY on an
+// exact match; anything else (absent, a padded/cased variant, an array-
+// shaped query value) resolves to the current string — so a malformed
+// query can never accidentally reach the restricted branch un-gated.
+app.get('/api/org/positions', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const requestedState = req.query.state === orgValidators.ORG_STATE_TARGET
+    ? orgValidators.ORG_STATE_TARGET
+    : orgValidators.ORG_STATE_CURRENT;
+  // Clearance is asserted BEFORE the lane is read — a hand-crafted request
+  // from a session that never loaded org.js's JS gets the identical 403.
+  if (requestedState === orgValidators.ORG_STATE_TARGET
+    && !accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to view the target org design.' });
+  }
+  const lane = orgPositionsLane(db);
+  res.json(lane.filter((p) => p.state === requestedState));
+});
+
+// D-04 tier 1: any `hr`-area-cleared deal member may create/maintain org
+// structure, not only IL/admin. Upsert-by-id, mirroring the DD routes'
+// validate-before-mutate shape.
+app.post('/api/org/positions', (req, res) => {
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to edit the org design.' });
+  }
+  const lane = orgPositionsLane(db);
+
+  if (b.id) {
+    const item = lane.find((p) => p.id === b.id);
+    if (!item) return res.status(404).json({ error: 'Position not found.' });
+    if (b.title !== undefined) item.title = String(b.title).trim();
+    if (b.level !== undefined) item.level = String(b.level || '');
+    if (b.reportsToId !== undefined) item.reportsToId = b.reportsToId || null;
+    if (b.employeeId !== undefined) item.employeeId = b.employeeId || null;
+    if (b.state !== undefined) item.state = b.state;
+    writeDb(db);
+    return res.json({ success: true, position: item });
+  }
+
+  const item = {
+    id: newId('pos'),
+    title: String(b.title || '').trim(),
+    level: String(b.level || ''),
+    reportsToId: b.reportsToId || null,
+    employeeId: b.employeeId || null,
+    state: b.state || orgValidators.ORG_STATE_CURRENT,
+    createdAt: new Date().toISOString(),
+  };
+  lane.push(item);
+  writeDb(db);
+  res.status(201).json({ success: true, position: item });
 });
 
 // =====================================================================

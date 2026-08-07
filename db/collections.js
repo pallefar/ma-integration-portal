@@ -11,7 +11,7 @@
 // db/schema.sql, db/store.js, and scripts/migrate-db-json-to-sqlite.js all
 // import this file — do NOT duplicate the inventory anywhere else.
 
-// The 35 array-shaped top-level collections. Each gets its own SQLite table
+// The 38 array-shaped top-level collections. Each gets its own SQLite table
 // (see db/schema.sql): one JSON-blob-per-row, id/project_id extracted as
 // metadata columns for indexing, `data` column holding the untouched item.
 const ARRAY_COLLECTIONS = [
@@ -44,6 +44,15 @@ const ARRAY_COLLECTIONS = [
   'integrationTasks',
   'media',
   'modules',
+  // Phase 6 (Org Design & Talent Retention, ORG-01/ORG-02/ORG-03): deal-DB-
+  // native collections for the org structure (positions, current/target
+  // state), the position-decision log and the flight-risk register. Same
+  // pattern as the Phase-4 DD block above — guarded at the application
+  // layer by db/accessPolicy.js's hasAreaGrant()/grantedAreas() 'hr' area
+  // gate, never by a schema constraint.
+  'orgDecisions',
+  'orgFlightRisks',
+  'orgPositions',
   'pages',
   'processCatalog',
   'projects',
@@ -65,8 +74,8 @@ const SINGLETON_KEYS = [
   'activeProjectId',
 ];
 
-if (ARRAY_COLLECTIONS.length !== 35) {
-  throw new Error(`db/collections.js: expected 35 array collections, got ${ARRAY_COLLECTIONS.length}`);
+if (ARRAY_COLLECTIONS.length !== 38) {
+  throw new Error(`db/collections.js: expected 38 array collections, got ${ARRAY_COLLECTIONS.length}`);
 }
 if (SINGLETON_KEYS.length !== 5) {
   throw new Error(`db/collections.js: expected 5 singleton keys, got ${SINGLETON_KEYS.length}`);

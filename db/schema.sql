@@ -234,6 +234,34 @@ CREATE TABLE IF NOT EXISTS modules (
 );
 CREATE INDEX IF NOT EXISTS idx_modules_project ON modules(project_id);
 
+-- Phase 6 (Org Design & Talent Retention, ORG-01/ORG-02/ORG-03): same
+-- blob-per-row shape as every table above — no normalized state/type/
+-- riskLevel column. Guarded at the application layer by
+-- db/accessPolicy.js, never by a schema-level constraint.
+CREATE TABLE IF NOT EXISTS orgDecisions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  seq INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_orgDecisions_project ON orgDecisions(project_id);
+
+CREATE TABLE IF NOT EXISTS orgFlightRisks (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  seq INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_orgFlightRisks_project ON orgFlightRisks(project_id);
+
+CREATE TABLE IF NOT EXISTS orgPositions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  seq INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_orgPositions_project ON orgPositions(project_id);
+
 CREATE TABLE IF NOT EXISTS pages (
   id TEXT PRIMARY KEY,
   project_id TEXT,

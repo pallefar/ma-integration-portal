@@ -12,7 +12,10 @@
 // are absent from db.json entirely — the round-trip below still holds for
 // them (source[key] || [] resolves to an empty array, and the migration
 // creates their tables with zero rows), bringing the ground-truth inventory
-// to 40 (37 + 3 new, none of which existed in db.json to begin with).
+// to 40 (37 + 3 new, none of which existed in db.json to begin with). Phase 6
+// Plan 01 (ORG-01) adds three more of the same never-in-db.json shape
+// (orgDecisions, orgFlightRisks, orgPositions), bringing the ground-truth
+// inventory to 43.
 //
 // node:test — Node's built-in runner, zero new dependency (this repo has no
 // test framework installed before this phase). Run via `node --test` (bare —
@@ -42,7 +45,7 @@ function cleanupDbFile(dbPath) {
   }
 }
 
-test('migration-roundtrip: reconstructs all 40 collections with exact canonical-JSON equality and row-count parity', () => {
+test('migration-roundtrip: reconstructs all 43 collections with exact canonical-JSON equality and row-count parity', () => {
   const outPath = tempDbPath('roundtrip');
   try {
     const { source, resolvedOut } = runMigration(SOURCE_PATH, outPath);
@@ -55,8 +58,8 @@ test('migration-roundtrip: reconstructs all 40 collections with exact canonical-
 
     assert.strictEqual(
       ARRAY_COLLECTIONS.length + SINGLETON_KEYS.length,
-      40,
-      'the ground-truth inventory must cover exactly 40 top-level keys (38 minus `users` plus Phase 4\'s 3 new dd* collections)'
+      43,
+      'the ground-truth inventory must cover exactly 43 top-level keys (38 minus `users` plus Phase 4\'s 3 dd* collections plus Phase 6\'s 3 org* collections)'
     );
 
     for (const key of ARRAY_COLLECTIONS) {

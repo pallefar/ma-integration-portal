@@ -1,0 +1,219 @@
+/**
+ * Org Design workspace (ORG-01) — renders exactly the positions the server
+ * returned for the signed-in caller (GET /api/org/positions), current state
+ * only. This page holds NO client-side list of "every possible state" — an
+ * uncleared caller never sees a target-state control, a target-state fetch,
+ * or a target-state row, because the server never returns one to it (D-07).
+ *
+ * T-06-08: every user-facing string (position title, occupant name) is
+ * written with textContent, never assigned as markup — org content is MNPI
+ * and this page must never become a stored-XSS vector for it. This module
+ * assigns no markup anywhere.
+ */
+(function () {
+  'use strict';
+
+  var state = { positions: [] };
+
+  function el(tag, opts) {
+    var node = document.createElement(tag);
+    opts = opts || {};
+    if (opts.className) node.className = opts.className;
+    if (opts.text !== undefined) node.textContent = opts.text;
+    return node;
+  }
+
+  function load() {
+    return fetch('/api/org/positions').then(function (r) { return r.json(); }).then(function (positions) {
+      state.positions = Array.isArray(positions) ? positions : [];
+    }).catch(function () {
+      state.positions = [];
+    });
+  }
+
+  // Groups the flat list on reportsToId — every row whose parent is missing
+  // or absent from the lane is treated as a root, matching due-diligence.js's
+  // existing flat-to-grouped transform idiom.
+  function buildTree(positions) {
+    var byParent = {};
+    var ids = {};
+    positions.forEach(function (p) { ids[p.id] = true; });
+    positions.forEach(function (p) {
+      var parentId = (p.reportsToId && ids[p.reportsToId]) ? p.reportsToId : '__root__';
+      byParent[parentId] = byParent[parentId] || [];
+      byParent[parentId].push(p);
+    });
+    function children(parentId) {
+      return (byParent[parentId] || []).map(function (p) {
+        return { position: p, children: children(p.id) };
+      });
+    }
+    return children('__root__');
+  }
+
+  function renderNode(node, depth) {
+    var article = el('article', { className: 'org-node' });
+    article.setAttribute('data-position-id', node.position.id);
+    article.setAttribute('data-depth', String(depth));
+
+    if (node.children.length) {
+      var toggle = el('button', { className: 'org-node-toggle', text: '▾' });
+      toggle.type = 'button';
+      article.appendChild(toggle);
+    }
+
+    var level = el('span', { className: 'org-node-level', text: node.position.level || '' });
+    article.appendChild(level);
+
+    var title = el('span', { className: 'org-node-title', text: node.position.title });
+    article.appendChild(title);
+
+    var occupant;
+    if (node.position.employeeId) {
+      occupant = el('span', { className: 'org-node-occupant', text: node.position.employeeId });
+    } else {
+      occupant = el('em', { className: 'org-node-occupant org-node-vacant', text: 'Vacant' });
+    }
+    article.appendChild(occupant);
+
+    if (node.children.length) {
+      var childWrap = el('div', { className: 'org-node-children' });
+      node.children.forEach(function (child) {
+        childWrap.appendChild(renderNode(child, depth + 1));
+      });
+      article.appendChild(childWrap);
+    }
+
+    return article;
+  }
+
+  function renderTree() {
+    var wrap = document.getElementById('org-tree');
+    if (!wrap) return;
+    wrap.textContent = '';
+    if (!state.positions.length) {
+      var heading = el('p', { className: 'org-empty', text: 'No positions mapped yet' });
+      var body = el('p', { className: 'org-empty', text: 'Add positions manually, or paste a roster to populate the structure at once.' });
+      wrap.appendChild(heading);
+      wrap.appendChild(body);
+      return;
+    }
+    var tree = buildTree(state.positions);
+    tree.forEach(function (node) {
+      wrap.appendChild(renderNode(node, 0));
+    });
+  }
+
+  function renderLoading() {
+    var wrap = document.getElementById('org-tree');
+    if (!wrap) return;
+    wrap.textContent = '';
+    wrap.appendChild(el('p', { className: 'org-empty', text: 'Loading organization…' }));
+  }
+
+  function buildReportsToSelect() {
+    var select = document.createElement('select');
+    select.id = 'org-add-reportsto';
+    var none = el('option', { text: 'None (top level)' });
+    none.value = '';
+    select.appendChild(none);
+    state.positions.forEach(function (p) {
+      var opt = el('option', { text: p.title });
+      opt.value = p.id;
+      select.appendChild(opt);
+    });
+    return select;
+  }
+
+  function buildLevelDatalist() {
+    var datalist = document.createElement('datalist');
+    datalist.id = 'org-level-suggestions';
+    var seen = {};
+    state.positions.forEach(function (p) {
+      if (p.level && !seen[p.level]) {
+        seen[p.level] = true;
+        var opt = document.createElement('option');
+        opt.value = p.level;
+        datalist.appendChild(opt);
+      }
+    });
+    return datalist;
+  }
+
+  function renderAddForm() {
+    var wrap = document.getElementById('org-add');
+    if (!wrap) return;
+    wrap.textContent = '';
+
+    var form = el('form', { className: 'org-add' });
+
+    var titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.placeholder = 'Position title';
+    titleInput.id = 'org-add-title';
+    form.appendChild(titleInput);
+
+    var levelInput = document.createElement('input');
+    levelInput.type = 'text';
+    levelInput.placeholder = 'Level';
+    levelInput.id = 'org-add-level';
+    levelInput.setAttribute('list', 'org-level-suggestions');
+    form.appendChild(levelInput);
+    form.appendChild(buildLevelDatalist());
+
+    form.appendChild(buildReportsToSelect());
+
+    var submit = el('button', { className: 'btn btn-primary', text: 'Add position' });
+    submit.type = 'submit';
+    form.appendChild(submit);
+
+    var error = el('div', { className: 'org-add-error' });
+    form.appendChild(error);
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      error.textContent = '';
+      error.style.display = 'none';
+      submit.disabled = true;
+      var body = {
+        title: titleInput.value,
+        level: levelInput.value,
+        reportsToId: document.getElementById('org-add-reportsto').value || null,
+      };
+      fetch('/api/org/positions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(function (r) {
+        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+      }).then(function (result) {
+        if (!result.ok) {
+          error.textContent = (result.data && result.data.error) || 'Could not add that position.';
+          error.style.display = 'block';
+          return;
+        }
+        titleInput.value = '';
+        levelInput.value = '';
+        return load().then(function () {
+          renderTree();
+          renderAddForm();
+        });
+      }).catch(function () {
+        error.textContent = 'Could not add that position.';
+        error.style.display = 'block';
+      }).then(function () {
+        submit.disabled = false;
+      });
+    });
+
+    wrap.appendChild(form);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    renderLoading();
+    load().then(function () {
+      renderTree();
+      renderAddForm();
+    });
+  });
+})();
