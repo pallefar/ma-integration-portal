@@ -4,19 +4,22 @@
  * surface never has to be audited against public/js/dashboard.js's ~2400
  * lines of pre-existing (and legitimately markup-assigning) demo rendering.
  *
- * Renders three panels into #deal-home, entirely from server responses that
+ * Renders four panels into #deal-home, entirely from server responses that
  * are already scoped to the caller's own clearance/membership — this module
  * holds NO client-side list of "every possible area" or "every possible
- * setup step's completeness" to fall back on; an uncleared DD area is
- * simply absent from what it draws (T-04-46), mirroring
- * public/js/due-diligence.js's own D-16 discipline.
+ * setup step's completeness" to fall back on; an uncleared DD area or org
+ * restricted tier is simply absent from what it draws (T-04-46/D-20),
+ * mirroring public/js/due-diligence.js's own D-16 discipline.
  *
  * - Setup checklist — GET /api/deals, the caller's own deal by id.
  * - Readiness assessments — GET /api/assessment-status (WIZ-01's
  *   pending/bySubject rollup, already in the server's declared subject
  *   order).
- * - Diligence progress — GET /api/dd/summary (this plan's clearance-scoped
- *   rollup, Task 1).
+ * - Diligence progress — GET /api/dd/summary (Phase 4's clearance-scoped
+ *   rollup).
+ * - Organisation status — GET /api/org/summary (06-07's clearance-scoped
+ *   rollup, Task 1) — open tier always drawn, restricted tier drawn only
+ *   when the response's `restricted` key is present (D-19/D-20/D-21).
  *
  * D-20: deliberately NO activity feed — status rollups only. This module
  * never references the admin audit route, by design; a grep-asserted
@@ -183,6 +186,109 @@
     wrap.appendChild(section);
   }
 
+  // D-14 (06-04): an independent copy of the five-value decision vocabulary
+  // and its English labels — the SAME i18n-key construction
+  // public/js/org.js's orgDecisionI18nKey() uses ('org.dec_' + value with
+  // hyphens replaced by underscores), duplicated here because this file
+  // shares no module system with org.js (mirrors the RAID_LEVELS/SYN_STAGES
+  // multi-copy convention already established elsewhere in this codebase —
+  // a fourth copy, not a new pattern).
+  var ORG_DECISION_TYPES = ['retain', 'redeploy', 'in-selection', 'redundant', 'open'];
+  var ORG_DECISION_LABELS = {
+    retain: 'Retain',
+    redeploy: 'Redeploy',
+    'in-selection': 'In Selection',
+    redundant: 'Redundant',
+    open: 'Open',
+  };
+
+  // D-19/D-20/D-21/UI-SPEC §7: renders from GET /api/org/summary alone — no
+  // client-side tallying of any kind. The open tier (current headcount,
+  // open positions) is ALWAYS drawn as a `div.org-summary-open`. The
+  // restricted tier is a DIFFERENT ELEMENT TAG — `section.org-summary-
+  // restricted`, never a div — constructed ONLY when `summary` carries a
+  // `restricted` key, branching on the KEY'S PRESENCE (hasOwnProperty)
+  // rather than a truthiness test of its contents, and never built then
+  // removed after the fact. This is the tag-level countermeasure Design
+  // Tension 3 names: a raw-markup query for the restricted container
+  // returns zero for an uncleared caller and exactly one for a cleared one,
+  // with no false positives from styling surviving a future CSS edit.
+  function renderOrgPanel(wrap, summary) {
+    var section = el('div', { className: 'card deal-home-section' });
+    section.appendChild(el('h2', { className: 'deal-home-section-title', text: 'Organisation' }));
+
+    var open = (summary && summary.open) || null;
+    if (!open || !open.currentPositions) {
+      var empty = el('div', { className: 'deal-home-empty' });
+      var link = document.createElement('a');
+      link.href = '/org.html';
+      link.textContent = 'No positions mapped yet — see the Org page';
+      empty.appendChild(link);
+      section.appendChild(empty);
+      wrap.appendChild(section);
+      return;
+    }
+
+    var openTier = el('div', { className: 'org-summary-open' });
+    var headcountRow = el('div', { className: 'org-summary-row deal-home-readiness-row' });
+    headcountRow.appendChild(el('span', { text: 'Current headcount' }));
+    headcountRow.appendChild(el('span', { text: String(open.currentHeadcount) }));
+    openTier.appendChild(headcountRow);
+    var openPositionsRow = el('div', { className: 'org-summary-row deal-home-readiness-row' });
+    openPositionsRow.appendChild(el('span', { text: 'Open positions' }));
+    openPositionsRow.appendChild(el('span', { text: String(open.openPositions) }));
+    openTier.appendChild(openPositionsRow);
+    section.appendChild(openTier);
+
+    // D-20: branch on the key's PRESENCE — never on a truthiness test of
+    // its contents (a genuinely all-zero restricted object must still
+    // render its section), and never remove a constructed section after
+    // the fact.
+    if (summary && Object.prototype.hasOwnProperty.call(summary, 'restricted')) {
+      var restricted = summary.restricted || {};
+      var restrictedTier = document.createElement('section');
+      restrictedTier.className = 'org-summary-restricted';
+
+      var targetRow = el('div', { className: 'org-summary-row deal-home-readiness-row' });
+      targetRow.appendChild(el('span', { text: 'Target headcount' }));
+      targetRow.appendChild(el('span', { text: String(restricted.targetHeadcount || 0) }));
+      restrictedTier.appendChild(targetRow);
+
+      // The single most-asked number per D-19 gets its own row, emphasised
+      // (the existing overdue-style treatment) ONLY when the delta is
+      // negative — a net reduction. A positive/zero delta stays at normal
+      // weight, avoiding false-alarm styling on growth or no change.
+      var delta = restricted.delta || 0;
+      var deltaRow = el('div', { className: 'org-summary-row org-summary-delta deal-home-readiness-row' });
+      deltaRow.appendChild(el('span', { text: 'Current → target delta' }));
+      var deltaValue = el('span', { text: String(delta) });
+      if (delta < 0) {
+        deltaValue.className = 'deal-home-dd-overdue';
+      }
+      deltaRow.appendChild(deltaValue);
+      restrictedTier.appendChild(deltaRow);
+
+      var decisions = restricted.decisions || {};
+      ORG_DECISION_TYPES.forEach(function (type) {
+        var row = el('div', { className: 'org-summary-row deal-home-readiness-row' });
+        var label = el('span', { text: ORG_DECISION_LABELS[type] || type });
+        label.setAttribute('data-i18n', 'org.dec_' + type.replace(/-/g, '_'));
+        row.appendChild(label);
+        row.appendChild(el('span', { text: String(decisions[type] || 0) }));
+        restrictedTier.appendChild(row);
+      });
+
+      var riskRow = el('div', { className: 'org-summary-row deal-home-readiness-row' });
+      riskRow.appendChild(el('span', { text: 'Unmitigated high/critical flight risks' }));
+      riskRow.appendChild(el('span', { text: String(restricted.unmitigatedFlightRisks || 0) }));
+      restrictedTier.appendChild(riskRow);
+
+      section.appendChild(restrictedTier);
+    }
+
+    wrap.appendChild(section);
+  }
+
   // D-19/UI-SPEC §6: locate a REAL, already-rendered panel heading by its
   // own text content, rather than assuming DOM order or inventing a
   // top-level heading this file does not otherwise produce (the file
@@ -252,10 +358,10 @@
   }
 
   /** Entry point — called by public/js/dashboard.js's deal-bound branch.
-   * Fetches all four sources, then renders all three panels plus the
+   * Fetches all five sources, then renders all four panels plus the
    * stale-synergy nudge once every fetch has resolved (best-effort: a
    * single failed fetch renders that panel's own empty state, or — for
-   * the rollup — simply omits the nudge, rather than blanking the whole
+   * a rollup — simply omits its nudge, rather than blanking the whole
    * page). */
   function renderDealHome(dealId) {
     var container = document.getElementById('deal-home');
@@ -269,17 +375,20 @@
       fetch('/api/assessment-status').then(function (r) { return r.json(); }).catch(function () { return null; }),
       fetch('/api/dd/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
       fetch('/api/synergies/rollup').then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch('/api/org/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
     ]).then(function (results) {
       var deals = Array.isArray(results[0]) ? results[0] : [];
       var statusData = results[1];
       var summary = results[2];
       var rollup = results[3];
+      var orgSummary = results[4];
       var deal = deals.filter(function (d) { return d.id === dealId; })[0] || null;
 
       wrap.textContent = '';
       renderSetupChecklist(wrap, deal);
       renderReadiness(wrap, statusData);
       renderDiligence(wrap, summary);
+      renderOrgPanel(wrap, orgSummary);
       renderStaleSynergyNudge(wrap, rollup);
     });
   }

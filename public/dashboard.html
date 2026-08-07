@@ -25,6 +25,19 @@
     .deal-home-dd-label{ font-weight:800; color:var(--te-dark-teal); min-width:140px; }
     .deal-home-dd-overdue{ color:#C0392B; font-weight:800; }
     .deal-home-empty{ font-size:.82rem; color:var(--text-dim); font-style:italic; }
+    /* D-19/D-20/D-21 (06-07): the org panel's two tiers. .org-summary-open
+       and .org-summary-restricted are pure layout wrappers (a div and a
+       section respectively — the tag-level distinction lives in the DOM,
+       not here); .org-summary-row matches .deal-home-readiness-row
+       verbatim. No fixed width, no clipping rule anywhere in this block —
+       German is the sizing case for the five decision-type labels. */
+    .org-summary-open, .org-summary-restricted{ display:flex; flex-direction:column; }
+    .org-summary-row{ display:flex; justify-content:space-between; align-items:center; padding:.4rem 0; border-bottom:1px dashed var(--border-color); font-size:.86rem; }
+    /* .org-summary-delta is a query hook only — its actual emphasis
+       (.deal-home-dd-overdue, applied to the value span ONLY when the
+       delta is negative, deal-home.js) is what carries the styling, so a
+       positive/zero delta stays at normal weight. */
+    .org-summary-delta{}
   </style>
 </head>
 <body>
@@ -1380,7 +1393,7 @@
     </div>
   </div>
 
-  <script src="/js/deal-home.js?v=1784700001"></script>
+  <script src="/js/deal-home.js?v=1784700002"></script>
   <script src="/js/dashboard.js?v=1784700001"></script>
 </body>
 </html>

@@ -374,3 +374,62 @@ test('org-summary: grep-level guard — the route handler calls recordSecurityEv
   const callsInsideRoute = (routeMatch[0].match(/recordSecurityEvent/g) || []).length;
   assert.strictEqual(callsInsideRoute, 0, 'the summary route must never write a security event');
 });
+
+// =============================================================== Task 2 ===
+// Source-level assertions on the deal-home panel wiring
+// (public/js/deal-home.js) and its CSS (public/dashboard.html) — no HTTP
+// calls, no database, mirroring test/dd-summary.test.js's own established
+// source-inspection style for this file's sibling.
+// ============================================================================
+const dealHomeJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'deal-home.js'), 'utf8');
+const dashboardHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'dashboard.html'), 'utf8');
+
+test('org-summary (source): deal-home.js fetches the org rollup route and contains no markup-assignment sink', () => {
+  assert.ok(dealHomeJs.includes("fetch('/api/org/summary')"), 'deal-home.js must fetch GET /api/org/summary');
+  assert.strictEqual((dealHomeJs.match(/innerHTML/g) || []).length, 0, 'deal-home.js must never assign innerHTML');
+});
+
+test('org-summary (source): deal-home.js\'s standing no-audit-route invariant survives this plan\'s own edits', () => {
+  assert.strictEqual((dealHomeJs.match(/\/api\/admin\/audit/g) || []).length, 0, 'deal-home.js must never reference the audit route');
+});
+
+test('org-summary (source): renderOrgPanel constructs the restricted tier as a <section>, the open tier as a <div>, and branches on the restricted key\'s PRESENCE rather than its truthiness', () => {
+  const fnMatch = dealHomeJs.match(/function renderOrgPanel[\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'renderOrgPanel must be present');
+  const fnSrc = fnMatch[0];
+  assert.ok(/document\.createElement\(['"]section['"]\)/.test(fnSrc), 'the restricted tier must be constructed via document.createElement(\'section\')');
+  assert.ok(/el\(['"]div['"],\s*\{\s*className:\s*['"]org-summary-open['"]/.test(fnSrc), 'the open tier must be constructed as a div carrying the org-summary-open class');
+  assert.ok(/hasOwnProperty\.call\(summary,\s*['"]restricted['"]\)/.test(fnSrc), 'the restricted branch must test the KEY\'s presence via hasOwnProperty, never a truthiness check on its contents');
+  assert.ok(!/if\s*\(\s*summary\s*&&\s*summary\.restricted\s*\)/.test(fnSrc), 'the restricted branch must never be a truthiness test on summary.restricted');
+});
+
+test('org-summary (source): the fan-out array now issues five fetch calls, and the file\'s header comment states the same shape', () => {
+  const fanOutMatch = dealHomeJs.match(/Promise\.all\(\[([\s\S]*?)\]\)/);
+  assert.ok(fanOutMatch, 'the Promise.all fan-out must be present');
+  const fetchCount = (fanOutMatch[1].match(/fetch\(/g) || []).length;
+  assert.strictEqual(fetchCount, 5, 'the fan-out must issue exactly five fetch calls');
+  assert.ok(dealHomeJs.includes('Renders four panels into #deal-home'), 'the header comment must state four panels, matching the new Organisation status panel');
+  assert.ok(dealHomeJs.includes('Fetches all five sources'), 'the entry-point doc comment must state five sources');
+});
+
+test('org-summary (source): the delta\'s overdue-emphasis class is applied only inside a negative-delta branch', () => {
+  const fnMatch = dealHomeJs.match(/function renderOrgPanel[\s\S]*?\n  \}/);
+  const fnSrc = fnMatch[0];
+  const ifMatch = fnSrc.match(/if\s*\(\s*delta\s*<\s*0\s*\)\s*\{([\s\S]*?)\}/);
+  assert.ok(ifMatch, 'renderOrgPanel must guard the emphasis class assignment with an explicit "delta < 0" branch');
+  assert.ok(/deal-home-dd-overdue/.test(ifMatch[1]), 'the negative-delta branch must assign the existing overdue-emphasis class');
+  // And the emphasis class must not be assigned anywhere else in the
+  // function (e.g. unconditionally, or inside a non-negative branch).
+  const emphasisAssignments = (fnSrc.match(/deal-home-dd-overdue/g) || []).length;
+  assert.strictEqual(emphasisAssignments, 1, 'the overdue-emphasis class must be assigned exactly once, inside the negative-delta branch');
+});
+
+test('org-summary (source): dashboard.html\'s .org-summary-restricted rule carries no width/overflow/clipping declaration', () => {
+  const ruleMatch = dashboardHtml.match(/\.org-summary-open,\s*\.org-summary-restricted\s*\{([^}]*)\}/);
+  assert.ok(ruleMatch, '.org-summary-restricted rule must be present');
+  assert.ok(!/(?:max-)?width\s*:|overflow|text-overflow/.test(ruleMatch[1]), 'the restricted-tier rule must declare no width, max-width, overflow or text-overflow');
+});
+
+test('org-summary (source): the deal-home script\'s cache stamp was bumped', () => {
+  assert.ok(dashboardHtml.includes('/js/deal-home.js?v=1784700002'), 'the deal-home.js cache stamp must be bumped past its Phase-5 value');
+});
