@@ -1043,3 +1043,79 @@ test('org-positions (ll): the employee orphan guard\'s early return precedes DEL
   assert.ok(filterIdx !== -1, 'the employee-removal filter must exist in the handler');
   assert.ok(guardIdx < filterIdx, 'the guard\'s early return must precede the array filter that removes the row');
 });
+
+// -----------------------------------------------------------------------
+// Plan 08, Task 1: the demo org seed script (D-18) — a source-level proof
+// that scripts/seed-org-demo.js runs a truncating WAL checkpoint before it
+// closes its connection, the standing trap that has fired in every prior
+// phase touching a committed database file (this plan's own objective).
+// -----------------------------------------------------------------------
+
+test('org-positions (mm): scripts/seed-org-demo.js calls a truncating wal_checkpoint before closing its connection', () => {
+  const SEED_SCRIPT_PATH = path.join(__dirname, '..', 'scripts', 'seed-org-demo.js');
+  const src = fs.readFileSync(SEED_SCRIPT_PATH, 'utf8');
+  const checkpointMatch = src.match(/wal_checkpoint\(TRUNCATE\)/);
+  assert.ok(checkpointMatch, 'the seed script must call a TRUNCATE-mode wal_checkpoint');
+  const closeIdx = src.indexOf('conn.close()');
+  assert.ok(closeIdx !== -1, 'the seed script must close its connection');
+  assert.ok(
+    checkpointMatch.index < closeIdx,
+    'the wal_checkpoint(TRUNCATE) call must be positioned before conn.close()',
+  );
+  // The checkpoint must sit inside the try block of a try/finally whose
+  // finally closes the connection — never after close (which would throw
+  // on an already-closed handle) and never outside the finally's own scope.
+  const finallyIdx = src.indexOf('} finally {');
+  assert.ok(finallyIdx !== -1, 'the seed script must use a try/finally around the connection');
+  assert.ok(
+    checkpointMatch.index < finallyIdx && finallyIdx < closeIdx,
+    'the checkpoint must run inside the try block, before the finally block that closes the connection',
+  );
+});
+
+test('org-positions (nn): scripts/seed-org-demo.js is idempotent by construction — an allowlist delete of its own prefixed ids precedes every insert', () => {
+  const SEED_SCRIPT_PATH = path.join(__dirname, '..', 'scripts', 'seed-org-demo.js');
+  const src = fs.readFileSync(SEED_SCRIPT_PATH, 'utf8');
+  assert.match(src, /DELETE FROM orgPositions WHERE id LIKE 'orgseed_%'/);
+  assert.match(src, /DELETE FROM orgDecisions WHERE id LIKE 'orgseed_%'/);
+  assert.match(src, /DELETE FROM orgFlightRisks WHERE id LIKE 'orgseed_%'/);
+  const firstDeleteIdx = src.indexOf("DELETE FROM orgPositions WHERE id LIKE 'orgseed_%'");
+  const firstInsertIdx = src.indexOf('INSERT INTO orgPositions');
+  assert.ok(firstDeleteIdx !== -1 && firstInsertIdx !== -1 && firstDeleteIdx < firstInsertIdx,
+    'the allowlist delete must precede the insert for the positions table');
+});
+
+test('org-positions (oo): the committed demo database carries the seeded org lane — vacant/target/decision-vocabulary/unmitigated-critical content, and all five decision keys in all four languages', () => {
+  const DEMO_DB_PATH = path.join(__dirname, '..', 'data', 'demo.db');
+  const Database = require('better-sqlite3');
+  const db = new Database(DEMO_DB_PATH, { readonly: true });
+  try {
+    const positions = db.prepare('SELECT data FROM orgPositions').all().map((r) => JSON.parse(r.data));
+    const decisions = db.prepare('SELECT data FROM orgDecisions').all().map((r) => JSON.parse(r.data));
+    const flightRisks = db.prepare('SELECT data FROM orgFlightRisks').all().map((r) => JSON.parse(r.data));
+
+    assert.ok(positions.some((p) => !p.employeeId), 'at least one vacant position must exist');
+    assert.ok(positions.some((p) => p.state === 'target'), 'at least one target-state position must exist');
+    const decisionTypes = new Set(decisions.map((d) => d.type));
+    ['retain', 'redeploy', 'in-selection', 'redundant', 'open'].forEach((type) => {
+      assert.ok(decisionTypes.has(type), `at least one decision entry of type "${type}" must exist`);
+    });
+    assert.ok(
+      flightRisks.some((r) => r.riskLevel === 'critical' && !String(r.mitigation || '').trim()),
+      'at least one unmitigated critical flight-risk entry must exist',
+    );
+
+    const i18nRow = db.prepare("SELECT data FROM app_state WHERE key = 'i18n'").get();
+    const i18n = JSON.parse(i18nRow.data);
+    ['org.dec_retain', 'org.dec_redeploy', 'org.dec_in_selection', 'org.dec_redundant', 'org.dec_open'].forEach((key) => {
+      ['en', 'de', 'zh', 'cs'].forEach((lang) => {
+        assert.ok(
+          i18n.strings[lang] && typeof i18n.strings[lang][key] === 'string' && i18n.strings[lang][key].length > 0,
+          `${key} must carry a non-empty value for language "${lang}"`,
+        );
+      });
+    });
+  } finally {
+    db.close();
+  }
+});
