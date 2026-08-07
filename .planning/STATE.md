@@ -2,18 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 6
-current_phase_name: Org Design & Talent Retention
 status: executing
-stopped_at: Quick task 260806-x2j complete — XSS chain closed; ready for /gsd-execute-phase 6
-last_updated: "2026-08-06T21:46:26.271Z"
-last_activity: 2026-08-06
-last_activity_desc: Completed quick task 260806-x2j (XSS chain); Phase 6 ready to execute
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-08-07T18:59:53.240Z"
+last_activity: 2026-08-07
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 38
-  completed_plans: 30
+  completed_plans: 31
+  percent: 71
 ---
 
 # Project State
@@ -23,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 6 — Org Design & Talent Retention
+**Current focus:** Phase 06 — org-design-talent-retention
 
 ## Current Position
 
-Phase: 6 — Org Design & Talent Retention
-Plan: Not started
+Phase: 06 (org-design-talent-retention) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-08-06 — Completed quick task 260806-x2j (XSS chain closed); Phase 6 ready to execute
+Last activity: 2026-08-07
 
-Progress: [██████████] 100%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -91,6 +89,7 @@ Progress: [██████████] 100%
 | Phase 05 P06 | ~12.5min | 2 tasks | 3 files |
 | Phase 05-synergy-value-capture P07 | ~20min | 3 tasks | 3 files |
 | Phase 05 P08 | ~57min | 3 tasks | 5 files |
+| Phase 06 P01 | 45min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -171,6 +170,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5 Plan 08] Hand-tuned demo seed distributes five synergy initiatives across all four SYN-03 stages with full ramped phasing, a second baseline, a deliberately stale confirmation stamp, cost entries and task links (D-10); dev-test debris removed from data/demo.db by the seed script's own idempotent allowlist-delete pass
 - [Phase ?]: [Phase 5 Plan 08] Wave-8 regression walk caught a real dead-on-load bug (0e778f5): 05-07's task-progress insert over-closed .syn-head, orphaning .syn-expand-toggle as a card sibling and aborting every synergy card's wiring loop — invisible to the 358-test suite, found only by a live browser walk
 - [Phase ?]: [Phase 5 Plan 08] Follow-up seed tweak (0a88dc9, user-approved): syn_seed_5's startMonth moved 5 months earlier (not runRateM raised) so its already-arrived window clears roundSynergyMoney's rounding threshold, giving the D-18 unconfirmed-split sentence a real non-zero figure ($0.9M realized, $0.3M unconfirmed) instead of a degenerate $0.0M
+- [Phase ?]: [Phase 6 Plan 01] Task 1's tracer feedback gate satisfied by the fully-automated node --test run rather than a mid-plan human-verify checkpoint — the plan's own <verification> section explicitly defers org.html's manual/visual sanity to Plan 08's live walk
+- [Phase ?]: [Phase 6 Plan 01] positionGraphFailure() intentionally shipped in Task 2, not Task 1 — Task 1's POST route has zero graph-integrity checking by design, matching the plan's own task split
 
 ### Pending Todos
 
@@ -210,6 +211,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-06T20:37:03.562Z
-Stopped at: Phase 6 UI-SPEC approved
-Resume file: .planning/phases/06-org-design-talent-retention/06-UI-SPEC.md
+Last session: 2026-08-07T18:59:53.230Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None

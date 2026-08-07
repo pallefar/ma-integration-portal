@@ -232,7 +232,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — Tracer: org position spine, current/target tiered clearance, graph-integrity guards (ORG-01)
+- [x] 06-01-PLAN.md — Tracer: org position spine, current/target tiered clearance, graph-integrity guards (ORG-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -288,5 +288,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
-| 6. Org Design & Talent Retention | 0/8 | Planned | - |
+| 6. Org Design & Talent Retention | 1/8 | In Progress|  |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |
