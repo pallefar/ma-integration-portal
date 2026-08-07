@@ -2,16 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
+current_phase: 06
+current_phase_name: org-design-talent-retention
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-08-07T18:59:53.240Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-08-07T20:06:33.038Z"
 last_activity: 2026-08-07
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 38
-  completed_plans: 31
-  percent: 71
+  completed_plans: 32
+  percent: 84
 ---
 
 # Project State
@@ -26,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 06 (org-design-talent-retention) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-08-07
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
@@ -90,6 +92,7 @@ Progress: [████████░░] 82%
 | Phase 05-synergy-value-capture P07 | ~20min | 3 tasks | 3 files |
 | Phase 05 P08 | ~57min | 3 tasks | 5 files |
 | Phase 06 P01 | 45min | 3 tasks | 9 files |
+| Phase 06 P02 | ~120min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -172,6 +175,10 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5 Plan 08] Follow-up seed tweak (0a88dc9, user-approved): syn_seed_5's startMonth moved 5 months earlier (not runRateM raised) so its already-arrived window clears roundSynergyMoney's rounding threshold, giving the D-18 unconfirmed-split sentence a real non-zero figure ($0.9M realized, $0.3M unconfirmed) instead of a degenerate $0.0M
 - [Phase ?]: [Phase 6 Plan 01] Task 1's tracer feedback gate satisfied by the fully-automated node --test run rather than a mid-plan human-verify checkpoint — the plan's own <verification> section explicitly defers org.html's manual/visual sanity to Plan 08's live walk
 - [Phase ?]: [Phase 6 Plan 01] positionGraphFailure() intentionally shipped in Task 2, not Task 1 — Task 1's POST route has zero graph-integrity checking by design, matching the plan's own task split
+- [Phase ?]: [Phase 6 Plan 02] The 'exactly one new Set(' source-level test was deliberately written to constrain the whole org.js file, not just Task 1's own code — later tasks use plain object hashes instead of a second Set to satisfy it
+- [Phase ?]: [Phase 6 Plan 02] Manual add form now tags a new position with state: viewState (Rule 1 fix) — otherwise adding while viewing Target would create a current-state row offered a target-state parent, guaranteed to fail positionGraphFailure()'s cross-state check
+- [Phase ?]: [Phase 6 Plan 02] Non-matching search siblings are de-emphasised (not hidden) per this plan's own explicit wording, superseding 06-UI-SPEC.md Design Tension 2's earlier 'collapsed/hidden' prose
+- [Phase ?]: [Phase 6 Plan 02] GET /api/org/capabilities is the UI-SPEC-named 'equivalent probe' standing in for Plan 07's not-yet-buildable GET /api/org/summary — same hr-grant check and absent-not-zeroed response shape Plan 07 will reuse
 
 ### Pending Todos
 
@@ -211,6 +218,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-07T18:59:53.230Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-08-07T20:06:33.028Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
