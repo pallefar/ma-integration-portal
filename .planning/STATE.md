@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: org-design-talent-retention
 status: executing
-stopped_at: Completed 06-04-PLAN.md
-last_updated: "2026-08-07T20:48:59.423Z"
+stopped_at: Completed 06-05-PLAN.md
+last_updated: "2026-08-07T21:17:31.525Z"
 last_activity: 2026-08-07
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 38
-  completed_plans: 33
-  percent: 87
+  completed_plans: 35
+  percent: 92
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 06 (org-design-talent-retention) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-08-07
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -95,6 +95,7 @@ Progress: [█████████░] 87%
 | Phase 06 P02 | ~120min | 3 tasks | 6 files |
 | Phase 06 P03 | ~60min | 3 tasks | 6 files |
 | Phase 06 P04 | ~50min | 3 tasks | 6 files |
+| Phase 06 P05 | ~70min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -188,6 +189,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 6 Plan 04] ORG_DECISION_TYPES declared as three independent copies (server.js, validators/org.js, public/js/org.js) per the RAID_LEVELS/SYN_STAGES precedent; an anti-drift test proves all three agree with each other and a literal expectation
 - [Phase ?]: [Phase 6 Plan 04] The decision badge always renders (defaulting to 'open') even for a caller uncleared to view GET /api/org/decisions — load()'s Promise.all falls back state.decisions to [] on a 403 exactly like every other probe, so an uncleared viewer sees the harmless 'open' default rather than the badge being hidden entirely; no true restricted value is ever disclosed by this fallback
 - [Phase ?]: [Phase 6 Plan 04] The decision-history panel reads from the already-fetched state.decisions array (no per-click fetch) — an uncleared caller's empty/403 result and a genuinely empty log render the IDENTICAL 'No decisions recorded yet.' copy, mirroring DD-04's anti-enumeration graceful-degradation convention
+- [Phase ?]: [Phase 6 Plan 05] The flight-risk read fetch (public/js/org.js) is issued conditionally — only when the caller already holds the hr capability — unlike the unconditional fetch pattern load() uses for positions/employees/decisions, because a successful GET /api/org/flight-risk writes an audit row (D-03) and the others do not
+- [Phase ?]: [Phase 6 Plan 05] The flight-risk entry form reuses Plan 04's existing recordOrgDecisions capability key rather than adding a second governance key, since POST /api/org/decisions and POST /api/org/flight-risk share the identical isAdminOrIlRequest(req)+hr-grant gate
+- [Phase ?]: [Phase 6 Plan 05] GET /api/org/flight-risk records the codebase's first read-side security event (D-03) — both a denial and a successful read now write exactly one audit row, proven scoped to the register alone against three sibling reads (positions, capabilities, decisions)
 
 ### Pending Todos
 
@@ -227,6 +231,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-07T20:48:59.412Z
-Stopped at: Completed 06-04-PLAN.md
+Last session: 2026-08-07T21:17:31.518Z
+Stopped at: Completed 06-05-PLAN.md
 Resume file: None
