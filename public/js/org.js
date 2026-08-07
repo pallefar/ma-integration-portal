@@ -147,48 +147,61 @@
     return node;
   }
 
+  // Plan 08 Task 2 walk finding F2: dynamically rendered content on this
+  // page (decision badges, history pills, decision-type select options, the
+  // current/target switch labels) is built AFTER transitions.js's own
+  // [data-i18n] pass already ran once at i18n-dictionary-fetch time — a
+  // fresh page load with a non-EN language already stored otherwise leaves
+  // every one of those elements in English forever. Mirrors the identical
+  // `applyI18n()` re-apply-after-render idiom already established in
+  // public/js/execution.js/assessments.js — never a new pattern.
+  function applyI18n() {
+    if (window.applyPortalI18n) window.applyPortalI18n();
+  }
+
   function load() {
     // The capability probe fires alongside the positions/employees fetch —
     // a Promise.all fan-out, same idiom deal-home.js uses for its own
     // multi-source panel loads. Any failure (including the probe itself)
     // resets capabilities to {}, the fail-closed state, so the switch is
     // never briefly visible and then withdrawn (Tension 4).
-    //
-    // 06-04: GET /api/org/decisions joins the same fan-out. It is
-    // hr-grant-restricted (D-01/D-02) — for an uncleared caller it 403s and
-    // resolves to a non-array JSON body, so `Array.isArray` below falls
-    // back to `[]` exactly like a network failure would. Every position's
-    // badge then derives to the harmless 'open' default (Surface Contract
-    // §5's "no gap state on the card" — open IS one of the five values),
-    // never a fabricated retain/redeploy/in-selection/redundant value, so
-    // this fallback discloses nothing about the true, restricted decision.
     return Promise.all([
       fetch('/api/org/positions').then(function (r) { return r.json(); }),
       fetch('/api/employees').then(function (r) { return r.json(); }),
       fetch('/api/org/capabilities').then(function (r) { return r.json(); }),
-      fetch('/api/org/decisions').then(function (r) { return r.json(); }),
     ]).then(function (results) {
       state.positions = Array.isArray(results[0]) ? results[0] : [];
       state.employees = Array.isArray(results[1]) ? results[1] : [];
       capabilities = (results[2] && typeof results[2] === 'object') ? results[2] : {};
-      state.decisions = Array.isArray(results[3]) ? results[3] : [];
 
-      // ORG-03 (06-05): the flight-risk register is READ-restricted behind
-      // the SAME capability Plan 02 established for target-state org
-      // structure (capabilities.targetOrgDesign, the hr area grant) — no
-      // second read-tier key is introduced. Fetched ONLY when that
-      // capability is present, and ONLY here, once per page visit: a
-      // successful GET /api/org/flight-risk writes an audit row by decision
-      // (D-03), so an uncleared caller's ordinary page load must issue
-      // NEITHER this fetch nor the denial event it would otherwise trigger.
-      if (capabilities.targetOrgDesign) {
-        return fetch('/api/org/flight-risk').then(function (r) { return r.json(); }).then(function (risks) {
-          state.flightRisks = Array.isArray(risks) ? risks : [];
-        }).catch(function () {
-          state.flightRisks = [];
-        });
+      // Plan 08 Task 2 walk finding F3: GET /api/org/decisions is
+      // hr-grant-restricted — SAME boundary as capabilities.targetOrgDesign
+      // (server.js's GET /api/org/decisions checks the identical
+      // accessPolicy.hasAreaGrant(deal, user, 'hr') the capabilities route
+      // does). Previously this fetch fired unconditionally alongside the
+      // capability probe itself, so an uncleared caller's ordinary page
+      // load wrote exactly one console 403 on every visit even though the
+      // response was always discarded to []. It is now gated on the
+      // ALREADY-RESOLVED capability, exactly like the flight-risk fetch
+      // below — no request is issued at all when it would only be refused,
+      // matching D-03's "no request, no denial event" discipline for the
+      // flight-risk register extended to this read as well.
+      if (!capabilities.targetOrgDesign) {
+        state.decisions = [];
+        state.flightRisks = [];
+        return;
       }
-      state.flightRisks = [];
+
+      return Promise.all([
+        fetch('/api/org/decisions').then(function (r) { return r.json(); }),
+        fetch('/api/org/flight-risk').then(function (r) { return r.json(); }),
+      ]).then(function (secondary) {
+        state.decisions = Array.isArray(secondary[0]) ? secondary[0] : [];
+        state.flightRisks = Array.isArray(secondary[1]) ? secondary[1] : [];
+      }).catch(function () {
+        state.decisions = [];
+        state.flightRisks = [];
+      });
     }).catch(function () {
       state.positions = [];
       state.employees = [];
@@ -457,18 +470,38 @@
     }
 
     // UI-SPEC Design Tension 5: the decision badge is a FILLED PILL, top-
-    // right of the card — `.org-node{ position:relative; }` (org.html)
-    // already gives this absolute-positioned child its containing block.
-    // Every position always carries a badge (open is itself one of the
-    // five values — see load()'s own comment on the absent-decisions
-    // fallback), so this is never wrapped in a presence check.
-    var decisionType = (derivedDecisionForClient(node.position.id) || {}).type || 'open';
-    var decisionBadge = el('span', {
-      className: 'org-node-decision ' + (ORG_DECISION_BADGE_CLASS[decisionType] || ''),
-      text: ORG_DECISION_LABELS[decisionType] || decisionType,
-    });
-    decisionBadge.setAttribute('data-i18n', orgDecisionI18nKey(decisionType));
-    article.appendChild(decisionBadge);
+    // right of the card. UI-SPEC Design Tension 3's own DOM contract states
+    // the target-state UI — "switch control, target-state tree render,
+    // DECISION BADGES, flight-risk register tab" — is never inserted into
+    // the DOM for an uncleared member, not merely hidden. Construction is
+    // therefore gated on the SAME capabilities.targetOrgDesign check every
+    // other restricted branch on this page already uses (Plan 08 Task 2
+    // walk finding F3 — this branch was previously unconditional, so an
+    // uncleared caller was shown a live 'Open' badge with a working
+    // Decisions history toggle on every position). For a CLEARED session,
+    // every position still always carries a badge (open is itself one of
+    // the five values — see load()'s own comment on the absent-decisions
+    // fallback), so within this branch it is never wrapped in a second
+    // presence check.
+    //
+    // Plan 08 Task 2 walk finding F4: the badge now PARTICIPATES IN LAYOUT
+    // FLOW (its own right-aligned line above the row) instead of being
+    // absolute-positioned — an absolute `.org-node-decision` fully occluded
+    // the Delete button on every card at 1280/768px and the occupant name
+    // at 375px, because it floated over whatever content happened to sit at
+    // that fixed corner regardless of the row's actual layout. A dedicated
+    // wrapper line can never overlap interactive controls or text below it.
+    if (capabilities.targetOrgDesign) {
+      var decisionType = (derivedDecisionForClient(node.position.id) || {}).type || 'open';
+      var decisionBadgeWrap = el('div', { className: 'org-node-decision-wrap' });
+      var decisionBadge = el('span', {
+        className: 'org-node-decision ' + (ORG_DECISION_BADGE_CLASS[decisionType] || ''),
+        text: ORG_DECISION_LABELS[decisionType] || decisionType,
+      });
+      decisionBadge.setAttribute('data-i18n', orgDecisionI18nKey(decisionType));
+      decisionBadgeWrap.appendChild(decisionBadge);
+      article.appendChild(decisionBadgeWrap);
+    }
 
     var row = el('div', { className: 'org-node-row' });
 
@@ -507,15 +540,23 @@
 
     row.appendChild(main);
 
-    var historyBtn = el('button', { className: 'org-node-history-toggle', text: 'Decisions' });
-    historyBtn.type = 'button';
-    historyBtn.setAttribute('aria-expanded', String(!!historyOpenIds[node.position.id]));
-    historyBtn.addEventListener('click', function () {
-      if (historyOpenIds[node.position.id]) delete historyOpenIds[node.position.id];
-      else historyOpenIds[node.position.id] = true;
-      renderTree();
-    });
-    row.appendChild(historyBtn);
+    // Plan 08 Task 2 walk finding F3: the Decisions history toggle is part
+    // of the SAME restricted target-state UI the decision badge above is —
+    // constructed only inside the capabilities.targetOrgDesign branch, so
+    // an uncleared caller is never shown a working toggle into a decision
+    // log the server would refuse to return (GET /api/org/decisions'
+    // hasAreaGrant(deal, user, 'hr') 403 boundary).
+    if (capabilities.targetOrgDesign) {
+      var historyBtn = el('button', { className: 'org-node-history-toggle', text: 'Decisions' });
+      historyBtn.type = 'button';
+      historyBtn.setAttribute('aria-expanded', String(!!historyOpenIds[node.position.id]));
+      historyBtn.addEventListener('click', function () {
+        if (historyOpenIds[node.position.id]) delete historyOpenIds[node.position.id];
+        else historyOpenIds[node.position.id] = true;
+        renderTree();
+      });
+      row.appendChild(historyBtn);
+    }
 
     var deleteBtn = el('button', { className: 'org-node-delete', text: 'Delete' });
     deleteBtn.type = 'button';
@@ -560,7 +601,11 @@
     // decisions and a position with a genuinely empty log render the
     // IDENTICAL empty copy — the same anti-enumeration graceful-
     // degradation convention DD-04 established (catch-to-empty-state).
-    if (historyOpenIds[node.position.id]) {
+    // Defence in depth (F3): historyOpenIds can only be set via the toggle
+    // above, which is itself constructed only inside the capabilities
+    // branch — this extra guard means even a stray call site could never
+    // insert the panel for an uncleared caller.
+    if (capabilities.targetOrgDesign && historyOpenIds[node.position.id]) {
       article.appendChild(buildDecisionHistoryPanel(node.position));
     }
 

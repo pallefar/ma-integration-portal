@@ -92,8 +92,19 @@
        (Plan 05) so the two vocabularies never compete for the same visual
        channel. No fixed width and no clipping rule anywhere in this
        block — a longer translation must reflow the pill, never clip it,
-       because the label IS the decision (i18n contract). */
-    .org-node-decision{ position:absolute; top:.55rem; right:.65rem; flex:none; font-size:.64rem; font-weight:800; border-radius:12px; padding:.18rem .6rem; }
+       because the label IS the decision (i18n contract).
+       Plan 08 Task 2 walk finding F4: this pill used to be
+       `position:absolute; top:.55rem; right:.65rem;`, floating over
+       whatever card content happened to sit at that fixed corner — a
+       ~620-656px² intersection with the Delete button at 1280/768px on
+       EVERY card, a collision with the Decisions button for longer labels
+       (DE "Freigesetzt"), and a ~636-665px² intersection with the occupant
+       name at 375px. It now PARTICIPATES IN LAYOUT FLOW instead: the wrap
+       renders as its own right-aligned line above `.org-node-row`, so the
+       badge can never overlap the interactive row or its text no matter
+       how long the label is or how narrow the viewport gets. */
+    .org-node-decision-wrap{ text-align:right; margin-bottom:.35rem; }
+    .org-node-decision{ display:inline-block; flex:none; font-size:.64rem; font-weight:800; border-radius:12px; padding:.18rem .6rem; }
     .org-dec-badge--retain{ background:rgba(63,122,55,.12); color:#3f7a37; }
     .org-dec-badge--redeploy{ background:rgba(59,130,246,.12); color:var(--status-info,#3B82F6); }
     .org-dec-badge--in-selection{ background:rgba(233,131,0,.12); color:var(--te-orange); }
@@ -187,6 +198,6 @@
     </main>
   </div>
 
-  <script src="/js/org.js?v=1784900009"></script>
+  <script src="/js/org.js?v=1784900010"></script>
 </body>
 </html>
