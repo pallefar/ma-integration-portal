@@ -137,6 +137,20 @@
     .org-risk-form select, .org-risk-form textarea, .org-risk-form input{ padding:.4rem .65rem; border:1.5px solid var(--border-color); border-radius:8px; font-family:inherit; font-size:.8rem; }
     .org-risk-form textarea{ resize:vertical; }
     .org-risk-form-error{ display:none; font-size:.76rem; color:#C0392B; }
+    /* Conversion controls (06-06, D-15/D-17, UI-SPEC Surface Contract 6).
+       Buttons reuse .btn/.btn-secondary verbatim (no new button styling).
+       .org-risk-linked mirrors this app's established small-pill idiom
+       (e.g. .raid-type, execution.html:109-113) — due-diligence.js's own
+       linked-pill markup carries no dedicated rule to copy, so this is a
+       fresh declaration in the SAME visual language, not a divergent one.
+       .org-risk-convert-note reuses .dd-finding-convert-note's exact
+       treatment (due-diligence.html:43) so the corrected D-17 wording reads
+       identically wherever it appears. No fixed width and no clipping rule
+       anywhere in this block — a longer translation must reflow, never
+       clip. */
+    .org-risk-convert{ display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; flex-basis:100%; margin-top:.4rem; }
+    .org-risk-linked{ font-size:.7rem; font-weight:700; color:#167987; background:rgba(22,121,135,.1); border:1px solid rgba(22,121,135,.3); border-radius:12px; padding:.15rem .55rem; }
+    .org-risk-convert-note{ display:block; width:100%; font-size:.72rem; font-style:italic; color:var(--text-dim); margin-top:.2rem; }
   </style>
 </head>
 <body>
@@ -173,6 +187,6 @@
     </main>
   </div>
 
-  <script src="/js/org.js?v=1784900008"></script>
+  <script src="/js/org.js?v=1784900009"></script>
 </body>
 </html>

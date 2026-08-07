@@ -579,14 +579,15 @@ test('org-flight-risk-ui: source-level — public/js/org.js contains no PROPERTY
   });
 });
 
-test('org-flight-risk-ui: source-level — the register fetch appears exactly once in the page-visit load path and org.js contains no interval or timeout callback', () => {
+test('org-flight-risk-ui: source-level — the register fetch appears exactly three times, each a direct consequence of an explicit user action (never a poll), and org.js contains no interval or timeout callback', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
   const fetchCallsInLoad = (src.match(/fetch\('\/api\/org\/flight-risk'\)/g) || []).length;
   // ONE call inside load() (the page-visit fetch) + ONE call inside the
-  // entry form's own submit-success refresh (a direct consequence of an
-  // explicit user action, not a poll) — never a third, background-triggered
-  // call site.
-  assert.strictEqual(fetchCallsInLoad, 2, 'exactly two fetch(\'/api/org/flight-risk\') call sites must exist: the page-visit load and the post-submit refresh');
+  // entry form's own submit-success refresh + ONE call inside 06-06's
+  // convertFlightRisk() post-conversion refresh — each a direct consequence
+  // of an explicit user action, not a poll — never a fourth,
+  // background-triggered call site.
+  assert.strictEqual(fetchCallsInLoad, 3, 'exactly three fetch(\'/api/org/flight-risk\') call sites must exist: the page-visit load, the post-submit refresh, and the post-conversion refresh');
   assert.strictEqual((src.match(/setInterval|setTimeout/g) || []).length, 0, 'org.js must contain no interval or timeout callback anywhere — the register must never be polled');
 });
 

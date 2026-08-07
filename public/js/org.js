@@ -776,7 +776,96 @@
     if (entry.mitigation) {
       row.appendChild(el('p', { className: 'org-risk-mitigation', text: entry.mitigation }));
     }
+
+    var hasTask = !!(entry.linkedTaskIds && entry.linkedTaskIds.length);
+    var hasRaid = !!(entry.linkedRaidIds && entry.linkedRaidIds.length);
+    var convertRow = el('div', { className: 'org-risk-convert' });
+
+    // D-15 (06-06): the conversion buttons are a WRITE affordance — the
+    // route enforces the same isAdminOrIlRequest(req)+hr-grant gate as the
+    // entry form above (D-04), so the buttons are constructed ONLY inside
+    // this SAME governance-capability branch, never rendered-then-disabled
+    // for an uncleared reader. A cleared-but-non-IL reader still sees the
+    // linked pills and the note below (both render unconditionally,
+    // outside this branch) — just no buttons.
+    if (capabilities.recordOrgDecisions) {
+      var taskBtn = el('button', { className: 'btn btn-secondary', text: 'Create Day-1 task' });
+      taskBtn.type = 'button';
+      // Genuinely disabled (not hidden) once a link of this kind already
+      // exists — this is a STATE signal for an already-permitted actor, not
+      // a clearance boundary, and the one place in this plan where disabled
+      // is the correct treatment (UI-SPEC Surface Contract 6).
+      taskBtn.disabled = hasTask;
+      taskBtn.addEventListener('click', function () { convertFlightRisk(entry.id, true, false); });
+      convertRow.appendChild(taskBtn);
+
+      var raidBtn = el('button', { className: 'btn btn-secondary', text: 'Create RAID entry' });
+      raidBtn.type = 'button';
+      raidBtn.disabled = hasRaid;
+      raidBtn.addEventListener('click', function () { convertFlightRisk(entry.id, false, true); });
+      convertRow.appendChild(raidBtn);
+    }
+
+    // Linked pills and the conversion note render for EVERY reader who can
+    // see this row at all (the whole register is already gated behind
+    // capabilities.targetOrgDesign above) — matching due-diligence.js's own
+    // linked-pill idiom (public/js/due-diligence.js:307-316).
+    if (hasTask) {
+      (entry.linkedTaskIds || []).forEach(function () {
+        convertRow.appendChild(el('span', { className: 'org-risk-linked', text: 'Task created' }));
+      });
+    }
+    if (hasRaid) {
+      (entry.linkedRaidIds || []).forEach(function () {
+        convertRow.appendChild(el('span', { className: 'org-risk-linked', text: 'RAID entry created' }));
+      });
+    }
+
+    // D-17: the corrected, now-true wording — a converted record is
+    // visible only to members cleared for THIS register, never the
+    // superseded due-diligence claim of an unrestricted, whole-deal-team
+    // audience that D-17 (06-06 Task 2) made false.
+    convertRow.appendChild(el('span', {
+      className: 'org-risk-convert-note',
+      text: 'Creates a linked Day-1 task and/or RAID entry, visible only to members cleared for this register.',
+    }));
+
+    row.appendChild(convertRow);
     return row;
+  }
+
+  // Posts the conversion, then refreshes state.flightRisks from the server
+  // and re-renders — NEVER patches the clicked entry object in place — so
+  // the row's link arrays and disabled-button state always reflect the
+  // authoritative record, mirroring buildFlightRiskForm()'s own
+  // refresh-after-write convention above.
+  function convertFlightRisk(entryId, toTask, toRaid) {
+    function showConvertError(message) {
+      var errorEl = document.querySelector('.org-risk-form-error');
+      if (!errorEl) return;
+      errorEl.textContent = message;
+      // Explicit visible display value, never '' — the Phase-4-Wave-7
+      // countermeasure (Copywriting Contract).
+      errorEl.style.display = 'block';
+    }
+    fetch('/api/org/flight-risk/' + entryId + '/convert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toTask: toTask, toRaid: toRaid }),
+    }).then(function (r) {
+      return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+    }).then(function (result) {
+      if (!result.ok) {
+        showConvertError((result.data && result.data.error) || 'Could not convert that flight-risk entry.');
+        return;
+      }
+      return fetch('/api/org/flight-risk').then(function (r2) { return r2.json(); }).then(function (risks) {
+        state.flightRisks = Array.isArray(risks) ? risks : [];
+        renderFlightRiskRegister();
+      });
+    }).catch(function () {
+      showConvertError('Could not convert that flight-risk entry.');
+    });
   }
 
   // Person (linked to the roster, required), risk level (select, no

@@ -366,3 +366,65 @@ test('org-flight-risk-convert (j): validators/org.js registers the conversion sc
   const src = fs.readFileSync(path.join(__dirname, '..', 'validators', 'org.js'), 'utf8');
   assert.match(src, /registerSchema\('POST', '\/api\/org\/flight-risk\/:id\/convert', FlightRiskConvertSchema\)/);
 });
+
+// ============================================================= Task 3 ====
+// Conversion controls on the register (public/js/org.js, public/org.html) —
+// source-level checks, since the buttons/pills/note are client-rendered UI
+// elements with no server-observable side effect.
+// ===========================================================================
+
+test('org-flight-risk-convert (k): public/js/org.js constructs the conversion buttons ONLY inside the governance-capability branch, while the linked pills and the note are NOT gated by it', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  const fnStart = src.indexOf('function buildFlightRiskRow(entry) {');
+  assert.ok(fnStart !== -1, 'expected to locate buildFlightRiskRow');
+  const fnBody = src.slice(fnStart, src.indexOf('\n  function convertFlightRisk', fnStart));
+  assert.ok(fnBody, 'expected to isolate buildFlightRiskRow\'s body');
+
+  const gateStart = fnBody.indexOf('if (capabilities.recordOrgDecisions) {');
+  assert.ok(gateStart !== -1, 'expected the governance-capability gate inside buildFlightRiskRow');
+
+  // Walk forward from the gate's opening brace to find its matching close.
+  let depth = 0;
+  let i = fnBody.indexOf('{', gateStart);
+  const braceOpenIdx = i;
+  for (; i < fnBody.length; i++) {
+    if (fnBody[i] === '{') depth++;
+    else if (fnBody[i] === '}') { depth--; if (depth === 0) break; }
+  }
+  const gateCloseIdx = i;
+  assert.ok(gateCloseIdx > braceOpenIdx, 'expected to find the governance-capability branch\'s matching closing brace');
+  const gatedRegion = fnBody.slice(braceOpenIdx, gateCloseIdx);
+  const afterGate = fnBody.slice(gateCloseIdx);
+
+  assert.ok(gatedRegion.includes('Create Day-1 task'), 'the Day-1 task button must be constructed inside the governance-capability branch');
+  assert.ok(gatedRegion.includes('Create RAID entry'), 'the RAID entry button must be constructed inside the governance-capability branch');
+  assert.ok(!gatedRegion.includes('org-risk-linked'), 'the linked pill must NOT be constructed inside the governance-capability branch');
+  assert.ok(!gatedRegion.includes('org-risk-convert-note'), 'the conversion note must NOT be constructed inside the governance-capability branch');
+
+  assert.ok(afterGate.includes('org-risk-linked'), 'the linked pill must be constructed after (outside) the governance-capability branch, so it renders for every cleared reader');
+  assert.ok(afterGate.includes('org-risk-convert-note'), 'the conversion note must be constructed after (outside) the governance-capability branch, so it renders for every cleared reader');
+});
+
+test('org-flight-risk-convert (l): public/js/org.js carries the corrected D-17 conversion-note wording and never repeats the superseded due-diligence sentence', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  assert.ok(src.includes('Creates a linked Day-1 task and/or RAID entry, visible only to members cleared for this register.'), 'the corrected conversion-note wording must be present');
+  assert.ok(!src.includes('whole deal team'), 'the superseded due-diligence sentence must never be repeated here');
+});
+
+test('org-flight-risk-convert (m): the conversion click handler refreshes state.flightRisks from the server rather than mutating the clicked entry object in place', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
+  const fnStart = src.indexOf('function convertFlightRisk(entryId, toTask, toRaid) {');
+  assert.ok(fnStart !== -1, 'expected to locate convertFlightRisk');
+  const fnBody = src.slice(fnStart, src.indexOf('\n  }\n', fnStart));
+  assert.ok(fnBody.includes("fetch('/api/org/flight-risk')"), 'the handler must re-fetch the register from the server on success');
+  assert.ok(fnBody.includes('state.flightRisks = '), 'the handler must reassign state.flightRisks from the server response');
+  assert.ok(!/entry\.linked(Task|Raid)Ids\s*(\.push|=)/.test(fnBody), 'the handler must never mutate the clicked entry\'s link arrays locally');
+});
+
+test('org-flight-risk-convert (n): public/org.html carries an .org-risk-convert rule block and a bumped org.js cache stamp', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'org.html'), 'utf8');
+  assert.match(src, /\.org-risk-convert\{[^}]*\}/, 'expected an .org-risk-convert rule block');
+  const match = /org\.js\?v=(\d+)/.exec(src);
+  assert.ok(match, 'expected a cache-stamped org.js script tag');
+  assert.notStrictEqual(match[1], '1784900008', 'the cache stamp must differ from the pre-Task-3 value');
+});
