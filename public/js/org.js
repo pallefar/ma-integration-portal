@@ -141,20 +141,23 @@
     return children('__root__');
   }
 
-  // Adds default-expanded ids for depth 0 and depth 1 (DEFAULT_EXPAND_DEPTH
-  // = 2) into the shared expandedIds Set. Called on every render pass — it
-  // only ADDS ids (Set.add is idempotent), it never clears or replaces the
-  // Set, so a node the operator manually collapsed at depth 0/1 stays
-  // collapsed across an unrelated re-render just as much as a manually
-  // EXPANDED deep node stays expanded. New nodes appearing at depth 0/1
-  // (e.g. right after being added) pick up the default automatically.
+  // Adds default-expanded ids for every depth below DEFAULT_EXPAND_DEPTH
+  // (2 — depths 0 and 1) into the shared expandedIds Set. Called on every
+  // render pass — it only ADDS ids (Set.add is idempotent), it never clears
+  // or replaces the Set, so a node the operator manually collapsed at
+  // depth 0/1 stays collapsed across an unrelated re-render just as much as
+  // a manually EXPANDED deep node stays expanded. New nodes appearing at
+  // depth 0/1 (e.g. right after being added) pick up the default
+  // automatically.
   function seedDefaultExpansion(tree) {
-    tree.forEach(function (rootNode) {
-      expandedIds.add(rootNode.position.id);
-      rootNode.children.forEach(function (childNode) {
-        expandedIds.add(childNode.position.id);
+    function seed(nodes, depth) {
+      if (depth >= DEFAULT_EXPAND_DEPTH) return;
+      nodes.forEach(function (node) {
+        expandedIds.add(node.position.id);
+        seed(node.children, depth + 1);
       });
-    });
+    }
+    seed(tree, 0);
   }
 
   function renderNode(node, depth, searchActive, relevantIds) {
