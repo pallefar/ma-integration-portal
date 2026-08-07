@@ -843,14 +843,19 @@ test('synergy-baseline (g): below committed, an ordinary run-rate change require
   }
 });
 
-test('synergy-baseline (h): grep-level guard — isAdminOrIlRequest is defined once in server.js and called only from the re-baseline route', () => {
+test('synergy-baseline (h): grep-level guard — isAdminOrIlRequest is defined once in server.js and reused (not re-implemented) by every tier-2 route that needs it', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const definitionCount = (src.match(/function isAdminOrIlRequest\(/g) || []).length;
   const callSites = (src.match(/isAdminOrIlRequest\(req\)/g) || []).length;
   assert.strictEqual(definitionCount, 1, 'isAdminOrIlRequest must be defined exactly once');
-  // One definition-site usage (`function isAdminOrIlRequest(req)`) + exactly
-  // one call site (`if (!isAdminOrIlRequest(req))` in the re-baseline route).
-  assert.strictEqual(callSites, 2, 'isAdminOrIlRequest(req) must appear exactly twice: its own definition signature and its one call site in the re-baseline route');
+  // One definition-site usage (`function isAdminOrIlRequest(req)`) + one call
+  // site in the re-baseline route (D-15) + one call site in
+  // POST /api/org/decisions (06-04, D-04 tier 2) — a THIRD tier-2 governance
+  // route reusing the same helper rather than re-implementing its own
+  // ['admin','hrbp'] check inline. This count grows by one every time a new
+  // route adopts the shared helper; the point of this test is that the
+  // DEFINITION count above never grows past 1.
+  assert.strictEqual(callSites, 3, 'isAdminOrIlRequest(req) must appear exactly three times: its own definition signature, the re-baseline route\'s call site, and the org-decisions route\'s call site');
 });
 
 // WR-01: the function's own comment states it "Deliberately does NOT honour

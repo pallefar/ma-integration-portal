@@ -4276,6 +4276,112 @@ app.post('/api/org/positions/import', (req, res) => {
   });
 });
 
+// ORG-02 (06-04) — the append-only decision register. D-13: a decision is
+// recorded as a NEW entry in `orgDecisions`, never as a field overwritten on
+// the position — the position record itself is NEVER touched by any route
+// below. D-14: the fixed five-value vocabulary. D-04 tier 2: recording a
+// decision is a governance act, restricted to admin + Integration Lead
+// ONLY — a strictly narrower gate than the tier-1 `hr`-area-grant write
+// clearance the routes above use for structural org edits.
+//
+// D-14: an INDEPENDENT COPY of the five-value decision vocabulary, kept in
+// sync BY HAND across three places — this array, validators/org.js's own
+// copy, and public/js/org.js's client-side array — following the
+// RAID_LEVELS/D-26 and SYN_STAGES/D-11 lockstep-copy convention already
+// established elsewhere in this file. test/org-decisions.test.js's
+// anti-drift block asserts all three agree, in order, with each other and
+// with a literal expectation written into the test.
+const ORG_DECISION_TYPES = ['retain', 'redeploy', 'in-selection', 'redundant', 'open'];
+
+// D-13: a position's CURRENT decision is DERIVED as its latest orgDecisions
+// entry by decidedAt, computed here at read time and stored nowhere — so a
+// reversal recorded a week later leaves the original entry (and its
+// rationale) intact and readable, never overwritten. Returns null when the
+// position carries no decision entry at all.
+//
+// FLAGGED PLANNER ASSUMPTION (this plan's objective, unresolved by
+// 06-CONTEXT.md/ROADMAP/UI-SPEC): an orgDecisions entry whose positionId no
+// longer names a position in the lane is RETAINED in the log verbatim
+// (append-only is absolute) but CONTRIBUTES TO NO DERIVED VALUE — this
+// function only ever answers "what is the latest decision FOR this
+// positionId", so a caller deriving over a live positions lane simply never
+// asks this function about a deleted position's id in the first place;
+// nothing in this function needs to know a position was deleted for that
+// exclusion to hold.
+function derivedDecisionFor(decisions, positionId) {
+  const forPosition = decisions.filter((d) => d.positionId === positionId);
+  if (!forPosition.length) return null;
+  return forPosition.reduce((latest, d) => (!latest || d.decidedAt > latest.decidedAt ? d : latest), null);
+}
+
+// D-01/D-02: the decision log is RESTRICTED content — same `hr`-area-grant
+// clearance boundary as target-state org structure, never open-tier like
+// current-state positions. Ordered most-recent-first; narrowed by an
+// optional `positionId` query value.
+app.get('/api/org/decisions', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to view org decisions.' });
+  }
+  let lane = orgDecisionsLane(db);
+  if (req.query.positionId) lane = lane.filter((d) => d.positionId === req.query.positionId);
+  const ordered = lane.slice().sort((a, b) => String(b.decidedAt || '').localeCompare(String(a.decidedAt || '')));
+  res.json(ordered);
+});
+
+// D-04 tier 2: recording a decision is the most consequential act this app
+// records about a named individual, so the gate is deliberately NARROWER
+// than the tier-1 `hr`-area-grant write clearance the routes above use — the
+// tier-2 role guard below runs as this handler's LITERAL FIRST STATEMENT,
+// before the deal lookup, before the position lookup, before anything reads
+// data, mirroring POST /api/synergies/:id/rebaseline's own D-15 precedent
+// (server.js, above) exactly — including its deliberate exclusion of the
+// X-Admin-Token break-glass identity (sessionId: null): an unattributed
+// token must not be able to record a decision with legal and severance
+// consequences against a named person.
+app.post('/api/org/decisions', (req, res) => {
+  if (!isAdminOrIlRequest(req)) {
+    return res.status(403).json({ error: 'Only admin and the Integration Lead can record an org decision.' });
+  }
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  // D-02: role alone is not sufficient — ALSO require the hr area grant, so
+  // the write is gated on both role (above) and clearance (here). This is a
+  // structural no-op for admin/hrbp today (grantedAreas()'s role
+  // short-circuit already reaches every area for both), but stays in place
+  // because isAdminOrIlRequest() is a pure role check with zero awareness of
+  // deal-level clearance.
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to edit the org design.' });
+  }
+  const position = orgPositionsLane(db).find((p) => p.id === b.positionId);
+  if (!position) return res.status(404).json({ error: 'Position not found.' });
+
+  const entry = {
+    id: newId('orgdec'),
+    positionId: b.positionId,
+    employeeId: b.employeeId || null,
+    type: b.type,
+    rationale: b.rationale,
+    // D-13/T-06-27: decidedBy/decidedAt are stamped HERE, server-side, from
+    // the resolved session and the server clock — NEVER from the request
+    // body. OrgDecisionSchema does not even declare these two keys, so a
+    // caller-supplied value for either is already stripped before this
+    // handler ever runs (z.object(shape)'s strip-unknown-keys-by-default).
+    decidedBy: req.portalUser.username,
+    decidedAt: new Date().toISOString(),
+    effectiveDate: b.effectiveDate || null,
+  };
+  // Append-only (D-13/T-06-28): ALWAYS push a NEW entry — never search for
+  // and mutate an existing one. A reversal is a new entry, not an edit, and
+  // no route anywhere exposes an update or delete path for a decision.
+  orgDecisionsLane(db).push(entry);
+  writeDb(db);
+  res.status(201).json({ success: true, decision: entry });
+});
+
 // =====================================================================
 // Due Diligence workspace (DD-01/DD-04) — request items scoped to one of
 // db/accessPolicy.js's eight fixed functional areas, guarded end-to-end by
@@ -5771,3 +5877,10 @@ module.exports.isAdminOrIlRequest = isAdminOrIlRequest;
 // a hand-built lane array, without a live POST sequence (which cannot itself
 // construct a cycle, since every write is refused before it lands).
 module.exports.positionGraphFailure = positionGraphFailure;
+// ORG-02 (06-04): exposed for the same pure-function unit-check rationale —
+// a test can assert derivedDecisionFor()'s latest-by-decidedAt/null/
+// ignores-other-positions behavior directly against a hand-built decisions
+// array, and the anti-drift test can assert this copy of the vocabulary
+// agrees with validators/org.js's and public/js/org.js's own copies.
+module.exports.ORG_DECISION_TYPES = ORG_DECISION_TYPES;
+module.exports.derivedDecisionFor = derivedDecisionFor;

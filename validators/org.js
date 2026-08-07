@@ -15,6 +15,22 @@ const { registerSchema, EmptyBodySchema } = require('./index');
 const TEXT_MAX = 300;
 const ID_MAX = 120;
 
+// IN-01 (04-REVIEW.md) idiom, replicated locally rather than imported —
+// validators/dd.js does not export isValidCalendarDate, mirroring
+// validators/workstream.js's own established local-copy convention for the
+// identical helper. An empty string is left to '' === '' below (clearing an
+// optional date); any non-empty value must be a real YYYY-MM-DD calendar
+// date, month/day range checked including leap years.
+const CALENDAR_DATE_SHAPE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+function isValidCalendarDate(value) {
+  const m = CALENDAR_DATE_SHAPE_RE.exec(value);
+  if (!m) return false;
+  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  if (month < 1 || month > 12) return false;
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day >= 1 && day <= daysInMonth;
+}
+
 // D-06: a position's identity is its own newId('pos') id; `state` is a
 // discriminator on ONE record, never a link between two. current/target are
 // exported below so server.js and test/org-positions.test.js assert against
@@ -87,6 +103,38 @@ const OrgPositionImportSchema = z.object({
 
 registerSchema('POST', '/api/org/positions/import', OrgPositionImportSchema);
 
+// D-14: the SECOND of three independent copies of the five-value decision
+// vocabulary — server.js's own ORG_DECISION_TYPES is the first,
+// public/js/org.js's client array is the third. Kept in sync by hand;
+// test/org-decisions.test.js's anti-drift block proves all three agree.
+const ORG_DECISION_TYPES = ['retain', 'redeploy', 'in-selection', 'redundant', 'open'];
+
+const EFFECTIVE_DATE_MAX = 10; // 'YYYY-MM-DD'
+
+/** POST /api/org/decisions (06-04, D-13/D-14) — deliberately does NOT
+ * declare `decidedBy` or `decidedAt`: both are stamped server-side from the
+ * resolved session and the server clock (server.js). z.object(shape) strips
+ * unknown keys by default (D-13, this file's own header note), so a caller
+ * that sends either key is silently stripped by the schema's own
+ * fail-closed unknown-key behaviour rather than accepted and then ignored —
+ * the governance record can never be back-dated or attributed to someone
+ * else via this route. `type` is a closed enum (no free text) built from
+ * this file's own vocabulary copy, matching D-14's "no rollup-breaking
+ * free text" requirement. `rationale` is required and non-empty (trimmed)
+ * — a rationale-less governance record is refused with 400, never saved. */
+const OrgDecisionSchema = z.object({
+  positionId: z.string().trim().min(1).max(ID_MAX),
+  employeeId: z.string().trim().max(ID_MAX).nullable().optional(),
+  type: z.enum(ORG_DECISION_TYPES),
+  rationale: z.string().trim().min(1, 'A rationale is required to record a decision.').max(TEXT_MAX),
+  effectiveDate: z.string().trim().max(EFFECTIVE_DATE_MAX)
+    .refine((val) => val === '' || isValidCalendarDate(val), {
+      message: 'effectiveDate must be a valid YYYY-MM-DD calendar date.',
+    }).optional(),
+});
+
+registerSchema('POST', '/api/org/decisions', OrgDecisionSchema);
+
 module.exports = {
   OrgPositionUpsertSchema,
   OrgCopyToTargetSchema,
@@ -95,4 +143,6 @@ module.exports = {
   ORG_STATE_CURRENT,
   ORG_STATE_TARGET,
   ORG_STATES,
+  OrgDecisionSchema,
+  ORG_DECISION_TYPES,
 };
