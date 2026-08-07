@@ -226,7 +226,7 @@ Plans:
   2. The IL can record a role-selection or redundancy decision against a role or person.
   3. The IL can maintain a flight-risk register (risk level, owner, mitigation) that only authorized roles can read, with access to it audited.
 
-**Plans**: 6/8 plans executed
+**Plans**: 7/8 plans executed
 
 Plans:
 
@@ -256,7 +256,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 06-07-PLAN.md — Clearance-scoped org rollup, two-tier deal-home panel and the flight-risk owner nudge (ORG-01, ORG-02, ORG-03)
+- [x] 06-07-PLAN.md — Clearance-scoped org rollup, two-tier deal-home panel and the flight-risk owner nudge (ORG-01, ORG-02, ORG-03)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -288,5 +288,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
-| 6. Org Design & Talent Retention | 6/8 | In Progress|  |
+| 6. Org Design & Talent Retention | 7/8 | In Progress|  |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |

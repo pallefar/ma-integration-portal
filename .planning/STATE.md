@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: org-design-talent-retention
 status: executing
-stopped_at: Completed 06-06-PLAN.md
-last_updated: "2026-08-07T21:37:55.540Z"
+stopped_at: Completed 06-07-PLAN.md
+last_updated: "2026-08-07T21:57:23.605Z"
 last_activity: 2026-08-07
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 38
-  completed_plans: 36
-  percent: 95
+  completed_plans: 37
+  percent: 97
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 06 (org-design-talent-retention) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-08-07
 
-Progress: [██████████] 95%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
@@ -97,6 +97,7 @@ Progress: [██████████] 95%
 | Phase 06 P04 | ~50min | 3 tasks | 6 files |
 | Phase 06 P05 | ~70min | 3 tasks | 7 files |
 | Phase 06 P06 | ~95min | 3 tasks | 12 files |
+| Phase 06 P07 | ~50min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -197,6 +198,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 6 Plan 06] The workstream field is never used as the RAID clearance key — DD_AREA_WORKSTREAM is many-to-one (financial+tax -> ws_finance, legal+complianceEsg -> ws_legal) and cannot be inverted
 - [Phase ?]: [Phase 6 Plan 06] An orphaned RAID provenance link (originating finding deleted) resolves to null/unlinked rather than staying withheld from everyone — proven by a previously-excluded caller gaining visibility after deletion
 - [Phase ?]: [Phase 6 Plan 06] Flight-risk conversion source prefix is the literal 'org-flightrisk:<id>' (06-RESEARCH.md Assumptions Log A1, planner discretion), distinguishable from the DD finding 'dd-finding:' prefix for the outbound RAID filter to branch on
+- [Phase ?]: 06-07: Decision-type counts are derived over the CURRENT-state roster only, mirroring the open tier's own current-state-only headcount (planner discretion, population scope unstated by plan/06-CONTEXT.md)
+- [Phase ?]: 06-07: GET /api/org/summary writes zero recordSecurityEvent calls and carries no explicit role gate — every number is already clearance-scoped before it is computed, mirroring GET /api/dd/summary; proven via a before/after audit-row-count delta of zero
+- [Phase ?]: 06-07: renderFlightRiskNudge() is a full independent copy of renderStaleSynergyNudge()'s shape (own element ids org-risk-nudge-badge/-banner, own sessionStorage key org_risk_nudge_dismissed) so the D-22 nudge stacks alongside the existing synergy nudge rather than merging with it
 
 ### Pending Todos
 
@@ -236,6 +240,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-07T21:37:55.530Z
-Stopped at: Completed 06-06-PLAN.md
+Last session: 2026-08-07T21:57:23.594Z
+Stopped at: Completed 06-07-PLAN.md
 Resume file: None
