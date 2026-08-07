@@ -61,7 +61,7 @@
 ### Org Design & Talent Retention
 
 - [x] **ORG-01**: The IL can represent the acquired organisation's structure and map roles beyond the current flat employee list
-- [ ] **ORG-02**: The IL can record role-selection / redundancy decisions against roles or people
+- [x] **ORG-02**: The IL can record role-selection / redundancy decisions against roles or people
 - [ ] **ORG-03**: The IL can maintain a key-talent flight-risk register (risk level, owner, mitigation), restricted to authorized roles and audited as sensitive data
 
 ## v2 Requirements
@@ -130,7 +130,7 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | SYN-04 | Phase 5: Synergy Value Capture | Complete |
 | SYN-05 | Phase 5: Synergy Value Capture | Complete |
 | ORG-01 | Phase 6: Org Design & Talent Retention | Complete |
-| ORG-02 | Phase 6: Org Design & Talent Retention | Pending |
+| ORG-02 | Phase 6: Org Design & Talent Retention | Complete |
 | ORG-03 | Phase 6: Org Design & Talent Retention | Pending |
 | RPT-01 | Phase 7: IMO Reporting & Exports | Pending |
 | RPT-02 | Phase 7: IMO Reporting & Exports | Pending |

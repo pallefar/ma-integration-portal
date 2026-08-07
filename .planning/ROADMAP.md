@@ -226,7 +226,7 @@ Plans:
   2. The IL can record a role-selection or redundancy decision against a role or person.
   3. The IL can maintain a flight-risk register (risk level, owner, mitigation) that only authorized roles can read, with access to it audited.
 
-**Plans**: 3/8 plans executed
+**Plans**: 4/8 plans executed
 
 Plans:
 
@@ -244,7 +244,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 06-04-PLAN.md — Append-only decision register, five-value vocabulary in three copies, IL/admin-only write gate (ORG-02)
+- [x] 06-04-PLAN.md — Append-only decision register, five-value vocabulary in three copies, IL/admin-only write gate (ORG-02)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -288,5 +288,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
-| 6. Org Design & Talent Retention | 3/8 | In Progress|  |
+| 6. Org Design & Talent Retention | 4/8 | In Progress|  |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |
