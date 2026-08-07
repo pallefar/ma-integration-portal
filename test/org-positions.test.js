@@ -33,6 +33,7 @@ const sessionsDb = require('../db/sessions.js');
 const { createDealDatabase } = require('../db/dealSeed.js');
 
 const app = require('../server.js');
+const { positionGraphFailure } = app;
 
 const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
 const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
@@ -305,6 +306,170 @@ test('org-positions (h): POST from a deal member with no hr grant returns 403 an
   } finally {
     sessionsDb.deleteSession(runtimeConn, pmoToken);
     sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
+// -----------------------------------------------------------------------
+// Task 2: graph integrity — self-parent, unknown parent, cross-state and
+// cycle refusals.
+// -----------------------------------------------------------------------
+
+test('org-positions (i): positionGraphFailure() returns null for a null reportsToId', () => {
+  assert.strictEqual(positionGraphFailure([], { id: 'pos_x', state: 'current', reportsToId: null }), null);
+});
+
+test('org-positions (j): positionGraphFailure() refuses a self-referential reportsToId', () => {
+  const reason = positionGraphFailure(
+    [{ id: 'pos_a', state: 'current', reportsToId: null }],
+    { id: 'pos_a', state: 'current', reportsToId: 'pos_a' },
+  );
+  assert.ok(reason);
+});
+
+test('org-positions (k): positionGraphFailure() refuses a reportsToId absent from the lane', () => {
+  const reason = positionGraphFailure(
+    [{ id: 'pos_a', state: 'current', reportsToId: null }],
+    { id: 'pos_b', state: 'current', reportsToId: 'pos_nonexistent' },
+  );
+  assert.ok(reason);
+});
+
+test('org-positions (l): positionGraphFailure() refuses a reportsToId whose state differs from the candidate\'s', () => {
+  const lane = [{ id: 'pos_a', state: 'target', reportsToId: null }];
+  const reason = positionGraphFailure(lane, { id: 'pos_b', state: 'current', reportsToId: 'pos_a' });
+  assert.ok(reason);
+});
+
+test('org-positions (m): positionGraphFailure() returns null for a valid same-state parent that is not an ancestor', () => {
+  const lane = [
+    { id: 'pos_a', state: 'current', reportsToId: null },
+    { id: 'pos_b', state: 'current', reportsToId: null },
+  ];
+  assert.strictEqual(positionGraphFailure(lane, { id: 'pos_c', state: 'current', reportsToId: 'pos_a' }), null);
+});
+
+test('org-positions (n): positionGraphFailure() terminates and returns a reason on a lane with a pre-existing parent cycle', (t, done) => {
+  // A hand-built lane whose two rows already form a cycle (never
+  // producible through the live API, since every write is refused before
+  // it lands) — proves the ancestor walk terminates on already-cyclic
+  // stored data rather than looping forever.
+  const lane = [
+    { id: 'pos_x', state: 'current', reportsToId: 'pos_y' },
+    { id: 'pos_y', state: 'current', reportsToId: 'pos_x' },
+  ];
+  const reason = positionGraphFailure(lane, { id: 'pos_z', state: 'current', reportsToId: 'pos_x' });
+  assert.ok(reason, 'the walk must return a reason string rather than hang on the pre-existing cycle');
+  done();
+});
+
+test('org-positions (o): POST with a self-referential reportsToId returns 400 and leaves the lane unchanged', async () => {
+  const deal = freshDeal('deal_orgo', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const createRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Self referrer' }),
+    });
+    const { position } = await createRes.json();
+
+    const before = (await (await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } })).json()).length;
+
+    const badRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: position.id, reportsToId: position.id }),
+    });
+    assert.strictEqual(badRes.status, 400);
+
+    const listRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const list = await listRes.json();
+    assert.strictEqual(list.length, before, 'the lane length must be unchanged');
+    const stillStored = list.find((p) => p.id === position.id);
+    assert.strictEqual(stillStored.reportsToId, null, 'the invalid reportsToId must not have been persisted');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (p): POST with a target-state reportsToId while the candidate is current-state returns 400', async () => {
+  const deal = freshDeal('deal_orgp', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const targetRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Target parent', state: 'target' }),
+    });
+    const { position: targetParent } = await targetRes.json();
+
+    const res = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Current child', reportsToId: targetParent.id }),
+    });
+    assert.strictEqual(res.status, 400);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (q): re-parenting a position to its own descendant returns 400; to an unrelated same-state node returns 200', async () => {
+  const deal = freshDeal('deal_orgq', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    async function create(body) {
+      const res = await fetch(`${base}/api/org/positions`, {
+        method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return (await res.json()).position;
+    }
+
+    const root = await create({ title: 'Root' });
+    const child = await create({ title: 'Child', reportsToId: root.id });
+    const grandchild = await create({ title: 'Grandchild', reportsToId: child.id });
+    const unrelated = await create({ title: 'Unrelated node' });
+
+    // Attempt to re-parent the root under its own grandchild — a cycle.
+    const cycleRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: root.id, reportsToId: grandchild.id }),
+    });
+    assert.strictEqual(cycleRes.status, 400);
+
+    const afterCycleAttempt = await (await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } })).json();
+    const rootRow = afterCycleAttempt.find((p) => p.id === root.id);
+    assert.strictEqual(rootRow.reportsToId, null, 'the root\'s reportsToId must be unchanged after the refused re-parent');
+
+    // Re-parent the root under an unrelated same-state node — valid.
+    const validRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: root.id, reportsToId: unrelated.id }),
+    });
+    assert.strictEqual(validRes.status, 200);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
     server.close();
   }
 });

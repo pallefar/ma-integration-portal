@@ -3946,6 +3946,38 @@ app.get('/api/org/positions', (req, res) => {
   res.json(lane.filter((p) => p.state === requestedState));
 });
 
+// D-05/D-06: refuses a `reportsToId` that is self-referential, unknown,
+// cross-state, or would close a parent-chain cycle. Returns a human-readable
+// reason string when `candidate.reportsToId` is invalid, null when it is
+// acceptable (including when it is null/empty — a root position). Checks, in
+// order: a null/empty parent is always acceptable; a parent equal to the
+// candidate's own id is refused; a parent id absent from the lane is
+// refused; a parent whose state differs from the candidate's is refused (the
+// identity-model rule: a position may only report to a position in the same
+// state); a parent whose ancestor chain reaches the candidate's own id is
+// refused. Walks the ancestor chain iteratively with a visited-id Set so a
+// pre-existing cycle in stored data makes this terminate rather than hang —
+// the recursive tree render depends on this guard being the only way a
+// parent link enters the lane.
+function positionGraphFailure(lane, candidate) {
+  const parentId = candidate.reportsToId;
+  if (!parentId) return null;
+  if (parentId === candidate.id) return 'A position cannot report to itself.';
+  const byId = new Map(lane.map((p) => [p.id, p]));
+  const parent = byId.get(parentId);
+  if (!parent) return 'reportsToId does not name a known position.';
+  if (parent.state !== candidate.state) return 'A position may only report to a position in the same state.';
+  const visited = new Set([candidate.id]);
+  let cursor = parent;
+  while (cursor) {
+    if (visited.has(cursor.id)) return 'That reporting line would create a cycle.';
+    visited.add(cursor.id);
+    if (!cursor.reportsToId) break;
+    cursor = byId.get(cursor.reportsToId);
+  }
+  return null;
+}
+
 // D-04 tier 1: any `hr`-area-cleared deal member may create/maintain org
 // structure, not only IL/admin. Upsert-by-id, mirroring the DD routes'
 // validate-before-mutate shape.
@@ -3961,6 +3993,12 @@ app.post('/api/org/positions', (req, res) => {
   if (b.id) {
     const item = lane.find((p) => p.id === b.id);
     if (!item) return res.status(404).json({ error: 'Position not found.' });
+    // Evaluate a shallow merge of the existing row and the incoming keys
+    // BEFORE any field of the stored row is mutated — readDb() hands back a
+    // shared cache, so a mutation followed by a refusal would stick.
+    const candidate = Object.assign({}, item, b);
+    const graphFailure = positionGraphFailure(lane, candidate);
+    if (graphFailure) return res.status(400).json({ error: graphFailure });
     if (b.title !== undefined) item.title = String(b.title).trim();
     if (b.level !== undefined) item.level = String(b.level || '');
     if (b.reportsToId !== undefined) item.reportsToId = b.reportsToId || null;
@@ -3979,6 +4017,8 @@ app.post('/api/org/positions', (req, res) => {
     state: b.state || orgValidators.ORG_STATE_CURRENT,
     createdAt: new Date().toISOString(),
   };
+  const graphFailure = positionGraphFailure(lane, item);
+  if (graphFailure) return res.status(400).json({ error: graphFailure });
   lane.push(item);
   writeDb(db);
   res.status(201).json({ success: true, position: item });
@@ -5452,3 +5492,8 @@ module.exports.synergyHorizonYears = synergyHorizonYears;
 // consolidated /api gate's exact shape for that path), without standing up
 // a real ADMIN_TOKEN-configured HTTP server.
 module.exports.isAdminOrIlRequest = isAdminOrIlRequest;
+// ORG-01 (Task 2): exposed for the same pure-function unit-check rationale —
+// a test can drive the terminate-on-pre-existing-cycle case directly against
+// a hand-built lane array, without a live POST sequence (which cannot itself
+// construct a cycle, since every write is refused before it lands).
+module.exports.positionGraphFailure = positionGraphFailure;
