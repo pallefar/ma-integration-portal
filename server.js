@@ -4665,6 +4665,103 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   res.json({ success: true, task, raid: raidEntry, entry });
 });
 
+// D-19/D-21 (06-07): the clearance-scoped organisation rollup — one
+// server-computed answer to "where does this organisation stand" so
+// public/js/deal-home.js never tallies a target-derived number itself.
+// Client-side tallying was rejected on a SECURITY ground, not a stylistic
+// one (D-21): computing the delta in the browser would mean shipping
+// target-state rows to an uncleared client and hiding them there, exactly
+// the failure DD-04's clean-room rules forbid. Structurally mirrors
+// GET /api/dd/summary above (06-RESEARCH.md Open Question 2, planner
+// discretion): filter/derive once, then compute several named tallies from
+// that single pass, rather than a narrowed query per number — keeps the two
+// rollup routes shaped alike and leaves room for Plan 08's demo seed and any
+// Phase-7 consumer to read more facets from the same pass.
+//
+// Exported as its own function (not inlined in the route) so Plan 08's seed
+// verification and any Phase-7 consumer can call ONE implementation rather
+// than reconstructing this shape a second time.
+function orgSummaryFor(db, deal, user) {
+  const positions = orgPositionsLane(db);
+  const current = positions.filter((p) => p.state === orgValidators.ORG_STATE_CURRENT);
+  const target = positions.filter((p) => p.state === orgValidators.ORG_STATE_TARGET);
+
+  const summary = {
+    open: {
+      currentHeadcount: current.filter((p) => p.employeeId).length,
+      openPositions: current.filter((p) => !p.employeeId).length,
+      currentPositions: current.length,
+    },
+  };
+
+  // D-20: the restricted key is assigned ONLY inside this branch, as a
+  // plain assignment — never from a ternary, never null, never an empty
+  // object. Serialisation OMITS a key that was never assigned; this
+  // structural omission IS the control (this route's own objective: a
+  // masked row still discloses that decisions exist, a zero is itself
+  // information).
+  if (accessPolicy.hasAreaGrant(deal, user, 'hr')) {
+    const targetHeadcount = target.filter((p) => p.employeeId).length;
+
+    // Decision-type counts are derived over the CURRENT-state roster only —
+    // the population a retain/redeploy/redundant decision is actually
+    // about — mirroring the open tier's own current-state-only headcount
+    // above. derivedDecisionFor() is only ever asked about a LIVE
+    // current-state position's id here, so a decision entry whose position
+    // no longer exists (or was only ever recorded against a target-state
+    // row) contributes to no count, per Plan 04's flagged assumption.
+    const decisions = orgDecisionsLane(db);
+    const decisionCounts = {};
+    ORG_DECISION_TYPES.forEach((t) => { decisionCounts[t] = 0; });
+    current.forEach((p) => {
+      const decision = derivedDecisionFor(decisions, p.id);
+      const type = decision ? decision.type : 'open';
+      if (decisionCounts[type] !== undefined) decisionCounts[type]++;
+    });
+
+    // Unmitigated high/critical flight risks — high/critical level with an
+    // EMPTY mitigation, excluding low/medium and mitigated entries. The
+    // caller-scoped `mine` count is the field D-22's owner nudge reads.
+    const myUsername = String((user && user.username) || '').trim();
+    let unmitigated = 0;
+    let mineUnmitigated = 0;
+    orgFlightRiskLane(db).forEach((r) => {
+      const isHighOrCritical = r.riskLevel === 'high' || r.riskLevel === 'critical';
+      const isUnmitigated = !String(r.mitigation || '').trim();
+      if (!isHighOrCritical || !isUnmitigated) return;
+      unmitigated++;
+      if (String(r.owner || '').trim() === myUsername) mineUnmitigated++;
+    });
+
+    summary.restricted = {
+      targetHeadcount,
+      delta: targetHeadcount - summary.open.currentHeadcount,
+      decisions: decisionCounts,
+      unmitigatedFlightRisks: unmitigated,
+      mine: { unmitigatedFlightRisks: mineUnmitigated },
+    };
+  }
+
+  return summary;
+}
+
+// This route deliberately writes NO security event of any kind, and carries
+// NO explicit role gate. No audit: the flight-risk register's D-03 read
+// audit (above) is scoped to the REGISTER's own contents — reading it
+// directly is the compliance-relevant act ORG-03 names. This route reports
+// PRE-AGGREGATED COUNTS, a materially different disclosure, and the deal
+// home is the most-loaded surface in the app; wiring an audit call here
+// would drown the compliance record within a day (Plan 05 already asserts
+// this boundary from the register's own side; this asserts it again from
+// here). No role gate: every number orgSummaryFor() returns above is
+// already clearance-scoped BEFORE it is computed — exactly as
+// GET /api/dd/summary documents for itself, above.
+app.get('/api/org/summary', (req, res) => {
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  res.json(orgSummaryFor(db, deal, req.portalUser));
+});
+
 // =====================================================================
 // Due Diligence workspace (DD-01/DD-04) — request items scoped to one of
 // db/accessPolicy.js's eight fixed functional areas, guarded end-to-end by
@@ -6172,3 +6269,7 @@ module.exports.derivedDecisionFor = derivedDecisionFor;
 // deleted from a hand-built lane) directly, without needing a live DELETE
 // sequence against a real finding first.
 module.exports.resolveRaidEntryClearanceArea = resolveRaidEntryClearanceArea;
+// D-19/D-21 (06-07): exposed so Plan 08's seed verification and any
+// Phase-7 consumer can call the SAME rollup implementation this route uses,
+// without booting the HTTP server for every pure-tally case.
+module.exports.orgSummaryFor = orgSummaryFor;
