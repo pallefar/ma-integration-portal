@@ -585,6 +585,214 @@
     wrap.appendChild(form);
   }
 
+  // -----------------------------------------------------------------------
+  // Bulk paste importer (D-09/D-10) — a two-step Preview-then-Import flow.
+  // importParsedRows holds the parsed row array between a successful
+  // Preview and the Import click; the Import button's own `disabled`
+  // attribute AND this variable's null-check both gate the commit path, so
+  // the handler is reachable only after a preview has actually been
+  // produced (never directly from raw textarea content).
+  // -----------------------------------------------------------------------
+  var importParsedRows = null;
+
+  // Header matching (Claude's Discretion, 06-CONTEXT.md): lowercase, trim,
+  // strip spaces and underscores, so 'Reports To', 'reports_to' and
+  // 'reportsto' all resolve to the same column; 'manager' is accepted as an
+  // alias for reportsTo.
+  function normalizeImportHeaderCell(cell) {
+    return String(cell || '').toLowerCase().trim().replace(/[\s_]+/g, '');
+  }
+  var IMPORT_HEADER_FIELD = {
+    title: 'title', level: 'level', reportsto: 'reportsTo', manager: 'reportsTo', name: 'name', email: 'email',
+  };
+
+  // Accepts a JSON array of objects, or delimited text (comma or tab,
+  // detected from the header line) whose first line is a header row.
+  // Unknown columns are ignored rather than failing the parse. Throws on
+  // any unparseable input — the caller renders the UI-SPEC's fixed parse-
+  // failure apology on any throw, never the raw error.
+  function parseImportPaste(text) {
+    var trimmed = String(text || '').trim();
+    if (!trimmed) throw new Error('Nothing pasted.');
+    if (trimmed.charAt(0) === '[') {
+      var data = JSON.parse(trimmed);
+      if (!Array.isArray(data)) throw new Error('JSON paste must be an array.');
+      return data.map(function (row) {
+        row = row || {};
+        return {
+          title: row.title || '',
+          level: row.level || '',
+          reportsTo: row.reportsTo || row.reportsto || row.manager || '',
+          name: row.name || '',
+          email: row.email || '',
+        };
+      });
+    }
+    var lines = trimmed.split('\n').map(function (l) { return l.replace(/\r$/, ''); }).filter(function (l) { return l.trim().length > 0; });
+    if (lines.length < 2) throw new Error('Delimited paste needs a header line and at least one row.');
+    var delimiter = lines[0].indexOf('\t') !== -1 ? '\t' : ',';
+    var fieldForCol = lines[0].split(delimiter).map(function (cell) {
+      return IMPORT_HEADER_FIELD[normalizeImportHeaderCell(cell)] || null;
+    });
+    var rows = [];
+    for (var i = 1; i < lines.length; i++) {
+      var cols = lines[i].split(delimiter);
+      var row = { title: '', level: '', reportsTo: '', name: '', email: '' };
+      fieldForCol.forEach(function (field, idx) {
+        if (field) row[field] = (cols[idx] || '').trim();
+      });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function renderImportPreviewTable(previewWrap, rows) {
+    previewWrap.textContent = '';
+    // Zero-one-many: a bare count, correct at every value.
+    previewWrap.appendChild(el('h4', { className: 'org-import-preview-heading', text: rows.length + ' position' + (rows.length === 1 ? '' : 's') + ' parsed' }));
+    if (!rows.length) return;
+    var table = document.createElement('table');
+    table.className = 'org-import-preview-table';
+    var thead = document.createElement('thead');
+    var headRow = document.createElement('tr');
+    ['Title', 'Level', 'Reports To', 'Name', 'Email'].forEach(function (h) {
+      headRow.appendChild(el('th', { text: h }));
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    rows.forEach(function (row) {
+      var tr = document.createElement('tr');
+      [row.title, row.level, row.reportsTo, row.name, row.email].forEach(function (val) {
+        tr.appendChild(el('td', { text: val || '' }));
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    previewWrap.appendChild(table);
+  }
+
+  function renderImportSection() {
+    var wrap = document.getElementById('org-import');
+    if (!wrap) return;
+    wrap.textContent = '';
+
+    var section = el('div', { className: 'org-import' });
+    var label = document.createElement('label');
+    label.className = 'org-import-label';
+    label.textContent = 'Paste roster (CSV or JSON) — title, level, reportsTo, name, email';
+    section.appendChild(label);
+
+    var textarea = document.createElement('textarea');
+    textarea.rows = 6;
+    textarea.id = 'org-import-textarea';
+    textarea.className = 'org-import-textarea';
+    textarea.placeholder = 'CSV: title,level,reportsTo,name,email\nCEO,,,, \n\nor JSON: [{"title":"VP Engineering","level":"VP","reportsTo":"CEO","name":"Jane Doe","email":"jane@example.com"}]';
+    section.appendChild(textarea);
+
+    var errorEl = el('div', { className: 'org-import-error' });
+    section.appendChild(errorEl);
+    var statusEl = el('div', { className: 'org-import-status' });
+    section.appendChild(statusEl);
+
+    var previewWrap = el('div', { className: 'org-import-preview' });
+    section.appendChild(previewWrap);
+
+    var actions = el('div', { className: 'org-import-actions' });
+    var previewBtn = el('button', { className: 'btn btn-secondary', text: 'Preview' });
+    previewBtn.type = 'button';
+    var importBtn = el('button', { className: 'btn btn-primary', text: 'Import' });
+    importBtn.type = 'button';
+    importBtn.disabled = true; // enabled only once a preview exists
+    actions.appendChild(previewBtn);
+    actions.appendChild(importBtn);
+    section.appendChild(actions);
+
+    function showImportError(message) {
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    }
+    function clearImportError() {
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
+    function showImportStatus(message) {
+      statusEl.textContent = message;
+      statusEl.style.display = 'block';
+    }
+    function clearImportStatus() {
+      statusEl.textContent = '';
+      statusEl.style.display = 'none';
+    }
+
+    previewBtn.addEventListener('click', function () {
+      clearImportError();
+      clearImportStatus();
+      importParsedRows = null;
+      importBtn.disabled = true;
+      previewWrap.textContent = '';
+      var rows;
+      try {
+        rows = parseImportPaste(textarea.value);
+      } catch (err) {
+        showImportError("Couldn't read that paste — check it's valid CSV or JSON, then try again.");
+        return;
+      }
+      importParsedRows = rows;
+      importBtn.disabled = false;
+      renderImportPreviewTable(previewWrap, rows);
+    });
+
+    importBtn.addEventListener('click', function () {
+      // Reachable only after a successful Preview populated importParsedRows.
+      if (!importParsedRows) return;
+      clearImportError();
+      clearImportStatus();
+      importBtn.disabled = true;
+      fetch('/api/org/positions/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: importParsedRows, state: viewState }),
+      }).then(function (r) {
+        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+      }).then(function (result) {
+        if (!result.ok) {
+          // The route is all-or-nothing — state plainly that nothing was
+          // imported, so the operator does not assume a partial import
+          // happened and re-paste, doubling their data. Text and preview
+          // stay intact so the operator can fix and retry.
+          var problems = (result.data && result.data.problems) || [];
+          var message = 'Nothing was imported. ' + ((result.data && result.data.error) || 'The paste could not be imported.');
+          problems.forEach(function (p) {
+            message += ' Row ' + (p.row + 1) + ': ' + p.message;
+          });
+          showImportError(message);
+          importBtn.disabled = false;
+          return;
+        }
+        textarea.value = '';
+        importParsedRows = null;
+        previewWrap.textContent = '';
+        var createdPositions = (result.data && result.data.createdPositions) || 0;
+        var createdEmployees = (result.data && result.data.createdEmployees) || 0;
+        return reloadPositionsForViewState().then(function () {
+          return fetch('/api/employees').then(function (r2) { return r2.json(); });
+        }).then(function (employees) {
+          state.employees = Array.isArray(employees) ? employees : [];
+          renderTree();
+          renderUnassigned();
+          renderAddForm();
+          showImportStatus('Imported ' + createdPositions + ' position(s) and ' + createdEmployees + ' new employee(s).');
+        });
+      }).catch(function () {
+        showImportError('Nothing was imported. Could not reach the server.');
+        importBtn.disabled = false;
+      });
+    });
+
+    wrap.appendChild(section);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     renderLoading();
     load().then(function () {
@@ -593,6 +801,7 @@
       renderTree();
       renderUnassigned();
       renderAddForm();
+      renderImportSection();
     });
   });
 })();

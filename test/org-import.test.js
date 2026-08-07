@@ -13,6 +13,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+const ORG_JS_PATH = path.join(__dirname, '..', 'public', 'js', 'org.js');
+const ORG_HTML_PATH = path.join(__dirname, '..', 'public', 'org.html');
+
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-org-import-'));
 process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
 process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
@@ -398,4 +401,66 @@ test('org-import (l): a payload exceeding the schema\'s row cap is refused by th
     sessionsDb.deleteSession(runtimeConn, pmoToken);
     server.close();
   }
+});
+
+// -----------------------------------------------------------------------
+// Task 2: the paste-and-preview importer UI — source-level assertions on
+// public/js/org.js and public/org.html (no DOM test harness in this repo,
+// mirroring test/org-positions.test.js's own source-level convention for
+// client-render contracts).
+// -----------------------------------------------------------------------
+
+test('org-import (m): no innerHTML sink exists anywhere in public/js/org.js', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const occurrences = (src.match(/innerHTML/g) || []).length;
+  assert.strictEqual(occurrences, 0, 'org.js must never assign markup — MNPI org content is textContent-only');
+});
+
+test('org-import (n): the "Couldn\'t read that paste" apology appears exactly once, and is set via an explicit visible display value', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const occurrences = (src.match(/Couldn't read that paste/g) || []).length;
+  assert.strictEqual(occurrences, 1, 'the parse-failure message must appear exactly once in the source');
+  assert.match(
+    src,
+    /showImportError\("Couldn't read that paste[^]*?"\);/,
+    'the parse-failure message must be routed through showImportError()',
+  );
+});
+
+test('org-import (o): every style.display assignment in public/js/org.js uses a non-empty literal value', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  const assignments = src.match(/style\.display\s*=\s*[^;]+;/g) || [];
+  assert.ok(assignments.length > 0, 'the file must contain at least one style.display assignment');
+  assignments.forEach((assignment) => {
+    assert.doesNotMatch(assignment, /=\s*''\s*;/, `style.display must never be reset to an empty string (found: ${assignment})`);
+    assert.match(assignment, /=\s*'(block|none)'\s*;/, `style.display must be set to a non-empty literal (found: ${assignment})`);
+  });
+});
+
+test('org-import (p): the import commit handler is reachable only after a preview has been produced', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  // importBtn starts disabled and is enabled ONLY inside the Preview click
+  // handler's success path (after importParsedRows is assigned a parsed
+  // array); the Import click handler itself early-returns unless
+  // importParsedRows is already set, so a click reaching the fetch() call
+  // is structurally impossible without a prior successful parse.
+  assert.match(src, /importBtn\.disabled = true;\s*\/\/ enabled only once a preview exists/, 'the Import button must start disabled');
+  assert.match(
+    src,
+    /importBtn\.addEventListener\('click', function \(\) \{\s*\/\/[^]*?\s*if \(!importParsedRows\) return;/,
+    'the Import click handler must early-return before doing anything unless a preview has already populated importParsedRows',
+  );
+});
+
+test('org-import (q): public/org.html\'s .org-import-preview rule carries no fixed height declaration — the table scrolls with the page', () => {
+  const src = fs.readFileSync(ORG_HTML_PATH, 'utf8');
+  const match = src.match(/\.org-import-preview\{[^}]*\}/);
+  assert.ok(match, '.org-import-preview rule block must exist');
+  assert.doesNotMatch(match[0], /(?:max-)?height\s*:/, '.org-import-preview must not declare a fixed/max height');
+});
+
+test('org-import (r): the paste importer\'s header matching lowercases, trims, strips spaces/underscores, and accepts "manager" as a reportsTo alias', () => {
+  const src = fs.readFileSync(ORG_JS_PATH, 'utf8');
+  assert.match(src, /toLowerCase\(\)\.trim\(\)\.replace\(\/\[\\s_\]\+\/g, ''\)/, 'header normalization must lowercase, trim and strip spaces/underscores');
+  assert.match(src, /manager:\s*'reportsTo'/, '"manager" must be registered as a reportsTo alias');
 });

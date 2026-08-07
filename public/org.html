@@ -57,6 +57,28 @@
     .org-unassigned-row{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:baseline; background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:8px; padding:.4rem .65rem; font-size:.78rem; }
     .org-unassigned-name{ font-weight:600; color:var(--text-primary); min-width:0; }
     .org-unassigned-meta{ color:var(--text-dim); font-size:.72rem; min-width:0; }
+    /* Bulk paste importer (D-10) — styled like .org-add (dashed border) and
+       #wiz-roster-raw (pmo.html:186 — monospace, .75rem, fixed rows with
+       native scroll, never resized to fit content). The textarea stays
+       full width at every breakpoint; only the action buttons stack below
+       600px — no fixed width anywhere in this block so a longer
+       translation reflows rather than clipping (i18n contract). */
+    .org-import{ background:var(--card-bg,#fff); border:1px dashed var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-top:.6rem; }
+    .org-import-label{ display:block; font-size:.72rem; font-weight:700; color:var(--te-dark-teal); margin-bottom:.35rem; }
+    .org-import-textarea{ width:100%; box-sizing:border-box; padding:.5rem; font-family:monospace; font-size:.75rem; border:1.5px solid var(--border-color); border-radius:8px; background:rgba(0,0,0,0.03); color:var(--text-main,var(--text-primary)); resize:vertical; }
+    .org-import-error{ display:none; width:100%; font-size:.76rem; color:#C0392B; margin-top:.4rem; }
+    .org-import-status{ display:none; width:100%; font-size:.76rem; color:#1E8449; margin-top:.4rem; }
+    .org-import-actions{ display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
+    /* Preview table — no fixed height anywhere: it scrolls with the page,
+       not inside its own clipped container. */
+    .org-import-preview{ margin-top:.6rem; }
+    .org-import-preview-heading{ font-size:.78rem; font-weight:800; color:var(--te-dark-teal); margin:0 0 .35rem; }
+    .org-import-preview-table{ width:100%; border-collapse:collapse; font-size:.74rem; }
+    .org-import-preview-table th, .org-import-preview-table td{ text-align:left; padding:.3rem .5rem; border-bottom:1px solid var(--border-color); }
+    .org-import-preview-table th{ color:var(--text-dim); font-weight:700; }
+    @media (max-width:600px){
+      .org-import-actions{ flex-direction:column; align-items:stretch; }
+    }
     /* Design Tension 6: narrow-width org tree — card padding shrinks, and
        the indent cap tightens from depth 6 to depth 3 (3 * 1.25rem = 60px),
        leaving room for card content at a 320px viewport. */
@@ -94,10 +116,11 @@
         <div id="org-tree"></div>
         <div id="org-unassigned" class="org-unassigned"></div>
         <div id="org-add"></div>
+        <div id="org-import"></div>
       </div>
     </main>
   </div>
 
-  <script src="/js/org.js?v=1784900005"></script>
+  <script src="/js/org.js?v=1784900006"></script>
 </body>
 </html>
