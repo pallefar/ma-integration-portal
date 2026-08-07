@@ -22,8 +22,8 @@
 // omits uncleared areas (a member browsing their own workspace is not
 // "attempting access to anything" worth auditing). assertAreaGrant() is the
 // BY-ID shape — it throws AreaAccessError, which the caller (server.js) both
-// turns into the uniform-403 response AND records as a security event
-// (db/auditHook.js#recordSecurityEvent({ action: 'dd-access-denied' })) —
+// turns into the uniform-403 response AND writes a 'dd-access-denied'
+// security event via db/auditHook.js's own event-recording function —
 // this module holds NO reference to the audit store itself, mirroring why
 // db/controlStore.js holds no reference to audit.db (AUD-02's isolation
 // precedent, applied here to a different module for the same reason: keeping

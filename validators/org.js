@@ -135,6 +135,44 @@ const OrgDecisionSchema = z.object({
 
 registerSchema('POST', '/api/org/decisions', OrgDecisionSchema);
 
+// ORG-03 (06-05, D-02/D-04/D-16) — the key-talent flight-risk register's
+// write shape. `riskLevel` REUSES server.js's own RAID_LEVELS four-value
+// vocabulary (this is a plain reuse of an existing enum, not a new
+// vocabulary — no third copy and no new anti-drift test is introduced,
+// following validators/workstream.js's own independent RAID_LEVELS copy
+// precedent below). `owner` is required — a mitigation with nobody driving
+// it is not representable; `mitigation`/`notes` are deliberately optional —
+// this plan's objective resolves an internal UI-SPEC inconsistency in
+// favor of an unmitigated entry being a first-class, representable state
+// (D-22's owner nudge keys on exactly that state existing). Every field is
+// `.optional()` at the object-shape level so an UPDATE (`id` present) can
+// supply only the keys it means to change; the `.refine()` calls below
+// enforce that employeeId/riskLevel/owner are all required on CREATE (no
+// `id`) — the same "optional-in-shape, required-via-refine-on-create"
+// pattern OrgPositionUpsertSchema above already establishes for `title`.
+const RAID_LEVELS = ['low', 'medium', 'high', 'critical'];
+
+const FlightRiskUpsertSchema = z.object({
+  id: z.string().trim().min(1).max(ID_MAX).optional(),
+  employeeId: z.string().trim().min(1).max(ID_MAX).optional(),
+  riskLevel: z.enum(RAID_LEVELS).optional(),
+  owner: z.string().trim().min(1).max(120).optional(),
+  mitigation: z.string().trim().max(TEXT_MAX).optional(),
+  notes: z.string().trim().max(TEXT_MAX).optional(),
+}).refine((data) => !!(data.id || data.employeeId), {
+  message: 'employeeId is required.',
+  path: ['employeeId'],
+}).refine((data) => !!(data.id || data.riskLevel), {
+  message: 'riskLevel is required.',
+  path: ['riskLevel'],
+}).refine((data) => !!(data.id || data.owner), {
+  message: 'An owner is required.',
+  path: ['owner'],
+});
+
+registerSchema('POST', '/api/org/flight-risk', FlightRiskUpsertSchema);
+registerSchema('DELETE', '/api/org/flight-risk/:id', EmptyBodySchema);
+
 module.exports = {
   OrgPositionUpsertSchema,
   OrgCopyToTargetSchema,
@@ -145,4 +183,5 @@ module.exports = {
   ORG_STATES,
   OrgDecisionSchema,
   ORG_DECISION_TYPES,
+  FlightRiskUpsertSchema,
 };

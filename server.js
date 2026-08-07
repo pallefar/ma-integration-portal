@@ -4392,6 +4392,144 @@ app.post('/api/org/decisions', (req, res) => {
   res.status(201).json({ success: true, decision: entry });
 });
 
+// ORG-03 (06-05) — the key-talent flight-risk register. D-02: restricted to
+// the `hr` area grant, the SAME clearance boundary as the decision log and
+// target-state org structure — never open-tier like current-state
+// positions. D-04 tier 2: writing an entry is a governance act, gated
+// identically to POST /api/org/decisions — the shared role-guard function
+// runs as each write handler's literal first statement, excluding the
+// X-Admin-Token break-glass identity — a retention determination against a
+// named person is the same class of act as a redundancy decision.
+//
+// D-03: THE GENUINELY NEW CONTROL THIS PLAN ADDS. No other GET handler in
+// this file records a security event — a caller LOOKING at the retention
+// list is itself the compliance-relevant act ORG-03's wording ("access to
+// it audited") actually names, not merely a caller being refused one. Both
+// halves — the denial (mirroring refuseDdArea()'s existing shape above) and
+// the successful read (new) — are recorded from THIS route handler,
+// deliberately never from db/accessPolicy.js, which stays free of any audit
+// dependency (AUD-02's isolation precedent, mirrored for this module too).
+// D-03's own checkpoint deliberately rejected session-scoped dedupe: every
+// successful read writes a row, so public/js/org.js fetches this route
+// exactly once per page visit and never from a poll or a revalidation loop.
+//
+// KNOWN, ACCEPTED LABELLING GAP (06-RESEARCH.md Assumptions Log A2):
+// db/auditHook.js's recordSecurityEvent() hardcodes db_kind to 'control' for
+// EVERY caller. A flight-risk read is conceptually a deal-scoped event and
+// will be recorded with the control-plane label regardless. Nothing filters
+// or facets on that column today, so this is a labelling inaccuracy, not a
+// functional gap — fixing it would mean threading a new parameter through
+// every existing recordSecurityEvent() call site, out of this plan's scope.
+app.get('/api/org/flight-risk', (req, res) => {
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'org-flightrisk-access-denied', dealId: req.dealContext.dealId,
+      subject: null, before: null, after: null, request: requestMeta(req),
+    });
+    return res.status(403).json({ error: 'You are not cleared to view the flight-risk register.' });
+  }
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser, action: 'org-flightrisk-read', dealId: req.dealContext.dealId,
+    subject: null, before: null, after: null, request: requestMeta(req),
+  });
+  const db = readDb();
+  res.json(orgFlightRiskLane(db));
+});
+
+// Resolves the SAME employee roster lane GET/POST /api/employees itself
+// reads/writes (isCustom predicate identical to POST /api/org/positions/import
+// above) — a flight-risk entry's employeeId must name a row in the actual
+// roster the org tree and the employees page both use, never a second,
+// divergent lane.
+function employeeRosterLane(db) {
+  const isCustom = db.settings && db.settings.demoMode === false;
+  return isCustom ? (db.customEmployees || []) : (db.employees || []);
+}
+
+// D-04 tier 2: identical governance-role gate to POST /api/org/decisions —
+// the shared role-guard function call is this handler's LITERAL FIRST
+// STATEMENT, before the deal lookup, before the employee lookup, before
+// anything reads data.
+app.post('/api/org/flight-risk', (req, res) => {
+  if (!isAdminOrIlRequest(req)) {
+    return res.status(403).json({ error: 'Only admin and the Integration Lead can edit the flight-risk register.' });
+  }
+  const b = req.body || {};
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  // D-02: role alone is not sufficient — ALSO require the hr area grant,
+  // mirroring POST /api/org/decisions' own structural no-op-for-admin/hrbp
+  // comment above.
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to edit the flight-risk register.' });
+  }
+  const lane = orgFlightRiskLane(db);
+  const employeeList = employeeRosterLane(db);
+
+  if (b.id) {
+    const item = lane.find((r) => r.id === b.id);
+    if (!item) return res.status(404).json({ error: 'Flight-risk entry not found.' });
+    if (b.employeeId !== undefined) {
+      if (!employeeList.find((e) => e.id === b.employeeId)) {
+        return res.status(404).json({ error: 'That employee could not be found.' });
+      }
+      item.employeeId = b.employeeId;
+    }
+    if (b.riskLevel !== undefined) item.riskLevel = b.riskLevel;
+    if (b.owner !== undefined) item.owner = String(b.owner).trim();
+    if (b.mitigation !== undefined) item.mitigation = String(b.mitigation || '');
+    if (b.notes !== undefined) item.notes = String(b.notes || '');
+    // linkedTaskIds/linkedRaidIds are NEVER touched by this route — Plan
+    // 06's conversion route owns writes to those two fields exclusively.
+    writeDb(db);
+    return res.json({ success: true, entry: item });
+  }
+
+  if (!employeeList.find((e) => e.id === b.employeeId)) {
+    return res.status(404).json({ error: 'That employee could not be found.' });
+  }
+  const entry = {
+    id: newId('risk'),
+    employeeId: b.employeeId,
+    riskLevel: b.riskLevel,
+    owner: String(b.owner || '').trim(),
+    // Deliberately empty string, never undefined/null, when the field is
+    // absent — a body with no mitigation returns 201 and stores an empty
+    // mitigation, per this plan's own resolution of the UI-SPEC's mitigation
+    // required/optional inconsistency (this plan's objective).
+    mitigation: String(b.mitigation || ''),
+    notes: String(b.notes || ''),
+    // Declared here, empty, per this plan's recorded planner discretion —
+    // Plan 06's conversion route pushes ids into these arrays; nothing else
+    // ever does.
+    linkedTaskIds: [],
+    linkedRaidIds: [],
+    createdAt: new Date().toISOString(),
+  };
+  lane.push(entry);
+  writeDb(db);
+  res.status(201).json({ success: true, entry });
+});
+
+// Same role-then-clearance gate ordering as the write route above.
+app.delete('/api/org/flight-risk/:id', (req, res) => {
+  if (!isAdminOrIlRequest(req)) {
+    return res.status(403).json({ error: 'Only admin and the Integration Lead can edit the flight-risk register.' });
+  }
+  const db = readDb();
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    return res.status(403).json({ error: 'You are not cleared to edit the flight-risk register.' });
+  }
+  const lane = orgFlightRiskLane(db);
+  const item = lane.find((r) => r.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Flight-risk entry not found.' });
+  db.orgFlightRisks = lane.filter((r) => r.id !== req.params.id);
+  writeDb(db);
+  res.json({ success: true });
+});
+
 // =====================================================================
 // Due Diligence workspace (DD-01/DD-04) — request items scoped to one of
 // db/accessPolicy.js's eight fixed functional areas, guarded end-to-end by
