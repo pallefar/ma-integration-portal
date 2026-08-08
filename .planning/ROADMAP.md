@@ -274,7 +274,32 @@ Plans:
   3. The steerco pack reports synergy net benefit, cost-to-achieve and confidence-stage movement without double-counting any initiative.
   4. A status report visually distinguishes current from stale line items, using the staleness signals established in Phase 5.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+**Wave 1**
+
+- [ ] 07-01-PLAN.md — Tracer: end-to-end RAID CSV export (route, clearance reuse, filename safety, audit) plus the Reports & Exports tab shell (RPT-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 07-02-PLAN.md — Remaining datasets, JSON parity with the live GET routes, and the server-side workstream rollup (RPT-01)
+- [ ] 07-03-PLAN.md — PDF substrate: vendored glyph-covering font, canvas promoted to a direct dependency, hand-rolled PDF 1.4 writer, zero new npm packages (RPT-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 07-04-PLAN.md — Synergy headline split into phased and unphased money (closes T-05-47) plus the stale day count (RPT-03, RPT-04)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 07-05-PLAN.md — Pack frame: page geometry, TE header band, every-page confidentiality footer, two-pass paginator, executive summary (RPT-02, RPT-03)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 07-06-PLAN.md — Pack sections, GET /api/reports/pack with shared clearance filtering and audit, and the generate-pack button (RPT-02, RPT-03, RPT-04)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 07-07-PLAN.md — Four-language reports translations, demo parity, and the blocking phase live walk (RPT-01, RPT-02, RPT-03, RPT-04)
 
 ## Progress
 
@@ -289,4 +314,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
 | 6. Org Design & Talent Retention | 8/8 | Complete    | 2026-08-08 |
-| 7. IMO Reporting & Exports | 0/TBD | Not started | - |
+| 7. IMO Reporting & Exports | 0/7 | Not started | - |
