@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Deal Isolation, Audit Log & Write Validation** - File-per-deal isolation from demo data, an audit trail on every write, and schema validation on every write (completed 2026-08-02)
 - [x] **Phase 4: Due Diligence Workspace** - New-deal setup wizard (guided onboarding incl. readiness assessments), DD request lists, findings register, and server-side clean-room access control (completed 2026-08-03)
 - [x] **Phase 5: Synergy Value Capture** - Baseline, phasing, cost-to-achieve and confidence stage-gating on synergy initiatives (completed 2026-08-06)
-- [ ] **Phase 6: Org Design & Talent Retention** - Organisation structure, redundancy decisions, and a flight-risk register
+- [x] **Phase 6: Org Design & Talent Retention** - Organisation structure, redundancy decisions, and a flight-risk register (completed 2026-08-08)
 - [ ] **Phase 7: IMO Reporting & Exports** - CSV/JSON data export and a generated steering-committee pack
 
 ## Phase Details
@@ -288,5 +288,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 3. Deal Isolation, Audit Log & Write Validation | 6/6 | Complete    | 2026-08-02 |
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
-| 6. Org Design & Talent Retention | 8/8 | In Progress|  |
+| 6. Org Design & Talent Retention | 8/8 | Complete    | 2026-08-08 |
 | 7. IMO Reporting & Exports | 0/TBD | Not started | - |
