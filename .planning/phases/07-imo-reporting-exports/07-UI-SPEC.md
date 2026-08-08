@@ -488,7 +488,11 @@ never a client-supplied value.
   silently drift from the rollup's own total — the same class of bug D-02's "screen and pack render
   from the identical rollup" rule exists to prevent).
 - **Per-initiative table**: Title, Category (Revenue/Cost, plain colored text — `.syn-cat` palette,
-  `execution.html:24-25`), Stage (Idea/Validated/Committed/Captured, `SYN_COLORS` above), Target,
+  `execution.html:24-25`), Stage (Idea/Validated/Committed/Captured, `SYN_COLORS` above),
+  **Stage at last baseline** (same four-value vocabulary, plain text, "—" when no baseline exists;
+  sourced from Phase 5's baseline history — this is RPT-03's "confidence-stage movement" made
+  visible: a steerco reading "Committed" needs to see it was "Validated" at the last baseline;
+  amendment 2026-08-09 resolving the planner's RPT-03 PARTIAL, option (a)), Target,
   Realized, Cost incurred, Net benefit, and a small horizontal bar (realized-vs-target,
   gradient `#E98300`→`#3f7a37`, the exact 2-stop gradient `.syn-fill` already uses,
   `execution.html:31`, reproduced as a canvas/PDF linear gradient using the identical two color
