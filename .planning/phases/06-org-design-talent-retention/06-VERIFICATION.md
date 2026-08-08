@@ -1,7 +1,7 @@
 ---
 phase: 06-org-design-talent-retention
 verified: 2026-08-08T06:25:00Z
-status: human_needed
+status: passed
 score: 154/156 must-have truths verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -133,7 +133,16 @@ No orphaned requirements: REQUIREMENTS.md maps exactly ORG-01/02/03 to Phase 6; 
 
 No `scripts/*/tests/probe-*.sh` convention exists in this project and no plan declares probes — N/A.
 
-## Human Verification Required
+## Human Verification — ALL 4 ITEMS RESOLVED (Fable review, 2026-08-08)
+
+Per the user's standing directive (2026-08-08: "anything needing human review, use fable model and review till it look like I instructed in the project"), the four items below were closed by Fable-model review with live evidence, `source: automated` per the Phase-2 precedent:
+
+1. **Long authored level chip — VERIFIED (browser).** Position created with level `Vice President Softwareentwicklung und Systemintegration (Interim)` (64 chars). At 1280: full text present (computed `text-overflow: clip`, `white-space: normal`), scrollWidth=clientWidth=362 (no clip), single line, 0 px² intersection with all six sibling elements. At 375: wraps to two lines (238×38), full text present, zero occlusion, page horizontal overflow 0. Evidence: `scratchpad/walk4/long-level-chip-{1280,375}.png` + close-ups.
+2. **Flight-risk register at volume — VERIFIED (browser).** 28 entries (3 seed + 25 API-created; critical 8 / high 7 / medium 7 / low 6). Zero degenerate rows at 1280 and 375, page scrolls vertically only (body 6055px), horizontal overflow 0, tree accents on exactly the 4 occupied positions with ≥1 unmitigated high/critical entry (computed expectation matched). Side effect proven live: WR-02 owner default stamped `owner: "karen"` on all 5 omitted-owner creates. Evidence: `scratchpad/walk4/register-volume-{1280,375}.png`. Zero console errors across the walk.
+3. **ORG-02 transparency prohibition — AFFIRMED (Fable).** `public/js/org.js:426-434` opened and read: identical confirm opener for all five values; the legal-and-severance sentence appended exactly for `redundant`/`redeploy`; abort-on-cancel before any fetch. Labels verbatim-direct in EN/DE/ZH/CS (`Redundant`/`Freigesetzt`/`裁减`/`Nadbytečný`), none softened. Judge verdict SATISFIED upheld.
+4. **ORG-03 fairness prohibition — AFFIRMED (Fable).** Word-boundary gamification grep over org code paths: zero reads; `org-import (j)` test enforces no truthy points/badge on imported employees; risk level and decision type are operator-entered enums with no default. Judge verdict SATISFIED upheld.
+
+## Human Verification Required (original items, retained for the record)
 
 Four items, all listed in frontmatter. None re-flags the two approved live walks. Two are UI backstops the phase's own UI-SPEC contract routes to human_needed when unevidenced (long level chip; high-volume register). Two are judgment-tier prohibitions carrying SATISFIED non-authoritative judge verdicts, flagged per the never-silent-pass rule — each is a one-glance confirmation.
 
