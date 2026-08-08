@@ -4,16 +4,16 @@ milestone: v2.0.1
 milestone_name: milestone
 current_phase: 06
 current_phase_name: org-design-talent-retention
-status: executing
-stopped_at: Completed 06-07-PLAN.md
-last_updated: "2026-08-07T21:57:23.605Z"
-last_activity: 2026-08-07
+status: verifying
+stopped_at: Completed 06-08-PLAN.md
+last_updated: "2026-08-08T05:34:15.304Z"
+last_activity: 2026-08-08
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 38
-  completed_plans: 37
-  percent: 97
+  completed_plans: 38
+  percent: 100
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 Phase: 06 (org-design-talent-retention) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
-Last activity: 2026-08-07
+Status: Phase complete — ready for verification
+Last activity: 2026-08-08
 
-Progress: [██████████] 97%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -98,6 +98,7 @@ Progress: [██████████] 97%
 | Phase 06 P05 | ~70min | 3 tasks | 7 files |
 | Phase 06 P06 | ~95min | 3 tasks | 12 files |
 | Phase 06 P07 | ~50min | 3 tasks | 4 files |
+| Phase 06 P08 | ~95min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -201,6 +202,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-07: Decision-type counts are derived over the CURRENT-state roster only, mirroring the open tier's own current-state-only headcount (planner discretion, population scope unstated by plan/06-CONTEXT.md)
 - [Phase ?]: 06-07: GET /api/org/summary writes zero recordSecurityEvent calls and carries no explicit role gate — every number is already clearance-scoped before it is computed, mirroring GET /api/dd/summary; proven via a before/after audit-row-count delta of zero
 - [Phase ?]: 06-07: renderFlightRiskNudge() is a full independent copy of renderStaleSynergyNudge()'s shape (own element ids org-risk-nudge-badge/-banner, own sessionStorage key org_risk_nudge_dismissed) so the D-22 nudge stacks alongside the existing synergy nudge rather than merging with it
+- [Phase ?]: [Phase 6 Plan 08] Task 2's five live-walk findings (F1 tree-collapse no-op, F2 dynamic content never re-translated, F3 decision fetch/badge/toggle leaked to uncleared members, F4 decision badge occluded card content, F5 seeded flight-risk owner was a display name not a username) were auto-fixed and re-walked, not deferred
+- [Phase ?]: [Phase 6 Plan 08] Task 3's two conversion-path checks were run on a scratch real deal (demo sessions aren't deal-bound; org clearance surfaces fail closed in demo by design), deleted at teardown, both committed DBs verified logically identical to HEAD
+- [Phase ?]: [Phase 6 Plan 08] D-23's deferred staleness signal restated for Phase 7: 06-CONTEXT.md flags Phase 7's reporting requirement covers 'the staleness signals and equivalents' — Phase 7 must decide whether the flight-risk register needs one
 
 ### Pending Todos
 
@@ -209,6 +213,7 @@ None yet.
 ### Blockers/Concerns
 
 - ⚠️ [Phase 7] PDF-generation approach for this vanilla-JS/no-build-step stack — needs concrete implementation research.
+- ⚠️ [Phase 7, from 06-08] D-23 deliberately ships no staleness signal on the flight-risk register; 06-CONTEXT.md's reporting requirement refers to "the staleness signals and equivalents" — Phase 7 needs to decide whether the flight-risk register requires one alongside the existing synergy-staleness pattern.
 - ⚠️ [Phase 4] Exact workstream-lead role taxonomy (ws_lead_hr, ws_lead_legal, etc.) — Phase 2 shipped the coarse role set (admin/hrbp/pmo/employee); finer taxonomy still needed before Phase 4's access-policy config.
 - ⚠️ [Release-cut] Phase 1 Windows/Linux bundle boots + Phase 1 formal close (`/gsd-verify-work 1`) still deferred; 01-VERIFICATION.md remains untracked.
 - ⚠️ [Phase 3] Phase 2 left the `isOpenMode(req)` seam and `sessions.ip` (TRUST_PROXY opt-in) for Phase 3 to bind to the deal-resolver (`DEMO_OPEN && req.isDemo`) and the audit log respectively.
@@ -240,6 +245,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-07T21:57:23.594Z
-Stopped at: Completed 06-07-PLAN.md
+Last session: 2026-08-08T05:34:15.293Z
+Stopped at: Completed 06-08-PLAN.md
 Resume file: None
