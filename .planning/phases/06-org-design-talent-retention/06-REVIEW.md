@@ -33,7 +33,13 @@ findings:
   warning: 3
   info: 2
   total: 5
-status: issues_found
+status: resolved
+resolved_at: 2026-08-08T06:02:52Z
+resolution_commits:
+  - d5a4ee7 # WR-01/IN-01
+  - 1ea97a7 # WR-02
+  - 1a65316 # WR-03
+  - dd53edc # IN-02
 ---
 
 # Phase 6: Code Review Report
@@ -41,7 +47,7 @@ status: issues_found
 **Reviewed:** 2026-08-08T05:44:26Z
 **Depth:** standard
 **Files Reviewed:** 21 (of the 23 listed; `data/demo.db` is a binary and was not read directly — it was reviewed via `scripts/seed-org-demo.js`, its sole writer, per the review instructions)
-**Status:** issues_found
+**Status:** resolved — all 5 findings (0 critical / 3 warning / 2 info) fixed. See REVIEW-FIX.md for the full fix report.
 
 ## Summary
 
@@ -53,7 +59,7 @@ The findings below are genuine gaps that fall through those authz nets: two data
 
 ## Warnings
 
-### WR-01: `POST /api/org/positions` never validates that `employeeId` names a real employee
+### WR-01: `POST /api/org/positions` never validates that `employeeId` names a real employee — **RESOLVED** (commit `d5a4ee7`)
 
 **File:** `server.js:4037-4078`
 **Issue:** Both the create branch (line 4069: `employeeId: b.employeeId || null`) and the update branch (line 4058: `if (b.employeeId !== undefined) item.employeeId = b.employeeId || null;`) accept any string up to 120 chars (bounded only by `validators/org.js`'s `z.string().trim().max(ID_MAX)`) with **zero existence check** against the deal's employee roster. This is inconsistent with the sibling route `POST /api/org/flight-risk`, which explicitly validates the reference two lines apart (`server.js:4527` and `:4542`: `if (!employeeList.find((e) => e.id === b.employeeId)) return res.status(404)...`), and with `POST /api/org/positions/import`, which only ever writes an `employeeId` it resolved or created itself.
@@ -72,7 +78,9 @@ if (b.employeeId) {
 ```
 placed before the graph-failure check on both the create and update paths.
 
-### WR-02: The flight-risk register's `owner` field is free text with no default from the caller's own identity — repeats the exact class of bug this phase's own seed script had to fix
+**Resolution:** Fixed in `d5a4ee7`. Both the create and update branches of `POST /api/org/positions` now run an `employeeRosterLane(db).find((e) => e.id === b.employeeId)` existence check — textually mirroring the flight-risk route's own check (closing IN-01 in the same commit) — before the graph-failure check, returning 404 `'That employee could not be found.'` for a named-but-nonexistent `employeeId`. A vacant (`null`/omitted) `employeeId` stays valid per D-05. The bulk importer (`POST /api/org/positions/import`) was confirmed to need no change — it never accepts a raw `employeeId` from the request body; it resolves or creates its own via `name`/`email`. Regression tests added in `test/org-positions.test.js` (xx)/(yy)/(zz): bogus `employeeId` on create and update → 404, no row persisted/mutated; valid roster id → 200/201; `null`/omitted → 200/201 (vacant stays valid).
+
+### WR-02: The flight-risk register's `owner` field is free text with no default from the caller's own identity — repeats the exact class of bug this phase's own seed script had to fix — **RESOLVED** (commit `1ea97a7`)
 
 **File:** `public/js/org.js:974-1034` (form), `server.js:4507-4566` (write route)
 **Issue:** `GET /api/org/summary`'s `mine.unmitigatedFlightRisks` (the field `renderFlightRiskNudge()` in `public/js/deal-home.js` keys D-22's owner nudge on) is computed by exact string equality: `String(r.owner || '').trim() === myUsername` (`server.js:4733`). The stored `owner` value comes entirely from `ownerInput.value` in `buildFlightRiskForm()` — a plain, unprefilled `<input type="text">` with placeholder `'Owner (required)'` and no default value. Neither the client nor the server (`server.js:4549`: `owner: String(b.owner || '').trim()`) ever populates it from the signed-in session's own username (available client-side as `window.__portalUser.username`, set by `public/js/transitions.js:201`, but never referenced anywhere in `org.js`).
@@ -81,7 +89,9 @@ This is precisely the mistake `scripts/seed-org-demo.js`'s own comment (lines 23
 
 **Fix:** Prefill `ownerInput.value` from `window.__portalUser && window.__portalUser.username` when the form is built (falling back to the current empty-string behavior if `window.__portalUser` is unavailable, e.g. on a PORTAL_AUTH-disabled demo deployment), and/or have the server default `owner` to `req.portalUser.username` when the field is omitted, mirroring how `decidedBy` is already stamped server-side on `POST /api/org/decisions` rather than trusted from the client.
 
-### WR-03: Deleting a converted DD finding retroactively declassifies its derived RAID entry to the whole deal
+**Resolution:** Fixed in `1ea97a7`, both server- and client-side. Server: `POST /api/org/flight-risk` now defaults `owner` to `req.portalUser.username` whenever the trimmed value is blank/whitespace/omitted, on both the create and update branches — a non-blank caller-supplied owner is still honoured verbatim. `validators/org.js`'s `FlightRiskUpsertSchema` had its `owner` field's `.min(1)` floor and its required-on-create `.refine()` removed so the schema no longer 400s a blank/omitted owner before the server default can apply. Client: `public/js/org.js` had no session-identity fetch of its own; `load()` now also fetches `GET /api/auth/me` (the actual Phase-2 session-identity endpoint — `window.__portalUser` from `transitions.js` was not reliably resolved by form-build time due to fetch ordering, so a dedicated fetch was used instead) and stores the resolved username, which `buildFlightRiskForm()` uses to prefill `ownerInput.value` (still fully editable). `public/org.html`'s `org.js` cache stamp was bumped. Regression tests added/updated in `test/org-flight-risk-audit.test.js`: (j) rewritten — omitted/whitespace owner now returns 201 with `owner` defaulted to the caller's username, never 400; (j2) an explicit non-blank owner is still honoured verbatim; (j3) an entry created with a defaulted owner counts toward that caller's own `GET /api/org/summary` `mine.unmitigatedFlightRisks`.
+
+### WR-03: Deleting a converted DD finding retroactively declassifies its derived RAID entry to the whole deal — **RESOLVED** (commit `1a65316`) — orchestrator directive: fixed, not accepted, because PROJECT.md's clean-room segregation is a legal/compliance control
 
 **File:** `server.js:3877-3890` (`resolveRaidEntryClearanceArea`), proven and accepted by `test/raid-access-filter.test.js` test (f)
 **Issue:** `GET /api/raid`'s new provenance filter resolves an entry's clearance area by following `entry.source` (`dd-finding:<id>` or `org-flightrisk:<id>`) back to its origin. When the origin no longer exists — e.g. a Legal-area DD finding is deleted via `DELETE /api/dd/findings/:id` after having been converted into a RAID entry — `resolveRaidEntryClearanceArea()` returns `null`, and `GET /api/raid`'s filter (`area === null || accessPolicy.hasAreaGrant(...)`) treats `null` as **unfiltered, visible to every deal member**. `test/raid-access-filter.test.js` test (f) exercises this exact scenario and asserts it as the intended behavior, with the code comment explicitly weighing this against the alternative failure mode (an orphaned link becoming permanently invisible to everyone, including admin).
@@ -90,19 +100,25 @@ This is a deliberate, documented, tested trade-off, not an oversight — but it 
 
 **Fix (if this residual risk is judged unacceptable on revisit):** Refuse the finding delete (or require an explicit override) while a RAID entry still references it via `source`, or have the delete cascade a redaction/removal of the derived RAID entry's `title`/`notes` rather than merely orphaning the link. If the current trade-off is intentional and stands, at minimum log a distinguishable audit event when `resolveRaidEntryClearanceArea()` resolves an orphaned `dd-finding:` source to `null` on a read, so a security review can retroactively detect how many reads happened under the widened, unintended audience.
 
+**Resolution:** Fixed in `1a65316`, via the "stamp at conversion time" option rather than either fix suggestion above (a third alternative that closes the risk without refusing the delete or cascading a redaction). Both conversion routes (`POST /api/dd/findings/:id/convert` and `POST /api/org/flight-risk/:id/convert`) now stamp the resolved clearance area onto the created RAID entry's own `clearanceArea` field at conversion time (the DD route stamps the finding's own `area`; the flight-risk route stamps the fixed `hr` area). `resolveRaidEntryClearanceArea()` now checks this stamp FIRST, falling back to the pre-existing source-parsing logic only for legacy/unstamped entries that predate this field. Net effect: deleting the originating DD finding or flight-risk entry no longer widens a converted RAID entry's audience — the fix is fail-closed (an entry only ever gets MORE restricted after deletion, never less). `test/raid-access-filter.test.js` test (f) — which previously proved-and-accepted declassify-on-delete — was flipped to prove RETENTION (the entry stays area-gated for both a legal-only and an hr-only member after the originating finding is deleted); a new test (f2) plus two new unit cases in test (g) prove the legacy source-parsing fallback still resolves correctly for unstamped entries, both live and orphaned. Both directions of the pre-existing filter (restricted-provenance excluded AND unlinked/manual entries returned unfiltered) remain independently proven by tests (a)-(e), unchanged. `db/accessPolicy.js`'s `filterByAreaGrant()` was not touched — it is not involved in the RAID path.
+
 ## Info
 
-### IN-01: `positions.employeeId` and `flightRisks.employeeId` are validated inconsistently across the org surface
+### IN-01: `positions.employeeId` and `flightRisks.employeeId` are validated inconsistently across the org surface — **RESOLVED** (commit `d5a4ee7`, same commit as WR-01)
 
 **File:** `server.js` (positions routes vs. flight-risk routes)
 **Issue:** Beyond WR-01's specific gap, the broader pattern worth naming for future maintainers: `POST /api/org/flight-risk` and `POST /api/org/positions/import` both validate `employeeId` against the live roster before writing; `POST /api/org/positions` does not. A future reviewer skimming only the flight-risk route could reasonably (and incorrectly) assume the same discipline holds everywhere in this file.
 **Fix:** Once WR-01 is fixed, consider extracting a single `assertEmployeeExists(db, employeeId)` helper (returning a 404 response or throwing) used by all three write paths, so the three call sites can never independently drift again.
 
-### IN-02: `org.html` carries no `pageAccess` entry in `public/js/transitions.js`, unlike every other role-gated page except `due-diligence.html`
+**Resolution:** WR-01's fix (`d5a4ee7`) mirrors the flight-risk route's existence-check shape/wording textually (same `.find((e) => e.id === b.employeeId)` pattern and identical error message), so the two checks now count together under a future grep, closing the drift concern this finding named. The `assertEmployeeExists()` extraction suggested as a further refactor was not applied — the two inline checks are already textually identical and independently test-covered; introducing a shared helper is left as optional future cleanup, not required to resolve the finding.
+
+### IN-02: `org.html` carries no `pageAccess` entry in `public/js/transitions.js`, unlike every other role-gated page except `due-diligence.html` — **RESOLVED** (commit `dd53edc`)
 
 **File:** `public/js/transitions.js:145-177` (not in this phase's file list, but composes directly with the new `org.html`)
 **Issue:** Every server-side control for the org surface is correctly clearance/role-gated (verified above), and this mirrors `due-diligence.html`'s existing, explicitly-documented precedent (`transitions.js:168-176`) of leaving MNPI-clearance-scoped pages off the role-based client convenience gate on purpose. However, unlike `due-diligence.html`, `org.html` carries **no comment of its own** explaining this choice — a future maintainer scanning `pageAccess` for "which pages have no entry and why" would have to infer the org page falls under the same rationale rather than being simply forgotten.
 **Fix:** Add a one-line comment next to the `due-diligence.html` explanation in `pageAccess` (or beside `org.html`'s own routes) stating that `org.html` is deliberately absent for the identical reason — per-deal-member clearance (`hr`-area grant / `current`-state-open), not role, gates this page, matching `due-diligence.html`.
+
+**Resolution:** Fixed in `dd53edc`. Added a comment block directly beside the existing `due-diligence.html` explanation in `public/js/transitions.js`'s `pageAccess` map, stating `org.html` is deliberately absent for the identical reason — per-deal-member `hr`-area clearance, not role, gates the page, with every `/api/org/*` route independently re-checking that grant server-side.
 
 ---
 
