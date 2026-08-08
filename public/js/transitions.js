@@ -174,6 +174,14 @@
     // db/accessPolicy.js's filterByAreaGrant()/assertAreaGrant() regardless
     // of which role loaded this page, so an uncleared visitor sees an empty
     // workspace, never someone else's DD content.
+    //
+    // IN-02 (06-REVIEW.md): 'org.html' has NO entry here either, for the
+    // IDENTICAL reason — org-design/talent-retention access is gated by the
+    // per-deal-member `hr` area clearance (accessPolicy.hasAreaGrant(deal,
+    // user, 'hr')), not role, matching due-diligence.html's precedent
+    // exactly. Every /api/org/* write and restricted-read route independently
+    // re-checks that grant server-side (server.js), so this is a client
+    // convenience omission, never the actual control.
   };
 
   let isAllowed = true;
