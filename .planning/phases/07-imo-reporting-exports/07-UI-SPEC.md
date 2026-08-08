@@ -550,22 +550,41 @@ contract deliberately differs between the two families:
 
 ## UI Considerations
 
-> **Not yet run.** This section is intentionally left as a surface inventory, not a coverage table —
-> the real `ui-consideration-probe.cjs` engine runs at step 9.5, after checker approval, and REPLACES
-> this section with its own PASS/backstop/unresolved table (the same rule Phase 6's `06-UI-SPEC.md`
-> Section "UI Considerations" documents at its own replacement point). Hand-authoring coverage claims
-> here would only be discarded and risks looking like probe output when it isn't — the phase brief
-> for this document was explicit that this must not happen.
+Probe engine run 2026-08-08 (`ui-consideration-probe.cjs`, 4 elements with authored kind overrides:
+reports-tab=[nav], export-row=[list-collection, interactive-control],
+pack-generate-button=[interactive-control], pack-document=[static-content, list-collection, media]).
+**Coverage: 23 applicable — 21 covered / 2 backstop / 0 unresolved.** Resolutions authored via
+Fable review per the user's 2026-08-08 directive, each citing this spec's own contracts.
 
-Elements this phase introduces, for the probe to classify against:
+| Element | Category | Status | Resolution |
+|---|---|---|---|
+| reports-tab | loading | covered | Pane is a display-toggle like its three siblings (§1); contents are static rows + one CTA card — no fetch on open, no loading state exists by design (§2, §7). |
+| reports-tab | error | covered | The tab/pane itself has no failure mode (no async work); all error surfaces belong to the pack CTA (§7) and are defined in the Copywriting Contract. |
+| reports-tab | overflow | backstop | { statement: "The .rpt-export-row flex rows and pack card reflow without horizontal page overflow at 375px in DE (longest translations)", verification: backstop — live walk at 375px/DE, this phase's walk plan } |
+| reports-tab | long-text | covered | Tab label and all pane strings are data-i18n keyed; §Internationalisation locks wrap-never-clip with DE as the sizing case and longest-translation verification as part of "done". |
+| export-row | empty | covered | The 4 dataset rows are fixed (datasets are structural, never zero); a zero-row dataset still downloads a headers-only file with the Copywriting Contract's empty-state copy. |
+| export-row | loading | covered | Deliberately none: plain `<a href>` navigation, synchronous string-join server-side — "a loading state would be theater" (§2, §7; download-zip precedent admin.html:666). |
+| export-row | error | covered | Server failure surfaces as the browser's native download-failure UI — explicit deliberate choice matching the shipped download-zip UX (§7). |
+| export-row | populated | covered | Four fixed rows, label + CSV/JSON links each, markup locked in §2 with .raid-row-derived rhythm. |
+| export-row | partial | covered | Clearance scoping is server-side: the file contains exactly the rows/fields the caller's screen shows (D-08 parity, §3 both-sides symmetry); the org dataset row is structurally absent for everyone (D-09). |
+| export-row | overflow | backstop | { statement: "Export rows wrap (label above links) rather than clip or overflow at 375px in DE", verification: backstop — same live-walk check as reports-tab overflow } |
+| export-row | zero-one-many | covered | Dataset list is fixed at 4; per-file row cardinality (0/1/many) is handled by headers-only-at-zero plus the same enriched shapes the live GET routes return (§2). |
+| export-row | long-text | covered | Labels are i18n-keyed under §Internationalisation's wrap-never-clip; filenames use `deal.name` codename (user-controlled text) which the OS, not the UI, renders. |
+| pack-generate-button | loading | covered | Concrete sequence locked in §7: `disabled=true` + label swap to "Generating pack…", restore on completion; no overlay (project idiom, admin-cms.js:37). |
+| pack-generate-button | error | covered | Inline error text with explicit `display:'block'` — never `''` (§7; the Phase-4-Wave-7 invisible-error countermeasure); button restored identically. |
+| pack-generate-button | long-text | covered | CTA label i18n-keyed; button is not fixed-width (§Internationalisation); DE label verified at longest translation as part of "done". |
+| pack-document | empty | covered | An empty deal produces a valid pack: exec tiles render zeros, each section carries its Copywriting Contract empty-state line — never a blank page or a failed generation. |
+| pack-document | loading | covered | The document has no loading state (it is a downloaded file); generation-in-flight is entirely the CTA's state (§7). |
+| pack-document | error | covered | Generation failure surfaces at the CTA per §7; the document itself is only ever delivered whole (blob download on success). |
+| pack-document | populated | covered | Full page design locked in §5: page-1 exec summary (stat tiles incl. D-01 phased/unphased split, RAG strip, top risks), then per-dataset section tables with canvas bars. |
+| pack-document | partial | covered | Pack contains only caller-cleared content; restricted content is structurally absent with no placeholder disclosing its existence (§5, the Phase-6 absence-not-disabled principle extended to files). |
+| pack-document | overflow | covered | Sections paginate when content overflows a page; header band + confidentiality footer repeat on every page (§5 page-geometry + D-07). |
+| pack-document | zero-one-many | covered | Section tables render 0/1/many rows with per-section empty-state copy; exec tiles carry the counts either way (§5, Copywriting Contract). |
+| pack-document | long-text | covered | Pack renders in the deal's active language (§Internationalisation :155-172), DE named the sizing case; table cells wrap rather than clip per the same contract. |
 
-- `reports-tab` (the 4th `execution.html` tab + pane, Surface Contract 1)
-- `export-row` (per-dataset CSV/JSON row, x4, Surface Contract 2)
-- `pack-generate-button` (the primary CTA + its in-flight/error states, Surface Contract 7)
-- `pack-document` (the PDF pack itself -- page 1 exec summary, and the three section pages/tables,
-  Surface Contract 5) -- a rendered-document surface, not a DOM element; the probe should treat its
-  states (empty deal data, single-page vs. paginated sections, long titles/translations) as it would
-  any other populated/overflow/long-text surface, per the pack's own pagination and i18n rules above.
+Backstops (2): both are the single 375px/DE reflow check — wired into this phase's live-walk
+verification (the walk plan must include it explicitly; an unevidenced backstop routes to
+human_needed at verify time, per Phase 6 precedent).
 
 ---
 
