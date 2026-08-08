@@ -3870,11 +3870,25 @@ const RAID_STATUSES = ['open', 'mitigating', 'closed'];
 //
 // An entry whose provenance resolves to null (manually created with an
 // empty source, or orphaned because its originating record was since
-// deleted) is returned UNFILTERED — general RAID content is not MNPI; only
-// content republished FROM a restricted source is gated, and an orphaned
-// link degrades to unlinked rather than becoming permanently invisible to
+// deleted AND carries no stamped clearanceArea — see WR-03 note below) is
+// returned UNFILTERED — general RAID content is not MNPI; only content
+// republished FROM a restricted source is gated, and an orphaned link
+// degrades to unlinked rather than becoming permanently invisible to
 // everyone including admin (T-06-45).
+//
+// WR-03 (06-REVIEW.md): both conversion routes (POST
+// /api/dd/findings/:id/convert and POST /api/org/flight-risk/:id/convert,
+// below) now STAMP the resolved area onto the created RAID entry's own
+// `clearanceArea` field AT CONVERSION TIME, so this resolver checks that
+// stamp FIRST — deleting the originating finding/flight-risk entry later
+// can no longer retroactively declassify a converted RAID entry back to
+// the whole deal (the exact residual risk 06-REVIEW.md WR-03 named). The
+// source-parsing fallback below is retained ONLY for legacy/unstamped
+// entries created before this field existed; every entry a conversion
+// route creates from today onward always carries the stamp, so the
+// fallback branch is never reached for a fresh conversion.
 function resolveRaidEntryClearanceArea(entry, db) {
+  if (entry && entry.clearanceArea) return entry.clearanceArea;
   const source = entry && entry.source;
   if (!source) return null;
   const ddMatch = /^dd-finding:(.+)$/.exec(source);
@@ -4682,6 +4696,10 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
         status: 'open',
         notes: entry.notes || entry.mitigation || '',
         source,
+        // WR-03 (06-REVIEW.md): retention clearance is always the fixed
+        // `hr` area, stamped here at conversion time — same rationale as
+        // the DD finding conversion route's own stamp above.
+        clearanceArea: 'hr',
         createdAt: new Date().toISOString(),
       };
       rLane.push(raidEntry);
@@ -5242,6 +5260,13 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
         status: 'open',
         notes: finding.notes || '',
         source,
+        // WR-03 (06-REVIEW.md): the resolved clearance area is stamped onto
+        // the RAID entry AT CONVERSION TIME, not re-derived from `source`
+        // on every read — resolveRaidEntryClearanceArea() (Due Diligence
+        // section, below) prefers this field when present, so deleting
+        // this finding later can never widen this entry's audience back to
+        // the whole deal (fail-closed: deletion never DEclassifies).
+        clearanceArea: finding.area,
         createdAt: new Date().toISOString(),
       };
       rLane.push(raidEntry);

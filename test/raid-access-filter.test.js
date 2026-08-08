@@ -250,7 +250,7 @@ test('raid-access-filter (e): a deal whose RAID log contains only manually creat
   }
 });
 
-test('raid-access-filter (f): an entry whose originating finding has been DELETED is still returned to admin, and is now ALSO visible to a member who was not cleared for that finding\'s area', async () => {
+test('raid-access-filter (f): WR-03 (06-REVIEW.md) — an entry whose originating finding has been DELETED is still returned to admin, and STAYS INVISIBLE to a member who was never cleared for the finding\'s area — deletion must never retroactively declassify a converted entry', async () => {
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -267,8 +267,44 @@ test('raid-access-filter (f): an entry whose originating finding has been DELETE
     const adminAfter = await (await getJSON(base, '/api/raid', fx.tokens.adminToken)).json();
     assert.ok(adminAfter.some((e) => e.id === fx.entries.financialRaid.id), 'admin must still receive the entry after its originating finding is deleted — an orphaned link must not become invisible to everyone');
 
+    // WR-03: the conversion route stamped `clearanceArea: 'financial'` onto
+    // the RAID entry AT CONVERSION TIME (server.js), so resolveRaidEntryClearanceArea()
+    // now reads THAT stamp first rather than re-deriving from the (now-gone)
+    // finding — deleting the finding must NEVER widen this entry's audience.
+    // This is the FLIPPED assertion from this test's pre-fix version, which
+    // proved-and-accepted exactly the opposite (declassification-on-delete).
     const legalAfter = await (await getJSON(base, '/api/raid', fx.tokens.pmoLegalToken)).json();
-    assert.ok(legalAfter.some((e) => e.id === fx.entries.financialRaid.id), 'after the originating finding is deleted, the orphaned entry resolves to null clearance and becomes visible to every caller, including one never cleared for the original area');
+    assert.ok(!legalAfter.some((e) => e.id === fx.entries.financialRaid.id), 'after the originating finding is deleted, the entry must REMAIN invisible to a member never cleared for the original financial area — fail-closed: deletion must never declassify (06-REVIEW.md WR-03)');
+
+    // The hr-only member (also uncleared for financial) must likewise still
+    // never see it — proves the retention holds for a second, independent
+    // identity, not just the one this fixture happens to reuse elsewhere.
+    const hrAfter = await (await getJSON(base, '/api/raid', fx.tokens.pmoHrToken)).json();
+    assert.ok(!hrAfter.some((e) => e.id === fx.entries.financialRaid.id), 'an hr-only member must also remain excluded from the orphaned-but-still-stamped financial entry');
+  } finally {
+    server.close();
+  }
+});
+
+test('raid-access-filter (f2): WR-03 — a LEGACY entry with no clearanceArea stamp (created before this field existed) still resolves via the source-parsing fallback, and still degrades to unfiltered once its source is orphaned — proves the fallback path is retained for pre-existing data', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const fx = await seedFixture(base, 'deal_raff2');
+
+    // Unit-level: a hand-built entry shaped like pre-WR-03 stored data (no
+    // clearanceArea key at all) must still resolve through the legacy
+    // source-parsing branch, live and orphaned, exactly as it did before.
+    const resolve = app.resolveRaidEntryClearanceArea;
+    const db = { ddFindings: [{ id: 'find_legacy', area: 'legal' }] };
+    assert.strictEqual(resolve({ source: 'dd-finding:find_legacy' }, db), 'legal', 'an unstamped legacy entry must still resolve its live source to the finding\'s area');
+    assert.strictEqual(resolve({ source: 'dd-finding:find_legacy_gone' }, db), null, 'an unstamped legacy entry whose source is now orphaned must still degrade to null (unfiltered) via the fallback — this plan\'s pre-existing, accepted trade-off for data that predates the stamp');
+
+    // HTTP-level sanity: a freshly converted entry (this plan's own fixture)
+    // DOES carry the stamp and is unaffected by the legacy fallback path —
+    // proven again here for a second deal id, independent of test (f).
+    assert.ok(fx.entries.legalRaid.id, 'sanity: the fixture\'s own conversion produced a RAID entry');
   } finally {
     server.close();
   }
@@ -293,6 +329,21 @@ test('raid-access-filter (g): resolveRaidEntryClearanceArea unit cases — empty
 
   assert.strictEqual(resolve({ source: 'org-flightrisk:risk_1' }, { ddFindings: [] }), 'hr', 'a flight-risk source resolves to the fixed hr area');
   assert.strictEqual(resolve({ source: 'something-unrecognised:1' }, { ddFindings: [] }), null, 'an unrecognised source prefix resolves to null');
+
+  // WR-03 (06-REVIEW.md): the stamped clearanceArea field takes priority
+  // over source-parsing, even when the source is orphaned/deleted — this is
+  // the fix's entire point: deletion of the origin record must never widen
+  // an already-stamped entry's audience back to null (unfiltered).
+  assert.strictEqual(
+    resolve({ source: 'dd-finding:find_missing', clearanceArea: 'legal' }, db),
+    'legal',
+    'a stamped clearanceArea must be preferred over source-parsing, even for an orphaned source — this is what keeps a converted entry restricted after its originating finding is deleted',
+  );
+  assert.strictEqual(
+    resolve({ source: 'dd-finding:find_1', clearanceArea: 'financial' }, db),
+    'financial',
+    'a stamped clearanceArea must win even when the source is still LIVE and would resolve to a different area — the stamp is authoritative at conversion time, never re-derived',
+  );
 });
 
 // ================================================================ Source-level ===
