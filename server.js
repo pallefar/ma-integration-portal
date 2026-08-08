@@ -4046,6 +4046,16 @@ app.post('/api/org/positions', (req, res) => {
   if (b.id) {
     const item = lane.find((p) => p.id === b.id);
     if (!item) return res.status(404).json({ error: 'Position not found.' });
+    // WR-01 (06-REVIEW.md): mirrors POST /api/org/flight-risk's identical
+    // employeeId-existence check (server.js, below) — same shape/wording,
+    // so the two checks are textually consistent for future greps (IN-01).
+    // Vacant (`null`/omitted) stays valid; only a NAMED, non-existent
+    // employeeId is refused.
+    if (b.employeeId) {
+      if (!employeeRosterLane(db).find((e) => e.id === b.employeeId)) {
+        return res.status(404).json({ error: 'That employee could not be found.' });
+      }
+    }
     // Evaluate a shallow merge of the existing row and the incoming keys
     // BEFORE any field of the stored row is mutated — readDb() hands back a
     // shared cache, so a mutation followed by a refusal would stick.
@@ -4061,6 +4071,13 @@ app.post('/api/org/positions', (req, res) => {
     return res.json({ success: true, position: item });
   }
 
+  // WR-01 (06-REVIEW.md): same existence check as the update branch above,
+  // run before this candidate object is even built.
+  if (b.employeeId) {
+    if (!employeeRosterLane(db).find((e) => e.id === b.employeeId)) {
+      return res.status(404).json({ error: 'That employee could not be found.' });
+    }
+  }
   const item = {
     id: newId('pos'),
     title: String(b.title || '').trim(),

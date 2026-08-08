@@ -1265,3 +1265,120 @@ test('org-positions (ww) [F4]: the decision badge no longer sits at a fixed abso
   const orgJsSrc = fs.readFileSync(ORG_JS_PATH, 'utf8');
   assert.match(orgJsSrc, /className:\s*'org-node-decision-wrap'/, 'org.js must construct the decision badge inside the org-node-decision-wrap container');
 });
+
+// -----------------------------------------------------------------------
+// WR-01 (06-REVIEW.md): POST /api/org/positions never validated that
+// employeeId names a real employee — mirrors POST /api/org/flight-risk's
+// pre-existing employeeId-existence check (test/org-flight-risk-audit.test.js
+// (i)), extended to both the create and update branches. Vacant
+// (null/omitted) stays valid per D-05.
+// -----------------------------------------------------------------------
+
+test('org-positions (xx) [WR-01]: POST create with a bogus employeeId returns 404 and creates no row', async () => {
+  const deal = freshDeal('deal_orgxx', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const res = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Bogus Occupant Position', employeeId: 'emp_does_not_exist' }),
+    });
+    assert.strictEqual(res.status, 404);
+    const body = await res.json();
+    assert.match(body.error, /could not be found/i);
+
+    const listRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const list = await listRes.json();
+    assert.ok(!list.some((p) => p.title === 'Bogus Occupant Position'), 'a refused create must persist no row');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (yy) [WR-01]: POST create with a valid roster employeeId returns 201, and with employeeId omitted (vacant) returns 201', async () => {
+  const deal = freshDeal('deal_orgyy', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Real Roster Member' });
+
+    const validRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Occupied Position', employeeId: employee.id }),
+    });
+    assert.strictEqual(validRes.status, 201);
+    const validBody = await validRes.json();
+    assert.strictEqual(validBody.position.employeeId, employee.id);
+
+    const vacantRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Vacant Position' }),
+    });
+    assert.strictEqual(vacantRes.status, 201, 'D-05: an omitted employeeId must stay valid — vacant is a first-class state, not a validation failure');
+    const vacantBody = await vacantRes.json();
+    assert.strictEqual(vacantBody.position.employeeId, null);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
+
+test('org-positions (zz) [WR-01]: POST update (id present) with a bogus employeeId returns 404 and leaves the stored employeeId unchanged; a valid roster id and an explicit null both succeed', async () => {
+  const deal = freshDeal('deal_orgzz', { memberGrants: { pmo: { ddAreas: ['hr'] } } });
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+
+  const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+
+    const position = await createPositionFor(base, pmoToken, { title: 'Update-target position' });
+
+    const badRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: position.id, employeeId: 'emp_still_does_not_exist' }),
+    });
+    assert.strictEqual(badRes.status, 404);
+    const badBody = await badRes.json();
+    assert.match(badBody.error, /could not be found/i);
+
+    const afterBadRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(pmoToken) } });
+    const afterBad = (await afterBadRes.json()).find((p) => p.id === position.id);
+    assert.strictEqual(afterBad.employeeId, null, 'the refused update must not have persisted the bogus employeeId');
+
+    const employee = await createEmployeeFor(base, pmoToken, { name: 'Update Roster Member' });
+    const goodRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: position.id, employeeId: employee.id }),
+    });
+    assert.strictEqual(goodRes.status, 200);
+    const goodBody = await goodRes.json();
+    assert.strictEqual(goodBody.position.employeeId, employee.id);
+
+    const nullRes = await fetch(`${base}/api/org/positions`, {
+      method: 'POST', headers: { Cookie: cookieHeader(pmoToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: position.id, employeeId: null }),
+    });
+    assert.strictEqual(nullRes.status, 200, 'clearing employeeId back to null (vacating the position) must stay valid');
+    const nullBody = await nullRes.json();
+    assert.strictEqual(nullBody.position.employeeId, null);
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, pmoToken);
+    server.close();
+  }
+});
