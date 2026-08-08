@@ -29,6 +29,17 @@
   var viewState = 'current';
   var capabilities = {};
 
+  // WR-02 (06-REVIEW.md): this page had no session fetch of its own — the
+  // flight-risk owner field prefill needs the caller's OWN username, not a
+  // display name, so the "mine" nudge on GET /api/org/summary can ever
+  // match. GET /api/auth/me is the same probe public/js/transitions.js
+  // already calls on every page (server.js), fetched here a second time so
+  // this module never depends on transitions.js's IIFE having already
+  // resolved window.__portalUser by the time buildFlightRiskForm() runs.
+  // Stays '' (falls back to today's empty-placeholder behavior) whenever
+  // auth is disabled (open demo) or the probe fails.
+  var sessionUsername = '';
+
   // Module-level, declared exactly once, never reassigned to a fresh Set
   // instance — an unrelated re-render (e.g. after the add form submits)
   // must not silently collapse the operator's working expand/collapse
@@ -169,10 +180,17 @@
       fetch('/api/org/positions').then(function (r) { return r.json(); }),
       fetch('/api/employees').then(function (r) { return r.json(); }),
       fetch('/api/org/capabilities').then(function (r) { return r.json(); }),
+      // WR-02: fetched alongside the capability probe and reused for the
+      // flight-risk form's owner prefill below — never a second round trip
+      // at form-build time. A rejected/malformed response leaves
+      // sessionUsername at its '' default (caught below), never throws.
+      fetch('/api/auth/me').then(function (r) { return r.json(); }).catch(function () { return null; }),
     ]).then(function (results) {
       state.positions = Array.isArray(results[0]) ? results[0] : [];
       state.employees = Array.isArray(results[1]) ? results[1] : [];
       capabilities = (results[2] && typeof results[2] === 'object') ? results[2] : {};
+      var me = results[3];
+      sessionUsername = (me && me.user && me.user.username) ? String(me.user.username) : '';
 
       // Plan 08 Task 2 walk finding F3: GET /api/org/decisions is
       // hr-grant-restricted — SAME boundary as capabilities.targetOrgDesign
@@ -975,6 +993,14 @@
     ownerInput.type = 'text';
     ownerInput.className = 'org-risk-form-owner';
     ownerInput.placeholder = 'Owner (required)';
+    // WR-02 (06-REVIEW.md): prefilled from the caller's OWN session
+    // username (never a display name) so GET /api/org/summary's
+    // mine.unmitigatedFlightRisks nudge can ever match what this operator
+    // just created — falls back to today's empty behavior when
+    // sessionUsername could not be resolved (e.g. a PORTAL_AUTH-disabled
+    // demo deployment). The field stays fully editable; this is a default,
+    // never a constraint.
+    ownerInput.value = sessionUsername;
     form.appendChild(ownerInput);
 
     var mitigationInput = document.createElement('textarea');
@@ -1017,7 +1043,11 @@
         }
         personSelect.value = '';
         levelSelect.value = '';
-        ownerInput.value = '';
+        // WR-02: reset back to the session-identity default, not blank —
+        // this form is rebuilt fresh from renderFlightRiskRegister() right
+        // after this refresh anyway, so this only covers the brief window
+        // before that rebuild lands.
+        ownerInput.value = sessionUsername;
         mitigationInput.value = '';
         // Refresh from the server, never by patching local state — mirrors
         // the decision form's own re-fetch-after-write convention.

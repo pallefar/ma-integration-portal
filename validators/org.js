@@ -140,23 +140,30 @@ registerSchema('POST', '/api/org/decisions', OrgDecisionSchema);
 // vocabulary (this is a plain reuse of an existing enum, not a new
 // vocabulary — no third copy and no new anti-drift test is introduced,
 // following validators/workstream.js's own independent RAID_LEVELS copy
-// precedent below). `owner` is required — a mitigation with nobody driving
-// it is not representable; `mitigation`/`notes` are deliberately optional —
-// this plan's objective resolves an internal UI-SPEC inconsistency in
-// favor of an unmitigated entry being a first-class, representable state
-// (D-22's owner nudge keys on exactly that state existing). Every field is
+// precedent below). `mitigation`/`notes` are deliberately optional — this
+// plan's objective resolves an internal UI-SPEC inconsistency in favor of
+// an unmitigated entry being a first-class, representable state (D-22's
+// owner nudge keys on exactly that state existing). Every field is
 // `.optional()` at the object-shape level so an UPDATE (`id` present) can
 // supply only the keys it means to change; the `.refine()` calls below
-// enforce that employeeId/riskLevel/owner are all required on CREATE (no
-// `id`) — the same "optional-in-shape, required-via-refine-on-create"
-// pattern OrgPositionUpsertSchema above already establishes for `title`.
+// enforce that employeeId/riskLevel are required on CREATE (no `id`) — the
+// same "optional-in-shape, required-via-refine-on-create" pattern
+// OrgPositionUpsertSchema above already establishes for `title`.
+//
+// WR-02 (06-REVIEW.md): `owner` deliberately carries NO `.min(1)` floor and
+// NO required-on-create `.refine()` — a blank/whitespace/omitted owner is a
+// valid shape at this layer, because server.js's write route now DEFAULTS
+// it to the caller's own session identity (req.portalUser.username) rather
+// than rejecting it. Free text is still accepted verbatim when the caller
+// does supply one; this schema only proves the shape/bound, never requires
+// the field.
 const RAID_LEVELS = ['low', 'medium', 'high', 'critical'];
 
 const FlightRiskUpsertSchema = z.object({
   id: z.string().trim().min(1).max(ID_MAX).optional(),
   employeeId: z.string().trim().min(1).max(ID_MAX).optional(),
   riskLevel: z.enum(RAID_LEVELS).optional(),
-  owner: z.string().trim().min(1).max(120).optional(),
+  owner: z.string().trim().max(120).optional(),
   mitigation: z.string().trim().max(TEXT_MAX).optional(),
   notes: z.string().trim().max(TEXT_MAX).optional(),
 }).refine((data) => !!(data.id || data.employeeId), {
@@ -165,9 +172,6 @@ const FlightRiskUpsertSchema = z.object({
 }).refine((data) => !!(data.id || data.riskLevel), {
   message: 'riskLevel is required.',
   path: ['riskLevel'],
-}).refine((data) => !!(data.id || data.owner), {
-  message: 'An owner is required.',
-  path: ['owner'],
 });
 
 registerSchema('POST', '/api/org/flight-risk', FlightRiskUpsertSchema);

@@ -320,7 +320,7 @@ test('org-flight-risk (i): a body with no employeeId returns 400; a body naming 
   }
 });
 
-test('org-flight-risk (j): a body with no owner returns 400; a body with no mitigation returns 201 and stores an empty mitigation', async () => {
+test('org-flight-risk (j): WR-02 (06-REVIEW.md) — a body with no owner returns 201 and defaults owner to the caller\'s own session username, never a 400; a body with no mitigation returns 201 and stores an empty mitigation', async () => {
   const deal = makeFourIdentityDeal('deal_ofrj');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const server = app.listen(0);
@@ -329,8 +329,23 @@ test('org-flight-risk (j): a body with no owner returns 400; a body with no miti
     const base = `http://127.0.0.1:${port}`;
     const employee = await createEmployee(base, adminToken, 'No Owner Target');
 
+    // WR-02: omitting owner is no longer a 400 — the server defaults it to
+    // the CALLER'S OWN session identity (req.portalUser.username), mirroring
+    // decidedBy's own server-stamped pattern on POST /api/org/decisions.
     const noOwnerRes = await postJSON(base, '/api/org/flight-risk', adminToken, { employeeId: employee.id, riskLevel: 'low' });
-    assert.strictEqual(noOwnerRes.status, 400);
+    assert.strictEqual(noOwnerRes.status, 201);
+    const { entry: noOwnerEntry } = await noOwnerRes.json();
+    assert.strictEqual(noOwnerEntry.owner, 'admin', 'an omitted owner must default to the caller\'s own session username');
+
+    // Whitespace-only owner is treated identically to omitted — trims to
+    // empty, then defaults, never persists as whitespace.
+    const employeeWs = await createEmployee(base, adminToken, 'Whitespace Owner Target');
+    const wsOwnerRes = await postJSON(base, '/api/org/flight-risk', adminToken, {
+      employeeId: employeeWs.id, riskLevel: 'low', owner: '   ',
+    });
+    assert.strictEqual(wsOwnerRes.status, 201);
+    const { entry: wsOwnerEntry } = await wsOwnerRes.json();
+    assert.strictEqual(wsOwnerEntry.owner, 'admin', 'a whitespace-only owner must default to the caller\'s own session username, not persist as whitespace');
 
     const employee2 = await createEmployee(base, adminToken, 'No Mitigation Target');
     const noMitigationRes = await postJSON(base, '/api/org/flight-risk', adminToken, {
@@ -339,6 +354,56 @@ test('org-flight-risk (j): a body with no owner returns 400; a body with no miti
     assert.strictEqual(noMitigationRes.status, 201);
     const { entry } = await noMitigationRes.json();
     assert.strictEqual(entry.mitigation, '', 'an absent mitigation must store as an empty string, never a placeholder or a missing key');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
+test('org-flight-risk (j2): WR-02 — an explicitly supplied, non-blank owner is still honoured verbatim, never overridden by the caller\'s own session identity', async () => {
+  const deal = makeFourIdentityDeal('deal_ofrj2');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const employee = await createEmployee(base, adminToken, 'Explicit Owner Target');
+
+    const res = await postJSON(base, '/api/org/flight-risk', adminToken, {
+      employeeId: employee.id, riskLevel: 'high', owner: 'karen',
+    });
+    assert.strictEqual(res.status, 201);
+    const { entry } = await res.json();
+    assert.strictEqual(entry.owner, 'karen', 'an explicitly supplied owner must be honoured verbatim — the default only applies when blank/whitespace/omitted');
+  } finally {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+    server.close();
+  }
+});
+
+test('org-flight-risk (j3): WR-02 — an unmitigated high-risk entry created with owner defaulted to the caller counts in that caller\'s GET /api/org/summary mine.unmitigatedFlightRisks', async () => {
+  const deal = makeFourIdentityDeal('deal_ofrj3');
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const employee = await createEmployee(base, adminToken, 'Summary Nudge Target');
+
+    const before = await (await getJSON(base, '/api/org/summary', adminToken)).json();
+    const beforeMine = (before.restricted && before.restricted.mine && before.restricted.mine.unmitigatedFlightRisks) || 0;
+
+    const res = await postJSON(base, '/api/org/flight-risk', adminToken, { employeeId: employee.id, riskLevel: 'critical' });
+    assert.strictEqual(res.status, 201);
+    const { entry } = await res.json();
+    assert.strictEqual(entry.owner, 'admin');
+
+    const after = await (await getJSON(base, '/api/org/summary', adminToken)).json();
+    assert.strictEqual(
+      after.restricted.mine.unmitigatedFlightRisks,
+      beforeMine + 1,
+      'the entry created with a server-defaulted owner must count toward the CREATING caller\'s own mine.unmitigatedFlightRisks nudge',
+    );
   } finally {
     sessionsDb.deleteSession(runtimeConn, adminToken);
     server.close();

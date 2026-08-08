@@ -4547,7 +4547,12 @@ app.post('/api/org/flight-risk', (req, res) => {
       item.employeeId = b.employeeId;
     }
     if (b.riskLevel !== undefined) item.riskLevel = b.riskLevel;
-    if (b.owner !== undefined) item.owner = String(b.owner).trim();
+    // WR-02 (06-REVIEW.md): a blank/whitespace-only owner defaults to the
+    // CALLER'S OWN session identity, mirroring how decidedBy is stamped
+    // server-side on POST /api/org/decisions (above) — never trusted
+    // free-text alone. A non-blank owner supplied by the caller is still
+    // honoured verbatim; this is a default, not a constraint.
+    if (b.owner !== undefined) item.owner = String(b.owner).trim() || req.portalUser.username;
     if (b.mitigation !== undefined) item.mitigation = String(b.mitigation || '');
     if (b.notes !== undefined) item.notes = String(b.notes || '');
     // linkedTaskIds/linkedRaidIds are NEVER touched by this route — Plan
@@ -4563,7 +4568,14 @@ app.post('/api/org/flight-risk', (req, res) => {
     id: newId('risk'),
     employeeId: b.employeeId,
     riskLevel: b.riskLevel,
-    owner: String(b.owner || '').trim(),
+    // WR-02 (06-REVIEW.md): defaults to the caller's own session identity
+    // when the field is blank/whitespace/omitted, closing the class of bug
+    // scripts/seed-org-demo.js's own comment documents having been caught
+    // for the seed data — a free-text owner that can never equal any
+    // session's username silently defeats GET /api/org/summary's
+    // mine.unmitigatedFlightRisks owner nudge. A non-blank caller-supplied
+    // owner is still honoured verbatim.
+    owner: String(b.owner || '').trim() || req.portalUser.username,
     // Deliberately empty string, never undefined/null, when the field is
     // absent — a body with no mitigation returns 201 and stores an empty
     // mitigation, per this plan's own resolution of the UI-SPEC's mitigation
