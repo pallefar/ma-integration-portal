@@ -3415,9 +3415,37 @@ app.get('/api/synergies', (req, res) => {
 // unconfirmed portion of gross realized, a total stale count, and a
 // caller-scoped stale count. Every figure sums per-item values that were
 // already rounded to one decimal inside enrichSynergy() — round only at the
-// item level, never re-round the aggregate upward, so unconfirmedRealizedM
-// is structurally incapable of exceeding grossRealizedM. Defined adjacent to
+// item level, never re-round the aggregate upward. Defined adjacent to
 // GET /api/synergies so the two read paths sit together.
+//
+// T-05-47/D-01/D-02/D-03: `grossRealizedM` is REDEFINED here — it used to
+// sum every item's realizedM; it now sums ONLY items that have at least one
+// phasing row (the phased partition). Free-typed realized money on an
+// initiative with no phasing rows is real but not forecast-backed, and
+// blending it into the steering-committee headline overstated confidence —
+// this is the standing Phase-5 debt this closes. `unphasedRealizedM` is the
+// new field carrying the complementary (unphased) partition's sum. D-02:
+// this split is computed ONCE, here, so the execution-tab tile row and (Plan
+// 07-05) the PDF pack both read this one response and can never disagree.
+// D-03: the partition is derived at read time on the SAME has-phasing
+// predicate synergyRollupFields() already uses — no migration, no stored
+// flag; an initiative that gains phasing rows moves partitions on its very
+// next read with no intervention. `grossRealizedM + unphasedRealizedM`
+// conserves the old undifferentiated total (money is relabelled, never
+// created or lost) — proven by test/synergy-rollup-split.test.js.
+//
+// `costIncurredM`, `netBenefitM`, `dealTargetM`, `unconfirmedRealizedM` and
+// `staleCount` deliberately keep summing the FULL enriched array,
+// unpartitioned — cost/target/staleness are not phasing-dependent concepts.
+// `netBenefitM` is derived from the REDEFINED (phased-only) `grossRealizedM`
+// minus cost, so it moves with the redefinition too — a reader expecting it
+// to still reflect the old undifferentiated total will not get that; this is
+// the intended consequence of D-01, not an oversight. Because
+// `unconfirmedRealizedM` sums over the FULL array while `grossRealizedM` now
+// sums only the phased partition, the old "unconfirmed can never exceed
+// gross" invariant is no longer stated against `grossRealizedM` alone — it
+// now holds against `grossRealizedM + unphasedRealizedM` (the conserved
+// total), which is what test/synergy-rollup-split.test.js asserts.
 app.get('/api/synergies/rollup', (req, res) => {
   const db = readDb();
   const lane = synergyLane(db);
@@ -3426,7 +3454,12 @@ app.get('/api/synergies/rollup', (req, res) => {
   const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
   const enriched = lane.map((item) => enrichSynergy(item, ctx));
 
-  const grossRealizedM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.realizedM || 0), 0));
+  const hasPhasing = (i) => Array.isArray(i.phasing) && i.phasing.length > 0;
+  const phasedItems = enriched.filter(hasPhasing);
+  const unphasedItems = enriched.filter((i) => !hasPhasing(i));
+
+  const grossRealizedM = roundSynergyMoney(phasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
+  const unphasedRealizedM = roundSynergyMoney(unphasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
   const costIncurredM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.costIncurredM || 0), 0));
   const netBenefitM = Math.round((grossRealizedM - costIncurredM) * 10) / 10;
   const dealTargetM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.targetM || 0), 0));
@@ -3444,6 +3477,7 @@ app.get('/api/synergies/rollup', (req, res) => {
 
   res.json({
     grossRealizedM,
+    unphasedRealizedM,
     costIncurredM,
     netBenefitM,
     dealTargetM,

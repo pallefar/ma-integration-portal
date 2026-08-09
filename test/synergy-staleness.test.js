@@ -368,7 +368,12 @@ test('synergy-staleness (k): a configured short threshold on the deal changes th
   }
 });
 
-test('synergy-staleness (l): unconfirmedRealizedM never exceeds grossRealizedM across a lane with both stale and fresh initiatives carrying fractional values (precision)', async () => {
+// T-05-47/D-01 (07-04-PLAN.md): updated deliberately, not deleted. Both
+// fixtures below carry no phasing rows, so under the redefinition their
+// realized value lands in unphasedRealizedM, not grossRealizedM — the old
+// "unconfirmed <= gross" invariant is now stated against the CONSERVED
+// gross+unphased total (grossRealizedM alone no longer sums every item).
+test('synergy-staleness (l): unconfirmedRealizedM never exceeds the conserved gross+unphased total across a lane with both stale and fresh initiatives carrying fractional values (precision)', async () => {
   const token = await setupDeal('deal_synstall');
   const server = app.listen(0);
   try {
@@ -394,8 +399,9 @@ test('synergy-staleness (l): unconfirmedRealizedM never exceeds grossRealizedM a
     await postJSON(base, '/api/settings', token, { synergyStaleDays: 0.0000000001 });
 
     const rollup = await getRollup(base, token);
-    assert.ok(rollup.unconfirmedRealizedM <= rollup.grossRealizedM, 'unconfirmedRealizedM must never exceed grossRealizedM');
-    assert.strictEqual(rollup.grossRealizedM, 7.4, 'gross realized must be the sum of both initiatives\' realized values');
+    assert.ok(rollup.unconfirmedRealizedM <= (rollup.grossRealizedM + rollup.unphasedRealizedM), 'unconfirmedRealizedM must never exceed the conserved gross+unphased total');
+    assert.strictEqual(rollup.grossRealizedM, 0, 'neither fixture carries phasing rows, so grossRealizedM (phased-only, T-05-47) must be 0');
+    assert.strictEqual(rollup.unphasedRealizedM, 7.4, 'unphasedRealizedM must be the sum of both initiatives\' realized values');
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
     server.close();
@@ -423,6 +429,13 @@ test('synergy-staleness (m): with zero stale initiatives, unconfirmedRealizedM, 
   }
 });
 
+// T-05-47/D-01 (07-04-PLAN.md): updated deliberately, not deleted. Net
+// benefit is now derived from the REDEFINED (phased-only) grossRealizedM, so
+// this fixture is given phasing rows (rather than a bare realizedM) to keep
+// exercising the general "net benefit = gross - cost" formula this test
+// names — an unphased fixture would report netBenefitM = 0 - 10 = -10 here,
+// which is the intended consequence of the redefinition, not what this
+// specific test is about.
 test('synergy-staleness (n): net benefit equals gross realized minus cost incurred and is negative when cost exceeds realized value', async () => {
   const token = await setupDeal('deal_synstaln');
   const server = app.listen(0);
@@ -430,8 +443,10 @@ test('synergy-staleness (n): net benefit equals gross realized minus cost incurr
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Net benefit', category: 'cost', realizedM: 2 });
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Net benefit', category: 'cost' });
     const { initiative: created } = await createRes.json();
+    await postJSON(base, `/api/synergies/${created.id}/generate-phasing`, token, { runRateM: 24, startMonth: '2020-01', curveShape: 'linear' });
+    await postJSON(base, `/api/synergies/${created.id}/phasing/2020-06`, token, { realizedM: 2 });
     await postJSON(base, `/api/synergies/${created.id}/cost-entries`, token, { date: '2025-01-01', amountM: 10 });
 
     const rollup = await getRollup(base, token);
@@ -554,12 +569,13 @@ test('synergy-staleness-ui (d): the stale badge is emitted only inside a conditi
   assert.ok(!/isSynergyStale/.test(src), 'the client must never replicate the server\'s staleness function');
 });
 
-test('synergy-staleness-ui (e): four rollup tile elements are emitted, and the net-benefit tile applies the destructive colour under a negative-value condition', () => {
+test('synergy-staleness-ui (e): five rollup tile elements are emitted (07-04-PLAN.md adds the unphased tile), and the net-benefit tile applies the destructive colour under a negative-value condition', () => {
   const src = readClientSrc();
   const fnMatch = src.match(/function renderSynRollup\(\) \{[\s\S]*?\n {2}\}/);
   const body = fnMatch[0];
   const tileCount = (body.match(/class="syn-rollup-tile"/g) || []).length;
-  assert.strictEqual(tileCount, 4, 'exactly four .syn-rollup-tile elements must be emitted: gross realized, cost incurred, net benefit, deal target');
+  assert.strictEqual(tileCount, 5, 'exactly five .syn-rollup-tile elements must be emitted: gross realized, unphased, cost incurred, net benefit, deal target (T-05-47/D-01)');
+  assert.match(body, /data-i18n="syn.rollup_unphased">Unphased</, 'the unphased tile must carry its own label, never a footnote inside the gross tile');
   assert.match(body, /var netColor = net < 0 \? '#C0392B' : /, 'the net-benefit tile\'s colour must be conditioned on a negative net value, applying the destructive colour');
   assert.match(body, /syn-rollup-value" style="color:' \+ netColor/, 'the destructive colour must actually be applied to the net-benefit tile\'s value element');
 });

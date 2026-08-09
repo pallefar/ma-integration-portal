@@ -639,22 +639,28 @@
       + '</div>';
   }
 
-  // UI-SPEC §7/D-18/D-21: four stat tiles (gross realized, cost incurred,
-  // net benefit, deal target) replacing the old two-figure rollup, plus the
-  // unconfirmed-split sentence (D-18's exact wording) and the retained
-  // percent-of-target bar — now driven by deal target vs gross realized.
-  // Reads ONLY state.synRollup (the server-computed GET
-  // /api/synergies/rollup response, Plan 05) — never recomputes any of
-  // these figures from the card list, so a wrong client clock or a stale
-  // local card can never disagree with the server's own totals (T-05-36).
+  // UI-SPEC §7/D-18/D-21, T-05-47/D-01/D-02: five stat tiles (gross
+  // realized, unphased, cost incurred, net benefit, deal target) — the
+  // "unphased" tile is new (07-04-PLAN.md), added so the screen and the
+  // steerco pack (Plan 07-05) render the same five figures from the same
+  // rollup response, in the same order UI-SPEC §5 fixes for the pack. It is
+  // a tile in its own right, never a footnote inside the gross tile, so
+  // free-typed unphased money can never read as folded into "gross". Reads
+  // ONLY state.synRollup (the server-computed GET /api/synergies/rollup
+  // response) — never recomputes any of these figures from the card list,
+  // so a wrong client clock or a stale local card can never disagree with
+  // the server's own totals (T-05-36).
   function renderSynRollup() {
     var r = state.synRollup || {};
     var gross = r.grossRealizedM || 0;
+    var unphased = r.unphasedRealizedM || 0;
     var cost = r.costIncurredM || 0;
     var net = r.netBenefitM != null ? r.netBenefitM : (gross - cost);
     var target = r.dealTargetM || 0;
     var staleCount = r.staleCount || 0;
     var unconfirmed = r.unconfirmedRealizedM || 0;
+    // T-05-47/D-01: the percentage now reflects the phased-only gross
+    // against the deal target — that is the point of the redefinition.
     var pct = target > 0 ? Math.round((gross / target) * 100) : 0;
     // Destructive colour when net benefit is negative — a real, expected
     // early-deal state (cost currently exceeds realized value), not an
@@ -663,6 +669,7 @@
 
     var tiles = '<div class="syn-rollup-tiles">'
       + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_gross">Gross realized</div><div class="syn-rollup-value">$' + gross.toFixed(1) + 'M</div></div>'
+      + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_unphased">Unphased</div><div class="syn-rollup-value">$' + unphased.toFixed(1) + 'M</div></div>'
       + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_cost">Cost incurred</div><div class="syn-rollup-value">$' + cost.toFixed(1) + 'M</div></div>'
       + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_net">Net benefit</div><div class="syn-rollup-value" style="color:' + netColor + ';">$' + net.toFixed(1) + 'M</div></div>'
       + '<div class="syn-rollup-tile"><div class="syn-rollup-label" data-i18n="syn.rollup_target">Deal target</div><div class="syn-rollup-value">$' + target.toFixed(1) + 'M</div></div>'
