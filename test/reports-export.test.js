@@ -113,6 +113,35 @@ async function createManualRaid(base, adminToken, title) {
   const { entry } = await res.json();
   return entry;
 }
+async function createTask(base, adminToken, body) {
+  const res = await postJSON(base, '/api/integration-tasks', adminToken, body);
+  const { task } = await res.json();
+  return task;
+}
+async function createSynergy(base, adminToken, body) {
+  const res = await postJSON(base, '/api/synergies', adminToken, body);
+  const { initiative } = await res.json();
+  return initiative;
+}
+// 07-02 Task 1: inserts a single checklistTemplates row DIRECTLY into the
+// given deal's own SQLite file (mirroring test/deal-seed.test.js's
+// insertRow pattern) — there is no API surface to create a checklist
+// template, and computeWorkstreamRollup(db) reads db.checklistTemplates[0].
+// Uses store.getOrOpenConnection() (the SAME cache db/resolver.js uses) so
+// this is a reference read/write against the connection the app itself will
+// use for that deal, never a second independent handle on the same file.
+function seedChecklistTemplate(dealId, workstreams) {
+  const conn = store.getOrOpenConnection(dbFiles.dealDbPath(dealId), dbFiles.DEAL_SCHEMA_PATH);
+  conn.prepare('INSERT INTO checklistTemplates (id, project_id, seq, data) VALUES (?, NULL, 0, ?)')
+    .run('ck_test', JSON.stringify({ id: 'ck_test', workstreams }));
+}
+/** Strips the leading BOM, splits on CRLF, drops the header row and any
+ * trailing empty line, and returns the number of DATA rows (never a header). */
+function dataRowCountFromCsv(csvText) {
+  const body = csvText.replace(/^\uFEFF/, '');
+  const lines = body.split('\r\n').filter((l) => l.length > 0);
+  return lines.length - 1;
+}
 async function createFinding(base, adminToken, area, title) {
   const res = await postJSON(base, '/api/dd/findings', adminToken, { area, title, severity: 'high' });
   const { finding } = await res.json();
@@ -261,3 +290,133 @@ test('reports-export (e): a title beginning with an equals sign is apostrophe-pr
     server.close();
   }
 });
+
+// =====================================================================
+// 07-02 Task 1: the three remaining datasets (workstreams/tasks/synergies)
+// and the JSON format branch, on top of the tracer's proven architecture.
+// =====================================================================
+
+test('reports-export (f): all eight accepted dataset/format combinations return 200 with the expected content type — no 501 remains', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rptf');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+    await createManualRaid(base, adminToken, 'A risk for the combination sweep');
+    await createTask(base, adminToken, { title: 'A task for the combination sweep', workstreamId: 'ws_imo' });
+    await createSynergy(base, adminToken, { title: 'A synergy for the combination sweep', category: 'cost', targetM: 1, realizedM: 0.5 });
+
+    for (const dataset of ['workstreams', 'tasks', 'raid', 'synergies']) {
+      for (const format of ['csv', 'json']) {
+        const res = await getRaw(base, `/api/reports/export?dataset=${dataset}&format=${format}`, adminToken);
+        assert.strictEqual(res.status, 200, `dataset=${dataset}&format=${format} must return 200, never 501`);
+        const contentType = res.headers.get('content-type') || '';
+        if (format === 'json') {
+          assert.ok(contentType.includes('application/json'), `dataset=${dataset}&format=json must have an application/json content type, got '${contentType}'`);
+          const parsed = JSON.parse(await res.text());
+          assert.ok(Array.isArray(parsed), `dataset=${dataset}&format=json must return a JSON array`);
+        } else {
+          assert.ok(contentType.includes('text/csv'), `dataset=${dataset}&format=csv must have a text/csv content type, got '${contentType}'`);
+        }
+      }
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-export (g): the JSON export of synergies and raid deep-equals the live GET route body for the SAME identity in the SAME run — never a bespoke export schema (D-08)', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rptg');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+    await createManualRaid(base, adminToken, 'A RAID entry for the parity check');
+    await createSynergy(base, adminToken, { title: 'A synergy for the parity check', category: 'revenue', targetM: 3, realizedM: 1, owner: 'Jamie', workstreamId: 'ws_sales' });
+
+    const liveRaid = await (await getRaw(base, '/api/raid', adminToken)).json();
+    const exportRaid = JSON.parse(await (await getRaw(base, '/api/reports/export?dataset=raid&format=json', adminToken)).text());
+    assert.deepStrictEqual(exportRaid, liveRaid, 'the RAID JSON export must be field-for-field identical to GET /api/raid for the same identity');
+
+    const liveSynergies = await (await getRaw(base, '/api/synergies', adminToken)).json();
+    const exportSynergies = JSON.parse(await (await getRaw(base, '/api/reports/export?dataset=synergies&format=json', adminToken)).text());
+    assert.deepStrictEqual(exportSynergies, liveSynergies, 'the synergies JSON export must be field-for-field identical to GET /api/synergies for the same identity');
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-export (h): the exported workstream rows equal what execution.js\'s own client-side math produces for the same seeded template and task set — a blocked workstream forces a red band, a zero-task workstream is absent', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rpth');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+    seedChecklistTemplate(deal.id, [
+      { id: 'ws_amber', label: 'Amber Stream', icon: '' },
+      { id: 'ws_blocked', label: 'Blocked Stream', icon: '' },
+      { id: 'ws_green', label: 'Green Stream', icon: '' },
+      { id: 'ws_empty', label: 'Empty Stream', icon: '' },
+    ]);
+
+    // ws_amber: 2/3 done -> 67% -> amber (>=40, <80), not blocked.
+    await createTask(base, adminToken, { title: 'a1', workstreamId: 'ws_amber', status: 'done' });
+    await createTask(base, adminToken, { title: 'a2', workstreamId: 'ws_amber', status: 'done' });
+    await createTask(base, adminToken, { title: 'a3', workstreamId: 'ws_amber', status: 'todo' });
+    // ws_blocked: 1/2 done but one blocked -> red regardless of the 50% figure.
+    await createTask(base, adminToken, { title: 'b1', workstreamId: 'ws_blocked', status: 'done' });
+    await createTask(base, adminToken, { title: 'b2', workstreamId: 'ws_blocked', status: 'blocked' });
+    // ws_green: 4/4 done -> 100% -> green.
+    await createTask(base, adminToken, { title: 'g1', workstreamId: 'ws_green', status: 'done' });
+    await createTask(base, adminToken, { title: 'g2', workstreamId: 'ws_green', status: 'done' });
+    await createTask(base, adminToken, { title: 'g3', workstreamId: 'ws_green', status: 'done' });
+    await createTask(base, adminToken, { title: 'g4', workstreamId: 'ws_green', status: 'done' });
+    // ws_empty has NO tasks — must not appear in the rollup at all.
+
+    const res = await getRaw(base, '/api/reports/export?dataset=workstreams&format=json', adminToken);
+    assert.strictEqual(res.status, 200);
+    const rows = JSON.parse(await res.text());
+
+    assert.deepStrictEqual(rows, [
+      { id: 'ws_amber', label: 'Amber Stream', tasksTotal: 3, tasksDone: 2, pctComplete: 67, blocked: false, ragStatus: 'amber' },
+      { id: 'ws_blocked', label: 'Blocked Stream', tasksTotal: 2, tasksDone: 1, pctComplete: 50, blocked: true, ragStatus: 'red' },
+      { id: 'ws_green', label: 'Green Stream', tasksTotal: 4, tasksDone: 4, pctComplete: 100, blocked: false, ragStatus: 'green' },
+    ], 'the exported rollup must equal execution.js\'s own client-side math exactly, and must omit the zero-task workstream');
+
+    // The same numbers via CSV, so the two formats can never disagree either.
+    const csvRes = await getRaw(base, '/api/reports/export?dataset=workstreams&format=csv', adminToken);
+    const csvBody = await csvRes.text();
+    assert.strictEqual(dataRowCountFromCsv(csvBody), 3, 'the CSV export must carry exactly the three non-empty workstreams');
+    assert.ok(csvBody.includes('ws_amber,Amber Stream,3,2,67,false,amber'), 'the amber row must carry the identical figures as the JSON export');
+    assert.ok(csvBody.includes('ws_blocked,Blocked Stream,2,1,50,true,red'), 'the blocked row must carry the identical figures as the JSON export');
+    assert.ok(csvBody.includes('ws_green,Green Stream,4,4,100,false,green'), 'the green row must carry the identical figures as the JSON export');
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-export (i): a deal with no data at all yields a headers-only CSV and an empty JSON array for all four datasets', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rpti');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+
+    for (const dataset of ['workstreams', 'tasks', 'raid', 'synergies']) {
+      const csvRes = await getRaw(base, `/api/reports/export?dataset=${dataset}&format=csv`, adminToken);
+      assert.strictEqual(csvRes.status, 200);
+      assert.strictEqual(dataRowCountFromCsv(await csvRes.text()), 0, `dataset=${dataset}&format=csv on an empty deal must have zero data rows`);
+
+      const jsonRes = await getRaw(base, `/api/reports/export?dataset=${dataset}&format=json`, adminToken);
+      assert.strictEqual(jsonRes.status, 200);
+      assert.deepStrictEqual(JSON.parse(await jsonRes.text()), [], `dataset=${dataset}&format=json on an empty deal must be an empty array, never an error`);
+    }
+  } finally {
+    server.close();
+  }
+});
+

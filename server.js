@@ -2922,6 +2922,34 @@ function taskLane(db) {
   return db.integrationTasks;
 }
 
+// RPT-01 (07-02): the SINGLE server-side port of public/js/execution.js's
+// own client-side workstream rollup math (render()'s wsGrid block, ~line
+// 130-144, and ragColor() ~line 105) — this is what lets the Reports export,
+// the Execution Hub screen and (Plan 07-04's) the PDF pack's RAG strip agree
+// on the same numbers. Reads the first checklist template's workstreams
+// list plus taskLane(db); a workstream with zero tasks is dropped, matching
+// the client's own `if (!ts.length) return '';` skip. Do NOT let a second
+// consumer re-derive the RAG band from a percentage independently — call
+// this function instead.
+function computeWorkstreamRollup(db) {
+  const template = (db.checklistTemplates || [])[0];
+  const workstreams = (template && template.workstreams) || [];
+  const tasks = taskLane(db);
+  const rows = [];
+  workstreams.forEach((w) => {
+    const ts = tasks.filter((t) => t.workstreamId === w.id);
+    if (!ts.length) return;
+    const tasksDone = ts.filter((t) => t.status === 'done').length;
+    const blocked = ts.some((t) => t.status === 'blocked');
+    const pctComplete = Math.round((tasksDone / ts.length) * 100);
+    // Named form of execution.js's ragColor() thresholds: blocked always
+    // wins red; otherwise green at/above 80, amber at/above 40, red below.
+    const ragStatus = blocked ? 'red' : (pctComplete >= 80 ? 'green' : (pctComplete >= 40 ? 'amber' : 'red'));
+    rows.push({ id: w.id, label: w.label, tasksTotal: ts.length, tasksDone, pctComplete, blocked, ragStatus });
+  });
+  return rows;
+}
+
 const TASK_STATUSES = ['todo', 'doing', 'blocked', 'done'];
 const TASK_PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
 
@@ -5429,13 +5457,14 @@ app.delete('/api/raid/:id', (req, res) => {
 });
 
 // =====================================================================
-// Reports & Exports (RPT-01) — phase tracer. Proves the whole export
-// architecture end to end on ONE dataset/format combination (RAID as CSV)
-// before Plan 07-02 expands the other three accepted-but-not-yet-wired
-// combinations. See lib/reportCsv.js (RFC 4180 quoting, CRLF terminators,
-// UTF-8 BOM, formula-injection neutralisation) and lib/reportFilename.js
-// (codename sanitisation + safe Content-Disposition) for the reusable
-// pieces this route composes.
+// Reports & Exports (RPT-01). Plan 07-01's tracer proved the whole export
+// architecture end to end on ONE dataset/format combination (RAID as CSV);
+// Plan 07-02 fills in the remaining three datasets and the JSON format on
+// the SAME architecture — one zod whitelist, one handler, one audit call
+// site. See lib/reportCsv.js (RFC 4180 quoting, CRLF terminators, UTF-8 BOM,
+// formula-injection neutralisation) and lib/reportFilename.js (codename
+// sanitisation + safe Content-Disposition) for the reusable pieces this
+// route composes.
 //
 // D-09 IS the zod enum below, not a denylist: `dataset` names exactly the
 // four datasets RPT-01/02 cover (workstreams, tasks, raid, synergies).
@@ -5455,51 +5484,105 @@ app.get('/api/reports/export', (req, res) => {
   }
   const { dataset, format } = parsed.data;
 
-  // Only raid+csv is implemented in this tracer plan — every other accepted
-  // enum combination is a deliberate 501 stub Plan 07-02 replaces with a
-  // real branch. Never silently honoured, never partially honoured.
-  if (!(dataset === 'raid' && format === 'csv')) {
-    return res.status(501).json({ error: `Export of dataset '${dataset}' as '${format}' is not yet implemented.` });
-  }
-
   try {
     const db = readDb();
     const deal = controlStore.getDeal(req.dealContext.dealId);
-    // D-08: reuse the EXISTING RAID clearance filter verbatim, in the same
-    // order GET /api/raid (above) uses it — never a second, divergent
-    // implementation. ddFindingsLane(db) is materialized once here, exactly
-    // as GET /api/raid does, so resolveRaidEntryClearanceArea()'s own calls
-    // below are just reference reads against the already-loaded array.
-    ddFindingsLane(db);
-    const rows = raidLane(db).filter((entry) => {
-      const area = resolveRaidEntryClearanceArea(entry, db);
-      return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
-    });
 
-    // Mirrors the fields the RAID tab already shows that caller (D-08 parity).
-    const columns = [
-      { key: 'id', header: 'ID' },
-      { key: 'type', header: 'Type' },
-      { key: 'severity', header: 'Severity' },
-      { key: 'probability', header: 'Probability' },
-      { key: 'title', header: 'Title' },
-      { key: 'owner', header: 'Owner' },
-      { key: 'workstreamId', header: 'Workstream' },
-      { key: 'status', header: 'Status' },
-    ];
-    const csv = reportCsv.toCsv(rows, columns);
+    let rows;
+    let columns;
+    if (dataset === 'raid') {
+      // D-08: reuse the EXISTING RAID clearance filter verbatim, in the same
+      // order GET /api/raid (above) uses it — never a second, divergent
+      // implementation. ddFindingsLane(db) is materialized once here, exactly
+      // as GET /api/raid does, so resolveRaidEntryClearanceArea()'s own calls
+      // below are just reference reads against the already-loaded array.
+      ddFindingsLane(db);
+      rows = raidLane(db).filter((entry) => {
+        const area = resolveRaidEntryClearanceArea(entry, db);
+        return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
+      });
+      // Mirrors the fields the RAID tab already shows that caller (D-08 parity).
+      columns = [
+        { key: 'id', header: 'ID' },
+        { key: 'type', header: 'Type' },
+        { key: 'severity', header: 'Severity' },
+        { key: 'probability', header: 'Probability' },
+        { key: 'title', header: 'Title' },
+        { key: 'owner', header: 'Owner' },
+        { key: 'workstreamId', header: 'Workstream' },
+        { key: 'status', header: 'Status' },
+      ];
+    } else if (dataset === 'workstreams') {
+      // Single server-side implementation — see computeWorkstreamRollup(db)
+      // next to taskLane(db) above. Never re-derived here.
+      rows = computeWorkstreamRollup(db);
+      columns = [
+        { key: 'id', header: 'ID' },
+        { key: 'label', header: 'Label' },
+        { key: 'tasksTotal', header: 'Tasks total' },
+        { key: 'tasksDone', header: 'Tasks done' },
+        { key: 'pctComplete', header: 'Percent complete' },
+        { key: 'blocked', header: 'Blocked' },
+        { key: 'ragStatus', header: 'RAG status' },
+      ];
+    } else if (dataset === 'tasks') {
+      // No per-item clearance concept exists on tasks today — every deal
+      // member sees every task, so no filter applies here (07-02-PLAN.md).
+      rows = taskLane(db);
+      columns = [
+        { key: 'id', header: 'ID' },
+        { key: 'title', header: 'Title' },
+        { key: 'workstreamId', header: 'Workstream' },
+        { key: 'phase', header: 'Phase' },
+        { key: 'status', header: 'Status' },
+        { key: 'owner', header: 'Owner' },
+        { key: 'due', header: 'Due' },
+        { key: 'source', header: 'Source' },
+      ];
+    } else {
+      // synergies — mirrors GET /api/synergies' own mapping EXACTLY (a ctx
+      // built ONCE for this request, then the same costEntries sort) so the
+      // JSON export can never diverge from the live route's shape (D-08).
+      const lane = synergyLane(db);
+      const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
+      rows = lane.map((item) => {
+        const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
+        const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+        return Object.assign({}, enrichSynergy(item, ctx), { costEntries: sortedCostEntries });
+      });
+      columns = [
+        { key: 'id', header: 'ID' },
+        { key: 'title', header: 'Title' },
+        { key: 'category', header: 'Category' },
+        { key: 'stage', header: 'Stage' },
+        { key: 'targetM', header: 'Target ($M)' },
+        { key: 'realizedM', header: 'Realized ($M)' },
+        { key: 'costIncurredM', header: 'Cost incurred ($M)' },
+        { key: 'netBenefitM', header: 'Net benefit ($M)' },
+        { key: 'owner', header: 'Owner' },
+        { key: 'workstreamId', header: 'Workstream' },
+        { key: 'stale', header: 'Stale' },
+        { key: 'lastConfirmedAt', header: 'Last confirmed' },
+      ];
+    }
 
     // D-07/D-09: the filename is built from the deal's CODENAME (deal.name —
     // the same field the header deal-switcher pill renders), NEVER
     // deal.targetCompany, the real legal target name that exists separately
-    // precisely so it can be withheld.
-    const filename = reportFilename.buildReportFilename((deal && deal.name) || '', dataset, 'csv');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    // precisely so it can be withheld. The extension now tracks the
+    // requested format.
+    const filename = reportFilename.buildReportFilename((deal && deal.name) || '', dataset, format);
+    // D-08: the JSON body is the SAME array of objects the CSV branch above
+    // derived its rows from, serialised whole — never a bespoke export
+    // schema that can drift from the live GET route's own shape.
+    const body = format === 'json' ? JSON.stringify(rows) : reportCsv.toCsv(rows, columns);
+    res.setHeader('Content-Type', format === 'json' ? 'application/json; charset=utf-8' : 'text/csv; charset=utf-8');
     reportFilename.setContentDisposition(res, filename);
 
     // D-10/D-11: exactly one audit event per successful real-deal export,
-    // gated on the request not being a demo request — demo keeps full
-    // export parity and gains no audit rows.
+    // for either format and any dataset, gated on the request not being a
+    // demo request — demo keeps full export parity and gains no audit rows.
+    // The row count reflects the rows actually written to this response.
     //
     // KNOWN, ACCEPTED LABELLING GAP (06-RESEARCH.md Assumptions Log A2, cited
     // by 07-RESEARCH.md Pitfall 4): db/auditHook.js's recordSecurityEvent()
@@ -5517,7 +5600,7 @@ app.get('/api/reports/export', (req, res) => {
       });
     }
 
-    res.send(csv);
+    res.send(body);
   } catch (error) {
     console.error('Error generating report export:', error);
     res.status(500).json({ error: 'Failed to generate the export.' });
