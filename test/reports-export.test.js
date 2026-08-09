@@ -35,6 +35,7 @@ const sessionsDb = require('../db/sessions.js');
 const { createDealDatabase } = require('../db/dealSeed.js');
 
 const app = require('../server.js');
+const { csvField } = require('../lib/reportCsv.js');
 
 const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
 const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
@@ -168,6 +169,22 @@ function patchSynergyRow(dealId, synergyId, patch) {
 
 test.after(() => {
   try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
+
+// ============================================================
+// WR-01 fix (07-REVIEW.md): csvField() must only apostrophe-prefix
+// string-typed values. A JS number's string form can only ever contain
+// digits/./-/e (never a formula payload), so a computed numeric column
+// (e.g. a negative netBenefitM) must round-trip as a real number, not
+// spreadsheet text — while the T-07-05 defence stays in force for every
+// string-typed field, including a numeric-looking string.
+// ============================================================
+test('reports-export (csvField unit): a number-typed negative value is NEVER apostrophe-prefixed, but the identical string value keeps the T-07-05 escaping, and a formula string is still escaped', () => {
+  assert.strictEqual(csvField(-5.2), '-5.2', 'a number must round-trip as real CSV numeric text, not spreadsheet text');
+  assert.strictEqual(csvField('-5.2'), "'-5.2", 'a numeric-looking STRING must still keep the T-07-05 apostrophe-prefix escaping');
+  assert.strictEqual(csvField('=cmd'), "'=cmd", 'a formula-string value must still be escaped');
+  assert.strictEqual(csvField(0), '0', 'a zero number must not be prefixed');
+  assert.strictEqual(csvField(-1), '-1', 'a negative integer number must not be prefixed');
 });
 
 // ============================================================
