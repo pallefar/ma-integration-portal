@@ -3507,6 +3507,34 @@ app.get('/api/synergies', (req, res) => {
 // gross" invariant is no longer stated against `grossRealizedM` alone — it
 // now holds against `grossRealizedM + unphasedRealizedM` (the conserved
 // total), which is what test/synergy-rollup-split.test.js asserts.
+// WR-05 fix (07-REVIEW.md): the SINGLE phased/unphased rollup-split
+// computation GET /api/synergies/rollup AND GET /api/reports/pack both call
+// — factored out so a future change to the split's definition (e.g. a new
+// partition rule, a rounding-order change) applied to one call site is
+// automatically applied to the other, and the on-screen synergy rollup and
+// the PDF pack's page-one/Section-4 numbers can never silently disagree
+// (the exact "double-counting drift" the T-05-47/D-01/D-02 comments above
+// describe preventing). Computes the FULL set of fields every caller might
+// need — the rollup route uses all seven; the pack route currently only
+// needs `staleCount` — so each caller reads what it needs from one shared
+// result rather than re-deriving any of it.
+function computeSynergyRollupSplit(enrichedItems) {
+  const hasPhasing = (i) => Array.isArray(i.phasing) && i.phasing.length > 0;
+  const phasedItems = enrichedItems.filter(hasPhasing);
+  const unphasedItems = enrichedItems.filter((i) => !hasPhasing(i));
+
+  const grossRealizedM = roundSynergyMoney(phasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
+  const unphasedRealizedM = roundSynergyMoney(unphasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
+  const costIncurredM = roundSynergyMoney(enrichedItems.reduce((a, i) => a + (i.costIncurredM || 0), 0));
+  const netBenefitM = Math.round((grossRealizedM - costIncurredM) * 10) / 10;
+  const dealTargetM = roundSynergyMoney(enrichedItems.reduce((a, i) => a + (i.targetM || 0), 0));
+  const staleItems = enrichedItems.filter((i) => i.stale);
+  const unconfirmedRealizedM = roundSynergyMoney(staleItems.reduce((a, i) => a + (i.realizedM || 0), 0));
+  const staleCount = staleItems.length;
+
+  return { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount, unconfirmedRealizedM };
+}
+
 app.get('/api/synergies/rollup', (req, res) => {
   const db = readDb();
   const lane = synergyLane(db);
@@ -3515,26 +3543,19 @@ app.get('/api/synergies/rollup', (req, res) => {
   const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
   const enriched = lane.map((item) => enrichSynergy(item, ctx));
 
-  const hasPhasing = (i) => Array.isArray(i.phasing) && i.phasing.length > 0;
-  const phasedItems = enriched.filter(hasPhasing);
-  const unphasedItems = enriched.filter((i) => !hasPhasing(i));
-
-  const grossRealizedM = roundSynergyMoney(phasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
-  const unphasedRealizedM = roundSynergyMoney(unphasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
-  const costIncurredM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.costIncurredM || 0), 0));
-  const netBenefitM = Math.round((grossRealizedM - costIncurredM) * 10) / 10;
-  const dealTargetM = roundSynergyMoney(enriched.reduce((a, i) => a + (i.targetM || 0), 0));
-  const staleItems = enriched.filter((i) => i.stale);
-  const unconfirmedRealizedM = roundSynergyMoney(staleItems.reduce((a, i) => a + (i.realizedM || 0), 0));
-  const staleCount = staleItems.length;
+  const split = computeSynergyRollupSplit(enriched);
+  const { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, unconfirmedRealizedM, staleCount } = split;
 
   // `mine.staleCount` mirrors GET /api/dd/summary's owner-comparison idiom
   // exactly — derived from the SAME enriched array the totals above came
   // from, so the deal-home nudge and the card badges can never disagree
   // (D-19). Read only from the server-resolved session identity, never a
-  // client-supplied username.
+  // client-supplied username. Re-filters `enriched` for stale items rather
+  // than reading them off `split` — computeSynergyRollupSplit() returns the
+  // aggregate `staleCount` number, not the intermediate staleItems array,
+  // since no other caller needs the array itself.
   const myUsername = String((req.portalUser && req.portalUser.username) || '').trim();
-  const mineStaleCount = staleItems.filter((i) => String(i.owner || '').trim() === myUsername).length;
+  const mineStaleCount = enriched.filter((i) => i.stale && String(i.owner || '').trim() === myUsername).length;
 
   res.json({
     grossRealizedM,
@@ -5769,19 +5790,13 @@ app.get('/api/reports/pack', async (req, res) => {
       });
     }
 
-    // T-05-47/D-01: the SAME rollup computation GET /api/synergies/rollup
-    // uses, over the SAME enriched array this handler already built above —
-    // never re-derived from `synergies` a second time (that IS the
-    // double-counting drift RPT-03 forbids, D-02).
-    const hasPhasing = (i) => Array.isArray(i.phasing) && i.phasing.length > 0;
-    const phasedItems = synergies.filter(hasPhasing);
-    const unphasedItems = synergies.filter((i) => !hasPhasing(i));
-    const grossRealizedM = roundSynergyMoney(phasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
-    const unphasedRealizedM = roundSynergyMoney(unphasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
-    const costIncurredM = roundSynergyMoney(synergies.reduce((a, i) => a + (i.costIncurredM || 0), 0));
-    const netBenefitM = Math.round((grossRealizedM - costIncurredM) * 10) / 10;
-    const dealTargetM = roundSynergyMoney(synergies.reduce((a, i) => a + (i.targetM || 0), 0));
-    const staleCount = synergies.filter((i) => i.stale).length;
+    // T-05-47/D-01/WR-05: the SAME shared computeSynergyRollupSplit() helper
+    // GET /api/synergies/rollup calls, over the SAME enriched `synergies`
+    // array this handler already built above — never re-derived a second
+    // time (that IS the double-counting drift RPT-03 forbids, D-02). Only
+    // `staleCount` is read from the result below; the helper still computes
+    // the full set so both call sites can never drift from each other.
+    const { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount } = computeSynergyRollupSplit(synergies);
 
     // Timestamp and username are resolved server-side, from the SAME
     // req.portalUser/Date.now() pair this generation's audit event records
