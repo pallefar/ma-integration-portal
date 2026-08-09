@@ -152,9 +152,102 @@ async function convertFindingToRaid(base, adminToken, findingId) {
   const body = await res.json();
   return body.raid;
 }
+// RPT-04/D-14 (07-04-PLAN.md Task 2): direct SQLite manipulation of the
+// deal's own synergyInitiatives row — mirrors seedChecklistTemplate()'s
+// established pattern above, since there is no API surface that lets a
+// caller backdate lastConfirmedAt/createdAt to a precise, deterministic age.
+// Uses store.getOrOpenConnection() (the SAME cache db/resolver.js uses), so
+// this is a reference read/write against the connection the app itself will
+// use for that deal, never a second independent handle on the same file.
+function patchSynergyRow(dealId, synergyId, patch) {
+  const conn = store.getOrOpenConnection(dbFiles.dealDbPath(dealId), dbFiles.DEAL_SCHEMA_PATH);
+  const row = conn.prepare('SELECT data FROM synergyInitiatives WHERE id = ?').get(synergyId);
+  const item = Object.assign(JSON.parse(row.data), patch);
+  conn.prepare('UPDATE synergyInitiatives SET data = ? WHERE id = ?').run(JSON.stringify(item), synergyId);
+}
 
 test.after(() => {
   try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
+
+// ============================================================
+// 07-04 Task 2: the stale day count, from one clock and one per-deal
+// threshold, into the exports (RPT-04/D-14)
+// ============================================================
+
+// The exact-at-threshold-is-not-yet-stale boundary is already proven at the
+// pure-function level against a FIXED, caller-controlled clock
+// (test/synergy-staleness.test.js (g): isSynergyStale(exactlyAtThreshold,
+// staleDays, now)). This export-level test instead proves the whole-day
+// count and the boolean survive correctly into the export surface and move
+// together with D-14's one threshold — an HTTP round trip has no way to
+// inject a fixed "now", so the "within threshold" fixture below is given a
+// deliberate safety margin (25 of a 30-day threshold, not exactly 30) so the
+// assertion can never flake on the few milliseconds of real wall-clock time
+// this test itself takes to run.
+test('reports-export (n): the synergies export carries a whole-day staleDays age alongside the existing boolean — comfortably-within-threshold is not stale, well-past-threshold is, moving the deal\'s threshold flips the within-threshold item, and an item with neither timestamp exports as not stale with a null day count', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rptn');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+
+    // D-14: an explicit threshold, not the 30-day default, so the test does
+    // not depend on a default that could change independently of this plan.
+    await postJSON(base, '/api/settings', adminToken, { synergyStaleDays: 30 });
+
+    const today = await createSynergy(base, adminToken, { title: 'Confirmed today', category: 'cost' });
+    const nowIso = new Date().toISOString();
+    patchSynergyRow(deal.id, today.id, { lastConfirmedAt: nowIso });
+
+    const withinThreshold = await createSynergy(base, adminToken, { title: 'Confirmed comfortably within threshold', category: 'cost' });
+    const twentyFiveDaysAgoIso = new Date(Date.now() - 25 * 86400000).toISOString();
+    patchSynergyRow(deal.id, withinThreshold.id, { lastConfirmedAt: twentyFiveDaysAgoIso });
+
+    const pastThreshold = await createSynergy(base, adminToken, { title: 'Confirmed well past threshold', category: 'cost' });
+    const fortyFiveDaysAgoIso = new Date(Date.now() - 45 * 86400000).toISOString();
+    patchSynergyRow(deal.id, pastThreshold.id, { lastConfirmedAt: fortyFiveDaysAgoIso });
+
+    // Carries neither lastConfirmedAt nor createdAt — an unknown-age item.
+    const unknownAge = await createSynergy(base, adminToken, { title: 'Unknown age' });
+    patchSynergyRow(deal.id, unknownAge.id, { lastConfirmedAt: undefined, createdAt: undefined });
+
+    const exportRows = async () => JSON.parse(await (await getRaw(base, '/api/reports/export?dataset=synergies&format=json', adminToken)).text());
+    const byId = (rows, id) => rows.find((r) => r.id === id);
+
+    let rows = await exportRows();
+    assert.strictEqual(byId(rows, today.id).stale, false, 'an item confirmed today must not be stale');
+    assert.strictEqual(byId(rows, today.id).staleDays, 0, 'an item confirmed today must carry a whole-day age of 0');
+
+    assert.strictEqual(byId(rows, withinThreshold.id).stale, false, 'comfortably within the threshold must NOT be stale');
+    assert.strictEqual(byId(rows, withinThreshold.id).staleDays, 25, 'the within-threshold item\'s day count must be exactly 25');
+
+    assert.strictEqual(byId(rows, pastThreshold.id).stale, true, 'well past the threshold must be stale');
+    assert.strictEqual(byId(rows, pastThreshold.id).staleDays, 45, 'the well-past-threshold item\'s day count must be exactly 45');
+
+    assert.strictEqual(byId(rows, unknownAge.id).stale, false, 'an item with neither timestamp must export as not stale, never defaulted to stale');
+    assert.strictEqual(byId(rows, unknownAge.id).staleDays, null, 'an item with neither timestamp must export a null day count, never 0 (which would misleadingly read as confirmed today)');
+
+    // D-14: moving the deal's ONE threshold moves the export's verdict — the
+    // within-threshold (25-day-old) item flips to stale once the threshold
+    // drops below its age, proven at the export surface, not just the live route.
+    await postJSON(base, '/api/settings', adminToken, { synergyStaleDays: 10 });
+    rows = await exportRows();
+    assert.strictEqual(byId(rows, withinThreshold.id).stale, true, 'lowering the threshold below the item\'s age must flip its exported stale column to true');
+    assert.strictEqual(byId(rows, withinThreshold.id).staleDays, 25, 'the day count itself is an intrinsic property of the item\'s age and must not move when only the threshold changes');
+
+    // CSV: the staleDays column exists immediately after the stale column,
+    // and the JSON export's values above are exactly what the CSV serializes
+    // (D-08's "same enriched shape" rule) — proven here by header order.
+    const csvText = await (await getRaw(base, '/api/reports/export?dataset=synergies&format=csv', adminToken)).text();
+    const headerLine = csvText.replace(/^﻿/, '').split('\r\n')[0];
+    const headerCols = headerLine.split(',');
+    const staleIdx = headerCols.indexOf('Stale');
+    assert.strictEqual(headerCols[staleIdx + 1], 'Stale days', 'the Stale days column must appear immediately after the Stale column');
+  } finally {
+    server.close();
+  }
 });
 
 test('reports-export (a): four-identity parity — admin, the IL (hrbp), a one-area member and a no-area member each receive from the CSV export EXACTLY the id set GET /api/raid returns for that same identity in the same run (D-08)', async () => {

@@ -3353,6 +3353,26 @@ function isSynergyStale(item, staleDays, nowMs) {
   return (nowMs - parsed) > (staleDays * 86400000);
 }
 
+// RPT-04/D-14 (07-04-PLAN.md Task 2, 07-UI-SPEC.md §4): the pack's stale tag
+// needs a whole-day age count behind isSynergyStale()'s boolean — the
+// screen's own `.syn-stale-badge` only ever showed the exact date in a
+// hover title, never an inline count. `nowMs` is the SAME single-clock
+// parameter isSynergyStale() takes (captured ONCE per request by the
+// caller's ctx, never read internally here) and this resolves the SAME
+// lastConfirmedAt-falling-back-to-createdAt timestamp isSynergyStale() does,
+// so the day count and the boolean can never disagree about which
+// timestamp they are judging or which instant they are judged against.
+// Returns null (never 0, which would misleadingly read as "confirmed
+// today") when neither timestamp parses to a finite instant — mirroring
+// isSynergyStale()'s own never-default-unknown-age-to-stale contract; an
+// unknown-age item must never carry a false day count either.
+function synergyStaleDayCount(item, nowMs) {
+  const raw = (item && item.lastConfirmedAt) || (item && item.createdAt);
+  const parsed = Date.parse(raw);
+  if (!isFinite(parsed)) return null;
+  return Math.max(0, Math.floor((nowMs - parsed) / 86400000));
+}
+
 // SYN-05/D-16: an EXPLICIT ALLOWLIST of the fields that constitute a real
 // value change on the base upsert — title and notes are deliberately
 // excluded (a typo fix must not make a six-week-old forecast look
@@ -3379,17 +3399,24 @@ function resolveSynergyTaskIds(taskIds, db) {
   return { ok: true, ids };
 }
 
-// SYN-05/D-18/D-19: the item merged with every derived field this phase's
-// routes attach — the rollup totals (synergyRollupFields), the cost fields
-// (synergyCostFields), and the `stale` boolean (isSynergyStale). `ctx` is
-// built ONCE per request by the caller (GET /api/synergies and
-// GET /api/synergies/rollup below) — its `staleDays` and `nowMs` are read
+// SYN-05/D-18/D-19/RPT-04: the item merged with every derived field this
+// phase's routes attach — the rollup totals (synergyRollupFields), the cost
+// fields (synergyCostFields), the `stale` boolean (isSynergyStale), and the
+// whole-day `staleDays` age count behind it (synergyStaleDayCount). `ctx` is
+// built ONCE per request by the caller (GET /api/synergies,
+// GET /api/synergies/rollup and GET /api/reports/export's synergies branch)
+// — its `staleDays` (the deal's configured THRESHOLD) and `nowMs` are read
 // once and reused for every item in that request, so two initiatives
 // sharing a lastConfirmedAt are always judged against the identical instant
-// and no item can flip mid-loop (SYN-05 adjacency).
+// and no item can flip mid-loop (SYN-05 adjacency). Note the per-item
+// `staleDays` field this function attaches is a DIFFERENT number from
+// `ctx.staleDays` — one is this item's own age, the other is the deal-wide
+// threshold it is judged against; both happen to share the name the rest of
+// this codebase already uses for each concept.
 function enrichSynergy(item, ctx) {
   return Object.assign({}, item, synergyRollupFields(item), synergyCostFields(item), {
     stale: isSynergyStale(item, ctx.staleDays, ctx.nowMs),
+    staleDays: synergyStaleDayCount(item, ctx.nowMs),
   });
 }
 
@@ -5596,6 +5623,13 @@ app.get('/api/reports/export', (req, res) => {
         { key: 'owner', header: 'Owner' },
         { key: 'workstreamId', header: 'Workstream' },
         { key: 'stale', header: 'Stale' },
+        // RPT-04/07-UI-SPEC.md §4: the day-count column immediately after
+        // the existing stale column — the CSV's data-only equivalent of the
+        // pack's "Stale {N}d" tag, since a spreadsheet cell has no visual
+        // weight to dim. Sourced from enrichSynergy()'s staleDays field
+        // (07-04-PLAN.md Task 2), so the export, the pack, and any future
+        // reader all move together with the deal's one threshold (D-14).
+        { key: 'staleDays', header: 'Stale days' },
         { key: 'lastConfirmedAt', header: 'Last confirmed' },
       ];
     }
@@ -6519,6 +6553,10 @@ module.exports.stageGateFailure = stageGateFailure;
 // nowMs, without booting the HTTP server for every case.
 module.exports.isSynergyStale = isSynergyStale;
 module.exports.synergyStaleDays = synergyStaleDays;
+// RPT-04: exposed for the same pure-function unit-check rationale as
+// isSynergyStale — a test can drive the boundary/null cases directly
+// against a controlled nowMs, without booting the HTTP server.
+module.exports.synergyStaleDayCount = synergyStaleDayCount;
 // CR-01: exposed for the same pure-function unit-check rationale — a test
 // can assert the [1, 15] clamp directly against a constructed db.settings
 // object, without needing an HTTP round-trip through the schema.
