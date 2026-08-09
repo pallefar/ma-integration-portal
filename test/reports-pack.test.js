@@ -809,7 +809,7 @@ test('reports-pack route (GET /api/reports/pack)', async (t) => {
       const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
       await postJSON(base, '/api/raid', adminToken, { title: 'Non-empty deal', type: 'risk', severity: 'low' });
 
-      const res = await getRaw(base, '/api/reports/pack?language=fr', adminToken);
+      const res = await getRaw(base, '/api/reports/pack?lang=fr', adminToken);
       assert.strictEqual(res.status, 200);
       const buf = Buffer.from(await res.arrayBuffer());
       assert.match(buf.toString('binary', 0, 8), /^%PDF-1\.4$/);

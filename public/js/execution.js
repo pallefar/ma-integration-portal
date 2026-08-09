@@ -1100,6 +1100,73 @@
         }
       });
     });
+
+    // RPT-02/07-06: the steerco pack button — the ONE accent-coloured
+    // control this phase introduces (07-UI-SPEC.md §7). Ports the existing
+    // content-management save button's disable+label-swap idiom
+    // (admin-cms.js:37) verbatim. No demo-conditional branch exists anywhere
+    // in this handler — demo generates the identical pack via the identical
+    // fetch (07-UI-SPEC.md §6); the only demo-conditional code in this
+    // phase's entire surface lives server-side, in the route's audit call.
+    var packBtn = document.getElementById('rpt-pack-btn');
+    var packErr = document.getElementById('rpt-pack-error');
+    if (packBtn) {
+      var packBtnDefaultLabel = packBtn.textContent;
+      packBtn.addEventListener('click', function () {
+        packBtn.disabled = true;
+        packBtn.textContent = 'Generating pack…';
+        // T-07-32/07-UI-SPEC.md §7: the browser's own active language is the
+        // ENTIRE request surface this fetch supplies — the server has no
+        // other way to learn it, since it never persists a per-user
+        // language preference. Shares the 'employeeLanguage' storage key
+        // transitions.js's own i18n bootstrap already reads/writes.
+        var lang = localStorage.getItem('employeeLanguage') || 'en';
+        fetch('/api/reports/pack?lang=' + encodeURIComponent(lang))
+          .then(function (res) {
+            if (!res.ok) {
+              return res.json().catch(function () { return {}; }).then(function (body) {
+                throw new Error((body && body.error) || 'Failed to generate the pack.');
+              });
+            }
+            var disposition = res.headers.get('content-disposition') || '';
+            var match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+            var filename = match ? decodeURIComponent(match[1]) : 'steerco-pack.pdf';
+            return res.blob().then(function (blob) { return { blob: blob, filename: filename }; });
+          })
+          .then(function (result) {
+            // The download itself is the success confirmation — no toast
+            // (07-UI-SPEC.md §7). fetch() responses aren't navigable URLs a
+            // browser can download directly, so a temporary anchor's
+            // synthetic click is the standard blob-download pattern.
+            var url = URL.createObjectURL(result.blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = result.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            if (packErr) { packErr.textContent = ''; packErr.style.display = 'none'; }
+          })
+          .catch(function (e) {
+            // Copywriting Contract / the Phase-4-Wave-7 invisible-error
+            // countermeasure: an explicit visible display value, NEVER an
+            // empty-string reset (that reverts to the stylesheet's `display:
+            // none` rule and makes the message invisible while every
+            // source-level test still passes — this exact failure has
+            // already shipped twice on this project and been fixed twice).
+            // #rpt-pack-error is revealed with an EXPLICIT visible value.
+            if (packErr) {
+              packErr.textContent = (e && e.message) || 'Failed to generate the pack.';
+              packErr.style.display = 'block';
+            }
+          })
+          .then(function () {
+            packBtn.disabled = false;
+            packBtn.textContent = packBtnDefaultLabel;
+          });
+      });
+    }
   }
 
   load().then(function () { wireControls(); wireExtraControls(); render(); renderSynergy(); renderRaid(); })

@@ -132,6 +132,14 @@
     .rpt-export-row{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-bottom:.45rem; display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
     .rpt-export-links{ display:flex; gap:.5rem; flex-wrap:wrap; }
     .rpt-export-label{ font-size:.92rem; font-weight:700; color:var(--text-primary); line-height:1.35; }
+    /* the steerco pack card (RPT-02/07-06) — the ONE accent-coloured control
+       this phase introduces, deliberately asymmetric with the eight
+       secondary-styled export links above (07-UI-SPEC.md §7). No fixed
+       width/max-width/overflow-hidden/ellipsis anywhere here either — same
+       wrap-never-clip contract as .rpt-export-row above. */
+    .rpt-pack-card{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:1rem 1.1rem; margin-top:.5rem; }
+    .rpt-pack-intro{ font-size:.88rem; color:var(--text-dim); line-height:1.5; margin:0 0 .8rem 0; }
+    .rpt-pack-error{ display:none; color:#C0392B; font-size:.82rem; margin-top:.6rem; }
     /* workstream rollup */
     .ex-ws-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:.75rem; margin-bottom:1.5rem; }
     .ex-ws{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.7rem .9rem; cursor:pointer; transition:all .15s; text-align:left; font-family:inherit; }
@@ -277,11 +285,18 @@
               <a href="/api/reports/export?dataset=synergies&amp;format=json" class="btn btn-secondary rpt-export-link" data-i18n="rpt.json">JSON</a>
             </span>
           </div>
+
+          <div class="syn-section-label" data-i18n="rpt.section_pack">Steering committee pack</div>
+          <div class="rpt-pack-card">
+            <p class="rpt-pack-intro" data-i18n="rpt.pack_intro">A one-page executive summary, then a section each for workstreams and tasks, risks and decisions, and synergies — TE-branded with a confidentiality footer on every page.</p>
+            <button type="button" class="btn btn-primary" id="rpt-pack-btn" data-i18n="rpt.pack_btn">Generate steerco pack (PDF)</button>
+            <p class="rpt-pack-error" id="rpt-pack-error"></p>
+          </div>
         </div>
       </div>
     </main>
   </div>
 
-  <script src="/js/execution.js?v=1786250801"></script>
+  <script src="/js/execution.js?v=1786250900"></script>
 </body>
 </html>

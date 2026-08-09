@@ -5721,8 +5721,10 @@ app.get('/api/reports/export', (req, res) => {
 // the 4.4.3 pin already used elsewhere in this file) is deliberate: a
 // missing or unsupported language code is not a client error, it silently
 // resolves to English — matching lib/reportPack.js's own resolveLanguage()
-// fallback contract. This is also the ENTIRE query-parameter surface this
-// route reads; no other request-supplied value reaches the model (T-07-32).
+// fallback contract. `lang` (not `language`) is the query key, matching the
+// browser's fetch call this plan's own button wiring issues (Task 3) — and
+// is also the ENTIRE query-parameter surface this route reads; no other
+// request-supplied value reaches the model (T-07-32).
 const ReportPackLanguageSchema = z.enum(reportPack.SUPPORTED_LANGUAGES).catch('en');
 
 /** "2026-08-09 14:32 UTC" — one server-resolved string, read verbatim by
@@ -5733,7 +5735,7 @@ function formatPackTimestamp(date) {
 }
 
 app.get('/api/reports/pack', async (req, res) => {
-  const language = ReportPackLanguageSchema.parse(req.query.language);
+  const language = ReportPackLanguageSchema.parse(req.query.lang);
 
   try {
     const db = readDb();

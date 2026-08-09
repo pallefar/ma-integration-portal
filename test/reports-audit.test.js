@@ -175,7 +175,7 @@ test('reports-audit (d): one successful REAL-deal pack generation increases the 
     await createManualRaid(base, adminToken, 'A risk to keep the deal non-empty');
 
     const before = auditRowCount();
-    const res = await getRaw(base, '/api/reports/pack?language=de', adminToken);
+    const res = await getRaw(base, '/api/reports/pack?lang=de', adminToken);
     assert.strictEqual(res.status, 200);
     const after = auditRowCount();
 
