@@ -274,7 +274,7 @@ Plans:
   3. The steerco pack reports synergy net benefit, cost-to-achieve and confidence-stage movement without double-counting any initiative.
   4. A status report visually distinguishes current from stale line items, using the staleness signals established in Phase 5.
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed
 
 **Wave 1**
 
@@ -299,7 +299,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 07-07-PLAN.md — Four-language reports translations, demo parity, and the blocking phase live walk (RPT-01, RPT-02, RPT-03, RPT-04)
+- [x] 07-07-PLAN.md — Four-language reports translations, demo parity, and the blocking phase live walk (RPT-01, RPT-02, RPT-03, RPT-04)
 
 ## Progress
 
@@ -314,4 +314,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
 | 6. Org Design & Talent Retention | 8/8 | Complete    | 2026-08-08 |
-| 7. IMO Reporting & Exports | 6/7 | In Progress|  |
+| 7. IMO Reporting & Exports | 7/7 | In Progress|  |
