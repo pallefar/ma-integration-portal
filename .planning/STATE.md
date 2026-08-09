@@ -2,16 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
+current_phase: 07
+current_phase_name: imo-reporting-exports
 status: executing
-stopped_at: Completed 07-05-PLAN.md
-last_updated: "2026-08-09T05:53:03.065Z"
+stopped_at: Completed 07-06-PLAN.md
+last_updated: "2026-08-09T06:20:25.858Z"
 last_activity: 2026-08-09
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 45
-  completed_plans: 43
-  percent: 86
+  completed_plans: 44
 ---
 
 # Project State
@@ -26,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 07 (imo-reporting-exports) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-08-09
 
-Progress: [██████████] 96%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
@@ -103,6 +104,7 @@ Progress: [██████████] 96%
 | Phase 07 P03 | 55min | 2 tasks | 6 files |
 | Phase 07 P04 | ~35min | 2 tasks | 6 files |
 | Phase 07 P05 | 50min | 2 tasks | 2 files |
+| Phase 07 P06 | ~2h | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -218,6 +220,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 7 Plan 4: T-05-47 closed via redefine-in-place — grossRealizedM sums phased-only realized money, unphasedRealizedM added for the complement, computed once in GET /api/synergies/rollup, sole consumer (execution.js renderSynRollup) updated same commit
 - [Phase ?]: Phase 7 Plan 4: enrichSynergy() gained staleDays (whole-day age, same clock/fallback as isSynergyStale's boolean); synergies CSV export gained a Stale days column; D-13 left untouched (no staleness invented for tasks/RAID/workstreams/flight-risk)
 - [Phase ?]: 07-05: pack model contract (deal/language/rollup/workstreams/raid/synergies/staleThresholdDays) defined by this plan for 07-06's route to build against; deal.targetCompany never appears in lib/reportPack.js's source (T-07-22 structural mitigation).
+- [Phase ?]: Phase 7 Plan 6: reportRaidRows()/reportSynergyRows() factored out as the single clearance-filtered/enriched read paths both GET /api/reports/export and GET /api/reports/pack call (D-08); stageAtLastBaseline() resolves RPT-03's confidence-stage-movement column server-side from an initiative's own baselines[] history
+- [Phase ?]: Phase 7 Plan 6: pack route's language query parameter renamed language->lang mid-plan to match Task 3's own locked verify script (a real correctness bug, not cosmetic — the client would otherwise never influence the rendered language)
 
 ### Pending Todos
 
@@ -258,6 +262,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-09T05:53:03.058Z
-Stopped at: Completed 07-05-PLAN.md
+Last session: 2026-08-09T06:20:25.847Z
+Stopped at: Completed 07-06-PLAN.md
 Resume file: None
