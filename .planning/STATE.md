@@ -5,14 +5,14 @@ milestone_name: milestone
 current_phase: 07
 current_phase_name: imo-reporting-exports
 status: executing
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-08-09T05:18:41.018Z"
+stopped_at: Completed 07-04-PLAN.md
+last_updated: "2026-08-09T05:38:25.988Z"
 last_activity: 2026-08-09
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 45
-  completed_plans: 41
+  completed_plans: 42
 ---
 
 # Project State
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 07 (imo-reporting-exports) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-08-09
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -102,6 +102,7 @@ Progress: [█████████░] 91%
 | Phase 07 P01 | ~20min | 3 tasks | 8 files |
 | Phase 07 P02 | 35min | 3 tasks | 3 files |
 | Phase 07 P03 | 55min | 2 tasks | 6 files |
+| Phase 07 P04 | ~35min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -214,6 +215,8 @@ Recent decisions affecting current work:
 - [Phase ?]: No API route exists to create a checklist template; tests insert a checklistTemplates row directly into a deal's SQLite file via store.getOrOpenConnection(), mirroring test/deal-seed.test.js's pattern
 - [Phase ?]: Vendored Noto Sans SC Regular (SIL OFL 1.1, 8.3MB, from notofonts/noto-cjk Sans2.004) as the single CJK+Latin+Latin-Extended-A font for the PDF pack; no bold weight vendored, canvas's bold synthesis verified to work
 - [Phase ?]: @napi-rs/canvas promoted from a transitive pdf-parse dependency to a direct pinned package.json dependency (0.1.80, zero new npm install); committed node_modules tree verified byte-for-byte unchanged
+- [Phase ?]: Phase 7 Plan 4: T-05-47 closed via redefine-in-place — grossRealizedM sums phased-only realized money, unphasedRealizedM added for the complement, computed once in GET /api/synergies/rollup, sole consumer (execution.js renderSynRollup) updated same commit
+- [Phase ?]: Phase 7 Plan 4: enrichSynergy() gained staleDays (whole-day age, same clock/fallback as isSynergyStale's boolean); synergies CSV export gained a Stale days column; D-13 left untouched (no staleness invented for tasks/RAID/workstreams/flight-risk)
 
 ### Pending Todos
 
@@ -254,6 +257,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-09T05:18:41.006Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-08-09T05:38:25.977Z
+Stopped at: Completed 07-04-PLAN.md
 Resume file: None
