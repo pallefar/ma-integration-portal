@@ -4037,10 +4037,14 @@ function resolveRaidEntryClearanceArea(entry, db) {
 }
 
 // RPT-01/RPT-02 (07-06 Task 2/T-07-28): the SINGLE clearance-filtered RAID
-// read GET /api/reports/export's raid branch AND GET /api/reports/pack both
-// call — factored out so there is exactly one filtered read path and a
-// future change can never make the CSV export and the PDF pack disagree
-// about which RAID rows a given caller may see (D-08).
+// read GET /api/reports/export's raid branch, GET /api/reports/pack, AND the
+// live GET /api/raid screen route all call — factored out so there is
+// exactly one filtered read path and a future change can never make the CSV
+// export, the PDF pack, and the live screen disagree about which RAID rows a
+// given caller may see (D-08). [WR-04 fix: GET /api/raid used to carry its
+// own line-for-line duplicate of this filter; that duplicate is now gone, so
+// the "one filtered read path" claim is actually true, not just true for two
+// of the three callers.]
 function reportRaidRows(db, deal, portalUser) {
   ddFindingsLane(db);
   return raidLane(db).filter((entry) => {
@@ -4052,14 +4056,7 @@ function reportRaidRows(db, deal, portalUser) {
 app.get('/api/raid', (req, res) => {
   const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
-  // Resolved once here, not re-derived per entry — resolveRaidEntryClearanceArea's
-  // own ddFindingsLane(db) calls below are then just reference reads
-  // against this already-materialized array.
-  ddFindingsLane(db);
-  const visible = raidLane(db).filter((entry) => {
-    const area = resolveRaidEntryClearanceArea(entry, db);
-    return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
-  });
+  const visible = reportRaidRows(db, deal, req.portalUser);
   res.json(visible);
 });
 

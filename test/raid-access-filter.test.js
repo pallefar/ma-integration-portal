@@ -353,11 +353,22 @@ test('raid-access-filter (g): resolveRaidEntryClearanceArea unit cases — empty
 // provable by an HTTP round-trip alone.
 // ===================================================================================
 
-test('raid-access-filter (h): the GET /api/raid handler body references resolveRaidEntryClearanceArea, proving the outbound filter is not a separately re-implemented predicate', () => {
+test('raid-access-filter (h): the GET /api/raid handler delegates to the single shared reportRaidRows() filter, proving the outbound filter is not a separately re-implemented predicate (WR-04)', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const routeMatch = /app\.get\('\/api\/raid',\s*\(req, res\) => \{([\s\S]*?)\n\}\);/.exec(src);
   assert.ok(routeMatch, 'expected to locate the GET /api/raid route handler body');
-  assert.ok(routeMatch[1].includes('resolveRaidEntryClearanceArea'), 'the GET /api/raid handler must call resolveRaidEntryClearanceArea inside its own body');
+  // WR-04 (07-REVIEW.md): the handler used to carry its own line-for-line
+  // duplicate of resolveRaidEntryClearanceArea's filter; it now calls the
+  // SAME reportRaidRows() the CSV export and PDF pack call, so there is
+  // exactly one implementation of the filter, not two hand-synchronised
+  // copies. Assert delegation to the shared function directly, rather than
+  // asserting the (now one-level-removed) resolveRaidEntryClearanceArea
+  // reference, since that reference legitimately lives inside
+  // reportRaidRows() rather than inline in the route body.
+  assert.ok(routeMatch[1].includes('reportRaidRows('), 'the GET /api/raid handler must delegate to the shared reportRaidRows() filter, not re-implement it');
+  const helperMatch = /function reportRaidRows\(db, deal, portalUser\) \{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(helperMatch, 'expected to locate the reportRaidRows() helper');
+  assert.ok(helperMatch[1].includes('resolveRaidEntryClearanceArea'), 'reportRaidRows() must call resolveRaidEntryClearanceArea inside its own body');
 });
 
 test('raid-access-filter (i): public/execution.html carries the fourth severity CSS rule with a colour and a heavier font-weight than the third rule', () => {
