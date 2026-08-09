@@ -2,18 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 07
-current_phase_name: imo-reporting-exports
 status: executing
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-08-09T04:51:23.770Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-08-09T05:06:42.008Z"
 last_activity: 2026-08-09
-last_activity_desc: Phase 07 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 45
-  completed_plans: 39
+  completed_plans: 40
+  percent: 86
 ---
 
 # Project State
@@ -28,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 ## Current Position
 
 Phase: 07 (imo-reporting-exports) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
-Last activity: 2026-08-09 — Phase 07 execution started
+Last activity: 2026-08-09
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -101,6 +99,7 @@ Progress: [█████████░] 87%
 | Phase 06 P07 | ~50min | 3 tasks | 4 files |
 | Phase 06 P08 | ~95min | 3 tasks | 8 files |
 | Phase 07 P01 | ~20min | 3 tasks | 8 files |
+| Phase 07 P02 | 35min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -208,6 +207,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 6 Plan 08] Task 3's two conversion-path checks were run on a scratch real deal (demo sessions aren't deal-bound; org clearance surfaces fail closed in demo by design), deleted at teardown, both committed DBs verified logically identical to HEAD
 - [Phase ?]: [Phase 6 Plan 08] D-23's deferred staleness signal restated for Phase 7: 06-CONTEXT.md flags Phase 7's reporting requirement covers 'the staleness signals and equivalents' — Phase 7 must decide whether the flight-risk register needs one
 - [Phase ?]: Phase 7 Plan 01: raid-only+csv-only tracer proves D-08 clearance-reuse, D-09 dataset whitelist, D-07 codename-filename discipline, T-07-05 formula neutralisation and D-10/D-11 audit scoping in one server.js route before Plan 07-02 expands to the other datasets/formats
+- [Phase ?]: computeWorkstreamRollup(db) is the single server-side implementation of execution.js's client-side workstream math, defined adjacent to taskLane(db); ragStatus derived once, never re-derived from a percentage by a second consumer
+- [Phase ?]: The synergies JSON export replicates GET /api/synergies' exact per-item mapping (ctx built once + sorted costEntries) rather than enrichSynergy() alone, so JSON export/live-route parity (D-08) is structural, not maintained
+- [Phase ?]: No API route exists to create a checklist template; tests insert a checklistTemplates row directly into a deal's SQLite file via store.getOrOpenConnection(), mirroring test/deal-seed.test.js's pattern
 
 ### Pending Todos
 
@@ -248,6 +250,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-09T04:51:23.756Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-08-09T05:06:42.000Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None

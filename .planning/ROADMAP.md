@@ -282,7 +282,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-02-PLAN.md — Remaining datasets, JSON parity with the live GET routes, and the server-side workstream rollup (RPT-01)
+- [x] 07-02-PLAN.md — Remaining datasets, JSON parity with the live GET routes, and the server-side workstream rollup (RPT-01)
 - [ ] 07-03-PLAN.md — PDF substrate: vendored glyph-covering font, canvas promoted to a direct dependency, hand-rolled PDF 1.4 writer, zero new npm packages (RPT-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -314,4 +314,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
 | 6. Org Design & Talent Retention | 8/8 | Complete    | 2026-08-08 |
-| 7. IMO Reporting & Exports | 1/7 | In Progress|  |
+| 7. IMO Reporting & Exports | 2/7 | In Progress|  |
