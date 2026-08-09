@@ -250,9 +250,31 @@
         <div id="ex-pane-reports" style="display:none;">
           <div class="syn-section-label" data-i18n="rpt.section_raw">Raw data export</div>
           <div class="rpt-export-row">
+            <span class="rpt-export-label" data-i18n="rpt.ds_workstreams">Workstreams</span>
+            <span class="rpt-export-links">
+              <a href="/api/reports/export?dataset=workstreams&amp;format=csv" class="btn btn-secondary rpt-export-link" data-i18n="rpt.csv">CSV</a>
+              <a href="/api/reports/export?dataset=workstreams&amp;format=json" class="btn btn-secondary rpt-export-link" data-i18n="rpt.json">JSON</a>
+            </span>
+          </div>
+          <div class="rpt-export-row">
+            <span class="rpt-export-label" data-i18n="rpt.ds_tasks">Tasks</span>
+            <span class="rpt-export-links">
+              <a href="/api/reports/export?dataset=tasks&amp;format=csv" class="btn btn-secondary rpt-export-link" data-i18n="rpt.csv">CSV</a>
+              <a href="/api/reports/export?dataset=tasks&amp;format=json" class="btn btn-secondary rpt-export-link" data-i18n="rpt.json">JSON</a>
+            </span>
+          </div>
+          <div class="rpt-export-row">
             <span class="rpt-export-label" data-i18n="rpt.ds_raid">RAID</span>
             <span class="rpt-export-links">
               <a href="/api/reports/export?dataset=raid&amp;format=csv" class="btn btn-secondary rpt-export-link" data-i18n="rpt.csv">CSV</a>
+              <a href="/api/reports/export?dataset=raid&amp;format=json" class="btn btn-secondary rpt-export-link" data-i18n="rpt.json">JSON</a>
+            </span>
+          </div>
+          <div class="rpt-export-row">
+            <span class="rpt-export-label" data-i18n="rpt.ds_synergies">Synergies</span>
+            <span class="rpt-export-links">
+              <a href="/api/reports/export?dataset=synergies&amp;format=csv" class="btn btn-secondary rpt-export-link" data-i18n="rpt.csv">CSV</a>
+              <a href="/api/reports/export?dataset=synergies&amp;format=json" class="btn btn-secondary rpt-export-link" data-i18n="rpt.json">JSON</a>
             </span>
           </div>
         </div>
@@ -260,6 +282,6 @@
     </main>
   </div>
 
-  <script src="/js/execution.js?v=1786250743"></script>
+  <script src="/js/execution.js?v=1786250800"></script>
 </body>
 </html>
