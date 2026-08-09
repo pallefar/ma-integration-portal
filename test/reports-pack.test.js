@@ -28,6 +28,7 @@ const {
   drawHeaderBand,
   drawFooterBand,
   paginateSections,
+  execSummarySection,
   CONTENT_WIDTH_PX,
   CONTENT_HEIGHT_PX,
   CONTENT_LEFT_PX,
@@ -214,6 +215,148 @@ test('reports-pack page frame', async (t) => {
     const pdf = await buildPack(model);
     assert.ok(Buffer.isBuffer(pdf));
     assert.match(pdf.toString('binary', 0, 8), /^%PDF-1\.4$/);
+    assert.strictEqual(countPdfPageObjects(pdf), 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 2: page one — the executive summary.
+// ---------------------------------------------------------------------------
+
+function renderExecSummary(model) {
+  const t2 = resolveLanguage(model.i18n, model.language);
+  const pages = execSummarySection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+  assert.strictEqual(pages.length, 1, 'the executive summary must always be exactly one page');
+  const { ctx, drawnStrings } = makeInstrumentedCtx();
+  pages[0].render(ctx, { pageNumber: 1, pageCount: 1 });
+  return drawnStrings;
+}
+
+test('reports-pack executive summary (page one)', async (t) => {
+  await t.test('(a) each of the five tiles renders the exact rollup value, on a rounding-edge fixture that a re-summation would get wrong', () => {
+    // A rounding-edge fixture: per-initiative amounts that do NOT sum
+    // cleanly to the rollup totals below. If execSummarySection ever starts
+    // re-summing model.synergies instead of reading model.rollup, this
+    // fixture makes the tile values visibly diverge from the assertions.
+    const model = baseModel({
+      rollup: {
+        grossRealizedM: 12.4,
+        unphasedRealizedM: 3.35,
+        costIncurredM: 5.06,
+        netBenefitM: 7.36,
+        dealTargetM: 40.0,
+        staleCount: 2,
+      },
+      synergies: [
+        { realizedM: 4.111, costIncurredM: 1.111 },
+        { realizedM: 4.222, costIncurredM: 1.222 },
+        { realizedM: 4.333, costIncurredM: 1.333 },
+        { realizedM: 3.234, costIncurredM: 1.394 },
+      ],
+    });
+    const drawn = renderExecSummary(model);
+    assert.ok(drawn.includes('$12.4M'), 'gross realized tile must equal the supplied rollup value');
+    assert.ok(drawn.includes('$3.4M'), 'unphased tile must equal the supplied rollup value');
+    assert.ok(drawn.includes('$5.1M'), 'cost incurred tile must equal the supplied rollup value');
+    assert.ok(drawn.includes('$7.4M'), 'net benefit tile must equal the supplied rollup value');
+    assert.ok(drawn.includes('$40.0M'), 'deal target tile must equal the supplied rollup value');
+    // A naive re-summation of the fixture above (4.111+4.222+4.333+3.234 =
+    // 15.9) would NOT equal the supplied grossRealizedM (12.4) — proving
+    // this test would fail loudly if the renderer ever re-summed.
+    assert.ok(!drawn.some((s) => s.includes('15.9')), 'no drawn string may show a re-summed total');
+  });
+
+  await t.test('(b) the unphased figure appears as its own labelled tile, never inside the gross tile text', () => {
+    const model = baseModel({
+      rollup: { grossRealizedM: 10.0, unphasedRealizedM: 2.5, costIncurredM: 1.0, netBenefitM: 9.0, dealTargetM: 20.0 },
+    });
+    const drawn = renderExecSummary(model);
+    assert.ok(drawn.includes('Gross realized'.toUpperCase()));
+    assert.ok(drawn.includes('Unphased'.toUpperCase()));
+    // The gross tile's own value string never contains the unphased number
+    // concatenated into it (i.e. no "$10.0M / $2.5M"-style folding).
+    assert.ok(drawn.includes('$10.0M'));
+    assert.ok(drawn.includes('$2.5M'));
+    assert.ok(!drawn.some((s) => s.includes('$10.0M') && s.includes('$2.5M')));
+  });
+
+  await t.test('(c) net benefit renders in the danger colour when negative', () => {
+    const model = baseModel({ rollup: { grossRealizedM: 1, costIncurredM: 5, netBenefitM: -4, dealTargetM: 10 } });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = execSummarySection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const seenFillStyles = [];
+    const { ctx } = makeInstrumentedCtx();
+    const realFillText = ctx.fillText.bind(ctx);
+    ctx.fillText = (text) => {
+      if (String(text).includes('-4.0M')) seenFillStyles.push(ctx.fillStyle);
+      realFillText(text);
+    };
+    pages[0].render(ctx, { pageNumber: 1, pageCount: 1 });
+    assert.ok(seenFillStyles.includes(reportPack.COLOR_DANGER));
+  });
+
+  await t.test('(d) the RAG chips use the bands the workstream rollup supplied, never re-derived from a percentage', () => {
+    const model = baseModel({
+      workstreams: [
+        { id: 'w1', label: 'HR', pctComplete: 95, ragStatus: 'red', blocked: true },
+        { id: 'w2', label: 'IT', pctComplete: 10, ragStatus: 'green', blocked: false },
+      ],
+    });
+    const drawn = renderExecSummary(model);
+    assert.ok(drawn.includes('HR'));
+    assert.ok(drawn.includes('IT'));
+  });
+
+  await t.test('(e) the risk list is ordered most-severe-first and truncated to the stated maximum', () => {
+    const model = baseModel({
+      raid: [
+        { type: 'risk', severity: 'low', title: 'Low risk A' },
+        { type: 'risk', severity: 'critical', title: 'Critical risk B' },
+        { type: 'issue', severity: 'critical', title: 'Not a risk, must be excluded' },
+        { type: 'risk', severity: 'medium', title: 'Medium risk C' },
+        { type: 'risk', severity: 'high', title: 'High risk D' },
+        { type: 'risk', severity: 'high', title: 'High risk E' },
+        { type: 'risk', severity: 'low', title: 'Low risk F (should be truncated)' },
+      ],
+    });
+    const drawn = renderExecSummary(model);
+    assert.ok(!drawn.includes('Not a risk, must be excluded'));
+    const order = ['Critical risk B', 'High risk D', 'High risk E', 'Medium risk C', 'Low risk A'];
+    const indices = order.map((title) => drawn.indexOf(title));
+    indices.forEach((idx) => assert.notStrictEqual(idx, -1));
+    for (let i = 1; i < indices.length; i++) {
+      assert.ok(indices[i] > indices[i - 1], 'risks must appear in most-severe-first order');
+    }
+    assert.ok(!drawn.includes('Low risk F (should be truncated)'), 'the list must truncate to the stated maximum (5)');
+  });
+
+  await t.test('(f) the stale sentence numbers equal the supplied rollup count and collection length', () => {
+    const model = baseModel({
+      rollup: { staleCount: 3 },
+      synergies: [{}, {}, {}, {}, {}],
+      staleThresholdDays: 45,
+    });
+    const drawn = renderExecSummary(model);
+    const sentence = drawn.find((s) => s.includes('synergy initiatives are stale'));
+    assert.ok(sentence, 'the stale sentence must be drawn');
+    assert.ok(sentence.startsWith('3 of 5'));
+    assert.ok(sentence.includes('45 days'));
+  });
+
+  await t.test('(g) an entirely empty model still renders a page one without throwing', () => {
+    const model = baseModel({ rollup: {}, workstreams: [], raid: [], synergies: [] });
+    assert.doesNotThrow(() => renderExecSummary(model));
+    const drawn = renderExecSummary(model);
+    assert.ok(drawn.includes('$0.0M'));
+    assert.ok(drawn.some((s) => s.includes('No workstreams yet.')));
+    assert.ok(drawn.some((s) => s.includes('No risks recorded yet.')));
+    assert.ok(drawn.some((s) => s.startsWith('0 of 0')));
+  });
+
+  await t.test('(h) an empty deal still produces a complete, valid multi-band PDF via buildPack', async () => {
+    const model = baseModel({ rollup: {}, workstreams: [], raid: [], synergies: [] });
+    const pdf = await buildPack(model);
+    assert.ok(Buffer.isBuffer(pdf));
     assert.strictEqual(countPdfPageObjects(pdf), 1);
   });
 });
