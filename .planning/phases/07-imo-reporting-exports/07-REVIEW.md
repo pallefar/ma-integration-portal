@@ -27,7 +27,7 @@ findings:
   warning: 5
   info: 2
   total: 7
-status: issues_found
+status: resolved
 ---
 
 # Phase 7: Code Review Report
@@ -109,6 +109,15 @@ function csvField(value) {
 }
 ```
 
+**Status:** Fixed — commit `9d34f0a`. `csvField()` now skips the formula-trigger
+prefix for `typeof value === 'number'` inputs while keeping it in force for
+every string value (including numeric-looking strings), matching the
+suggested fix exactly. New unit test added:
+`test/reports-export.test.js` — "reports-export (csvField unit)" — proves
+`csvField(-5.2) === '-5.2'` (no prefix), `csvField('-5.2') === "'-5.2"`
+(prefix kept), and `csvField('=cmd') === "'=cmd"` (prefix kept). Full suite:
+651/651 passing.
+
 ### WR-02: The pack-download button's Content-Disposition parser always picks the ASCII fallback filename, never the RFC 5987 extended parameter
 
 **File:** `public/js/execution.js:1132`
@@ -142,6 +151,13 @@ var extMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
 var asciiMatch = /filename="([^"]*)"/i.exec(disposition);
 var filename = extMatch ? decodeURIComponent(extMatch[1]) : (asciiMatch ? asciiMatch[1] : 'steerco-pack.pdf');
 ```
+
+**Status:** Fixed — commit `030600b`. Two regexes tried in order (extended
+parameter first, ASCII fallback second, literal default last), with
+`decodeURIComponent` wrapped in try/catch so a malformed extended parameter
+falls back to the ASCII match instead of throwing. Manually verified against
+the review's exact repro string (`Muller_ZhongWen.pdf` / `Müller-中文.pdf`
+header) — now resolves to `Müller-中文.pdf`. Full suite: 651/651 passing.
 
 ### WR-03: `lib/reportPack.js`'s logo-load cache permanently poisons itself on first failure
 
@@ -180,6 +196,12 @@ function loadLogoImage() {
   return logoImagePromise;
 }
 ```
+
+**Status:** Fixed — commit `653e22a`. `logoImagePromise` is reset to `null`
+inside the `.catch` before re-throwing, so a subsequent call retries
+`loadImage()` instead of replaying a cached rejection for the process
+lifetime. `test/reports-pack.test.js` (41 tests) still passes unchanged.
+Full suite: 651/651 passing.
 
 ### WR-04: `reportRaidRows()` is documented as "the single clearance-filtered RAID read" but `GET /api/raid` still carries its own separate copy of the identical filter
 
@@ -225,6 +247,19 @@ against the *current* `GET /api/raid` output, not against a shared implementatio
 **Fix:** Have `GET /api/raid` call `reportRaidRows(db, deal, req.portalUser)` too, so there is
 exactly one implementation of the filter, not two synchronised-by-hand copies.
 
+**Status:** Fixed — commit `6821f8d`. `GET /api/raid` now calls
+`reportRaidRows(db, deal, req.portalUser)` directly, preserving the
+`res.json(visible)` response shape exactly; `reportRaidRows()`'s comment was
+updated to note the live screen route is now also a caller. The pre-existing
+static-analysis test `raid-access-filter (h)` asserted the OLD inline
+implementation (a literal `resolveRaidEntryClearanceArea` reference inside
+the route body) and had to be updated — it now asserts the handler delegates
+to `reportRaidRows(` and that `reportRaidRows()` itself calls
+`resolveRaidEntryClearanceArea`, preserving the original intent (no
+re-implemented predicate) against the new, stronger structure. The
+four-identity parity tests in `test/reports-export.test.js` pass unchanged.
+Full suite: 651/651 passing.
+
 ### WR-05: The synergy phased/unphased rollup-split formula is duplicated verbatim between `GET /api/synergies/rollup` and `GET /api/reports/pack`
 
 **File:** `server.js:3518-3527` (`/api/synergies/rollup`) vs. `server.js:5779-5788`
@@ -265,6 +300,18 @@ the "double-counting drift" the surrounding comments say this design prevents.
 costIncurredM, netBenefitM, dealTargetM, staleCount, unconfirmedRealizedM }`) and call it from both
 `GET /api/synergies/rollup` and `GET /api/reports/pack`.
 
+**Status:** Fixed — commit `b119b37`. Extracted `computeSynergyRollupSplit(enrichedItems)`,
+placed near the rollup route, returning exactly the field set the fix
+suggested; both `GET /api/synergies/rollup` and `GET /api/reports/pack` now
+call it (the pack route only destructures `staleCount`, since that's all it
+needs — the rollup route uses all seven fields). `mine.staleCount`'s
+owner-scoped filter stayed inline in the rollup route (the shared helper
+returns the aggregate `staleCount` number, not the intermediate `staleItems`
+array, since no other caller needed the array). The reduce/round order is
+unchanged — only hoisted into the shared function, so results are
+bit-identical to before. `test/synergy-rollup-split.test.js` and
+`test/reports-pack.test.js` pass unchanged. Full suite: 651/651 passing.
+
 ## Info
 
 ### IN-01: `csvField()`'s formula-trigger character set omits leading TAB/CR, which some spreadsheet CSV-injection guidance also flags
@@ -280,6 +327,12 @@ names) rather than an oversight.
 
 **Fix:** Either add `\t` to the trigger set, or add a one-line comment explaining why it was
 deliberately excluded.
+
+**Status:** Fixed — commit `a79cb9d`. Added a one-line comment above
+`FORMULA_TRIGGER_CHARS` noting the leading TAB/CR exclusion is deliberate
+because RFC 4180 quoting already wraps any field containing a control
+character, matching the four-character convention the module's header
+comment already names.
 
 ### IN-02: `buildPdf()` hardcodes an assumed `scale=2` when recovering point dimensions from pixel dimensions
 
@@ -301,6 +354,13 @@ the wrong `/MediaBox`, stretching or shrinking the rendered page without any err
 **Fix:** Have `renderPageToRgbStream()` return the `scale` (or the CSS `cssWidth`/`cssHeight`)
 alongside `width`/`height`/`deflated`, and have `buildPdf()` read it from the page object instead
 of assuming `2`.
+
+**Status:** Deferred — latent-only (no caller in this codebase overrides
+`scale`, so the current behaviour is correct today). Changing
+`lib/reportPdf.js`'s geometry would invalidate the externally-verified
+raster proofs this phase's PDF tests depend on
+(`test/reports-pdf.test.js`). Candidate for a future phase if a caller ever
+needs a non-default `scale`.
 
 ---
 
