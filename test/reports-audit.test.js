@@ -160,3 +160,81 @@ test('reports-audit (c): a 400 dataset refusal writes no audit row, since nothin
     server.close();
   }
 });
+
+// ============================================================
+// 07-06 Task 2: the steering-committee PDF pack's D-10/D-11 audit delta.
+// ============================================================
+
+test('reports-audit (d): one successful REAL-deal pack generation increases the audit row count by EXACTLY one, naming the pack action/actor/deal/format/language (D-10)', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rpad');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+    await createManualRaid(base, adminToken, 'A risk to keep the deal non-empty');
+
+    const before = auditRowCount();
+    const res = await getRaw(base, '/api/reports/pack?language=de', adminToken);
+    assert.strictEqual(res.status, 200);
+    const after = auditRowCount();
+
+    assert.strictEqual(after - before, 1, 'exactly one audit row must be written per successful real-deal pack generation');
+    const row = latestAuditRow();
+    assert.strictEqual(row.action, 'report-pack-generated');
+    assert.strictEqual(row.actor_username, 'admin');
+    assert.strictEqual(row.deal_id, deal.id);
+    const afterValue = JSON.parse(row.after_json);
+    assert.strictEqual(afterValue.format, 'pdf');
+    assert.strictEqual(afterValue.language, 'de');
+    assert.ok(afterValue.rowCounts && typeof afterValue.rowCounts.raid === 'number');
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-audit (e): the byte-identical pack request against DEMO increases the audit row count by EXACTLY zero, while still returning a valid PDF — demo keeps full pack parity and gains no audit rows (D-11)', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const adminToken = newSession('admin', 'admin'); // never bound to a deal -> resolves to demo.db
+    // This isolated test's demo.db starts genuinely empty (initDb() only
+    // creates schema, it does not seed showcase content the way the
+    // project's committed data/demo.db does) — one manual RAID entry keeps
+    // the pack's own empty-deal 409 check from firing, so this test proves
+    // the audit-scoping property (D-11), not the empty-deal refusal (that
+    // is (f)'s job).
+    await createManualRaid(base, adminToken, 'Demo risk to keep the pack non-empty');
+
+    const before = auditRowCount();
+    const res = await getRaw(base, '/api/reports/pack', adminToken);
+    assert.strictEqual(res.status, 200, 'demo must retain full pack parity');
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert.strictEqual(buf.toString('binary', 0, 8), '%PDF-1.4', 'demo must still return a valid PDF');
+    const after = auditRowCount();
+
+    assert.strictEqual(after - before, 0, 'demo must gain ZERO audit rows for the identical pack generation request');
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-audit (f): a 409 empty-deal pack refusal writes no audit row, since nothing was generated', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rpaf');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+
+    const before = auditRowCount();
+    const res = await getRaw(base, '/api/reports/pack', adminToken);
+    assert.strictEqual(res.status, 409);
+    const after = auditRowCount();
+
+    assert.strictEqual(after - before, 0, 'a 409 empty-deal refusal must write no audit row');
+  } finally {
+    server.close();
+  }
+});

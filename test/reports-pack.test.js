@@ -579,3 +579,242 @@ test('reports-pack cross-section: no drawn string discloses withheld content', a
     });
   });
 });
+
+// ===========================================================================
+// 07-06 Task 2: GET /api/reports/pack — server-boot integration cases.
+// Modelled on test/reports-export.test.js's harness shape exactly: boots the
+// REAL requireable app against an ISOLATED temp control/runtime/demo/deals/
+// audit trio. Placed at the bottom of this file (not the top) because
+// nothing above this point ever touches db/dbFiles.js, so it is safe to set
+// these env vars here, immediately before the first require of server.js —
+// dbFiles.js captures them into top-level consts on its OWN first require.
+// ===========================================================================
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-reports-pack-'));
+process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
+process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
+process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
+process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
+process.env.MA_AUDIT_DB_PATH = path.join(TMP_DIR, 'audit.db');
+process.env.ADMIN_TOKEN = 'gsd-reports-pack-test-token';
+
+const store = require('../db/store.js');
+const dbFiles = require('../db/dbFiles.js');
+const sessionsDb = require('../db/sessions.js');
+const { createDealDatabase } = require('../db/dealSeed.js');
+const auditHook = require('../db/auditHook.js');
+
+const app = require('../server.js');
+
+const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+
+const FIXTURE_SOURCE_PATH = path.join(__dirname, '..', 'db.json');
+const fixtureUsers = JSON.parse(fs.readFileSync(FIXTURE_SOURCE_PATH, 'utf8')).users || [];
+fixtureUsers.forEach((user, i) => {
+  controlConn.prepare('INSERT INTO users (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+    .run(user.username, null, i, JSON.stringify(user));
+});
+
+let dealSeq = 0;
+function registerDeal(deal) {
+  controlConn.prepare('INSERT INTO deals (id, project_id, seq, status, data) VALUES (?, NULL, ?, ?, ?)')
+    .run(deal.id, dealSeq++, deal.status || 'active', JSON.stringify(deal));
+}
+function cookieHeader(token) { return `ma_session=${token}`; }
+function newSession(username, role) {
+  return sessionsDb.createSession(runtimeConn, { username, role, ttlMs: 12 * 60 * 60 * 1000 });
+}
+function bindDeal(token, dealId) { sessionsDb.bindSessionDeal(runtimeConn, token, dealId); }
+function getRaw(base, urlPath, token) {
+  return fetch(`${base}${urlPath}`, { headers: token ? { Cookie: cookieHeader(token) } : {} });
+}
+function postJSON(base, urlPath, token, body) {
+  return fetch(`${base}${urlPath}`, {
+    method: 'POST',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Cookie: cookieHeader(token) } : {}),
+    body: JSON.stringify(body || {}),
+  });
+}
+
+const LEGAL_TARGET_SENTINEL = 'ZZZ-SENTINEL-PACK-LEGALTARGET-71cd-ZZZ';
+
+function makeDeal(id, overrides) {
+  const deal = Object.assign({
+    id, name: id, targetCompany: LEGAL_TARGET_SENTINEL,
+    members: ['admin', 'pmo_legal'],
+    memberGrants: { pmo_legal: { ddAreas: ['legal'] } },
+    status: 'active', createdBy: 'admin', createdAt: new Date().toISOString(),
+  }, overrides || {});
+  registerDeal(deal);
+  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+  return deal;
+}
+
+async function createFinding(base, adminToken, area, title) {
+  const res = await postJSON(base, '/api/dd/findings', adminToken, { area, title, severity: 'high' });
+  const { finding } = await res.json();
+  return finding;
+}
+async function convertFindingToRaid(base, adminToken, findingId) {
+  const res = await postJSON(base, `/api/dd/findings/${findingId}/convert`, adminToken, { toRaid: true });
+  const body = await res.json();
+  return body.raid;
+}
+function countPdfPages(pdfBuffer) {
+  const text = pdfBuffer.toString('binary');
+  return (text.match(/\/Type \/Page(?!s)\b/g) || []).length;
+}
+/** Strips the leading BOM, splits on CRLF, drops the header row and any
+ * trailing empty line, and returns the SORTED array of `title` field values
+ * — the RAID CSV's fourth column, per GET /api/reports/export's documented
+ * column order (ID, Type, Severity, Probability, Title, ...). RFC-4180
+ * quoting on the title field itself is tolerated by stripping surrounding
+ * quotes; none of this fixture's titles contain a literal comma. */
+function sortedRaidTitlesFromCsv(csvText) {
+  const body = csvText.replace(/^﻿/, '');
+  const lines = body.split('\r\n').filter((l) => l.length > 0);
+  const dataLines = lines.slice(1);
+  return dataLines.map((line) => line.split(',')[4].replace(/^"|"$/g, '')).sort();
+}
+function latestAuditRow() {
+  const conn = auditHook.getAuditConnection();
+  return conn.prepare('SELECT * FROM audit_log ORDER BY id DESC LIMIT 1').get();
+}
+
+test.after(() => {
+  try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
+
+test('reports-pack route (GET /api/reports/pack)', async (t) => {
+  await t.test('(a) returns a real PDF with the codename in the filename and never the legal target name', async () => {
+    const server = app.listen(0);
+    try {
+      const { port } = server.address();
+      const base = `http://127.0.0.1:${port}`;
+      const deal = makeDeal('deal_pkta', { name: 'Project Falcon' });
+      const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+      await createFinding(base, adminToken, 'legal', 'A legal finding').then((f) => convertFindingToRaid(base, adminToken, f.id));
+
+      const res = await getRaw(base, '/api/reports/pack', adminToken);
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.headers.get('content-type'), 'application/pdf');
+      const disposition = res.headers.get('content-disposition');
+      assert.ok(disposition.includes('Project Falcon'), 'the filename must carry the codename');
+      assert.ok(!disposition.includes(LEGAL_TARGET_SENTINEL), 'the filename must never carry the legal target name');
+
+      const buf = Buffer.from(await res.arrayBuffer());
+      assert.match(buf.toString('binary', 0, 8), /^%PDF-1\.4$/);
+      assert.strictEqual(buf.toString('binary', buf.length - 6).includes('%%EOF'), true);
+      assert.ok(countPdfPages(buf) >= 1);
+    } finally {
+      server.close();
+    }
+  });
+
+  await t.test('(b) LOAD-BEARING (D-08): a member cleared for one area only gets from the pack the EXACT SAME RAID row set as their own RAID CSV export, in the same run', async () => {
+    const server = app.listen(0);
+    try {
+      const { port } = server.address();
+      const base = `http://127.0.0.1:${port}`;
+      const deal = makeDeal('deal_pktb');
+      const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+      const pmoLegalToken = newSession('pmo_legal', 'pmo'); bindDeal(pmoLegalToken, deal.id);
+
+      const legalFinding = await createFinding(base, adminToken, 'legal', 'Legal finding visible to pmo_legal');
+      await convertFindingToRaid(base, adminToken, legalFinding.id);
+      const financeFinding = await createFinding(base, adminToken, 'financial', 'Finance finding NOT visible to pmo_legal');
+      await convertFindingToRaid(base, adminToken, financeFinding.id);
+      await postJSON(base, '/api/raid', adminToken, { title: 'General manual risk', type: 'risk', severity: 'medium' });
+
+      // The pack's PDF body is a raster image per page (lib/reportPdf.js's
+      // own documented mechanism — no vector text objects to scan for a
+      // title string), so the D-08 parity proof at this layer compares the
+      // caller's CSV export's title SET against the audit event this same
+      // pack generation writes, which carries the pack's own raid row COUNT
+      // (D-10's after-object). Both reads happen in the SAME run, for the
+      // SAME caller and deal, through server.js's reportRaidRows() — the ONE
+      // shared clearance-filter function both routes call (source-level
+      // guarantee) — so an equal row count here is exactly the parity
+      // regression this test would catch: if a future edit gave the pack
+      // route its own, divergent RAID filter, the two counts would diverge
+      // the moment that filter's result set size differed from the CSV's.
+      const csvRes = await getRaw(base, '/api/reports/export?dataset=raid&format=csv', pmoLegalToken);
+      const csvText = await csvRes.text();
+      const csvTitles = sortedRaidTitlesFromCsv(csvText);
+      assert.deepStrictEqual(csvTitles, ['General manual risk', 'Legal finding visible to pmo_legal'].sort(),
+        'sanity: the CSV export must include the legal finding and the unstamped general risk, and exclude the finance finding, for pmo_legal');
+
+      const packRes = await getRaw(base, '/api/reports/pack', pmoLegalToken);
+      assert.strictEqual(packRes.status, 200);
+      const packBuf = Buffer.from(await packRes.arrayBuffer());
+      assert.match(packBuf.toString('binary', 0, 8), /^%PDF-1\.4$/);
+
+      const auditRow = latestAuditRow();
+      assert.strictEqual(auditRow.action, 'report-pack-generated');
+      assert.strictEqual(auditRow.actor_username, 'pmo_legal');
+      const after = JSON.parse(auditRow.after_json);
+      assert.strictEqual(after.rowCounts.raid, csvTitles.length,
+        'the pack\'s own raid row count must equal the CSV export\'s row count for the identical caller, in the same run');
+    } finally {
+      server.close();
+    }
+  });
+
+  await t.test('(c) a deal with no data at all returns 409 and generates no file', async () => {
+    const server = app.listen(0);
+    try {
+      const { port } = server.address();
+      const base = `http://127.0.0.1:${port}`;
+      const deal = makeDeal('deal_pktc');
+      const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+
+      const res = await getRaw(base, '/api/reports/pack', adminToken);
+      assert.strictEqual(res.status, 409);
+      const body = await res.json();
+      assert.ok(body.error && body.error.length > 0);
+      assert.notStrictEqual(res.headers.get('content-type'), 'application/pdf');
+    } finally {
+      server.close();
+    }
+  });
+
+  await t.test('(d) an org/talent spelling injected as an extra query parameter cannot make the pack include org content (D-09)', async () => {
+    const server = app.listen(0);
+    try {
+      const { port } = server.address();
+      const base = `http://127.0.0.1:${port}`;
+      const deal = makeDeal('deal_pktd');
+      const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+      await postJSON(base, '/api/raid', adminToken, { title: 'Keeps the deal non-empty', type: 'risk', severity: 'low' });
+
+      const res = await getRaw(base, '/api/reports/pack?dataset=positions&include=flightrisk&scope=decisions', adminToken);
+      assert.strictEqual(res.status, 200, 'unrecognised extra query parameters must be silently ignored, never rejected or honoured as an org toggle');
+      const buf = Buffer.from(await res.arrayBuffer());
+      assert.match(buf.toString('binary', 0, 8), /^%PDF-1\.4$/);
+    } finally {
+      server.close();
+    }
+  });
+
+  await t.test('(e) an unsupported language query value silently resolves to English rather than rejecting the request', async () => {
+    const server = app.listen(0);
+    try {
+      const { port } = server.address();
+      const base = `http://127.0.0.1:${port}`;
+      const deal = makeDeal('deal_pkte');
+      const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+      await postJSON(base, '/api/raid', adminToken, { title: 'Non-empty deal', type: 'risk', severity: 'low' });
+
+      const res = await getRaw(base, '/api/reports/pack?language=fr', adminToken);
+      assert.strictEqual(res.status, 200);
+      const buf = Buffer.from(await res.arrayBuffer());
+      assert.match(buf.toString('binary', 0, 8), /^%PDF-1\.4$/);
+    } finally {
+      server.close();
+    }
+  });
+});

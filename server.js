@@ -56,6 +56,7 @@ const wizardValidators = require('./validators/wizard'); // provides DEAL_SETUP_
 const { z } = require('zod');
 const reportCsv = require('./lib/reportCsv');
 const reportFilename = require('./lib/reportFilename');
+const reportPack = require('./lib/reportPack');
 
 
 const app = express();
@@ -3420,6 +3421,39 @@ function enrichSynergy(item, ctx) {
   });
 }
 
+// RPT-01/RPT-02 (07-06 Task 2/T-07-28): the SINGLE enriched-synergies read
+// (with the SAME sorted-costEntries mapping) both GET /api/reports/export's
+// synergies branch AND GET /api/reports/pack call — factored out so a future
+// change can never make the CSV/JSON export and the PDF pack disagree about
+// a caller's synergy rows (D-08). Synergies carry no per-item clearance
+// concept today (every deal member sees every initiative), so this is an
+// enrichment pass, not a filter.
+function reportSynergyRows(db, ctx) {
+  const lane = synergyLane(db);
+  return lane.map((item) => {
+    const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
+    const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return Object.assign({}, enrichSynergy(item, ctx), { costEntries: sortedCostEntries });
+  });
+}
+
+// RPT-03 (07-06 Task 1/07-UI-SPEC.md §5 Section 4, amended 2026-08-09): the
+// stage recorded at the initiative's LAST baseline snapshot — resolved here,
+// server-side, so lib/reportPack.js's synergiesSection never has to read
+// item.baselines itself (that module performs no database logic by design).
+// Version is the append-only ordering key (pushBaseline() above never reuses
+// or relies on array position), so "last" means highest version, not
+// baselines[baselines.length - 1] — the two coincide today since baselines
+// are only ever appended, but resolving by version is the correct contract
+// regardless. Returns null (never a placeholder string) when the initiative
+// has no baseline history yet — lib/reportPack.js renders that as an em-dash.
+function stageAtLastBaseline(item) {
+  const baselines = Array.isArray(item && item.baselines) ? item.baselines : [];
+  if (!baselines.length) return null;
+  const last = baselines.reduce((a, b) => ((b.version || 0) > (a.version || 0) ? b : a));
+  return last.stage || null;
+}
+
 app.get('/api/synergies', (req, res) => {
   const db = readDb();
   const lane = synergyLane(db);
@@ -4000,6 +4034,19 @@ function resolveRaidEntryClearanceArea(entry, db) {
   // conversion route, above, never sets a workstream-derived area here).
   if (source.indexOf('org-flightrisk:') === 0) return 'hr';
   return null;
+}
+
+// RPT-01/RPT-02 (07-06 Task 2/T-07-28): the SINGLE clearance-filtered RAID
+// read GET /api/reports/export's raid branch AND GET /api/reports/pack both
+// call — factored out so there is exactly one filtered read path and a
+// future change can never make the CSV export and the PDF pack disagree
+// about which RAID rows a given caller may see (D-08).
+function reportRaidRows(db, deal, portalUser) {
+  ddFindingsLane(db);
+  return raidLane(db).filter((entry) => {
+    const area = resolveRaidEntryClearanceArea(entry, db);
+    return area === null || accessPolicy.hasAreaGrant(deal, portalUser, area);
+  });
 }
 
 app.get('/api/raid', (req, res) => {
@@ -5552,16 +5599,10 @@ app.get('/api/reports/export', (req, res) => {
     let rows;
     let columns;
     if (dataset === 'raid') {
-      // D-08: reuse the EXISTING RAID clearance filter verbatim, in the same
-      // order GET /api/raid (above) uses it — never a second, divergent
-      // implementation. ddFindingsLane(db) is materialized once here, exactly
-      // as GET /api/raid does, so resolveRaidEntryClearanceArea()'s own calls
-      // below are just reference reads against the already-loaded array.
-      ddFindingsLane(db);
-      rows = raidLane(db).filter((entry) => {
-        const area = resolveRaidEntryClearanceArea(entry, db);
-        return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
-      });
+      // D-08/T-07-28 (07-06): reportRaidRows() is now the SINGLE clearance-
+      // filtered RAID read GET /api/reports/pack calls too — never a second,
+      // divergent implementation.
+      rows = reportRaidRows(db, deal, req.portalUser);
       // Mirrors the fields the RAID tab already shows that caller (D-08 parity).
       columns = [
         { key: 'id', header: 'ID' },
@@ -5601,16 +5642,11 @@ app.get('/api/reports/export', (req, res) => {
         { key: 'source', header: 'Source' },
       ];
     } else {
-      // synergies — mirrors GET /api/synergies' own mapping EXACTLY (a ctx
-      // built ONCE for this request, then the same costEntries sort) so the
-      // JSON export can never diverge from the live route's shape (D-08).
-      const lane = synergyLane(db);
+      // synergies — D-08/T-07-28 (07-06): reportSynergyRows() is now the
+      // SINGLE enriched-synergies read GET /api/reports/pack calls too, so
+      // the JSON export can never diverge from the pack's shape either.
       const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
-      rows = lane.map((item) => {
-        const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
-        const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-        return Object.assign({}, enrichSynergy(item, ctx), { costEntries: sortedCostEntries });
-      });
+      rows = reportSynergyRows(db, ctx);
       columns = [
         { key: 'id', header: 'ID' },
         { key: 'title', header: 'Title' },
@@ -5672,6 +5708,131 @@ app.get('/api/reports/export', (req, res) => {
   } catch (error) {
     console.error('Error generating report export:', error);
     res.status(500).json({ error: 'Failed to generate the export.' });
+  }
+});
+
+// RPT-02/RPT-03/RPT-04 (07-06 Task 2): the steering-committee PDF pack. A
+// deliberate GET — the write-role policy (ROLE_WRITE_POLICY) only gates
+// non-read methods, so D-08's any-deal-member access falls out of the
+// existing gate with no new policy entry, exactly like GET /api/reports/export
+// above.
+//
+// `.catch('en')` (zod's default-on-parse-failure combinator, available since
+// the 4.4.3 pin already used elsewhere in this file) is deliberate: a
+// missing or unsupported language code is not a client error, it silently
+// resolves to English — matching lib/reportPack.js's own resolveLanguage()
+// fallback contract. This is also the ENTIRE query-parameter surface this
+// route reads; no other request-supplied value reaches the model (T-07-32).
+const ReportPackLanguageSchema = z.enum(reportPack.SUPPORTED_LANGUAGES).catch('en');
+
+/** "2026-08-09 14:32 UTC" — one server-resolved string, read verbatim by
+ * both the header and footer bands (lib/reportPack.js never formats a
+ * date/timestamp itself, per its own module contract). */
+function formatPackTimestamp(date) {
+  return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
+app.get('/api/reports/pack', async (req, res) => {
+  const language = ReportPackLanguageSchema.parse(req.query.language);
+
+  try {
+    const db = readDb();
+    const deal = controlStore.getDeal(req.dealContext.dealId);
+
+    // T-07-28/D-08: assembled from the EXACT SAME lane-read and clearance-
+    // filter functions GET /api/reports/export calls above — reportRaidRows()
+    // and reportSynergyRows() are the shared internal assembly this plan's
+    // own instruction requires, so a future change can never make the pack
+    // and the CSV disagree. No internal HTTP request to the app's own routes
+    // is issued anywhere in this handler — every read below is a direct
+    // function call.
+    const raid = reportRaidRows(db, deal, req.portalUser);
+    const workstreams = computeWorkstreamRollup(db);
+    const tasks = taskLane(db);
+    const synergyCtx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
+    // RPT-03 (D-04 Section 4, amended 2026-08-09): each synergy row also
+    // carries `stageAtBaseline`, resolved server-side from the SAME
+    // baselines[] history POST /api/synergies/:id/rebaseline writes — never
+    // re-derived inside lib/reportPack.js, which performs no database logic.
+    const synergies = reportSynergyRows(db, synergyCtx).map((item) =>
+      Object.assign({}, item, { stageAtBaseline: stageAtLastBaseline(item) })
+    );
+
+    // A deal with NO workstream, task, RAID or synergy data at all cannot be
+    // summarised — refused with 409 so the button can show it inline. A deal
+    // that merely has one empty section still generates normally (each
+    // section's own empty-state line covers that case) — this check is only
+    // for the entirely-empty case.
+    const hasAnyData = raid.length > 0 || workstreams.length > 0 || tasks.length > 0 || synergies.length > 0;
+    if (!hasAnyData) {
+      return res.status(409).json({
+        error: 'This deal has no data yet — a steering committee pack cannot summarise a deal with no workstreams, tasks, risks or synergies recorded.',
+      });
+    }
+
+    // T-05-47/D-01: the SAME rollup computation GET /api/synergies/rollup
+    // uses, over the SAME enriched array this handler already built above —
+    // never re-derived from `synergies` a second time (that IS the
+    // double-counting drift RPT-03 forbids, D-02).
+    const hasPhasing = (i) => Array.isArray(i.phasing) && i.phasing.length > 0;
+    const phasedItems = synergies.filter(hasPhasing);
+    const unphasedItems = synergies.filter((i) => !hasPhasing(i));
+    const grossRealizedM = roundSynergyMoney(phasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
+    const unphasedRealizedM = roundSynergyMoney(unphasedItems.reduce((a, i) => a + (i.realizedM || 0), 0));
+    const costIncurredM = roundSynergyMoney(synergies.reduce((a, i) => a + (i.costIncurredM || 0), 0));
+    const netBenefitM = Math.round((grossRealizedM - costIncurredM) * 10) / 10;
+    const dealTargetM = roundSynergyMoney(synergies.reduce((a, i) => a + (i.targetM || 0), 0));
+    const staleCount = synergies.filter((i) => i.stale).length;
+
+    // Timestamp and username are resolved server-side, from the SAME
+    // req.portalUser/Date.now() pair this generation's audit event records
+    // below — never a client-supplied value (T-07-32).
+    const generatedAtDate = new Date();
+    const model = {
+      deal: { name: (deal && deal.name) || '' }, // the CODENAME — deal.targetCompany is never read here (T-07-22).
+      language,
+      generatedAt: formatPackTimestamp(generatedAtDate),
+      generatedBy: req.portalUser.username,
+      i18n: db.i18n,
+      rollup: { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount },
+      workstreams,
+      tasks,
+      raid,
+      synergies,
+      staleThresholdDays: synergyStaleDays(db),
+    };
+
+    const pdfBuffer = await reportPack.buildPack(model);
+
+    // D-07/D-09: filename discipline identical to the raw exports — the
+    // deal's CODENAME, never deal.targetCompany.
+    const filename = reportFilename.buildReportFilename((deal && deal.name) || '', 'steerco-pack', 'pdf');
+    res.setHeader('Content-Type', 'application/pdf');
+    reportFilename.setContentDisposition(res, filename);
+
+    // D-10/D-11: exactly one audit event per successful real-deal pack
+    // generation, naming the actor, deal, format and scope, and carrying the
+    // per-section row counts — gated on the request not being a demo
+    // request, mirroring GET /api/reports/export's identical audit-scoping
+    // rule immediately above. Same accepted db_kind:'control' labelling
+    // residual documented there (06-RESEARCH.md Assumptions Log A2).
+    if (!req.isDemo) {
+      auditHook.recordSecurityEvent({
+        actor: req.portalUser, action: 'report-pack-generated', dealId: req.dealContext.dealId,
+        subject: 'steerco-pack',
+        before: null,
+        after: {
+          format: 'pdf', language,
+          rowCounts: { workstreams: workstreams.length, tasks: tasks.length, raid: raid.length, synergies: synergies.length },
+        },
+        request: requestMeta(req),
+      });
+    }
+
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating report pack:', error);
+    res.status(500).json({ error: 'Failed to generate the steering committee pack.' });
   }
 });
 
