@@ -21,6 +21,7 @@ const assert = require('node:assert');
 const path = require('path');
 const zlib = require('zlib');
 const { createCanvas, GlobalFonts } = require('@napi-rs/canvas');
+const { renderPageToRgbStream, buildPdf, REPORT_FONT_FAMILY } = require('../lib/reportPdf.js');
 
 const FONT_PATH = path.join(__dirname, '..', 'public', 'vendor', 'fonts', 'NotoSansSC-Regular.otf');
 const TEST_FONT_FAMILY = 'ReportsPdfTestFont';
@@ -99,5 +100,142 @@ test('reports-pdf glyph coverage', async (t) => {
         '(see 07-03-SUMMARY.md), relying on the graphics library to fake-bold it; if this fails, bold pack ' +
         'headings would render blank.'
     );
+  });
+});
+
+// --- Task 2: the minimal PDF 1.4 writer ------------------------------------
+
+/**
+ * Parses the xref table out of a buildPdf() buffer by following its own
+ * trailer -> startxref -> xref chain (never assuming a fixed offset), and
+ * returns { totalObjects, entries: [{ objNum, offset, type }] } for every
+ * entry after the reserved free-list head (object 0).
+ */
+function parseXref(buf) {
+  const text = buf.toString('binary');
+  const startxrefMatch = /startxref\n(\d+)\n%%EOF\n?$/.exec(text);
+  assert.ok(startxrefMatch, 'buffer must end with startxref/<offset>/%%EOF');
+  const xrefOffset = Number(startxrefMatch[1]);
+
+  const xrefHeaderMatch = /^xref\n(\d+) (\d+)\n/.exec(text.slice(xrefOffset));
+  assert.ok(xrefHeaderMatch, `no "xref\\n0 N\\n" header found at the offset startxref points to (${xrefOffset})`);
+  const firstObjNum = Number(xrefHeaderMatch[1]);
+  const totalObjects = Number(xrefHeaderMatch[2]);
+  const entriesStart = xrefOffset + xrefHeaderMatch[0].length;
+
+  const entries = [];
+  for (let i = 0; i < totalObjects; i++) {
+    const lineStart = entriesStart + i * 20;
+    const line = text.slice(lineStart, lineStart + 20);
+    const entryMatch = /^(\d{10}) (\d{5}) ([nf]) \n$/.exec(line);
+    assert.ok(entryMatch, `xref entry ${i} is not a well-formed 20-byte entry: ${JSON.stringify(line)}`);
+    entries.push({ objNum: firstObjNum + i, offset: Number(entryMatch[1]), type: entryMatch[3] });
+  }
+  return { totalObjects, entries };
+}
+
+test('reports-pdf minimal PDF 1.4 writer', async (t) => {
+  await t.test('(f) buildPdf rejects a zero-page call with a clear error, never producing an unopenable file', () => {
+    assert.throws(() => buildPdf([]), /non-empty array/);
+  });
+
+  await t.test('(g) a one-page document begins with the version header and ends with the EOF marker', () => {
+    const page = renderPageToRgbStream(
+      (ctx) => {
+        ctx.fillStyle = '#000000';
+        ctx.font = `20px ${REPORT_FONT_FAMILY}`;
+        ctx.fillText('One page', 10, 30);
+      },
+      200,
+      100
+    );
+    const pdf = buildPdf([page]);
+    assert.match(pdf.toString('binary', 0, 8), /^%PDF-1\.4$/);
+    assert.match(pdf.toString('binary', pdf.length - 6), /%%EOF\n?$/);
+  });
+
+  await t.test('(h) a three-page document contains exactly three /Type /Page objects', () => {
+    const pages = [1, 2, 3].map((n) =>
+      renderPageToRgbStream(
+        (ctx) => {
+          ctx.fillStyle = '#000000';
+          ctx.font = `16px ${REPORT_FONT_FAMILY}`;
+          ctx.fillText(`Page ${n} of 3`, 10, 20);
+        },
+        200,
+        100
+      )
+    );
+    const pdf = buildPdf(pages);
+    const text = pdf.toString('binary');
+    const pageObjectCount = (text.match(/\/Type \/Page(?!s)\b/g) || []).length;
+    assert.strictEqual(pageObjectCount, 3, 'expected exactly one /Type /Page object per requested page');
+  });
+
+  await t.test('(i) every cross-reference offset resolves to a real object header at that exact byte position', () => {
+    const pages = [1, 2, 3].map(() =>
+      renderPageToRgbStream(
+        (ctx) => {
+          ctx.fillStyle = '#000000';
+          ctx.font = `16px ${REPORT_FONT_FAMILY}`;
+          ctx.fillText('Xref proof page', 10, 20);
+        },
+        200,
+        100
+      )
+    );
+    const pdf = buildPdf(pages);
+    const { totalObjects, entries } = parseXref(pdf);
+    assert.ok(totalObjects > 1, 'expected more than the reserved free-list head object');
+
+    for (const entry of entries) {
+      if (entry.type === 'f') continue; // the reserved free-list head, not a real object
+      const headerAtOffset = pdf.toString('binary', entry.offset, entry.offset + 40);
+      assert.match(
+        headerAtOffset,
+        new RegExp(`^${entry.objNum} 0 obj`),
+        `xref offset ${entry.offset} for object ${entry.objNum} does not land on a matching object header ` +
+          `(found: ${JSON.stringify(headerAtOffset)})`
+      );
+    }
+  });
+
+  await t.test('(j) the trailer names the catalog object as /Root and matches the real object count', () => {
+    const page = renderPageToRgbStream((ctx) => {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, 10, 10);
+    }, 100, 50);
+    const pdf = buildPdf([page]);
+    const text = pdf.toString('binary');
+    const trailerMatch = /trailer\n<< \/Size (\d+) \/Root (\d+) 0 R >>/.exec(text);
+    assert.ok(trailerMatch, 'trailer must name /Size and /Root');
+    const { totalObjects } = parseXref(pdf);
+    assert.strictEqual(Number(trailerMatch[1]), totalObjects, '/Size must match the xref table object count');
+    assert.strictEqual(Number(trailerMatch[2]), 1, '/Root must reference the catalog object (object 1)');
+  });
+
+  await t.test('(k) the deflated image stream round-trips back to the exact pixel byte length implied by the page dimensions', () => {
+    const page = renderPageToRgbStream((ctx) => {
+      ctx.fillStyle = '#FF0000';
+      ctx.fillRect(0, 0, 50, 50);
+    }, 100, 50);
+    const inflated = zlib.inflateSync(page.deflated);
+    assert.strictEqual(inflated.length, page.width * page.height * 3, 'RGB (alpha-stripped) byte length must be width*height*3');
+
+    const pdf = buildPdf([page]);
+    const { entries } = parseXref(pdf);
+    const imageEntry = entries.find((e) => e.type === 'n' && e.objNum === 3); // first page's image object (obj 1=catalog, 2=pages tree, 3=first image)
+    assert.ok(imageEntry, 'expected an image XObject at object 3');
+    const streamStartMatch = /stream\n/.exec(pdf.toString('binary', imageEntry.offset, imageEntry.offset + 300));
+    assert.ok(streamStartMatch, 'image object must declare a stream');
+    const streamStart = imageEntry.offset + streamStartMatch.index + streamStartMatch[0].length;
+    const embeddedDeflated = pdf.subarray(streamStart, streamStart + page.deflated.length);
+    assert.deepStrictEqual(embeddedDeflated, page.deflated, 'the embedded stream bytes must be byte-identical to the deflated buffer renderPageToRgbStream produced');
+  });
+
+  await t.test('(l) renderPageToRgbStream rejects non-positive dimensions and a non-function drawFn', () => {
+    assert.throws(() => renderPageToRgbStream(() => {}, 0, 100), /positive/);
+    assert.throws(() => renderPageToRgbStream(() => {}, 100, -1), /positive/);
+    assert.throws(() => renderPageToRgbStream('not a function', 100, 100), /drawFn/);
   });
 });
