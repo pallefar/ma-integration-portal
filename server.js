@@ -46,6 +46,16 @@ require('./validators/settings'); // ditto
 require('./validators/dd'); // ditto
 const orgValidators = require('./validators/org'); // provides ORG_STATE_CURRENT/ORG_STATE_TARGET below, plus its own registerSchema() side effect
 const wizardValidators = require('./validators/wizard'); // provides DEAL_SETUP_STEPS below, plus its own registerSchema() side effect
+// RPT-01 (07-01): GET /api/reports/export is a READ route, so it is outside
+// validators/index.js's write-only WRITE_SCHEMAS pipeline — it validates its
+// own dataset/format query parameters directly with zod (07-RESEARCH.md's
+// Supporting Stack: "every existing write/query-validated route in this
+// codebase already uses zod; export routes should follow the same VAL-01
+// discipline even though they are reads"). reportCsv/reportFilename are the
+// two new lib/ modules this plan's Task 1 builds.
+const { z } = require('zod');
+const reportCsv = require('./lib/reportCsv');
+const reportFilename = require('./lib/reportFilename');
 
 
 const app = express();
@@ -5416,6 +5426,102 @@ app.delete('/api/raid/:id', (req, res) => {
   else db.raidEntries = filtered;
   writeDb(db);
   res.json({ success: true });
+});
+
+// =====================================================================
+// Reports & Exports (RPT-01) — phase tracer. Proves the whole export
+// architecture end to end on ONE dataset/format combination (RAID as CSV)
+// before Plan 07-02 expands the other three accepted-but-not-yet-wired
+// combinations. See lib/reportCsv.js (RFC 4180 quoting, CRLF terminators,
+// UTF-8 BOM, formula-injection neutralisation) and lib/reportFilename.js
+// (codename sanitisation + safe Content-Disposition) for the reusable
+// pieces this route composes.
+//
+// D-09 IS the zod enum below, not a denylist: `dataset` names exactly the
+// four datasets RPT-01/02 cover (workstreams, tasks, raid, synergies).
+// Org/talent data (positions, decisions, flight-risk) has NO export surface
+// at all — a crafted request naming any of them is refused with 400 before
+// any lane is ever opened, with no branch to forget to update if a future
+// org/talent collection is added.
+const ReportExportQuerySchema = z.object({
+  dataset: z.enum(['workstreams', 'tasks', 'raid', 'synergies']),
+  format: z.enum(['csv', 'json']),
+});
+
+app.get('/api/reports/export', (req, res) => {
+  const parsed = ReportExportQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'dataset must be one of workstreams/tasks/raid/synergies and format must be csv or json.' });
+  }
+  const { dataset, format } = parsed.data;
+
+  // Only raid+csv is implemented in this tracer plan — every other accepted
+  // enum combination is a deliberate 501 stub Plan 07-02 replaces with a
+  // real branch. Never silently honoured, never partially honoured.
+  if (!(dataset === 'raid' && format === 'csv')) {
+    return res.status(501).json({ error: `Export of dataset '${dataset}' as '${format}' is not yet implemented.` });
+  }
+
+  try {
+    const db = readDb();
+    const deal = controlStore.getDeal(req.dealContext.dealId);
+    // D-08: reuse the EXISTING RAID clearance filter verbatim, in the same
+    // order GET /api/raid (above) uses it — never a second, divergent
+    // implementation. ddFindingsLane(db) is materialized once here, exactly
+    // as GET /api/raid does, so resolveRaidEntryClearanceArea()'s own calls
+    // below are just reference reads against the already-loaded array.
+    ddFindingsLane(db);
+    const rows = raidLane(db).filter((entry) => {
+      const area = resolveRaidEntryClearanceArea(entry, db);
+      return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
+    });
+
+    // Mirrors the fields the RAID tab already shows that caller (D-08 parity).
+    const columns = [
+      { key: 'id', header: 'ID' },
+      { key: 'type', header: 'Type' },
+      { key: 'severity', header: 'Severity' },
+      { key: 'probability', header: 'Probability' },
+      { key: 'title', header: 'Title' },
+      { key: 'owner', header: 'Owner' },
+      { key: 'workstreamId', header: 'Workstream' },
+      { key: 'status', header: 'Status' },
+    ];
+    const csv = reportCsv.toCsv(rows, columns);
+
+    // D-07/D-09: the filename is built from the deal's CODENAME (deal.name —
+    // the same field the header deal-switcher pill renders), NEVER
+    // deal.targetCompany, the real legal target name that exists separately
+    // precisely so it can be withheld.
+    const filename = reportFilename.buildReportFilename((deal && deal.name) || '', dataset, 'csv');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    reportFilename.setContentDisposition(res, filename);
+
+    // D-10/D-11: exactly one audit event per successful real-deal export,
+    // gated on the request not being a demo request — demo keeps full
+    // export parity and gains no audit rows.
+    //
+    // KNOWN, ACCEPTED LABELLING GAP (06-RESEARCH.md Assumptions Log A2, cited
+    // by 07-RESEARCH.md Pitfall 4): db/auditHook.js's recordSecurityEvent()
+    // hardcodes the audit row's db_kind column to the literal 'control' for
+    // EVERY caller. This export is conceptually deal-scoped and will be
+    // recorded with the control-plane label regardless. This route
+    // deliberately does not work around it — writing to the audit
+    // connection directly would break db/controlStore.js's
+    // zero-reference-to-audit.db isolation guarantee (AUD-02).
+    if (!req.isDemo) {
+      auditHook.recordSecurityEvent({
+        actor: req.portalUser, action: 'report-export', dealId: req.dealContext.dealId,
+        subject: dataset, before: null, after: { format, rowCount: rows.length },
+        request: requestMeta(req),
+      });
+    }
+
+    res.send(csv);
+  } catch (error) {
+    console.error('Error generating report export:', error);
+    res.status(500).json({ error: 'Failed to generate the export.' });
+  }
 });
 
 // ==========================================
