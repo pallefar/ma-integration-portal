@@ -226,6 +226,57 @@ test('reports-pack page frame', async (t) => {
   });
 });
 
+/**
+ * 07-07 (F-A/F-B regression proofs): extends the instrumented ctx above to
+ * also record every filled rectangle (roundRect, or its rect() fallback) and
+ * every fillText call's (text, x, y) position — the sentinel-absence proofs
+ * above only ever needed WHICH strings were drawn; these two regressions are
+ * about WHERE they were drawn, which needs real geometry.
+ */
+function makeGeometryInstrumentedCtx() {
+  const drawnStrings = [];
+  const drawnRects = [];
+  const drawnTexts = [];
+  const ctx = {
+    fillStyle: '#000000',
+    strokeStyle: '#000000',
+    font: '10px sans-serif',
+    textAlign: 'left',
+    textBaseline: 'alphabetic',
+    lineWidth: 1,
+    fillText(text, x, y) {
+      drawnStrings.push(String(text));
+      drawnTexts.push({ text: String(text), x, y });
+    },
+    measureText(text) {
+      return { width: String(text).length * 6 };
+    },
+    fillRect() {},
+    strokeRect() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+    fill() {},
+    save() {},
+    restore() {},
+    clip() {},
+    rect(x, y, w, h) {
+      drawnRects.push({ x, y, w, h });
+    },
+    roundRect(x, y, w, h) {
+      drawnRects.push({ x, y, w, h });
+    },
+    drawImage() {},
+    scale() {},
+    translate() {},
+    createLinearGradient() {
+      return { addColorStop() {} };
+    },
+  };
+  return { ctx, drawnStrings, drawnRects, drawnTexts };
+}
+
 // ---------------------------------------------------------------------------
 // Task 2: page one — the executive summary.
 // ---------------------------------------------------------------------------
@@ -368,6 +419,35 @@ test('reports-pack executive summary (page one)', async (t) => {
     // empty-state line rather than throwing or producing zero pages.
     assert.strictEqual(countPdfPageObjects(pdf), reportPack.DEFAULT_SECTIONS.length);
   });
+
+  await t.test('(i) F-A regression: the RAG chip ribbon wraps onto additional lines rather than overflowing past the content-width right edge', () => {
+    const workstreams = Array.from({ length: 10 }, (_, i) => ({
+      id: `w${i}`, label: `Workstream Number ${i} Long Label`, pctComplete: 50, ragStatus: 'green',
+    }));
+    const model = baseModel({ workstreams });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = execSummarySection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const { ctx, drawnRects } = makeGeometryInstrumentedCtx();
+    pages[0].render(ctx, { pageNumber: 1, pageCount: 1 });
+
+    // The RAG strip's chips are the only filled rounded rects execSummarySection
+    // draws — one per workstream.
+    assert.strictEqual(drawnRects.length, workstreams.length, 'one chip rect must be drawn per workstream, or this proof is vacuous');
+
+    const rightEdge = reportPack.CONTENT_RIGHT_PX;
+    drawnRects.forEach((r) => {
+      assert.ok(
+        r.x + r.w <= rightEdge + 0.01,
+        `a chip was drawn past the content-width right edge: x=${r.x} w=${r.w} rightEdge=${rightEdge}`
+      );
+    });
+
+    // Ten long-label chips at 672px content width cannot fit on one line —
+    // proving the wrap actually fired, not merely that no single oversized
+    // chip happened to cross the edge.
+    const distinctYs = new Set(drawnRects.map((r) => r.y));
+    assert.ok(distinctYs.size > 1, '10 long-label chips must wrap onto more than one row, or this proof is vacuous');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -424,6 +504,58 @@ test('reports-pack Section 2 — Workstreams & Tasks', async (t) => {
       assert.ok(drawn.some((s) => s.includes('No workstreams yet.')));
       assert.ok(drawn.some((s) => s.includes('No tasks recorded yet.')));
     });
+  });
+
+  await t.test("(d) F-B regression: a title exceeding its column width wraps within the TITLE column, grows the row height, and never overprints the neighbouring column", () => {
+    const longTitle =
+      'A very long task title that is guaranteed to exceed the width available in the narrow title column of this table';
+    const tasks = [
+      { id: 't1', title: longTitle, workstreamId: 'w1', phase: 'day1', status: 'todo', owner: 'x', due: '2026-01-01' },
+      { id: 't2', title: 'Short', workstreamId: 'w1', phase: 'day1', status: 'todo', owner: 'x', due: '2026-01-01' },
+    ];
+    const model = baseModel({ tasks, workstreams: [] });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.workstreamsTasksSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const xs = reportPack.columnX(reportPack.TASK_TABLE_COLUMNS, CONTENT_WIDTH_PX);
+    const titleColX = xs[0];
+    const workstreamColX = xs[1]; // the column immediately right of TITLE
+
+    const { ctx, drawnTexts } = makeGeometryInstrumentedCtx();
+    pages[0].render(ctx, { pageNumber: 1, pageCount: pages.length });
+
+    // Every fillText call at the TITLE column's x whose text is a piece the
+    // long title was wrapped FROM (never a coincidental substring of some
+    // other column's value).
+    const wrappedTitleCalls = drawnTexts
+      .filter((d) => d.x === titleColX && longTitle.includes(d.text))
+      .sort((a, b) => a.y - b.y);
+    assert.ok(wrappedTitleCalls.length > 1, 'a title exceeding the column width must wrap onto more than one line, or this proof is vacuous');
+
+    // No neighbouring-column draw call lands at any CONTINUATION line's y —
+    // the exact overprint (F-B) this regression guards against. The first
+    // wrapped line's y is excused: that is the row's shared baseline every
+    // other column also draws at, by design.
+    const continuationYs = wrappedTitleCalls.slice(1).map((d) => d.y);
+    assert.ok(continuationYs.length > 0, 'the fixture must force at least one continuation line, or this proof is vacuous');
+    continuationYs.forEach((y) => {
+      const overlap = drawnTexts.find((d) => d.x >= workstreamColX && d.y === y);
+      assert.strictEqual(
+        overlap,
+        undefined,
+        `a neighbouring column drew text at continuation-line y=${y}, which would overprint the wrapped title`
+      );
+    });
+
+    // Row-height regression: the SECOND row's title ('Short') must render
+    // strictly more than one fixed row height below the first row's title —
+    // proving the wrapped row grew taller rather than the paginator
+    // budgeting it (and the next row) at the old fixed height.
+    const shortTitleCall = drawnTexts.find((d) => d.x === titleColX && d.text === 'Short');
+    assert.ok(shortTitleCall, "the second row's short title must still render");
+    assert.ok(
+      shortTitleCall.y - wrappedTitleCalls[0].y > reportPack.TABLE_ROW_HEIGHT_PX,
+      'a wrapped title must grow its own row height beyond the fixed single-line row height'
+    );
   });
 });
 
