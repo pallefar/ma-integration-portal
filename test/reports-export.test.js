@@ -420,3 +420,134 @@ test('reports-export (i): a deal with no data at all yields a headers-only CSV a
   }
 });
 
+// =====================================================================
+// 07-02 Task 3: proves the RAID clearance filter survived the four-dataset
+// expansion, that the three unfiltered datasets return identical sets
+// across identities (catching an accidental over-filter as loudly as an
+// under-filter), and that no dataset/format combination ever leaks a
+// second deal's rows or the legal-target sentinel.
+// =====================================================================
+
+test('reports-export (j): the RAID clearance parity from test (a) holds in BOTH formats now that the handler branches on four datasets', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rptj');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+    const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+    const legalToken = newSession('pmo_legal', 'pmo'); bindDeal(legalToken, deal.id);
+    const noneToken = newSession('pmo_none', 'pmo'); bindDeal(noneToken, deal.id);
+
+    await createManualRaid(base, adminToken, 'A manually created risk with no source');
+    const legalFinding = await createFinding(base, adminToken, 'legal', 'A legal finding');
+    await convertFindingToRaid(base, adminToken, legalFinding.id);
+    const financialFinding = await createFinding(base, adminToken, 'financial', 'A financial finding');
+    await convertFindingToRaid(base, adminToken, financialFinding.id);
+
+    const identities = [
+      { name: 'admin', token: adminToken },
+      { name: 'karen (IL/hrbp)', token: karenToken },
+      { name: 'pmo_legal (one area)', token: legalToken },
+      { name: 'pmo_none (no area)', token: noneToken },
+    ];
+
+    for (const identity of identities) {
+      const liveIds = ((await (await getRaw(base, '/api/raid', identity.token)).json())).map((e) => e.id).slice().sort();
+
+      const csvIds = sortedIdsFromCsv(await (await getRaw(base, '/api/reports/export?dataset=raid&format=csv', identity.token)).text());
+      assert.deepStrictEqual(csvIds, liveIds, `${identity.name}: CSV export id set must equal GET /api/raid's own id set`);
+
+      const jsonRows = JSON.parse(await (await getRaw(base, '/api/reports/export?dataset=raid&format=json', identity.token)).text());
+      const jsonIds = jsonRows.map((r) => r.id).sort();
+      assert.deepStrictEqual(jsonIds, liveIds, `${identity.name}: JSON export id set must equal GET /api/raid's own id set`);
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-export (k): the three datasets with NO per-item clearance concept (workstreams, tasks, synergies) return the IDENTICAL set for all four identities — an accidental over-filter is caught as loudly as a leak', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rptk');
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+    const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+    const legalToken = newSession('pmo_legal', 'pmo'); bindDeal(legalToken, deal.id);
+    const noneToken = newSession('pmo_none', 'pmo'); bindDeal(noneToken, deal.id);
+
+    seedChecklistTemplate(deal.id, [{ id: 'ws_imo', label: 'Governance & IMO', icon: '' }]);
+    await createTask(base, adminToken, { title: 'A task', workstreamId: 'ws_imo', status: 'done' });
+    await createSynergy(base, adminToken, { title: 'A synergy', category: 'cost', targetM: 1, realizedM: 0.2 });
+
+    const identities = [
+      { name: 'admin', token: adminToken },
+      { name: 'karen (IL/hrbp)', token: karenToken },
+      { name: 'pmo_legal (one area)', token: legalToken },
+      { name: 'pmo_none (no area)', token: noneToken },
+    ];
+
+    for (const dataset of ['workstreams', 'tasks', 'synergies']) {
+      let firstIds = null;
+      for (const identity of identities) {
+        const rows = JSON.parse(await (await getRaw(base, `/api/reports/export?dataset=${dataset}&format=json`, identity.token)).text());
+        const ids = rows.map((r) => r.id).sort();
+        if (firstIds === null) { firstIds = ids; continue; }
+        assert.deepStrictEqual(ids, firstIds, `dataset=${dataset}: ${identity.name} must see the IDENTICAL id set as every other identity — no clearance concept exists on this dataset`);
+      }
+      assert.ok(firstIds.length > 0, `dataset=${dataset}: the fixture must actually contain a row, or this assertion would pass vacuously`);
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-export (l): the export route reads through the deal-bound context, never a global — a session bound to a SECOND deal receives ONLY that deal\'s rows', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const dealOne = makeDeal('deal_rptlone');
+    const dealTwo = makeDeal('deal_rptltwo');
+    const adminOneToken = newSession('admin', 'admin'); bindDeal(adminOneToken, dealOne.id);
+    const adminTwoToken = newSession('karen', 'hrbp'); bindDeal(adminTwoToken, dealTwo.id);
+
+    const entryOne = await createManualRaid(base, adminOneToken, 'Deal one\'s own risk');
+    const entryTwo = await createManualRaid(base, adminTwoToken, 'Deal two\'s own risk');
+
+    const idsForDealTwo = sortedIdsFromCsv(await (await getRaw(base, '/api/reports/export?dataset=raid&format=csv', adminTwoToken)).text());
+    assert.deepStrictEqual(idsForDealTwo, [entryTwo.id], 'a session bound to deal two must see ONLY deal two\'s own RAID id, never deal one\'s');
+    assert.ok(!idsForDealTwo.includes(entryOne.id), 'deal one\'s id must never leak into deal two\'s export');
+  } finally {
+    server.close();
+  }
+});
+
+test('reports-export (m): the legal-target sentinel never appears in any response body or Content-Disposition header, across all four datasets and both formats (D-07)', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_rptm', { name: 'project-heron' });
+    const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
+    seedChecklistTemplate(deal.id, [{ id: 'ws_imo', label: 'Governance & IMO', icon: '' }]);
+    await createManualRaid(base, adminToken, 'A risk');
+    await createTask(base, adminToken, { title: 'A task', workstreamId: 'ws_imo', status: 'done' });
+    await createSynergy(base, adminToken, { title: 'A synergy', category: 'cost', targetM: 1, realizedM: 0.2 });
+
+    for (const dataset of ['workstreams', 'tasks', 'raid', 'synergies']) {
+      for (const format of ['csv', 'json']) {
+        const res = await getRaw(base, `/api/reports/export?dataset=${dataset}&format=${format}`, adminToken);
+        assert.strictEqual(res.status, 200);
+        const disposition = res.headers.get('content-disposition') || '';
+        const body = await res.text();
+        assert.ok(!disposition.includes(LEGAL_TARGET_SENTINEL), `dataset=${dataset}&format=${format}: Content-Disposition must never carry the legal-target sentinel`);
+        assert.ok(!body.includes(LEGAL_TARGET_SENTINEL), `dataset=${dataset}&format=${format}: the response body must never carry the legal-target sentinel`);
+      }
+    }
+  } finally {
+    server.close();
+  }
+});
