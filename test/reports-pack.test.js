@@ -72,6 +72,9 @@ function makeInstrumentedCtx() {
     drawImage() {},
     scale() {},
     translate() {},
+    createLinearGradient() {
+      return { addColorStop() {} };
+    },
   };
   return { ctx, drawnStrings };
 }
@@ -210,12 +213,16 @@ test('reports-pack page frame', async (t) => {
     assert.strictEqual(t2('rpt.k'), 'English value');
   });
 
-  await t.test('(h) buildPack returns a valid PDF buffer using the module default section', async () => {
+  await t.test('(h) buildPack returns a valid PDF buffer using the module default sections', async () => {
     const model = baseModel();
     const pdf = await buildPack(model);
     assert.ok(Buffer.isBuffer(pdf));
     assert.match(pdf.toString('binary', 0, 8), /^%PDF-1\.4$/);
-    assert.strictEqual(countPdfPageObjects(pdf), 1);
+    // 07-06: DEFAULT_SECTIONS now carries all four of D-04's parts (exec
+    // summary, workstreams & tasks, RAID, synergies); an entirely empty
+    // model still produces exactly one page per section (each renders its
+    // own empty-state line rather than zero pages).
+    assert.strictEqual(countPdfPageObjects(pdf), reportPack.DEFAULT_SECTIONS.length);
   });
 });
 
@@ -357,6 +364,218 @@ test('reports-pack executive summary (page one)', async (t) => {
     const model = baseModel({ rollup: {}, workstreams: [], raid: [], synergies: [] });
     const pdf = await buildPack(model);
     assert.ok(Buffer.isBuffer(pdf));
-    assert.strictEqual(countPdfPageObjects(pdf), 1);
+    // 07-06: one page per default section, each rendering its own
+    // empty-state line rather than throwing or producing zero pages.
+    assert.strictEqual(countPdfPageObjects(pdf), reportPack.DEFAULT_SECTIONS.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 07-06 Task 1: the three remaining sections — Workstreams & Tasks, RAID and
+// Synergies — registered after the executive summary in D-04's fixed order.
+// ---------------------------------------------------------------------------
+
+function renderAllPages(pages) {
+  const { ctx, drawnStrings } = makeInstrumentedCtx();
+  pages.forEach((page, i) => page.render(ctx, { pageNumber: i + 1, pageCount: pages.length }));
+  return drawnStrings;
+}
+
+test('reports-pack Section 2 — Workstreams & Tasks', async (t) => {
+  await t.test('(a) an overflowing task table continues onto further pages that repeat the column header while the section title appears only once', () => {
+    const tasks = Array.from({ length: 220 }, (_, i) => ({
+      id: `t${i}`, title: `Task ${i}`, workstreamId: 'w1', phase: 'day1', status: 'todo', owner: 'x', due: '2026-01-01',
+    }));
+    const model = baseModel({ tasks, workstreams: [] });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.workstreamsTasksSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    assert.ok(pages.length > 1, 'the fixture must force more than one page or this proof is vacuous');
+
+    let titleCount = 0;
+    const headerSeenPerPage = [];
+    pages.forEach((page) => {
+      const { ctx, drawnStrings } = makeInstrumentedCtx();
+      page.render(ctx, { pageNumber: 1, pageCount: pages.length });
+      if (drawnStrings.includes('Workstreams & Tasks')) titleCount += 1;
+      headerSeenPerPage.push(drawnStrings.includes('TITLE'));
+    });
+    assert.strictEqual(titleCount, 1, 'the section title must render on exactly one page, never repeated');
+    assert.ok(headerSeenPerPage.every(Boolean), 'the column-header row must repeat on every page, including continuations');
+  });
+
+  await t.test('(b) workstream bars render label, percentage and the caller-supplied RAG band, never a re-derived one', () => {
+    const model = baseModel({
+      workstreams: [{ id: 'w1', label: 'HR', pctComplete: 63, ragStatus: 'amber', blocked: false }],
+      tasks: [],
+    });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.workstreamsTasksSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const drawn = renderAllPages(pages);
+    assert.ok(drawn.includes('HR'));
+    assert.ok(drawn.includes('63%'));
+  });
+
+  await t.test('(c) no workstreams and no tasks renders the empty-state lines rather than throwing', () => {
+    const model = baseModel({ workstreams: [], tasks: [] });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    assert.doesNotThrow(() => {
+      const pages = reportPack.workstreamsTasksSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+      const drawn = renderAllPages(pages);
+      assert.ok(drawn.some((s) => s.includes('No workstreams yet.')));
+      assert.ok(drawn.some((s) => s.includes('No tasks recorded yet.')));
+    });
+  });
+});
+
+test('reports-pack Section 3 — Risks & Decisions (RAID)', async (t) => {
+  await t.test('(a) RAID rows render grouped by type in the fixed order risk -> issue -> decision -> dependency', () => {
+    const model = baseModel({
+      raid: [
+        { id: 'd1', type: 'dependency', severity: 'low', title: 'Dep one', owner: 'x', status: 'open' },
+        { id: 'r1', type: 'risk', severity: 'low', title: 'Risk one', owner: 'x', status: 'open' },
+        { id: 'dec1', type: 'decision', severity: 'low', title: 'Decision one', owner: 'x', status: 'open' },
+        { id: 'i1', type: 'issue', severity: 'low', title: 'Issue one', owner: 'x', status: 'open' },
+      ],
+    });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.raidSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const { ctx, drawnStrings } = makeInstrumentedCtx();
+    pages[0].render(ctx, { pageNumber: 1, pageCount: pages.length });
+    const order = ['Risk one', 'Issue one', 'Decision one', 'Dep one'];
+    const indices = order.map((title) => drawnStrings.indexOf(title));
+    indices.forEach((idx) => assert.notStrictEqual(idx, -1));
+    for (let i = 1; i < indices.length; i++) {
+      assert.ok(indices[i] > indices[i - 1], 'RAID rows must appear grouped in the fixed type order');
+    }
+  });
+
+  await t.test('(b) an oversized RAID dataset truncates with a plain notice naming the remaining count and the CSV export, rather than growing unboundedly', () => {
+    const raid = Array.from({ length: 260 }, (_, i) => ({
+      id: `r${i}`, type: 'risk', severity: 'low', title: `Risk ${i}`, owner: 'x', status: 'open',
+    }));
+    const model = baseModel({ raid });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.raidSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    assert.ok(pages.length <= reportPack.MAX_SECTION_PAGES, 'the page ceiling must cap the section to a small, bounded number of pages');
+
+    const drawn = renderAllPages(pages);
+    const notice = drawn.find((s) => /further row/i.test(s));
+    assert.ok(notice, 'the final page must draw a truncation notice');
+    assert.ok(/CSV export/i.test(notice), 'the notice must name the CSV export as the complete source');
+
+    const titlesDrawn = drawn.filter((s) => /^Risk \d+$/.test(s));
+    assert.ok(titlesDrawn.length < 260, 'the oversized dataset must be truncated, not fully rendered');
+  });
+
+  await t.test('(c) zero RAID rows renders the empty-state line, never a placeholder implying withheld content', () => {
+    const model = baseModel({ raid: [] });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.raidSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const drawn = renderAllPages(pages);
+    assert.ok(drawn.some((s) => s.includes('No risks, issues, decisions or dependencies recorded yet.')));
+  });
+});
+
+test('reports-pack Section 4 — Synergies', async (t) => {
+  await t.test('(a) the recap numbers equal the supplied rollup exactly on a rounding-edge fixture that a re-summation would get wrong', () => {
+    const model = baseModel({
+      rollup: { grossRealizedM: 12.4, costIncurredM: 5.06, netBenefitM: 7.36, dealTargetM: 40.0 },
+      synergies: [
+        { title: 'A', realizedM: 4.111, costIncurredM: 1.111, targetM: 5, category: 'cost', stage: 'idea' },
+        { title: 'B', realizedM: 4.222, costIncurredM: 1.222, targetM: 5, category: 'cost', stage: 'idea' },
+      ],
+    });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.synergiesSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const { ctx, drawnStrings } = makeInstrumentedCtx();
+    pages[0].render(ctx, { pageNumber: 1, pageCount: pages.length });
+    const recap = drawnStrings.find((s) => /gross realized/i.test(s));
+    assert.ok(recap, 'a recap line must be drawn');
+    assert.ok(recap.includes('$12.4M'));
+    assert.ok(recap.includes('$5.1M'));
+    assert.ok(recap.includes('$7.4M'));
+    assert.ok(recap.includes('$40.0M'));
+    // A naive re-sum of the per-initiative rows (4.111+4.222=8.333) would
+    // NOT equal grossRealizedM (12.4) — proves the recap reads the rollup,
+    // never re-derives it.
+    assert.ok(!drawnStrings.some((s) => s.includes('8.3')));
+  });
+
+  await t.test('(b) a fixture initiative whose baseline stage differs from its current stage renders BOTH values, and an initiative with no baseline history renders the em-dash', () => {
+    const model = baseModel({
+      synergies: [
+        { title: 'Moved', stage: 'committed', stageAtBaseline: 'validated', category: 'cost', targetM: 5, realizedM: 3, costIncurredM: 1, netBenefitM: 2 },
+        { title: 'No baseline yet', stage: 'idea', category: 'revenue', targetM: 2, realizedM: 0, costIncurredM: 0, netBenefitM: 0 },
+      ],
+    });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.synergiesSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const drawn = renderAllPages(pages);
+    assert.ok(drawn.includes('committed'), 'current stage must render');
+    assert.ok(drawn.includes('validated'), 'the last-baseline stage must ALSO render, proving movement is visible');
+    assert.ok(drawn.includes('—'), 'an initiative with no baseline history must render the em-dash');
+  });
+
+  await t.test('(c) a stale initiative row renders dimmed with a day-count tag matching the supplied field, and keeps its input-order position', () => {
+    const model = baseModel({
+      synergies: [
+        { id: 's1', title: 'Fresh one', stage: 'idea', category: 'cost', targetM: 1, realizedM: 1, costIncurredM: 0, netBenefitM: 1, stale: false },
+        { id: 's2', title: 'Stale one', stage: 'validated', category: 'revenue', targetM: 2, realizedM: 1, costIncurredM: 0, netBenefitM: 1, stale: true, staleDays: 45 },
+        { id: 's3', title: 'Another fresh', stage: 'committed', category: 'cost', targetM: 1, realizedM: 1, costIncurredM: 0, netBenefitM: 1, stale: false },
+      ],
+    });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.synergiesSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+
+    const drawnOrder = [];
+    const seenStaleTitleFillStyles = [];
+    const { ctx } = makeInstrumentedCtx();
+    const realFillText = ctx.fillText.bind(ctx);
+    ctx.fillText = (text) => {
+      const s = String(text);
+      if (['Fresh one', 'Stale one', 'Another fresh'].includes(s)) drawnOrder.push(s);
+      if (s === 'Stale one') seenStaleTitleFillStyles.push(ctx.fillStyle);
+      realFillText(text);
+    };
+    pages[0].render(ctx, { pageNumber: 1, pageCount: pages.length });
+
+    assert.deepStrictEqual(drawnOrder, ['Fresh one', 'Stale one', 'Another fresh'], 'stale rows must stay in input order, never sorted to the bottom or moved to a separate page');
+    assert.ok(seenStaleTitleFillStyles.length > 0 && seenStaleTitleFillStyles.every((c) => c === reportPack.COLOR_TEXT_DIM), 'the stale row\'s title must render in the dim text colour');
+
+    const drawnAll = renderAllPages(pages);
+    assert.ok(drawnAll.includes('Stale 45d'), 'the stale tag must carry the exact supplied day count');
+  });
+
+  await t.test('(d) zero synergies renders the empty-state line', () => {
+    const model = baseModel({ synergies: [] });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const pages = reportPack.synergiesSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX);
+    const drawn = renderAllPages(pages);
+    assert.ok(drawn.some((s) => s.includes('No synergy initiatives recorded yet.')));
+  });
+});
+
+test('reports-pack cross-section: no drawn string discloses withheld content', async (t) => {
+  await t.test('a pack whose model already has clearance-withheld rows draws no placeholder disclosing that fact', () => {
+    const model = baseModel({
+      tasks: [{ id: 't1', title: 'Visible task', workstreamId: 'w1', phase: 'day1', status: 'todo', owner: 'x', due: '2026-01-01' }],
+      workstreams: [{ id: 'w1', label: 'HR', pctComplete: 50, ragStatus: 'amber' }],
+      raid: [{ id: 'r1', type: 'risk', severity: 'high', title: 'Visible risk', owner: 'x', status: 'open' }],
+      synergies: [{ title: 'Visible synergy', stage: 'idea', category: 'cost', targetM: 1, realizedM: 0, costIncurredM: 0, netBenefitM: 0 }],
+    });
+    const t2 = resolveLanguage(model.i18n, model.language);
+    const sections = [
+      reportPack.workstreamsTasksSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX),
+      reportPack.raidSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX),
+      reportPack.synergiesSection(model, t2, CONTENT_WIDTH_PX, CONTENT_HEIGHT_PX),
+    ];
+    const drawn = sections.flatMap((pages) => renderAllPages(pages));
+    drawn.forEach((s) => {
+      assert.ok(!/hidden|restricted/i.test(s), `drawn string implies withheld content: "${s}"`);
+      // "further row(s) exist" (the volume-truncation notice) is the only
+      // permitted mention of a count of unrendered rows, and it never fires
+      // in this small fixture — so "remaining" must not appear here either.
+      assert.ok(!/remaining/i.test(s), `drawn string implies withheld content: "${s}"`);
+    });
   });
 });
