@@ -1047,7 +1047,7 @@
       b.addEventListener('click', function () {
         var tab = b.getAttribute('data-ex-tab');
         document.querySelectorAll('.ex-tab').forEach(function (x) { x.classList.toggle('active', x === b); });
-        ['tasks', 'synergy', 'raid'].forEach(function (p) {
+        ['tasks', 'synergy', 'raid', 'reports'].forEach(function (p) {
           document.getElementById('ex-pane-' + p).style.display = p === tab ? 'block' : 'none';
         });
       });

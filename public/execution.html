@@ -124,6 +124,14 @@
     .raid-lvl.critical{ color:#9C2A17; font-weight:900; }
     .raid-fbtn{ border:1px solid var(--border-color); background:var(--card-bg,#fff); border-radius:20px; font-family:inherit; font-size:.74rem; font-weight:700; color:var(--text-dim); padding:.3rem .8rem; cursor:pointer; }
     .raid-fbtn.active{ background:var(--te-dark-teal); border-color:var(--te-dark-teal); color:#fff; }
+    /* reports & exports (RPT-01/07-01) — .rpt-export-row lifts .raid-row's
+       existing rhythm verbatim (07-UI-SPEC.md §2). None of these three rules
+       carry an absolute width, a max-width, hidden overflow or an ellipsis
+       truncation — the Internationalisation contract locks wrap-never-clip
+       with German as the sizing case and Chinese as the opposite failure. */
+    .rpt-export-row{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.6rem .9rem; margin-bottom:.45rem; display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+    .rpt-export-links{ display:flex; gap:.5rem; flex-wrap:wrap; }
+    .rpt-export-label{ font-size:.92rem; font-weight:700; color:var(--text-primary); line-height:1.35; }
     /* workstream rollup */
     .ex-ws-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:.75rem; margin-bottom:1.5rem; }
     .ex-ws{ background:var(--card-bg,#fff); border:1px solid var(--border-color); border-radius:10px; padding:.7rem .9rem; cursor:pointer; transition:all .15s; text-align:left; font-family:inherit; }
@@ -183,6 +191,7 @@
           <button class="ex-tab active" data-ex-tab="tasks" data-i18n="exec.tab_tasks">Tasks & Checklist</button>
           <button class="ex-tab" data-ex-tab="synergy" data-i18n="exec.tab_synergy">Synergy Tracker</button>
           <button class="ex-tab" data-ex-tab="raid" data-i18n="exec.tab_raid">Risks & Decisions</button>
+          <button class="ex-tab" data-ex-tab="reports" data-i18n="exec.tab_reports">Reports &amp; Exports</button>
         </div>
 
         <div id="ex-pane-tasks">
@@ -237,10 +246,20 @@
           </div>
           <div id="raid-list"></div>
         </div>
+
+        <div id="ex-pane-reports" style="display:none;">
+          <div class="syn-section-label" data-i18n="rpt.section_raw">Raw data export</div>
+          <div class="rpt-export-row">
+            <span class="rpt-export-label" data-i18n="rpt.ds_raid">RAID</span>
+            <span class="rpt-export-links">
+              <a href="/api/reports/export?dataset=raid&amp;format=csv" class="btn btn-secondary rpt-export-link" data-i18n="rpt.csv">CSV</a>
+            </span>
+          </div>
+        </div>
       </div>
     </main>
   </div>
 
-  <script src="/js/execution.js?v=1784500008"></script>
+  <script src="/js/execution.js?v=1786250743"></script>
 </body>
 </html>
