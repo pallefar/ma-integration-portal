@@ -291,7 +291,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 07-05-PLAN.md — Pack frame: page geometry, TE header band, every-page confidentiality footer, two-pass paginator, executive summary (RPT-02, RPT-03)
+- [x] 07-05-PLAN.md — Pack frame: page geometry, TE header band, every-page confidentiality footer, two-pass paginator, executive summary (RPT-02, RPT-03)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -314,4 +314,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
 | 6. Org Design & Talent Retention | 8/8 | Complete    | 2026-08-08 |
-| 7. IMO Reporting & Exports | 4/7 | In Progress|  |
+| 7. IMO Reporting & Exports | 5/7 | In Progress|  |
