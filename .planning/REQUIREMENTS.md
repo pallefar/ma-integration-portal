@@ -53,7 +53,7 @@
 
 ### IMO Reporting & Exports
 
-- [ ] **RPT-01**: The IL can export raw data (workstreams, tasks, RAID, synergies) as CSV and JSON — closing the current "no export at all" gap
+- [x] **RPT-01**: The IL can export raw data (workstreams, tasks, RAID, synergies) as CSV and JSON — closing the current "no export at all" gap
 - [ ] **RPT-02**: The IL can generate a formatted PDF steering-committee pack summarizing status across workstreams, tasks, RAID and synergies
 - [ ] **RPT-03**: The steerco pack reports synergy net benefit, cost-to-achieve and confidence-stage movement, avoiding double-counting across initiatives
 - [ ] **RPT-04**: A status report distinguishes current from stale data using the staleness signals (SYN-05 and equivalents)
@@ -132,7 +132,7 @@ Explicitly excluded. Documented to prevent scope creep. (Anti-features corrobora
 | ORG-01 | Phase 6: Org Design & Talent Retention | Complete |
 | ORG-02 | Phase 6: Org Design & Talent Retention | Complete |
 | ORG-03 | Phase 6: Org Design & Talent Retention | Complete |
-| RPT-01 | Phase 7: IMO Reporting & Exports | Pending |
+| RPT-01 | Phase 7: IMO Reporting & Exports | Complete |
 | RPT-02 | Phase 7: IMO Reporting & Exports | Pending |
 | RPT-03 | Phase 7: IMO Reporting & Exports | Pending |
 | RPT-04 | Phase 7: IMO Reporting & Exports | Pending |
