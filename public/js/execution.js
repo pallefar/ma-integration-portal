@@ -1128,9 +1128,30 @@
                 throw new Error((body && body.error) || 'Failed to generate the pack.');
               });
             }
+            // WR-02 fix (07-REVIEW.md): lib/reportFilename.js's
+            // setContentDisposition() emits BOTH an RFC 5987 extended
+            // filename*=UTF-8''... parameter (for non-ASCII codenames, e.g.
+            // 中文/Müller) and an ASCII filename="..." fallback, with the
+            // ASCII form appearing FIRST in the header. Try the extended
+            // parameter first so non-ASCII codenames survive into the
+            // downloaded filename; only fall back to the ASCII match (or
+            // the literal default) if the extended parameter is absent or
+            // malformed. decodeURIComponent is wrapped in try/catch so a
+            // malformed extended parameter can never throw — it just falls
+            // through to the ASCII match instead.
             var disposition = res.headers.get('content-disposition') || '';
-            var match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-            var filename = match ? decodeURIComponent(match[1]) : 'steerco-pack.pdf';
+            var extMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+            var asciiMatch = /filename="([^"]*)"/i.exec(disposition);
+            var filename = 'steerco-pack.pdf';
+            if (extMatch) {
+              try {
+                filename = decodeURIComponent(extMatch[1]);
+              } catch (e) {
+                filename = asciiMatch ? asciiMatch[1] : 'steerco-pack.pdf';
+              }
+            } else if (asciiMatch) {
+              filename = asciiMatch[1];
+            }
             return res.blob().then(function (blob) { return { blob: blob, filename: filename }; });
           })
           .then(function (result) {
