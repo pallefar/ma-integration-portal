@@ -8,7 +8,7 @@ Scoped requirements for the v2.2.0 milestone — moving the portal from laptop-l
 
 ### Concurrency & Data Safety (CONC)
 
-- [ ] **CONC-01**: Concurrent writers — whether overlapping requests in one process or separate processes on the same host — serialize safely with no lost updates, via immediate write transactions and busy-retry (SQLite WAL cross-process locking; the Option-B storage-layer change).
+- [x] **CONC-01**: Concurrent writers — whether overlapping requests in one process or separate processes on the same host — serialize safely with no lost updates, via immediate write transactions and busy-retry (SQLite WAL cross-process locking; the Option-B storage-layer change).
 - [ ] **CONC-02**: A user whose edit to a co-edited record (RAID entry, integration task, DD finding, synergy initiative, org decision) is based on stale data has that write rejected with a 409, and the UI offers a reload-and-reapply path rather than silently clobbering — optimistic locking enforced in the SQL WHERE clause (version carried in the record's JSON blob).
 
 ### Deployment (DEPLOY)
@@ -56,7 +56,7 @@ All 15 v1 requirements mapped to exactly one phase. Coverage: 15/15.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONC-01 | Phase 8 | Pending |
+| CONC-01 | Phase 8 | Complete |
 | CONC-02 | Phase 9 | Pending |
 | DEPLOY-03 | Phase 10 | Pending |
 | OPS-01 | Phase 10 | Pending |
