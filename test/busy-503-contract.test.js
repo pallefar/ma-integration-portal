@@ -301,7 +301,13 @@ function waitForExit(child) {
 }
 
 test('busy-503-contract (live contention): three routes — one plain sync write, one async write, and one Task-1-patched catch site — all return 503 + Retry-After under real cross-process contention, never a leaked detail', async () => {
-  const HOLD_MS = 4500; // comfortably longer than three sequential ~1000ms busy_timeout waits
+  // Comfortably longer than three sequential ~1000ms busy_timeout waits, with
+  // extra margin for scheduling jitter when other parallel test/build
+  // processes are competing for CPU on the same host (this plan runs
+  // alongside sibling worktree agents) — a tight margin here would make the
+  // LAST of the three sequential requests occasionally land after the lock
+  // already released, turning a real assertion into a flaky one.
+  const HOLD_MS = 9000;
   const child = spawn(process.execPath, ['-e', LOCK_HOLDER_SCRIPT, '--', dbFiles.DEMO_DB_PATH, String(HOLD_MS)], {
     stdio: ['ignore', 'pipe', 'inherit'],
   });
