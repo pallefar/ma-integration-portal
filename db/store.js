@@ -310,12 +310,19 @@ function writeDb(data) {
   // attempts to write can hit SQLITE_BUSY_SNAPSHOT partway through, after
   // some statements may already have executed; .immediate fails fast, before
   // any statement in the body runs, if the lock cannot be acquired within
-  // busy_timeout (db/dbFiles.js). The transaction BODY below is unchanged —
-  // the snapshot-diff merge algorithm (see this function's own doc comment
-  // above) is byte-identical to pre-Phase-8. No try/catch is added around
-  // applyWrite(data) below — a SqliteError (including SQLITE_BUSY*) must
-  // propagate uncaught through writeDb()'s existing no-swallow contract so it
-  // reaches server.js's central 503 error middleware (D-06).
+  // busy_timeout (db/dbFiles.js). The transaction BODY below is otherwise
+  // unchanged — the snapshot-diff merge algorithm (see this function's own
+  // doc comment above) is byte-identical to pre-Phase-8. No try/catch is
+  // added around applyWrite(data) below — a SqliteError (including
+  // SQLITE_BUSY*) must propagate uncaught through writeDb()'s existing
+  // no-swallow contract so it reaches server.js's central 503 error
+  // middleware (D-06).
+  //
+  // [security] CR-01 (Phase 8 review fix): the audit append (previously a
+  // SEPARATE transaction dispatched only after this transaction had already
+  // committed) now runs as the FINAL STEP of THIS SAME .immediate
+  // transaction — see the comment immediately above the audit block below
+  // for the full invariant this establishes.
   const applyWrite = conn.transaction((payload) => {
     for (const key of ARRAY_COLLECTIONS) {
       const beforeMap = before[key] || new Map();
@@ -370,35 +377,68 @@ function writeDb(data) {
         ).run(key, JSON.stringify(payload[key]));
       }
     }
+
+    // [security] AUD-01/D-09/D-11/CR-01 (Phase 8 review fix): the audit
+    // append now runs as the FINAL STEP of THIS transaction, not as a
+    // separate, later transaction dispatched only after this one had already
+    // committed. It writes to a DIFFERENT connection (audit.db, via
+    // auditHook.getAuditConnection()) than `conn` (this deal/control/demo
+    // file's connection) — better-sqlite3's no-nested-transactions rule
+    // applies per-connection, so acquiring audit.db's own `.immediate` lock
+    // from inside `conn`'s transaction body is not a nested transaction and
+    // is safe.
+    //
+    // Invariant this establishes: the deal-level write and its audit row now
+    // succeed or fail TOGETHER. If the audit append is busy (SQLITE_BUSY* on
+    // the contended, process-wide audit.db) or D-11's actor check below
+    // throws, that error propagates out of THIS transaction body BEFORE
+    // `conn` ever commits — better-sqlite3 rolls back every array/singleton
+    // write this call just made, so no committed-but-unaudited row is ever
+    // left behind. The error still propagates uncaught to server.js's
+    // central 503 middleware exactly as before, but a 503 now truthfully
+    // means "nothing persisted": the client's existing identical-payload
+    // auto-retry (D-07, public/js/transitions.js) is genuinely safe, because
+    // there is no already-committed row for a retry to duplicate (closes
+    // review finding CR-01: previously, a busy audit append after an
+    // already-committed deal write, followed by the client's automatic
+    // retry, could silently double-insert an MNPI business record under a
+    // fresh id).
+    //
+    // Accepted residual: if `conn`'s own COMMIT fails AFTER this audit
+    // transaction has already committed (only reachable via a disk-level
+    // I/O error on `conn` — a SQLITE_BUSY* on `conn` itself cannot occur
+    // here, since this transaction already holds `conn`'s write lock via
+    // `.immediate`), an audit row could still exist for an uncommitted deal
+    // write. That direction remains detectable via the audit-vs-acknowledged
+    // 1:1 reconciliation in scripts/soak.js's verification pass.
+    if (deltas && deltas.length) {
+      const actor = scoped.actor;
+      if (!actor || !actor.username) {
+        // D-11: never synthesize an actor here — an audited write reaching
+        // this point with no resolved identity is a bug in the caller (a
+        // request that should have 401'd, or a test/script that opened a
+        // runWithDb() context without an actor), not something this hook may
+        // silently paper over with an anonymous row. Thrown INSIDE the
+        // transaction: the deal-level writes above are rolled back before
+        // this error ever reaches writeDb()'s caller.
+        throw new Error(
+          `db/store.js: writeDb() resolved an audited context (kind=${auditKind}) with no attributed actor — refusing to write an anonymous audit row (D-11)`
+        );
+      }
+      // Never swallowed: if the audit write itself throws (e.g. audit.db is
+      // busy or unwritable), it propagates out of this transaction body —
+      // rolling back the deal-level write above — through writeDb()'s
+      // existing no-swallow error contract, so a silently-missing audit
+      // entry can never look like an action that never happened, and a
+      // rolled-back write can never look like it succeeded.
+      auditHook.writeAuditBatch(auditHook.getAuditConnection(), {
+        actor, dealId: scoped.dealId || null, dbKind: auditKind,
+        request: scoped.request || null, ts: new Date().toISOString(), rows: deltas,
+      });
+    }
   }).immediate; // D-03/CONC-01: BEGIN IMMEDIATE — see comment above applyWrite's declaration
 
   applyWrite(data);
-
-  // AUD-01/D-09/D-11: dispatch the audit batch ONLY after applyWrite() above
-  // has returned successfully — a throw from applyWrite() propagates before
-  // this line is ever reached (better-sqlite3's transaction() rolls back
-  // automatically), so a rolled-back write never produces an audit row.
-  if (deltas && deltas.length) {
-    const actor = scoped.actor;
-    if (!actor || !actor.username) {
-      // D-11: never synthesize an actor here — an audited write reaching
-      // this point with no resolved identity is a bug in the caller (a
-      // request that should have 401'd, or a test/script that opened a
-      // runWithDb() context without an actor), not something this hook may
-      // silently paper over with an anonymous row.
-      throw new Error(
-        `db/store.js: writeDb() resolved an audited context (kind=${auditKind}) with no attributed actor — refusing to write an anonymous audit row (D-11)`
-      );
-    }
-    // Never swallowed: if the audit write itself throws (e.g. audit.db is
-    // unwritable), it propagates through writeDb()'s existing no-swallow
-    // error contract — a silently-missing audit entry must never look like
-    // an action that never happened.
-    auditHook.writeAuditBatch(auditHook.getAuditConnection(), {
-      actor, dealId: scoped.dealId || null, dbKind: auditKind,
-      request: scoped.request || null, ts: new Date().toISOString(), rows: deltas,
-    });
-  }
 
   return true; // preserves existing callers' truthy-return expectation
 }

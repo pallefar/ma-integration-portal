@@ -108,11 +108,28 @@ function writeAuditBatch(conn, { actor, dealId, dbKind, request, ts, rows }) {
   // existing no-swallow chain to server.js's central 503 middleware. This
   // must fail the WHOLE request rather than being queued, retried out-of-band,
   // or logged-and-continued: an acknowledged deal-data write with no audit
-  // row would be an MNPI change with no compliance record. Failing the whole
-  // request is safe for the client to retry — writeDb()'s snapshot-diff merge
-  // re-applies an identical payload idempotently, converging to the same
-  // state, so the 503-then-retry the client already performs (D-07) costs
-  // nothing beyond the wait.
+  // row would be an MNPI change with no compliance record.
+  //
+  // [security] CR-01 (Phase 8 review fix): this call now executes FROM
+  // INSIDE the caller's own deal-level `.immediate` transaction (db/store.js's
+  // writeDb(), as this function's own final step), not after that transaction
+  // has already committed. This is what makes "failing the whole request is
+  // safe for the client to retry" actually TRUE: a throw here propagates out
+  // of the CALLER's transaction body before it commits, so better-sqlite3
+  // rolls back the deal-level write too — a busy audit append can never leave
+  // a committed-but-unaudited row behind. (The review found the OLD ordering
+  // — dispatching this as a separate, later transaction after the caller's
+  // write had already committed — meant a busy audit append here produced a
+  // 503 for an already-committed write; the client's D-07 auto-retry then
+  // re-ran the whole request and minted a brand-new id, silently duplicating
+  // the row. "writeDb()'s snapshot-diff merge is idempotent" is true for two
+  // calls sharing one snapshot within a single request — it does NOT hold
+  // across an HTTP-level retry that re-executes application logic and mints
+  // a fresh id, which is exactly what the old ordering allowed.) With the
+  // append inside the caller's transaction, a 503 now truthfully means
+  // "nothing persisted," so the 503-then-retry the client already performs
+  // (D-07) costs nothing beyond the wait, and duplicates the row only if a
+  // FRESH write, not a retry of an already-committed one.
   const insert = conn.prepare(INSERT_SQL);
   const runBatch = conn.transaction((entries) => {
     for (const row of entries) {
