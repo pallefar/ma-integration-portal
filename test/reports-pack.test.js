@@ -1002,7 +1002,12 @@ test('reports-pack [portability]: (b) getReportPack() lazily requires and caches
   assert.ok(/console\.error\(\s*(['"`])\[portability\]/.test(getterBody),
     'getReportPack() must console.error a message whose first argument literal begins with the [portability] marker');
 
-  const routeMatch = /app\.get\('\/api\/reports\/pack',\s*async \(req, res\) => \{([\s\S]*?)\n\}\);/.exec(src);
+  // Phase 8 (08-03, D-06/CONC-01): the handler now also takes a `next`
+  // parameter so its local catch can forward a write-lock contention error
+  // to the central 503 middleware (Express 4 does not auto-forward a
+  // rejected promise from an async handler) — the regex tolerates that
+  // optional third parameter without weakening what it asserts below.
+  const routeMatch = /app\.get\('\/api\/reports\/pack',\s*async \(req, res(?:, next)?\) => \{([\s\S]*?)\n\}\);/.exec(src);
   assert.ok(routeMatch, 'expected to locate the GET /api/reports/pack route handler body');
   const routeBody = routeMatch[1];
   assert.ok(routeBody.includes('getReportPack()'), 'the pack route must call getReportPack()');

@@ -797,8 +797,26 @@ app.post('/api/deals', (req, res) => {
     createDealDatabase(deal.id, { name, targetCompany });
   } catch (e) {
     console.error(`Error provisioning database for deal ${deal.id}, rolling back registry row:`, e);
-    try { controlStore.deleteDeal(deal.id); }
-    catch (rollbackErr) { console.error(`Error rolling back deal registry row ${deal.id} after provisioning failure:`, rollbackErr); }
+    // [security] D-06/D-11/CONC-01 (Phase 8): a local catch that converts a
+    // retryable write-lock contention error into a hand-written 500 denies
+    // the client its documented retry path — a bounded 503 tells the client
+    // to retry, a bare 500 looks permanent and the write is silently lost.
+    // Every storage-wrapping catch in this file re-throws a busy error
+    // (isBusyError(), the single predicate exported near the top of this
+    // file) so it reaches the central 503 middleware instead of a local
+    // response — uniformly, including control-plane writes (D-11), never by
+    // matching error message text (RESEARCH.md "Don't Hand-Roll"). Here, the
+    // compensating rollback must still run FIRST (T-08-11) — losing it on a
+    // contention failure would leave a half-created deal selectable in the
+    // registry with no database behind it — and only then is the original
+    // provisioning error re-thrown.
+    try {
+      controlStore.deleteDeal(deal.id);
+    } catch (rollbackErr) {
+      console.error(`Error rolling back deal registry row ${deal.id} after provisioning failure:`, rollbackErr);
+      if (isBusyError(rollbackErr)) throw rollbackErr;
+    }
+    if (isBusyError(e)) throw e;
     return res.status(500).json({ error: 'Failed to provision the new deal database.' });
   }
   // D-08: deal creation is a control-plane security event.
@@ -1168,7 +1186,7 @@ app.get('/api/rag/search', (req, res) => {
 });
 
 // POST AI Model RAG PDF Training Upload & AI Insight Review
-app.post('/api/rag/upload', async (req, res) => {
+app.post('/api/rag/upload', async (req, res, next) => {
   try {
     // VAL-01: presence is now owned exclusively by validators/settings.js's RagUploadSchema.
     const { fileName, fileData } = req.body;
@@ -1223,8 +1241,13 @@ app.post('/api/rag/upload', async (req, res) => {
       success: true,
       upload: newUpload
     });
-  } catch (error) {
-    console.error('Error handling RAG PDF upload:', error);
+  } catch (e) {
+    // [security] D-06/D-10/CONC-01: Express 4 does not auto-forward a
+    // rejected promise from an async handler — an isBusyError() re-throw
+    // here would become an unhandled rejection, not a 503 (RESEARCH.md
+    // Pitfall 2). Forward explicitly via next() instead.
+    if (isBusyError(e)) return next(e);
+    console.error('Error handling RAG PDF upload:', e);
     res.status(500).json({ success: false, error: 'Failed to process and train RAG model.' });
   }
 });
@@ -2048,6 +2071,10 @@ app.post('/api/media', (req, res) => {
     writeDb(db);
     res.json({ success: true, media: item });
   } catch (e) {
+    // [security] D-06/CONC-01: writeDb() contention must still 503 through
+    // the central middleware here — the surrounding fs work (mkdir/write
+    // file) keeps its existing generic handling for every other failure.
+    if (isBusyError(e)) throw e;
     console.error('Media upload failed:', e);
     res.status(500).json({ error: 'Media upload failed.' });
   }
@@ -2310,7 +2337,7 @@ app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
 });
 
 // GET AI Insight dynamic RAG portal insight
-app.get('/api/ai/insight', async (req, res) => {
+app.get('/api/ai/insight', async (req, res, next) => {
   const { portal } = req.query;
   if (!portal) {
     return res.status(400).json({ error: 'Portal parameter is required.' });
@@ -2332,6 +2359,9 @@ app.get('/api/ai/insight', async (req, res) => {
       insight
     });
   } catch (error) {
+    // [security] D-06/CONC-01: async handler — forward via next(), never a
+    // bare re-throw (RESEARCH.md Pitfall 2).
+    if (isBusyError(error)) return next(error);
     console.error('Error generating AI Insight dynamic insight:', error);
     res.status(500).json({ success: false, error: 'Failed to generate integration insight.' });
   }
@@ -2397,7 +2427,7 @@ app.delete('/api/questions/:id', (req, res) => {
 });
 
 // POST Assessment (Submit responses and trigger AI Plan generation)
-app.post('/api/assessment', async (req, res) => {
+app.post('/api/assessment', async (req, res, next) => {
   // VAL-01: non-empty-responses is now owned exclusively by validators/assessment.js's AssessmentSubmitSchema.
   const { responses } = req.body; // e.g. { "q1": 4, "q2": 3 }
   const db = readDb();
@@ -2438,6 +2468,12 @@ app.post('/api/assessment', async (req, res) => {
       apiKey: controlStore.getSecretSettings().geminiApiKey || ''
     });
   } catch (error) {
+    // [security] D-06/CONC-01: async handler — a write-lock contention error
+    // surfaced while reading the secret settings must still reach the
+    // client as a 503 (D-11's uniform contract), not be silently absorbed
+    // into the local-fallback degrade path below. Forward via next(), never
+    // a bare re-throw (RESEARCH.md Pitfall 2).
+    if (isBusyError(error)) return next(error);
     console.error("AI Plan generation failed, falling back to local engine:", error);
     aiPlan = aiService.generateLocalFallbackPlan(targetCompany, scores);
   }
@@ -2461,6 +2497,9 @@ app.post('/api/assessment', async (req, res) => {
   try {
     writeDb(db);
   } catch (e) {
+    // [security] D-06/CONC-01: async handler — forward via next(), never a
+    // bare re-throw (RESEARCH.md Pitfall 2).
+    if (isBusyError(e)) return next(e);
     return res.status(500).json({ error: 'Failed to save assessment.' });
   }
 
@@ -5894,6 +5933,11 @@ app.get('/api/reports/export', (req, res) => {
 
     res.send(body);
   } catch (error) {
+    // [security] D-06/D-11/CONC-01: the audit write (recordSecurityEvent)
+    // inside this try is itself a SQLite write — its contention must still
+    // 503 through the central middleware, uniformly with every other write
+    // path, never a swallowed local 500.
+    if (isBusyError(error)) throw error;
     console.error('Error generating report export:', error);
     res.status(500).json({ error: 'Failed to generate the export.' });
   }
@@ -5938,7 +5982,7 @@ function getReportPack() {
   }
 }
 
-app.get('/api/reports/pack', async (req, res) => {
+app.get('/api/reports/pack', async (req, res, next) => {
   const packLib = getReportPack();
   if (!packLib) {
     return res.status(503).json({ error: 'PDF pack generation is unavailable on this host platform' });
@@ -6049,6 +6093,12 @@ app.get('/api/reports/pack', async (req, res) => {
 
     res.send(pdfBuffer);
   } catch (error) {
+    // [security] D-06/CONC-01: async handler — forward via next(), never a
+    // bare re-throw (RESEARCH.md Pitfall 2). The audit write
+    // (recordSecurityEvent) inside this try is itself a SQLite write whose
+    // contention must reach the client as 503, uniformly with every other
+    // write path.
+    if (isBusyError(error)) return next(error);
     console.error('Error generating report pack:', error);
     res.status(500).json({ error: 'Failed to generate the steering committee pack.' });
   }
