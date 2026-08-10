@@ -55,7 +55,27 @@
   // message is a fixed literal set via textContent — never markup assignment —
   // so this stays covered by test/client-xss-sinks.test.js.
   const BUSY_GIVE_UP_MESSAGE = 'Server is busy — your change was not saved. Please try again.';
+  // IN-02 (Phase 8 review fix): if two different in-flight writes both
+  // exhaust their retry budget around the same time (plausible under
+  // sustained contention — exactly the scenario this phase targets), a
+  // second call must not append a second toast stacked on top of the first.
+  // Module-scoped so it survives across calls within this one IIFE closure.
+  let activeGiveUpToast = null;
+  let activeGiveUpToastTimer = null;
   const showBusyGiveUpToast = () => {
+    if (activeGiveUpToast) {
+      // A toast is already visible: refresh its 5s lifetime instead of
+      // appending a second element — the same fixed message already covers
+      // "your change was not saved" for whichever write just gave up.
+      clearTimeout(activeGiveUpToastTimer);
+      const toast = activeGiveUpToast;
+      activeGiveUpToastTimer = setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+        if (activeGiveUpToast === toast) activeGiveUpToast = null;
+        activeGiveUpToastTimer = null;
+      }, 5000);
+      return;
+    }
     const toast = document.createElement('div');
     toast.style.position = 'fixed';
     toast.style.bottom = '2rem';
@@ -70,8 +90,11 @@
     toast.style.fontSize = '0.9rem';
     toast.textContent = BUSY_GIVE_UP_MESSAGE;
     document.body.appendChild(toast);
-    setTimeout(() => {
+    activeGiveUpToast = toast;
+    activeGiveUpToastTimer = setTimeout(() => {
       if (toast.parentNode) toast.parentNode.removeChild(toast);
+      if (activeGiveUpToast === toast) activeGiveUpToast = null;
+      activeGiveUpToastTimer = null;
     }, 5000);
   };
 
@@ -88,13 +111,26 @@
 
   // A stream body, or an already-consumed Request object's body, can't be
   // safely replayed on a retry — only absent or string bodies are re-sendable.
-  const isRetryableBody = (init) => init.body === undefined || init.body === null || typeof init.body === 'string';
+  // WR-05 (Phase 8 review fix): every current caller in this codebase passes
+  // `body` via the `init` object as a JSON.stringify(...) string, so
+  // inspecting only `init.body` was correct for everything that exists
+  // today. But a caller that instead does
+  // `window.fetch(new Request(url, { method, body }))` would arrive here
+  // with `init` empty/undefined while `input` is the pre-built Request whose
+  // body is a stream ALREADY consumed by the first origFetch() call above —
+  // this check would wrongly judge that retry "safe". `input` is inspected
+  // for a `Request` instance FIRST (never retryable, regardless of `init`),
+  // falling through to the existing init.body check otherwise.
+  const isRetryableBody = (input, init) => {
+    if (typeof Request !== 'undefined' && input instanceof Request) return false;
+    return init.body === undefined || init.body === null || typeof init.body === 'string';
+  };
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const attemptFetch = (input, init, url, method, attempt) => origFetch(input, init).then((res) => {
     if (res.status === 503 && isApi(url)) {
-      if (attempt < BUSY_RETRY_MAX_RETRIES && isRetryableBody(init)) {
+      if (attempt < BUSY_RETRY_MAX_RETRIES && isRetryableBody(input, init)) {
         const wait = parseRetryAfterMs(res) + Math.floor(Math.random() * BUSY_RETRY_JITTER_MAX_MS);
         return delay(wait).then(() => attemptFetch(input, init, url, method, attempt + 1));
       }
