@@ -6922,6 +6922,14 @@ app.get('*', (req, res, next) => {
 // final 500 handler immediately below already documents.
 app.use((err, req, res, next) => {
   if (isBusyError(err)) {
+    // WR-04 (Phase 8 review fix): guard headersSent BEFORE calling
+    // res.status(...), mirroring the final generic handler immediately
+    // below. No route currently reachable in this diff throws a busy error
+    // after already calling res.send()/res.json() — but this is the direct
+    // sibling of a handler that DOES guard this, and a future route that
+    // streams a response before a later SQLite write must not hit
+    // ERR_HTTP_HEADERS_SENT from inside error-handling middleware itself.
+    if (res.headersSent) return next(err);
     const retryAfterSeconds = 1; // Claude's Discretion within D-05's ~1s budget
     res.set('Retry-After', String(retryAfterSeconds));
     return res.status(503).json({ error: 'Server is busy. Please try again.' });
