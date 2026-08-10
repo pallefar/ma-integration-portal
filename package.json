@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "(sleep 1 && open http://localhost:3000) & node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "soak": "node scripts/soak.js"
   },
   "engines": {
     "node": ">=22"
