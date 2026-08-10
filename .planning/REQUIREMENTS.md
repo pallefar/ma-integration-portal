@@ -52,6 +52,22 @@ Scoped requirements for the v2.2.0 milestone — moving the portal from laptop-l
 
 ## Traceability
 
+All 15 v1 requirements mapped to exactly one phase. Coverage: 15/15.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _(filled by roadmap)_ | | |
+| CONC-01 | Phase 8 | Pending |
+| CONC-02 | Phase 9 | Pending |
+| DEPLOY-03 | Phase 10 | Pending |
+| OPS-01 | Phase 10 | Pending |
+| OPS-02 | Phase 10 | Pending |
+| OPS-03 | Phase 10 | Pending |
+| DEPLOY-01 | Phase 11 | Pending |
+| DEPLOY-02 | Phase 11 | Pending |
+| COLLAB-01 | Phase 12 | Pending |
+| COLLAB-02 | Phase 12 | Pending |
+| COLLAB-03 | Phase 12 | Pending |
+| COLLAB-04 | Phase 12 | Pending |
+| WIZ-02 | Phase 13 | Pending |
+| WIZ-03 | Phase 13 | Pending |
+| WIZ-04 | Phase 13 | Pending |
