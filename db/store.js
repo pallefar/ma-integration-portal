@@ -302,6 +302,20 @@ function writeDb(data) {
   const auditKind = scoped ? scoped.kind : null;
   const deltas = (scoped && auditHook.AUDITED_DB_KINDS.has(auditKind)) ? [] : null;
 
+  // D-03/CONC-01 (Phase 8): .immediate acquires the write lock UP FRONT via
+  // BEGIN IMMEDIATE, rather than a plain/deferred BEGIN that only acquires
+  // the write lock the first time a write statement runs inside the
+  // transaction. This avoids a mid-transaction lock-upgrade failure class —
+  // without .immediate, a transaction that starts as a read and only later
+  // attempts to write can hit SQLITE_BUSY_SNAPSHOT partway through, after
+  // some statements may already have executed; .immediate fails fast, before
+  // any statement in the body runs, if the lock cannot be acquired within
+  // busy_timeout (db/dbFiles.js). The transaction BODY below is unchanged —
+  // the snapshot-diff merge algorithm (see this function's own doc comment
+  // above) is byte-identical to pre-Phase-8. No try/catch is added around
+  // applyWrite(data) below — a SqliteError (including SQLITE_BUSY*) must
+  // propagate uncaught through writeDb()'s existing no-swallow contract so it
+  // reaches server.js's central 503 error middleware (D-06).
   const applyWrite = conn.transaction((payload) => {
     for (const key of ARRAY_COLLECTIONS) {
       const beforeMap = before[key] || new Map();
@@ -356,7 +370,7 @@ function writeDb(data) {
         ).run(key, JSON.stringify(payload[key]));
       }
     }
-  });
+  }).immediate; // D-03/CONC-01: BEGIN IMMEDIATE — see comment above applyWrite's declaration
 
   applyWrite(data);
 

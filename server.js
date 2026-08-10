@@ -350,6 +350,20 @@ function roleAllowedForWrite(role, path, method) {
   return allowed.includes(role);
 }
 
+// [security] D-06/CONC-01 (Phase 8): the SINGLE definition of "this error is
+// SQLite write-lock contention" — used by the central 503 error middleware
+// below, and (D-09's scope) by every local try/catch re-throw guard a later
+// plan (08-03) adds. A prefix test (startsWith), not an equality test, so the
+// WAL-specific extended code SQLITE_BUSY_SNAPSHOT (raised when a read
+// transaction tries to upgrade to a write transaction after another
+// connection already committed — RESEARCH.md Pitfall 5) is also caught, not
+// just the plain SQLITE_BUSY code. Checks `err.code`, NEVER `err.message` —
+// message text is not a stable contract and other SqliteErrors can leak
+// internal detail (file paths, table names) that must never reach a client.
+function isBusyError(err) {
+  return !!(err && typeof err.code === 'string' && err.code.startsWith('SQLITE_BUSY'));
+}
+
 // ISO-02: the demo-only showcase mechanics (time-travel day-scaling, the
 // XP/merit-award/lesson-completion endpoints that drive points/badges/
 // leaderboards) — gated ONCE here in the consolidated gate, in the exact
@@ -6835,6 +6849,29 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// [security] D-06/CONC-01 (Phase 8): ONE central error middleware mapping
+// SQLite write-lock contention (SQLITE_BUSY / SQLITE_BUSY_SNAPSHOT, via
+// isBusyError() above) to a bounded 503 + Retry-After — covering every write
+// path that lets its SqliteError propagate uncaught (writeDb, sessions,
+// controlStore, audit; D-09's scope). New endpoints inherit this contract for
+// free, with zero per-route code. Mounted BEFORE the final generic 500
+// handler below so non-contention errors still fall through to it (D-06).
+// Same shape as the existing malformed-JSON handler near the top of this
+// file: check a specific error property, respond directly if matched,
+// otherwise next(err). The response body is a FIXED generic string — never
+// err.message, a stack, a file path, or a deal identifier (T-08-01,
+// Information Disclosure: a SQLite file path would leak the deal id, which
+// is an MNPI target name pre-announcement) — matching the discipline the
+// final 500 handler immediately below already documents.
+app.use((err, req, res, next) => {
+  if (isBusyError(err)) {
+    const retryAfterSeconds = 1; // Claude's Discretion within D-05's ~1s budget
+    res.set('Retry-After', String(retryAfterSeconds));
+    return res.status(503).json({ error: 'Server is busy. Please try again.' });
+  }
+  next(err);
+});
+
 // Final error handler — log server-side, return a generic message without internal details
 app.use((err, req, res, next) => {
   console.error('Unhandled route error:', err && err.stack ? err.stack : err);
@@ -6884,6 +6921,10 @@ module.exports = app;
 // ROLE_WRITE_POLICY capability check directly, without needing to boot the
 // HTTP server for the pure-function cases (AUTH-02).
 module.exports.roleAllowedForWrite = roleAllowedForWrite;
+// D-06/CONC-01 (Phase 8): exposed so a test can assert the SQLITE_BUSY*
+// prefix-detection predicate directly, and so plan 08-03's re-throw guards
+// share this SAME definition rather than re-declaring a second copy.
+module.exports.isBusyError = isBusyError;
 // Exposed alongside app for the same reason (ISO-02): lets a test unit-check
 // isDemoOnlyPath()/DEMO_ONLY_PREFIXES directly against the live route
 // inventory without booting the HTTP server for every case.
