@@ -1,19 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1.0
-milestone_name: Real-Deal
-status: Awaiting next milestone
-stopped_at: Completed 07-07-PLAN.md
-last_updated: "2026-08-10T18:23:19.265Z"
+milestone: v2.2.0
+milestone_name: Shared-Host Multi-User
+status: planning
+last_updated: "2026-08-10T18:38:45.896Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 7 complete — all 7 phases executed; Phase 1 formal close (deferred Win/Linux boots) pending at release-cut
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 45
-  completed_plans: 45
-current_phase: 1
-current_phase_name: Schema & Migration
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -27,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 ## Current Position
 
-Phase: Milestone v2.1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-10 — Milestone v2.1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-10 — Milestone v2.2.0 started
 
 ## Deferred Items
 

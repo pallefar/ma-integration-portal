@@ -8,6 +8,19 @@ A TE Connectivity M&A integration portal that today demonstrates post-merger int
 
 An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
 
+## Current Milestone: v2.2.0 Shared-Host Multi-User
+
+**Goal:** Move the portal from laptop-local to a shared internal host where the Integration Lead and workstream leads collaborate on one live deal concurrently — conflict-safe, operationally hardened, and deployable across a self-managed host, a container/platform, or app-only — plus collaborative enhancements to the deal-setup wizard.
+
+**Target features:**
+- Concurrency safety: optimistic locking on co-edited records (version + 409 + reload UX); the multi-writer architecture (single-writer broker vs cross-process lock vs Postgres migration) chosen by a research-first pass, since multi-process clustering breaks the Phase-1 in-process snapshot merge.
+- Deployment for all three shapes: self-managed internal Linux host tooling/docs (service manager, reverse proxy + TLS, backups, secrets, graceful restart), a container image + config contract for TE-IT-run infra, and app-layer multi-user safety as the shared base.
+- Operational hardening: sessions at scale, rate limiting, real secret management (retire the ADMIN_TOKEN stopgap), health/readiness endpoints, backup/restore, graceful shutdown.
+- Workstream-lead collaboration: invite/onboard workstream leads with per-area clearance grants set at setup, plus presence/status.
+- Deal-setup wizard enhancements: a workstream-lead onboarding step, per-step ownership handoff, and multi-user-aware resume/collaboration state.
+
+**Key context:** the concurrency architecture is the pivotal unknown; research weighs it against the zero-install committed-DB turnkey-zip model and the surviving demo showcase. A Postgres decision may reshape scope and bump the version to v3.0.
+
 ## Requirements
 
 ### Validated
@@ -121,4 +134,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 after v2.1.0 (Real-Deal Milestone) shipped — Phases 1–7 complete, released on GitHub.*
+*Last updated: 2026-08-10 — started v2.2.0 (Shared-Host Multi-User) after v2.1.0 shipped.*
