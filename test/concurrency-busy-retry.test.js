@@ -3,9 +3,9 @@
 // contended by a real second OS process serializes through SQLite's own WAL
 // write lock (BEGIN IMMEDIATE + busy_timeout, db/dbFiles.js + db/store.js),
 // and the losing writer gets a clean, bounded 503 Retry-After on the wire
-// (server.js's central error middleware). Task 2 (below, in a later commit
-// to this same file) extends this with the zero-lost-update invariant across
-// two real processes issuing hundreds of interleaved writes.
+// (server.js's central error middleware) — plus (Task 2, below) the
+// zero-lost-update invariant across two real processes issuing hundreds of
+// interleaved writes.
 //
 // CRITICAL (RESEARCH.md Pitfall 3, reproduced empirically this session): a
 // "concurrent" second writer simulated with a Promise/timer WITHIN this test
@@ -15,11 +15,13 @@
 // spawns a REAL node:child_process instance for the second writer.
 //
 // This is Task 1's end-to-end proof (spawns a real HTTP server + one
-// contended /api/pulses write) — extends test/concurrent-write.test.js's
-// tempDbPath()/cleanupDbFile() helpers, but NOT its in-process "concurrent
-// writer" technique (see assumption_delta_decision in 08-01-PLAN.md:
-// test/concurrent-write.test.js remains valid but proves merge semantics
-// only, never multi-process serialization).
+// contended /api/pulses write) plus Task 2's fast bounded multi-process
+// zero-lost-update proof (two children calling db/store.js's writeDb()
+// directly against a shared deal file, no HTTP layer) — extending
+// test/concurrent-write.test.js's tempDbPath()/cleanupDbFile() helpers, but
+// NOT its in-process "concurrent writer" technique (see assumption_delta_decision
+// in 08-01-PLAN.md: test/concurrent-write.test.js remains valid but proves
+// merge semantics only, never multi-process serialization).
 //
 // ISO-01 (Phase 3): boots the REAL requireable app (`require('../server.js')`)
 // against an ISOLATED temp trio of control/runtime/demo files — never the
@@ -216,5 +218,133 @@ test('CONC-01 (end-to-end): a write contended by a real second OS process return
     if (child.exitCode === null && !child.killed) {
       try { child.kill(); } catch (e) { /* ignore */ }
     }
+  }
+});
+
+// --- Task 2: zero-lost-update proof across two writing processes -----------
+//
+// Two real child processes require db/store.js directly and perform
+// hundreds of interleaved read-modify-write cycles against ONE shared deal
+// file — no HTTP/auth layer, proving the storage-layer guarantee in
+// isolation (fast enough for every `npm test` run, per D-12(a)).
+
+const STORE_ABS_PATH = path.join(__dirname, '..', 'db', 'store.js');
+
+// Inline child script (node -e): requires db/store.js directly (a SEPARATE
+// OS process — not the connection cache above), calls initDb() against the
+// shared file path passed on argv, then loops readDb() -> append one row to
+// `pulses` (id namespaced by this child's own label + iteration index) ->
+// writeDb(). A SQLITE_BUSY* thrown after the full busy-wait is a bounded,
+// EXPECTED failure (D-15 — "a bounded busy failure is the design working")
+// and is NOT counted as acknowledged; any other error is unexpected and
+// fails the child (and, via its exit code, the test).
+const CONCURRENT_WRITER_SCRIPT = `
+  const store = require(${JSON.stringify(STORE_ABS_PATH)});
+  const dbPath = process.argv[1];
+  const label = process.argv[2];
+  const iterations = parseInt(process.argv[3], 10);
+  store.initDb(dbPath);
+  const acknowledged = [];
+  for (let i = 0; i < iterations; i++) {
+    const id = label + '_' + i;
+    try {
+      const current = store.readDb();
+      current.pulses = current.pulses.concat([{ id, employeeName: label, rating: 3, comment: 'soak', type: 'general' }]);
+      store.writeDb(current);
+      acknowledged.push(id);
+    } catch (e) {
+      if (e && e.code && String(e.code).startsWith('SQLITE_BUSY')) {
+        // Bounded busy failure — the design working (D-15). This write was
+        // NOT acknowledged; do not assert it is present.
+        continue;
+      }
+      process.stderr.write('UNEXPECTED_ERROR: ' + (e && e.stack ? e.stack : String(e)) + '\\n');
+      process.exit(1);
+    }
+  }
+  console.log('ACKNOWLEDGED:' + JSON.stringify(acknowledged));
+  process.exit(0);
+`;
+
+function runWriterChild(dbPath, label, iterations) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['-e', CONCURRENT_WRITER_SCRIPT, '--', dbPath, label, String(iterations)], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (c) => { stdout += c.toString(); });
+    child.stderr.on('data', (c) => { stderr += c.toString(); });
+    child.once('error', reject);
+    child.once('exit', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`writer child '${label}' exited ${code}: ${stderr || stdout}`));
+      }
+      const match = stdout.match(/ACKNOWLEDGED:(\[.*\])/s);
+      if (!match) return reject(new Error(`writer child '${label}' produced no ACKNOWLEDGED line: stdout=${stdout} stderr=${stderr}`));
+      resolve(JSON.parse(match[1]));
+    });
+  });
+}
+
+test('CONC-01 (zero-lost-update): two real processes issuing hundreds of interleaved writes lose zero acknowledged writes', async () => {
+  const dealDbPath = tempDbPath('shared-deal');
+  const ITERATIONS = 150; // 2 children x 150 = 300 interleaved writes total ("several hundred", D-12a)
+
+  try {
+    runMigration(SOURCE_PATH, dealDbPath); // seeds a real, non-empty fixture (same shape production traffic would use)
+
+    // Baseline row count, read BEFORE either child opens the file.
+    const seedConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    const seededPulseIds = seedConn.prepare('SELECT id FROM pulses').all().map((r) => r.id);
+    const seededCount = seededPulseIds.length;
+    assert.ok(seededCount > 0, 'fixture must seed a non-empty pulses collection for this test to be meaningful');
+    // Release the parent's connection before spawning — the point of this
+    // test is that SEPARATE OS processes hold separate connections to one
+    // file, not a connection shared via this module's cache.
+    store.closeConnection(dealDbPath);
+
+    const [ackA, ackB] = await Promise.all([
+      runWriterChild(dealDbPath, 'childA', ITERATIONS),
+      runWriterChild(dealDbPath, 'childB', ITERATIONS),
+    ]);
+
+    assert.ok(ackA.length > 0, 'child A must acknowledge at least one write');
+    assert.ok(ackB.length > 0, 'child B must acknowledge at least one write');
+
+    const finalConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    const finalRows = finalConn.prepare('SELECT id FROM pulses').all().map((r) => r.id);
+    const finalIds = new Set(finalRows);
+
+    // The zero-loss assertion is over the set of ids each child REPORTED as
+    // acknowledged, not over the ids it attempted — a bounded 503/BUSY
+    // rejection is not a lost update (D-15).
+    for (const id of ackA) {
+      assert.ok(finalIds.has(id), `child A's acknowledged write '${id}' must be present in the final database`);
+    }
+    for (const id of ackB) {
+      assert.ok(finalIds.has(id), `child B's acknowledged write '${id}' must be present in the final database`);
+    }
+    for (const id of seededPulseIds) {
+      assert.ok(finalIds.has(id), `seeded pulse '${id}' must not have been dropped`);
+    }
+
+    assert.strictEqual(
+      finalRows.length,
+      seededCount + ackA.length + ackB.length,
+      "total row count must equal the seeded baseline plus both children's acknowledged counts — no lost update, no phantom row"
+    );
+
+    const integrity = finalConn.prepare('PRAGMA integrity_check').get();
+    assert.strictEqual(integrity.integrity_check, 'ok', 'PRAGMA integrity_check must return ok after concurrent multi-process writes');
+
+    // Negative control: a write acknowledged by child A is still present
+    // after child B's LATER writes committed — i.e. B's snapshot-diff merge
+    // did not delete a row that was never in B's own __snapshot (db/store.js
+    // writeDb() doc comment).
+    assert.ok(finalIds.has(ackA[0]), "child A's first acknowledged write must survive every one of child B's subsequent commits");
+  } finally {
+    store.closeConnection(dealDbPath);
+    cleanupDbFile(dealDbPath);
   }
 });
