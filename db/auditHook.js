@@ -99,6 +99,20 @@ function writeAuditBatch(conn, { actor, dealId, dbKind, request, ts, rows }) {
   }
   if (!rows || rows.length === 0) return;
 
+  // [security] D-10/D-03/CONC-01 (Phase 8): .immediate acquires audit.db's
+  // write lock UP FRONT via BEGIN IMMEDIATE, mirroring db/store.js's own
+  // writeDb() change in plan 08-01 — the same busy_timeout budget (db/dbFiles.js)
+  // now governs this append too. A busy append that outlives the wait THROWS
+  // and propagates uncaught (no try/catch is added here, deliberately — see
+  // this file's own header no-swallow contract above) through writeDb()'s
+  // existing no-swallow chain to server.js's central 503 middleware. This
+  // must fail the WHOLE request rather than being queued, retried out-of-band,
+  // or logged-and-continued: an acknowledged deal-data write with no audit
+  // row would be an MNPI change with no compliance record. Failing the whole
+  // request is safe for the client to retry — writeDb()'s snapshot-diff merge
+  // re-applies an identical payload idempotently, converging to the same
+  // state, so the 503-then-retry the client already performs (D-07) costs
+  // nothing beyond the wait.
   const insert = conn.prepare(INSERT_SQL);
   const runBatch = conn.transaction((entries) => {
     for (const row of entries) {
@@ -110,7 +124,7 @@ function writeAuditBatch(conn, { actor, dealId, dbKind, request, ts, rows }) {
         (request && request.method) || null, (request && request.path) || null, (request && request.ip) || null
       );
     }
-  });
+  }).immediate;
   runBatch(rows);
 }
 
