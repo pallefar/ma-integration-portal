@@ -1,12 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0.1
-milestone_name: milestone
-current_phase: 1
-current_phase_name: Schema & Migration
-status: milestone_ready_for_release
+milestone: v2.1.0
+milestone_name: Real-Deal
+status: Awaiting next milestone
 stopped_at: Completed 07-07-PLAN.md
-last_updated: "2026-08-10T07:49:28.096Z"
+last_updated: "2026-08-10T18:23:19.265Z"
 last_activity: 2026-08-10
 last_activity_desc: Phase 7 complete — all 7 phases executed; Phase 1 formal close (deferred Win/Linux boots) pending at release-cut
 progress:
@@ -14,6 +12,8 @@ progress:
   completed_phases: 7
   total_plans: 45
   completed_plans: 45
+current_phase: 1
+current_phase_name: Schema & Migration
 ---
 
 # Project State
@@ -27,12 +27,22 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 ## Current Position
 
-Phase: ALL 7 COMPLETE — milestone v2.1.0 ready for release cut
-Plan: all phases closed; Linux boot verified (Docker), Windows boot static-verified + user-confirm at release
-Status: Milestone close — security review done + remediated, launchers + WAL hook shipped, release artifacts building; awaiting push confirmation
-Last activity: 2026-08-10 — Phase 7 complete (review 0-crit, verifier passed 12/12, SECURED 40/40)
+Phase: Milestone v2.1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-10 — Milestone v2.1.0 completed and archived
 
-Progress: [██████████] 100%
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-08-10 (v2.1.0 override closeout — all documented, none blocking; consistent with the tech_debt milestone audit):
+
+| Category | Item | Status | Note |
+|----------|------|--------|------|
+| verification | Phase 01 01-VERIFICATION.md | human_needed | Cross-platform bundle boots: Linux PASSED via Docker 2026-08-10 (glibc>=2.38 envelope documented); Windows statically verified (win32 prebuilds + skia binding + start.bat present) and folded into the v2.1.0 release confirmation — live Windows boot is a user check on a Windows host. |
+| uat | Phase 01 01-UAT.md | testing (0 pending) | Same as above — item 2 (Linux) passed, item 1 (Windows) awaits a live user boot. |
+| uat | Phase 03 03-UAT.md | passed (0 pending) | Already passed; no open scenarios. |
+| quick_task | 260803-sxl-session-continuity | missing | Old quick task, never completed; not part of the v2.1.0 milestone scope. |
+| todo | new-deal-setup-wizard.md | pending | Captured idea for a future guided deal-onboarding wizard; backlog, not this milestone. |
 
 ## Performance Metrics
 
@@ -272,3 +282,7 @@ Items acknowledged and carried forward from previous milestone close:
 Last session: 2026-08-09T07:28:10.844Z
 Stopped at: Completed 07-07-PLAN.md
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

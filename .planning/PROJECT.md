@@ -33,42 +33,19 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - ✓ Append-only audit log — store-layer `writeDb()` hook writing attributed before/after JSON into a separate gitignored `audit.db` (UPDATE/DELETE rejected by schema triggers), D-08 control-plane security events, admin-only filterable viewer; trail survives deal deletion — Phase 3 (2026-08-02)
 - ✓ Write validation on every route — one zod pipeline over all ~65 write routes (strip-unknown, typed, length-bounded, value-free 400s, applies in demo-open mode too) + write-time HTML sanitization + a coverage test that fails the suite on any unvalidated new route — Phase 3 (2026-08-02)
 
+**Real-Deal capabilities — VALIDATED in v2.1.0 (Phases 1–7 shipped 2026-08-10)**
+
+- ✓ Foundation: SQLite (WAL) replacing `db.json`, concurrent-write race closed, audit log, write validation, real/demo store separation — Phases 1–3
+- ✓ Due diligence workspace: request list with functional areas + owners + status, findings register flowing into Day-1 tasks/RAID, clean-room need-to-know access, VDR link-out, guided deal-intake wizard — Phase 4
+- ✓ Synergy value capture: monthly phasing, cost-to-achieve, confidence stage-gating, synergy→task linkage, staleness signals, non-double-counting rollup — Phase 5
+- ✓ Org design & talent retention: org-position registry, append-only decision log, clearance-scoped flight-risk register, two-tier deal-home rollup — Phase 6
+- ✓ IMO reporting & exports: CSV/JSON exports of workstreams/tasks/RAID/synergies + TE-branded tri-language PDF steerco pack, all clearance-scoped and audited — Phase 7
+
 ### Active
 
-<!-- This milestone. Hypotheses until shipped and validated. Foundation first, then the four capability gaps. -->
+<!-- Next milestone — TBD. Start with /gsd-new-milestone (questioning → research → requirements → roadmap). -->
 
-**Foundation — VALIDATED (Phases 1–3 complete; real deal data can now land)**
-
-- [x] Replace the `db.json` file store with SQLite in WAL mode, sized for concurrent users from day one even while running laptop-local — Validated in Phase 1
-- [x] Eliminate the documented concurrent-write race that can silently lose a write — Validated in Phase 1
-- [x] Add an audit log recording who changed what, when, with before/after values — Validated in Phase 3
-- [x] Add schema validation on all write paths, with length and type limits — Validated in Phase 3
-- [x] Separate real-deal data from demo data so the two never share a store, and make time-travel, XP/leaderboard and other showcase mechanics unreachable from real-deal mode — Validated in Phase 3
-
-**Due diligence workspace**
-
-- [ ] Due diligence request list with functional areas, owners, status and document tracking
-- [ ] DD findings register, with findings flowing into Day-1 tasks and RAID entries via the existing remediation linkage
-- [ ] Clean-room access segregation so pre-close information is restricted on a need-to-know basis
-
-**Synergy value capture**
-
-- [ ] Synergy baseline and phasing over time, not just a single target vs realized pair
-- [ ] Cost-to-achieve tracked against each initiative
-- [ ] Confidence stage-gating on initiatives as they mature
-- [ ] Linkage from a synergy initiative to the integration tasks that deliver it
-
-**IMO reporting & exports**
-
-- [ ] Generated steering-committee pack replacing manual deck assembly
-- [ ] Status reporting across workstreams, tasks, RAID and synergies
-- [ ] Data export (the app currently has import but no export endpoint at all)
-
-**Org design & talent retention**
-
-- [ ] Organisation structure and role mapping beyond the current flat employee list
-- [ ] Role selection and redundancy decisions
-- [ ] Key-talent flight-risk register
+(None — v2.1.0 shipped and released. Candidate next-milestone threads: shared-host/multi-process hardening, TE SSO + HRIS integration, SQLCipher at-rest encryption, vendoring the AI-Insight model weights, and completing the client-side XSS sink-class audit.)
 
 ### Out of Scope
 
@@ -87,9 +64,9 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 
 ## Context
 
-**Current state.** The app is at v2.0.1 (HEAD `5c45f3f`), 11 phases shipped, released on GitHub with three turnkey zips. A codebase map exists at `.planning/codebase/` (7 documents, refreshed 2026-07-18) and should be treated as the authoritative technical reference.
+**Current state.** The app is at **v2.1.0 (Real-Deal Milestone), shipped 2026-08-10** — released on GitHub with three turnkey zips (any-OS / macOS / Windows). Test suite 687/687. The v2.0.1 demo-showcase heritage is preserved as a cleanly-isolated mode. A codebase map exists at `.planning/codebase/` (7 documents) as the authoritative technical reference; note the SQLite/auth/isolation facts below now supersede the pre-Phase-1 `db.json` description in older docs.
 
-**Stack.** Express 4 backend (`server.js`, ~3,200 lines) serving a vanilla-JS multi-page frontend (~23,400 lines across `public/js/`). Persistence is a single `db.json` file with an in-memory mtime-checked cache. No build step, no framework, no bundler. `node_modules` is committed and Transformers.js is vendored locally so the bundles are fully self-contained.
+**Stack.** Express 4 backend (`server.js`, ~6,800 lines) serving a vanilla-JS multi-page frontend. Persistence is **SQLite (better-sqlite3, WAL) via `db/store.js`**, file-per-deal (`data/control.db` + `data/demo.db` committed; `data/runtime.db`, `data/audit.db`, `data/deals/*.db` gitignored). Real server-verified auth is **fail-closed by default** (sessions table; `DEMO_OPEN=1` is the explicit demo-open flag used only by the demo launchers). Writes are zod-validated and audited to an append-only `audit.db`. No build step, no framework, no bundler. `node_modules` is committed and Transformers.js is vendored locally so the bundles are self-contained. Real-deal deployments use the fail-closed `start-real-deal.*` launchers (see `DEPLOYMENT.md`).
 
 **Lifecycle coverage gap that motivates this milestone.** Analysis against the M&A lifecycle found: strategy/screening thin (static content), due diligence entirely absent, pre-close partial, Day 1 strong, first 100 days strongest, value capture partial (synergy is a four-field stub), IMO/steering partial (RAID and tasks exist but produce no reporting output), post-close review absent. The app is effectively the back half of an M&A tool with a very strong HR spine.
 
@@ -144,4 +121,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-02 after Phase 3 (Deal Isolation, Audit Log & Write Validation)*
+*Last updated: 2026-08-10 after v2.1.0 (Real-Deal Milestone) shipped — Phases 1–7 complete, released on GitHub.*
