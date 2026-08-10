@@ -1,0 +1,42 @@
+#!/bin/bash
+# [data-integrity] WAL-trap pre-commit guard.
+#
+# The committed data/*.db files run in SQLite WAL mode. A write can land only in
+# the gitignored `<db>-wal` sidecar and not in the main .db, so `git status`
+# reports the .db as clean while uncommitted data sits in the sidecar — a commit
+# then captures a STALE database. This hook blocks the commit whenever a tracked
+# .db has a non-empty WAL sidecar, and tells you how to flush it.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Bypass for a specific commit (rarely needed):  SKIP_WAL_CHECK=1 git commit ...
+
+if [ "${SKIP_WAL_CHECK:-}" = "1" ]; then
+  exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+dirty=""
+
+while IFS= read -r rel; do
+  [ -z "$rel" ] && continue
+  wal="${repo_root}/${rel}-wal"
+  # A WAL sidecar larger than the 32-byte empty-header size holds unflushed frames.
+  if [ -f "$wal" ] && [ "$(wc -c < "$wal" | tr -d '[:space:]')" -gt 32 ]; then
+    dirty="${dirty}  - ${rel}  (WAL: ${wal}, $(wc -c < "$wal" | tr -d '[:space:]') bytes unflushed)\n"
+  fi
+done < <(git ls-files '*.db')
+
+if [ -n "$dirty" ]; then
+  printf '\n\033[31mWAL-trap pre-commit guard: uncheckpointed WAL data detected.\033[0m\n' >&2
+  printf 'These committed databases have pending WAL writes NOT yet in the .db file\n' >&2
+  printf 'git will commit — the committed copy would be STALE:\n\n' >&2
+  printf "$dirty\n" >&2
+  printf 'Flush it, then verify and re-stage:\n' >&2
+  printf '    node scripts/wal-checkpoint.js\n' >&2
+  printf '    git add <the .db files that changed>   # only if they actually changed\n' >&2
+  printf '    git status                              # confirm the real diff\n\n' >&2
+  printf 'To bypass this guard for one commit:  SKIP_WAL_CHECK=1 git commit ...\n\n' >&2
+  exit 1
+fi
+
+exit 0
