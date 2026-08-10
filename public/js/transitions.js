@@ -1,3 +1,4 @@
+// ma-fetch-wrapper:begin
 // Admin API auth bridge: when the server requires an admin token (production, i.e.
 // ADMIN_TOKEN is set), attach it to same-origin /api requests and prompt for it once
 // on a 401 write. Completely inert in the demo — the server leaves the API open when
@@ -10,6 +11,16 @@
 // reads included), rather than racing the best-effort /api/auth/me probe further
 // below. Checked first, falling through to the write-only token prompt only when
 // the 401 is NOT an authRequired session gate.
+//
+// D-07/CONC-01 (Phase 8 Plan 04): this same wrapper also owns the client half of
+// write-contention handling. A same-origin /api write that comes back 503 here is
+// transient SQLite write contention (server.js's central busy-retry middleware,
+// Phase 8 Plan 01) — a DIFFERENT signal from the 409 stale-write conflict Phase 9
+// introduces for a real, resolved edit conflict; the two stay distinct and are
+// handled by different code paths. The retry below is capped and jittered: without
+// the jitter, every browser tab blocked by the same contended write would retry at
+// the same instant and amplify the very contention it is trying to recover from —
+// a self-inflicted thundering herd (retry-storm avoidance).
 (function () {
   if (window.__adminAuthWrapped || !window.fetch) return;
   window.__adminAuthWrapped = true;
@@ -34,24 +45,85 @@
     }
     return res;
   };
+
+  // D-08: the give-up surface when contention outlasts the retry budget below.
+  // Built fresh here rather than reused: public/js/banners.js is a CMS-driven,
+  // server-fetched page-banner system (the wrong mechanism entirely), and
+  // dashboard.js's showToast() is defined inside that page's own IIFE and is
+  // not reachable from any other page (08-RESEARCH.md Pitfall 6). This is the
+  // one JS file loaded on every page, so the toast lives here instead. The
+  // message is a fixed literal set via textContent — never markup assignment —
+  // so this stays covered by test/client-xss-sinks.test.js.
+  const BUSY_GIVE_UP_MESSAGE = 'Server is busy — your change was not saved. Please try again.';
+  const showBusyGiveUpToast = () => {
+    const toast = document.createElement('div');
+    toast.style.position = 'fixed';
+    toast.style.bottom = '2rem';
+    toast.style.right = '2rem';
+    toast.style.padding = '1rem 1.5rem';
+    toast.style.backgroundColor = '#DC2626';
+    toast.style.color = '#FFFFFF';
+    toast.style.borderRadius = '8px';
+    toast.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
+    toast.style.zIndex = '9999';
+    toast.style.fontWeight = '600';
+    toast.style.fontSize = '0.9rem';
+    toast.textContent = BUSY_GIVE_UP_MESSAGE;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 5000);
+  };
+
+  // D-07: bounded, jittered silent retry for transient write contention (503).
+  const BUSY_RETRY_MAX_RETRIES = 2; // 2 retries = 3 total attempts
+  const BUSY_RETRY_FALLBACK_WAIT_MS = 1000; // used when Retry-After is absent/unparseable
+  const BUSY_RETRY_JITTER_MAX_MS = 300; // retry-storm avoidance: desynchronizes tabs
+
+  const parseRetryAfterMs = (res) => {
+    const raw = res.headers && typeof res.headers.get === 'function' ? res.headers.get('Retry-After') : null;
+    const seconds = parseInt(raw, 10);
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : BUSY_RETRY_FALLBACK_WAIT_MS;
+  };
+
+  // A stream body, or an already-consumed Request object's body, can't be
+  // safely replayed on a retry — only absent or string bodies are re-sendable.
+  const isRetryableBody = (init) => init.body === undefined || init.body === null || typeof init.body === 'string';
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const attemptFetch = (input, init, url, method, attempt) => origFetch(input, init).then((res) => {
+    if (res.status === 503 && isApi(url)) {
+      if (attempt < BUSY_RETRY_MAX_RETRIES && isRetryableBody(init)) {
+        const wait = parseRetryAfterMs(res) + Math.floor(Math.random() * BUSY_RETRY_JITTER_MAX_MS);
+        return delay(wait).then(() => attemptFetch(input, init, url, method, attempt + 1));
+      }
+      // Retries exhausted (or the body can't be safely re-sent): tell the user
+      // plainly and leave the page/form exactly as it is so they can just save
+      // again — nothing is discarded, cleared, or re-navigated (D-08).
+      showBusyGiveUpToast();
+      return res;
+    }
+    if (res.status !== 401 || !isApi(url)) return res;
+    return res.clone().json().then((body) => {
+      if (body && body.authRequired) {
+        if (!onLoginPage()) window.location.href = '/login.html';
+        return res;
+      }
+      return maybePromptForToken(res, input, init, method);
+    }).catch(() => maybePromptForToken(res, input, init, method));
+  });
+
   window.fetch = function (input, init) {
     init = init || {};
     const url = typeof input === 'string' ? input : (input && input.url) || '';
     const method = (init.method || (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
     const tok = localStorage.getItem(KEY);
     if (tok && isApi(url)) init = withToken(init, tok);
-    return origFetch(input, init).then((res) => {
-      if (res.status !== 401 || !isApi(url)) return res;
-      return res.clone().json().then((body) => {
-        if (body && body.authRequired) {
-          if (!onLoginPage()) window.location.href = '/login.html';
-          return res;
-        }
-        return maybePromptForToken(res, input, init, method);
-      }).catch(() => maybePromptForToken(res, input, init, method));
-    });
+    return attemptFetch(input, init, url, method, 0);
   };
 })();
+// ma-fetch-wrapper:end
 
 // Playbook slide viewer: any element with data-playbook-slide="N" (or a call to
 // window.openPlaybookSlide(N)) opens the HR M&A Guidebook PDF at that slide in a modal.
