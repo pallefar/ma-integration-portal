@@ -4,7 +4,7 @@ milestone: v2.0.1
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Schema & Migration
-status: awaiting_formal_close
+status: milestone_ready_for_release
 stopped_at: Completed 07-07-PLAN.md
 last_updated: "2026-08-10T07:49:28.096Z"
 last_activity: 2026-08-10
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-07-23)
 
 ## Current Position
 
-Phase: 1 — Schema & Migration (code-complete since 2026-07-23; formal close deferred to release-cut)
-Plan: 3/3 executed; open items = Win/Linux turnkey boot verification + /gsd-verify-work 1
-Status: Milestone close in progress — all 7 phases executed, Phases 2-7 formally closed
+Phase: ALL 7 COMPLETE — milestone v2.1.0 ready for release cut
+Plan: all phases closed; Linux boot verified (Docker), Windows boot static-verified + user-confirm at release
+Status: Milestone close — security review done + remediated, launchers + WAL hook shipped, release artifacts building; awaiting push confirmation
 Last activity: 2026-08-10 — Phase 7 complete (review 0-crit, verifier passed 12/12, SECURED 40/40)
 
 Progress: [██████████] 100%

@@ -13,7 +13,7 @@ This milestone turns the existing demo-shaped portal (v2.0.1) into a tool an Int
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Schema & Migration** - Replace `db.json` with SQLite (WAL mode) via a re-runnable, verified migration
+- [x] **Phase 1: Schema & Migration** - Replace `db.json` with SQLite (WAL mode) via a re-runnable, verified migration (completed 2026-08-10; code-complete since 2026-07-23, Linux bundle boot verified via Docker, Windows bundle boot statically verified + confirmed at release cut — see 01-UAT.md)
 - [x] **Phase 2: Mandatory Auth & Roles** - Promote `PORTAL_AUTH` to mandatory, with full route coverage and role enforcement (completed 2026-07-31)
 - [x] **Phase 3: Deal Isolation, Audit Log & Write Validation** - File-per-deal isolation from demo data, an audit trail on every write, and schema validation on every write (completed 2026-08-02)
 - [x] **Phase 4: Due Diligence Workspace** - New-deal setup wizard (guided onboarding incl. readiness assessments), DD request lists, findings register, and server-side clean-room access control (completed 2026-08-03)
