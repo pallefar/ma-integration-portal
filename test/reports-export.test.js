@@ -188,6 +188,22 @@ test('reports-export (csvField unit): a number-typed negative value is NEVER apo
 });
 
 // ============================================================
+// T-ERM-06 (260810-erm): the leading-whitespace-strip bypass — a
+// spreadsheet application itself strips leading whitespace before deciding
+// whether a cell is a formula, so `s[0]` alone (the pre-fix check) let a
+// space/tab-padded formula payload through unguarded.
+// ============================================================
+test('reports-export (csvField unit) T-ERM-06: a value whose first NON-whitespace character is a formula trigger is apostrophe-guarded regardless of how much leading whitespace precedes it, a plain leading-space non-trigger value is untouched, and the number-skip still holds', () => {
+  assert.strictEqual(csvField(' =1+1'), "' =1+1", 'a leading-space-padded formula payload must be apostrophe-guarded');
+  assert.strictEqual(csvField('\t=SUM(A1)'), "'\t=SUM(A1)", 'a leading-tab-padded formula payload must be apostrophe-guarded');
+  assert.strictEqual(csvField('  @cmd'), "'  @cmd", 'a multi-space-padded @ trigger payload must be apostrophe-guarded');
+  assert.strictEqual(csvField('=1+1'), "'=1+1", 'a no-leading-whitespace formula payload must remain guarded — regression check');
+  assert.strictEqual(csvField(-5), '-5', 'a negative NUMBER must never be apostrophe-prefixed, even under the new whitespace-aware check');
+  assert.strictEqual(csvField(5), '5', 'a positive NUMBER must never be apostrophe-prefixed');
+  assert.strictEqual(csvField(' hello'), ' hello', 'a plain leading-space value with no formula trigger must be left completely unchanged — no spurious apostrophe');
+});
+
+// ============================================================
 // 07-04 Task 2: the stale day count, from one clock and one per-deal
 // threshold, into the exports (RPT-04/D-14)
 // ============================================================
