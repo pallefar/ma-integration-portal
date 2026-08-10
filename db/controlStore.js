@@ -424,7 +424,36 @@ function deleteDeal(dealId) {
   const targetPath = dbFiles.dealDbPath(dealId);
   closeConnection(targetPath);
   for (const ext of ['', '-wal', '-shm']) {
-    try { fs.unlinkSync(targetPath + ext); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    try {
+      fs.unlinkSync(targetPath + ext);
+    } catch (e) {
+      if (e.code === 'ENOENT') continue;
+      // [security] WR-03 (Phase 8 review fix): on Windows, an open file
+      // cannot be unlinked at all (see closeConnection()'s own doc comment
+      // above) — if a DIFFERENT process (the whole point of this phase) is
+      // still mid-write on this deal's file at the exact moment of deletion,
+      // `unlinkSync` throws `EBUSY`/`EPERM`, not `SQLITE_BUSY*`.
+      // `isBusyError()` (server.js) only recognizes an `err.code` PREFIX of
+      // `SQLITE_BUSY`, so an unmapped fs lock error would fall through this
+      // function's caller to the generic 500 handler instead of the central
+      // 503 middleware — breaking this phase's own "every write path
+      // uniformly 503s under contention" contract for this one path, and
+      // doing so specifically on the Windows deployment target this
+      // project's turnkey release supports. Re-map to a prefix-matching
+      // synthetic code so the SAME central 503 + Retry-After contract
+      // applies here too: the client's existing retry re-runs this (already
+      // idempotent — the registry row is already gone) delete, which
+      // succeeds once the other process releases the file.
+      if (e.code === 'EBUSY' || e.code === 'EPERM') {
+        const busyErr = new Error(
+          `db/controlStore.js: deleteDeal() could not unlink '${targetPath}${ext}' — file is held open by another process (${e.code})`
+        );
+        busyErr.code = 'SQLITE_BUSY_FSLOCK';
+        busyErr.cause = e;
+        throw busyErr;
+      }
+      throw e;
+    }
   }
   return true;
 }
