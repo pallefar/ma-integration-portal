@@ -4235,7 +4235,28 @@ app.get('/api/org/positions', (req, res) => {
   // from a session that never loaded org.js's JS gets the identical 403.
   if (requestedState === orgValidators.ORG_STATE_TARGET
     && !accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    // [security] T-ERM-07 (260810-erm): the TARGET org design is restricted
+    // MNPI (pre-announcement structure), so a denied read is audited — ONLY
+    // on this branch, never for the open-tier current-state read below,
+    // mirroring GET /api/org/flight-risk's identical read-audit shape.
+    // Gated real-deal-only (!req.isDemo), matching GET /api/reports/export's
+    // established audit-scoping rule.
+    if (!req.isDemo) {
+      auditHook.recordSecurityEvent({
+        actor: req.portalUser, action: 'org-positions-target-access-denied', dealId: req.dealContext.dealId,
+        subject: null, before: null, after: null, request: requestMeta(req),
+      });
+    }
     return res.status(403).json({ error: 'You are not cleared to view the target org design.' });
+  }
+  // [security] T-ERM-07: a successful TARGET read is audited too — the
+  // symmetric half of the denial above, ONLY on the target branch (current-
+  // state reads stay silent, matching D-01/D-07's open-tier treatment).
+  if (requestedState === orgValidators.ORG_STATE_TARGET && !req.isDemo) {
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'org-positions-target-read', dealId: req.dealContext.dealId,
+      subject: null, before: null, after: null, request: requestMeta(req),
+    });
   }
   const lane = orgPositionsLane(db);
   res.json(lane.filter((p) => p.state === requestedState));
@@ -4644,7 +4665,27 @@ app.get('/api/org/decisions', (req, res) => {
   const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
   if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
+    // [security] T-ERM-07 (260810-erm): the decision log is RESTRICTED MNPI
+    // content (D-01/D-02) — a denied read is audited, mirroring GET
+    // /api/org/flight-risk's identical read-audit shape. Gated real-deal-
+    // only (!req.isDemo), matching GET /api/reports/export's established
+    // audit-scoping rule.
+    if (!req.isDemo) {
+      auditHook.recordSecurityEvent({
+        actor: req.portalUser, action: 'org-decisions-access-denied', dealId: req.dealContext.dealId,
+        subject: null, before: null, after: null, request: requestMeta(req),
+      });
+    }
     return res.status(403).json({ error: 'You are not cleared to view org decisions.' });
+  }
+  // [security] T-ERM-07: the symmetric successful-read half — subject
+  // carries the narrowing positionId query value when the caller supplied
+  // one, or null for the unnarrowed full-log read.
+  if (!req.isDemo) {
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'org-decisions-read', dealId: req.dealContext.dealId,
+      subject: req.query.positionId || null, before: null, after: null, request: requestMeta(req),
+    });
   }
   let lane = orgDecisionsLane(db);
   if (req.query.positionId) lane = lane.filter((d) => d.positionId === req.query.positionId);
@@ -5344,6 +5385,18 @@ app.get('/api/dd/findings', (req, res) => {
   const lane = ddFindingsLane(db);
   let visible = accessPolicy.filterByAreaGrant(lane, deal, req.portalUser);
   if (req.query.area) visible = visible.filter((f) => f.area === req.query.area);
+  // [security] T-ERM-07 (260810-erm): this route returns a per-caller
+  // CLEARED SUBSET and never 403s (filterByAreaGrant silently narrows,
+  // rather than refusing), so there is no denial branch to audit here —
+  // only the successful read, gated real-deal-only (!req.isDemo), matching
+  // GET /api/reports/export's established audit-scoping rule. `subject`
+  // names the narrowing area query value, or 'all' for the unnarrowed read.
+  if (!req.isDemo) {
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'dd-findings-read', dealId: req.dealContext.dealId,
+      subject: req.query.area || 'all', before: null, after: null, request: requestMeta(req),
+    });
+  }
   res.json(visible);
 });
 
@@ -5352,6 +5405,16 @@ app.get('/api/dd/findings/:id', (req, res) => {
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const finding = ddFindingsLane(db).find((f) => f.id === req.params.id);
   if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+  // [security] T-ERM-07: ddAreaRefused() (above) already owns the denial
+  // path (an unconditional 'dd-access-denied' row, pre-existing) — this is
+  // only the successful-read half, gated real-deal-only (!req.isDemo),
+  // matching GET /api/reports/export's established audit-scoping rule.
+  if (!req.isDemo) {
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'dd-finding-read', dealId: req.dealContext.dealId,
+      subject: req.params.id, before: null, after: null, request: requestMeta(req),
+    });
+  }
   res.json(finding);
 });
 
