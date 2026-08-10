@@ -724,6 +724,7 @@ test('reports-pack cross-section: no drawn string discloses withheld content', a
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-reports-pack-'));
 process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
@@ -949,4 +950,140 @@ test('reports-pack route (GET /api/reports/pack)', async (t) => {
       server.close();
     }
   });
+});
+
+// ===========================================================================
+// Quick task 260810-e1j: the portability invariant. The committed node_modules
+// tree vendors @napi-rs/canvas's skia binding for four platforms only
+// (darwin-arm64, darwin-x64, linux-x64-gnu, win32-x64-msvc) — every other
+// host, e.g. linux-arm64, used to die at `require('./server.js')` because
+// lib/reportPack.js (and its lib/reportPdf.js dependency) were required at
+// server.js's own module load. These four cases lock in the fix: the
+// require moves behind a lazy, cached accessor reached only from inside the
+// one route that needs it, so a host without the binding still boots the
+// whole portal and degrades only GET /api/reports/pack, once, to a 503.
+// ===========================================================================
+
+test('reports-pack [portability]: (a) server.js has no top-level require of lib/reportPack', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const codeLines = [];
+  src.split('\n').forEach((raw, i) => {
+    const stripped = raw.replace(/\/\/.*$/, '');
+    const trimmed = stripped.trim();
+    if (trimmed.length === 0) return;
+    if (trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+    codeLines.push({ lineNo: i + 1, raw, stripped });
+  });
+
+  const reportPackLines = codeLines.filter((l) => l.stripped.includes("require('./lib/reportPack')"));
+  assert.ok(reportPackLines.length > 0, "expected at least one lazy require('./lib/reportPack') call to remain in server.js");
+
+  reportPackLines.forEach((l) => {
+    assert.ok(/^\s/.test(l.raw),
+      `server.js:${l.lineNo} requires lib/reportPack at column zero — a load failure on a host without the vendored skia binding would abort the ENTIRE portal's boot, not just GET /api/reports/pack: "${l.raw.trim()}"`);
+  });
+
+  const topLevelBindingRe = /^(?:const|let|var)\s+\w+\s*=\s*require\('\.\/lib\/reportPack'\)/;
+  codeLines.forEach((l) => {
+    assert.ok(!topLevelBindingRe.test(l.stripped),
+      `server.js:${l.lineNo} is a top-level "const x = require('./lib/reportPack')" binding — this runs at module-load time and would abort the whole portal's boot on a host without the vendored skia binding, instead of degrading only GET /api/reports/pack: "${l.raw.trim()}"`);
+  });
+});
+
+test('reports-pack [portability]: (b) getReportPack() lazily requires and caches the module, and the route refuses with 503 before any audit call', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+  const getterMatch = /function getReportPack\(\)\s*\{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(getterMatch, 'expected to locate a getReportPack() function in server.js');
+  const getterBody = getterMatch[1];
+  assert.ok(getterBody.includes("require('./lib/reportPack')"), "getReportPack() must require('./lib/reportPack') inside its own body");
+  assert.ok(getterBody.includes('try {'), 'getReportPack() must guard the require with a try block');
+  assert.ok(/catch\s*\(/.test(getterBody), 'getReportPack() must catch a failed require');
+  assert.ok(/console\.error\(\s*(['"`])\[portability\]/.test(getterBody),
+    'getReportPack() must console.error a message whose first argument literal begins with the [portability] marker');
+
+  const routeMatch = /app\.get\('\/api\/reports\/pack',\s*async \(req, res\) => \{([\s\S]*?)\n\}\);/.exec(src);
+  assert.ok(routeMatch, 'expected to locate the GET /api/reports/pack route handler body');
+  const routeBody = routeMatch[1];
+  assert.ok(routeBody.includes('getReportPack()'), 'the pack route must call getReportPack()');
+  assert.ok(routeBody.includes('503'), 'the pack route must carry a 503 refusal');
+  assert.ok(routeBody.includes('PDF pack generation is unavailable on this host platform'), 'the pack route must carry the exact refusal sentence');
+
+  const idx503 = routeBody.indexOf('503');
+  const idxAudit = routeBody.indexOf('recordSecurityEvent');
+  assert.ok(idx503 >= 0 && idxAudit >= 0 && idx503 < idxAudit,
+    'the 503 refusal must appear before recordSecurityEvent in the handler body, so the refusal returns before anything can be audited');
+});
+
+test('reports-pack [portability]: (c) a clean host boot leaves lib/reportPack unloaded (require.cache empty)', () => {
+  const repoRoot = path.join(__dirname, '..');
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-reports-pack-portability-c-'));
+  try {
+    const probe = [
+      "const app = require('./server.js');",
+      "console.log('PACK_CACHED=' + Boolean(require.cache[require.resolve('./lib/reportPack.js')]));",
+    ].join('\n');
+
+    const env = Object.assign({}, process.env, {
+      MA_CONTROL_DB_PATH: path.join(probeDir, 'control.db'),
+      MA_RUNTIME_DB_PATH: path.join(probeDir, 'runtime.db'),
+      MA_DEMO_DB_PATH: path.join(probeDir, 'demo.db'),
+      MA_DEALS_DIR: path.join(probeDir, 'deals'),
+      MA_AUDIT_DB_PATH: path.join(probeDir, 'audit.db'),
+      ADMIN_TOKEN: 'gsd-reports-pack-portability-c-token',
+    });
+
+    const result = spawnSync(process.execPath, ['-e', probe], { cwd: repoRoot, encoding: 'utf8', env });
+    assert.strictEqual(result.status, 0, `probe process exited non-zero: stderr=${result.stderr}`);
+    const match = /PACK_CACHED=(true|false)/.exec(result.stdout);
+    assert.ok(match, `expected stdout to carry PACK_CACHED=(true|false), got: ${result.stdout}`);
+    assert.strictEqual(match[1], 'false',
+      'requiring server.js on a clean host must leave lib/reportPack unloaded until the first pack request reaches getReportPack()');
+  } finally {
+    fs.rmSync(probeDir, { recursive: true, force: true });
+  }
+});
+
+test('reports-pack [portability]: (d) a sabotaged @napi-rs/canvas binding still boots the portal and degrades to null, once, per process', () => {
+  const repoRoot = path.join(__dirname, '..');
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-reports-pack-portability-d-'));
+  try {
+    const probe = [
+      "const Module = require('module');",
+      'const originalLoad = Module._load;',
+      "Module._load = function (request, parent, isMain) {",
+      "  if (request === '@napi-rs/canvas') {",
+      "    const err = new Error(\"Cannot find module './skia.linux-arm64-gnu.node'\");",
+      "    err.code = 'MODULE_NOT_FOUND';",
+      '    throw err;',
+      '  }',
+      '  return originalLoad.apply(this, arguments);',
+      '};',
+      "const app = require('./server.js');",
+      "console.log('BOOT_OK');",
+      "console.log('FIRST=' + String(app.getReportPack()));",
+      "console.log('SECOND=' + String(app.getReportPack()));",
+    ].join('\n');
+
+    const env = Object.assign({}, process.env, {
+      MA_CONTROL_DB_PATH: path.join(probeDir, 'control.db'),
+      MA_RUNTIME_DB_PATH: path.join(probeDir, 'runtime.db'),
+      MA_DEMO_DB_PATH: path.join(probeDir, 'demo.db'),
+      MA_DEALS_DIR: path.join(probeDir, 'deals'),
+      MA_AUDIT_DB_PATH: path.join(probeDir, 'audit.db'),
+      ADMIN_TOKEN: 'gsd-reports-pack-portability-d-token',
+    });
+
+    const result = spawnSync(process.execPath, ['-e', probe], { cwd: repoRoot, encoding: 'utf8', env });
+    assert.strictEqual(result.status, 0, `probe process exited non-zero: stdout=${result.stdout} stderr=${result.stderr}`);
+    assert.ok(result.stdout.includes('BOOT_OK'), `expected the sabotaged host to still boot the whole portal: stdout=${result.stdout}`);
+    assert.ok(result.stdout.includes('FIRST=null'), `expected the first getReportPack() call to degrade to null: stdout=${result.stdout}`);
+    assert.ok(result.stdout.includes('SECOND=null'), `expected the second getReportPack() call to degrade to null: stdout=${result.stdout}`);
+
+    const portabilityLines = result.stderr.split('\n').filter((l) => l.includes('[portability]'));
+    assert.strictEqual(portabilityLines.length, 1,
+      `expected exactly one [portability] stderr line — the failure must be announced once per process, not once per request: stderr=${result.stderr}`);
+  } finally {
+    fs.rmSync(probeDir, { recursive: true, force: true });
+  }
 });

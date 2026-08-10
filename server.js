@@ -56,7 +56,13 @@ const wizardValidators = require('./validators/wizard'); // provides DEAL_SETUP_
 const { z } = require('zod');
 const reportCsv = require('./lib/reportCsv');
 const reportFilename = require('./lib/reportFilename');
-const reportPack = require('./lib/reportPack');
+// Quick task 260810-e1j: the steerco pack module is deliberately NOT required
+// here. It pulls in @napi-rs/canvas, whose skia binding is vendored in the
+// committed node_modules tree for four platforms only (darwin-arm64,
+// darwin-x64, linux-x64-gnu, win32-x64-msvc) — a load-time failure on any
+// other host would abort this entire module's require, i.e. the whole
+// portal's boot, over one route. It is acquired lazily, on first request, by
+// getReportPack() next to the pack route below.
 
 
 const app = express();
@@ -5734,16 +5740,6 @@ app.get('/api/reports/export', (req, res) => {
 // non-read methods, so D-08's any-deal-member access falls out of the
 // existing gate with no new policy entry, exactly like GET /api/reports/export
 // above.
-//
-// `.catch('en')` (zod's default-on-parse-failure combinator, available since
-// the 4.4.3 pin already used elsewhere in this file) is deliberate: a
-// missing or unsupported language code is not a client error, it silently
-// resolves to English — matching lib/reportPack.js's own resolveLanguage()
-// fallback contract. `lang` (not `language`) is the query key, matching the
-// browser's fetch call this plan's own button wiring issues (Task 3) — and
-// is also the ENTIRE query-parameter surface this route reads; no other
-// request-supplied value reaches the model (T-07-32).
-const ReportPackLanguageSchema = z.enum(reportPack.SUPPORTED_LANGUAGES).catch('en');
 
 /** "2026-08-09 14:32 UTC" — one server-resolved string, read verbatim by
  * both the header and footer bands (lib/reportPack.js never formats a
@@ -5752,8 +5748,47 @@ function formatPackTimestamp(date) {
   return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
+// Quick task 260810-e1j: the lazy accessor for lib/reportPack — see the
+// require-cluster comment near the top of this file for why the require
+// cannot run at module load. A failed load is cached PERMANENTLY for the
+// process lifetime rather than retried per request: a missing native binding
+// is a fixed property of the host plus the committed node_modules tree, and
+// neither can change while the process runs, so a retry could only re-emit
+// the identical error and re-pay a failed module resolution on every
+// request. This is deliberately UNLIKE the WR-03 review finding, where
+// permanently poisoning a genuinely TRANSIENT failure was wrong — a missing
+// skia binding is not transient, so the same "poison once" shape is correct
+// here.
+let reportPackModule = null;
+let reportPackUnavailable = false;
+function getReportPack() {
+  if (reportPackModule) return reportPackModule;
+  if (reportPackUnavailable) return null;
+  try {
+    reportPackModule = require('./lib/reportPack');
+    return reportPackModule;
+  } catch (error) {
+    reportPackUnavailable = true;
+    console.error('[portability] lib/reportPack (steerco PDF pack) could not be loaded on this host — GET /api/reports/pack will return 503 until the process restarts:', error && error.message);
+    return null;
+  }
+}
+
 app.get('/api/reports/pack', async (req, res) => {
-  const language = ReportPackLanguageSchema.parse(req.query.lang);
+  const packLib = getReportPack();
+  if (!packLib) {
+    return res.status(503).json({ error: 'PDF pack generation is unavailable on this host platform' });
+  }
+
+  // `.catch('en')` (zod's default-on-parse-failure combinator, available since
+  // the 4.4.3 pin already used elsewhere in this file) is deliberate: a
+  // missing or unsupported language code is not a client error, it silently
+  // resolves to English — matching lib/reportPack.js's own resolveLanguage()
+  // fallback contract. `lang` (not `language`) is the query key, matching the
+  // browser's fetch call this plan's own button wiring issues (Task 3) — and
+  // is also the ENTIRE query-parameter surface this route reads; no other
+  // request-supplied value reaches the model (T-07-32).
+  const language = z.enum(packLib.SUPPORTED_LANGUAGES).catch('en').parse(req.query.lang);
 
   try {
     const db = readDb();
@@ -5816,7 +5851,7 @@ app.get('/api/reports/pack', async (req, res) => {
       staleThresholdDays: synergyStaleDays(db),
     };
 
-    const pdfBuffer = await reportPack.buildPack(model);
+    const pdfBuffer = await packLib.buildPack(model);
 
     // D-07/D-09: filename discipline identical to the raw exports — the
     // deal's CODENAME, never deal.targetCompany.
@@ -6763,3 +6798,8 @@ module.exports.resolveRaidEntryClearanceArea = resolveRaidEntryClearanceArea;
 // Phase-7 consumer can call the SAME rollup implementation this route uses,
 // without booting the HTTP server for every pure-tally case.
 module.exports.orgSummaryFor = orgSummaryFor;
+// Quick task 260810-e1j: exposed for the same pure-function unit-check
+// rationale — a test can drive the binding-absent path directly (via a
+// sabotaged module loader in a child process) even on a host where the
+// binding actually exists, without needing a real linux-arm64 machine.
+module.exports.getReportPack = getReportPack;
