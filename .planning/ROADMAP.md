@@ -57,7 +57,13 @@ showcase both survive. MNPI-grade throughout: every phase gets a threat model at
   1. Two or more processes (or overlapping in-process requests) writing the same deal's records concurrently all persist — no write silently overwrites another, proven by a multi-process soak test.
   2. Under write contention a losing writer gets a clear, bounded retry signal (busy-retry → `503 Retry-After`) rather than a corrupt, partial, or hung write.
   3. The demo showcase still boots and behaves identically, and the zero-install committed-DB turnkey bundle still runs with no install step, after the storage-layer change.
-**Plans**: TBD
+**Plans**: 5 plans (3 waves)
+Plans:
+- [ ] 08-01-PLAN.md — Tracer: contended write serializes end-to-end and returns a bounded 503 Retry-After (wave 1)
+- [ ] 08-02-PLAN.md — Serialization scope: audit batch + control-plane direct-SQL writers (wave 2)
+- [ ] 08-03-PLAN.md — Uniform 503 contract: close swallow sites, async forwarding, coverage gate (wave 2)
+- [ ] 08-04-PLAN.md — Client silent retry with jitter + give-up toast (wave 2)
+- [ ] 08-05-PLAN.md — Soak harness, phase gate, demo/turnkey intact (wave 3)
 
 ### Phase 9: Optimistic Locking & Conflict Recovery
 **Goal**: When two people edit the same record, the second save is caught and safely recoverable instead of silently overwriting the first.
