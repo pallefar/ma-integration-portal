@@ -390,22 +390,30 @@ function verify({ dealId, acknowledged, refused, unexpected }) {
     auditRowIdCounts.set(r.row_id, (auditRowIdCounts.get(r.row_id) || 0) + 1);
   }
 
-  // Check 2: no refused write both committed AND was audited.
+  // Check 2: no refused write left ANY trace committed — neither the
+  // deal-level row NOR its audit row.
   //
-  // [security] D-10: db/store.js's writeDb() commits the deal-level write in
-  // its OWN transaction FIRST, then dispatches the audit append as a
-  // SEPARATE, LATER transaction against audit.db. If THAT second write hits
-  // contention after the deal write already committed, the no-swallow
-  // contract fails the WHOLE request 503 — but the deal-level row has
-  // already landed. This is a deliberate, user-approved trade-off ("Client
-  // retry re-applies the write; acceptable because writeDb() re-application
-  // of identical content is idempotent" — 08-RESEARCH.md D-10), not a
-  // rollback failure. It is distinguishable from a genuine violation: a
-  // refused write whose row committed AND has a matching audit row would
-  // mean the whole request fully succeeded server-side while still lying to
-  // the client about it — THAT is the real "503 lied about the rollback"
-  // case D-15 exists to catch. A committed-but-unaudited row is the accepted
-  // D-10 trade-off and is reported separately, not counted as a failure.
+  // [security] CR-01 (Phase 8 review fix): db/store.js's writeDb() used to
+  // commit the deal-level write in its OWN transaction FIRST, then dispatch
+  // the audit append as a SEPARATE, LATER transaction against audit.db — so
+  // a busy audit append after an already-committed deal write produced a
+  // "clean" 503 for a write that had, in fact, partially landed
+  // (committed-but-unaudited). That was a deliberate, then-accepted
+  // trade-off (D-10, "the client's 503-retry costs nothing because
+  // writeDb()'s re-application is idempotent") — but the phase 8 code review
+  // (finding CR-01) proved that argument false across an HTTP-level retry:
+  // the retried request re-executes application logic and mints a BRAND NEW
+  // id, so a committed-but-unaudited row does not get "re-applied
+  // idempotently" — it becomes an invisible, permanent, un-audited MNPI
+  // duplicate once the retry's own write lands under its own fresh id.
+  //
+  // The audit append now runs INSIDE the SAME transaction as the deal-level
+  // write (db/store.js writeDb(), as its final step) — a busy audit append
+  // rolls back the deal-level write too, so nothing may commit without its
+  // audit row. `committedButUnaudited` is therefore no longer an accepted
+  // trade-off: it is now a GENUINE violation, exactly like
+  // `committedAndAudited` (the pre-existing "503 lied about the full
+  // rollback" case). Both buckets fail this check.
   const committedButUnaudited = [];
   const committedAndAudited = [];
   for (const w of refused) {
@@ -418,9 +426,9 @@ function verify({ dealId, acknowledged, refused, unexpected }) {
     }
   }
   checks.push({
-    name: 'no cleanly-refused write both committed AND was audited (D-10 audit-stage-busy trade-off excepted)',
-    ok: committedAndAudited.length === 0,
-    detail: `refused=${refused.length} committedButUnaudited(D-10 accepted trade-off)=${committedButUnaudited.length} committedAndAudited(genuine violation)=${committedAndAudited.length}`,
+    name: 'no cleanly-refused write left anything committed (CR-01 fix: committed-but-unaudited is now a genuine violation, not an accepted trade-off)',
+    ok: committedAndAudited.length === 0 && committedButUnaudited.length === 0,
+    detail: `refused=${refused.length} committedButUnaudited(genuine violation post-CR-01)=${committedButUnaudited.length} committedAndAudited(genuine violation)=${committedAndAudited.length}`,
   });
 
   // Check 3: PRAGMA integrity_check ok on every file the run touched.
@@ -437,10 +445,11 @@ function verify({ dealId, acknowledged, refused, unexpected }) {
 
   // Check 4: audit trail matches acknowledged writes one-to-one, in both
   // directions — a missing row AND a duplicate row each fail. A
-  // committed-but-unaudited row from check 2's D-10 trade-off is, BY
-  // DEFINITION, absent from auditRowIdCounts and absent from `acknowledged`
-  // (it was bucketed as refused, not acknowledged) — so it does not appear
-  // on either side of this comparison and cannot masquerade as a pass here.
+  // committed-but-unaudited row (now a genuine violation caught by check 2
+  // above, post-CR-01) is, BY DEFINITION, absent from auditRowIdCounts and
+  // absent from `acknowledged` (it was bucketed as refused, not
+  // acknowledged) — so it does not appear on either side of this comparison
+  // and cannot masquerade as a pass here.
   const ackIds = new Set(acknowledged.map((w) => w.pulseId));
   const missingFromAudit = [...ackIds].filter((id) => !auditRowIdCounts.has(id));
   const duplicateInAudit = [...auditRowIdCounts.entries()].filter(([, count]) => count > 1);
