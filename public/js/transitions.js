@@ -1393,13 +1393,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item.match === 'index-home') return path === '/' || path === '' || path.includes('index.html');
         return isLinkActive(item);
       };
+      // [security] T-ERM-03 (260810-erm): a LOCAL escapeHtml — the one
+      // defined inside initGlobalTeodorChatbot() (below) is scoped to that
+      // function alone and unreachable here; function declarations hoist
+      // only within their own containing function, never across sibling
+      // functions, so this must be its own copy rather than a reach-across
+      // reference.
+      function escapeHtml(unsafe) {
+        return String(unsafe == null ? '' : unsafe)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+      // [security] T-ERM-03 (260810-erm): escaping alone does NOT stop a
+      // `javascript:`/`data:` scheme URL from executing when clicked —
+      // only a scheme ALLOWLIST does. Bookmark hrefs originate from
+      // GET /api/menus (write ACL admin/hrbp/pmo) and render in EVERY
+      // user's chrome on EVERY page, so an attacker-authored bookmark href
+      // is neutralized here regardless of write-side validation. Accepts a
+      // relative path, a `#`-anchor, or an http(s) absolute URL; anything
+      // else (javascript:, data:, vbscript:, etc.) degrades to '#'.
+      const safeUrl = (u) => {
+        const s = String(u == null ? '' : u).trim();
+        if (!s) return '#';
+        if (s.charAt(0) === '/' || s.charAt(0) === '#' || s.charAt(0) === '?') return s;
+        if (/^https?:\/\//i.test(s)) return s;
+        return '#';
+      };
       const renderQuickLink = (item) => `
-        <a href="${item.href}" class="quicknav-link ${quickActive(item) ? 'active' : ''}">
-          <span>${item.icon}</span><span>${item.title}</span>
+        <a href="${escapeHtml(safeUrl(item.href))}" class="quicknav-link ${quickActive(item) ? 'active' : ''}">
+          <span>${escapeHtml(item.icon)}</span><span>${escapeHtml(item.title)}</span>
         </a>`;
       const renderQuickGroup = (label, items) => `
         <div class="quicknav-group">
-          <h5>${label}</h5>
+          <h5>${escapeHtml(label)}</h5>
           ${items.map(renderQuickLink).join('')}
         </div>`;
 

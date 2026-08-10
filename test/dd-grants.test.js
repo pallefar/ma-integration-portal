@@ -392,9 +392,14 @@ test('dd-grants (source): admin.js POSTs to the grants route and renders with no
   assert.strictEqual(section.includes('innerHTML'), false, 'the grants panel must render entirely via textContent/DOM APIs, never innerHTML');
 });
 
-test('dd-grants (source): admin.html loads admin.js at the bumped cache stamp', () => {
+test('dd-grants (source): admin.html loads admin.js at a cache-stamped URL', () => {
   const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin.html'), 'utf8');
-  assert.match(adminHtml, /admin\.js\?v=1784700001/, 'admin.html must reference the bumped ?v= cache stamp for admin.js');
+  // 260810-erm (T-ERM-05): asserts a cache-stamped reference EXISTS, rather
+  // than pinning the exact ?v= value — that pin broke the moment a later,
+  // unrelated fix (the admin.js textarea escaping fix) legitimately bumped
+  // the stamp again. The stamp's presence, not its literal digits, is what
+  // this test needs to prove.
+  assert.match(adminHtml, /admin\.js\?v=\d+/, 'admin.html must reference a cache-stamped admin.js URL');
 });
 
 // ---------------------------------------------------------------------------

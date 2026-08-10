@@ -6,6 +6,19 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // [security] T-ERM-04 (260810-erm, milestone-close Fable 5 review): this
+  // module had NO escaper at all — the leaderboard roster row below
+  // interpolates employee name/role/department/badge RAW into innerHTML.
+  // Same 5-replace body as public/js/transitions.js and public/js/admin.js.
+  function escapeHtml(unsafe) {
+    return String(unsafe == null ? '' : unsafe)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // Elements
   const clockEl = document.getElementById('signage-clock');
   const dateEl = document.getElementById('signage-date');
@@ -297,13 +310,13 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="display: flex; align-items: center; gap: 0.75rem;">
           <div class="${badgeClass}">${icon}</div>
           <div>
-            <h5 style="margin: 0; color: #f8fafc; font-size: 0.9rem; font-weight: 700;">${emp.name} ${emp.isLeader ? '👑' : ''}</h5>
-            <p style="margin: 0.1rem 0 0 0; font-size: 0.75rem; color: #94a3b8;">${emp.role} &bull; ${emp.department}</p>
+            <h5 style="margin: 0; color: #f8fafc; font-size: 0.9rem; font-weight: 700;">${escapeHtml(emp.name)} ${emp.isLeader ? '👑' : ''}</h5>
+            <p style="margin: 0.1rem 0 0 0; font-size: 0.75rem; color: #94a3b8;">${escapeHtml(emp.role)} &bull; ${escapeHtml(emp.department)}</p>
           </div>
         </div>
         <div style="text-align: right;">
           <span style="font-weight: 800; color: var(--te-orange); font-size: 1rem;">${emp.points || 0} XP</span>
-          <div style="font-size: 0.65rem; color: #64748b; margin-top: 0.1rem; text-transform: uppercase; font-weight: 700;">${emp.badge || 'Recruit'}</div>
+          <div style="font-size: 0.65rem; color: #64748b; margin-top: 0.1rem; text-transform: uppercase; font-weight: 700;">${escapeHtml(emp.badge || 'Recruit')}</div>
         </div>
       `;
       

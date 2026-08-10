@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     bodyEl.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:0.5rem; width:100%; margin-top: 0.25rem;">
-        <textarea class="inline-edit-textarea" rows="2" style="width:100%; box-sizing:border-box;">${q.text}</textarea>
+        <textarea class="inline-edit-textarea" rows="2" style="width:100%; box-sizing:border-box;">${escapeHtml(q.text)}</textarea>
         <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; width:100%;">
           <select class="inline-edit-input select-dim" style="flex:1; min-width:100px; padding:0.25rem 0.5rem;">
             <option value="culture" ${q.dimension === 'culture' ? 'selected' : ''}>Culture & Values</option>
