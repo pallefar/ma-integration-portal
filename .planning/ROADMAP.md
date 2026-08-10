@@ -60,11 +60,11 @@ showcase both survive. MNPI-grade throughout: every phase gets a threat model at
   2. Under write contention a losing writer gets a clear, bounded retry signal (busy-retry → `503 Retry-After`) rather than a corrupt, partial, or hung write.
   3. The demo showcase still boots and behaves identically, and the zero-install committed-DB turnkey bundle still runs with no install step, after the storage-layer change.
 
-**Plans**: 5 plans (3 waves)
+**Plans**: 1/5 plans executed (3 waves)
 Plans:
 **Wave 1**
 
-- [ ] 08-01-PLAN.md — Tracer: contended write serializes end-to-end and returns a bounded 503 Retry-After (wave 1)
+- [x] 08-01-PLAN.md — Tracer: contended write serializes end-to-end and returns a bounded 503 Retry-After (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -155,7 +155,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. Concurrency & Storage Foundation | v2.2.0 | 0/TBD | Not started | - |
+| 8. Concurrency & Storage Foundation | v2.2.0 | 1/5 | In Progress|  |
 | 9. Optimistic Locking & Conflict Recovery | v2.2.0 | 0/TBD | Not started | - |
 | 10. Runtime Hardening & Deployment Readiness | v2.2.0 | 0/TBD | Not started | - |
 | 11. Deployment Shapes | v2.2.0 | 0/TBD | Not started | - |
