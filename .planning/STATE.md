@@ -255,6 +255,7 @@ None yet.
 | 260801-fj5 | Hide Post-Merger splash screen via guarded early return (keep code) | 2026-08-01 | f2a0484 | [260801-fj5-hide-post-merger-splash-screen-via-guard](./quick/260801-fj5-hide-post-merger-splash-screen-via-guard/) |
 | 2 | Fix infinite reload loop (admin role hidden by demo roleVisibility) — flicker on / after mandatory auth | 2026-08-01 | 13d6cb9 | — |
 | 260806-x2j | Fix the XSS chain — escape Leaders roster sinks, widen sanitizer separator class in all THREE copies (incl. the server-side write-time one), gitignore future outbound emails | 2026-08-06 | 4f7c1da | [260806-x2j-fix-the-xss-chain](./quick/260806-x2j-fix-the-xss-chain/) |
+| 260810-e1j | Lazy-load @napi-rs/canvas's steerco pack module so server.js boots on hosts without the vendored skia binding (linux-arm64); GET /api/reports/pack degrades to 503 instead | 2026-08-10 | c5d0573 | [260810-e1j-lazy-load-napi-rs-canvas-so-server-boots](./quick/260810-e1j-lazy-load-napi-rs-canvas-so-server-boots/) |
 
 ## Deferred Items
 
