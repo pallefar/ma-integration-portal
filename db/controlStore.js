@@ -152,6 +152,22 @@ const DEAL_SETUP_STEPS = ['basics', 'team', 'assessments', 'scope', 'timeline', 
  * those two steps), the remaining four start `null` — an incomplete-but-
  * usable deal, never a rollback, is the whole point of create-early.
  */
+// WR-02 (Phase 8 review fix): the `seqRow` read (SELECT COALESCE(MAX(seq),
+// -1) + 1) and the following INSERT used to be two unguarded statements —
+// `seq` carries no UNIQUE constraint (db/control-schema.sql), so two
+// concurrent createDeal() calls across processes could both read the same
+// MAX(seq) and commit with identical values, silently breaking listDeals()'s
+// stable creation-order sort. Both statements below now run on `conn` — the
+// SAME connection callers pass through createDealDeduped()'s `.immediate`
+// transaction (the sanctioned entry point below), so in that path they
+// execute under one already-acquired write lock. `createDeal()` itself stays
+// callable standalone (existing test/audit-log.test.js and scripts/soak.js
+// call sites) — see createDealDeduped()'s own comment for why those callers'
+// exposure is either non-concurrent (tests) or a single-process harness
+// (soak.js), so this function is not additionally self-wrapped here (doing
+// so would make it a second, nested `.immediate` transaction when called
+// from inside createDealDeduped()'s own — better-sqlite3 disallows nested
+// transactions on one connection).
 function createDeal({ name, targetCompany, members, createdBy, dealType, signingDate, expectedClose, day1Date, dealSizeM, currency }) {
   const id = newId('deal');
   const memberSet = new Set((members || []).map(String));
@@ -227,6 +243,43 @@ function findUnfinishedDealFor({ createdBy, name, targetCompany }) {
     d.targetCompany === targetCompany &&
     hasOutstandingSetupStep(d)
   )) || null;
+}
+
+/**
+ * WR-01/WR-02 (Phase 8 review fix): the sanctioned, race-free entry point for
+ * `POST /api/deals` — wraps findUnfinishedDealFor()'s dedup read and
+ * createDeal()'s seq-read-then-insert in ONE `.immediate` transaction on
+ * `control.db`, mirroring updateDealMembers()'s own read-modify-write
+ * pattern above. Without this wrap, findUnfinishedDealFor() (a read) and
+ * createDeal() (a write) were two separate, unguarded operations: under the
+ * multi-process deployment this phase makes safe, two different
+ * `node server.js` processes could each observe "no existing unfinished
+ * deal" and each insert a fresh deal registry row for what the operator
+ * intended as one wizard submission (WR-01) — and even within a single
+ * createDeal() call, its own `seq`-read-then-insert had no lock of its own,
+ * so two concurrent creates (from the dedup race, or from two unrelated
+ * users creating deals at the same instant) could commit with identical
+ * `seq` values, silently breaking listDeals()'s stable creation-order sort
+ * (WR-02). Acquiring `.immediate`'s write lock BEFORE the dedup read closes
+ * both: a second process attempting the same check-then-create blocks (then
+ * busy-waits per db/dbFiles.js's busy_timeout, or 503s) until this
+ * transaction has fully committed, at which point its own dedup read
+ * observes the just-created row.
+ *
+ * Returns `{ deal, resumed }` exactly matching POST /api/deals's existing
+ * response contract: `resumed: true` (with the pre-existing unfinished deal)
+ * when the dedup guard matched — nothing is created and no security event
+ * should be recorded by the caller; `resumed: false` (with the newly
+ * inserted deal) otherwise.
+ */
+function createDealDeduped(fields) {
+  const conn = controlConn();
+  const apply = conn.transaction((f) => {
+    const existing = findUnfinishedDealFor({ createdBy: f.createdBy, name: f.name, targetCompany: f.targetCompany });
+    if (existing) return { deal: existing, resumed: true };
+    return { deal: createDeal(f), resumed: false };
+  }).immediate;
+  return apply(fields);
 }
 
 /**
@@ -440,7 +493,7 @@ function setSecretSettings(patch) {
 module.exports = {
   findUser, listUsers, updateUser,
   getDeal, listDeals, listDealsForUser, isDealMember,
-  createDeal, updateDealMembers, archiveDeal, deleteDeal,
+  createDeal, createDealDeduped, updateDealMembers, archiveDeal, deleteDeal,
   setDealMemberGrants, getDealMemberGrants,
   updateDealSetup, DEAL_SETUP_STEPS,
   hasOutstandingSetupStep, findUnfinishedDealFor,

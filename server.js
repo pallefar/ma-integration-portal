@@ -776,20 +776,27 @@ app.post('/api/deals', (req, res) => {
   // call changed nothing. D-05 create-early is untouched below: a caller
   // with no matching unfinished deal still gets one created on the very
   // first successful basics-and-team post.
-  const existingUnfinished = controlStore.findUnfinishedDealFor({
-    createdBy: req.portalUser.username, name, targetCompany,
-  });
-  if (existingUnfinished) {
-    return res.json({ success: true, deal: existingUnfinished, resumed: true });
-  }
-  // D-05/WIZ-01: the wizard's optional basics fields (dealType/signingDate/
-  // expectedClose/day1Date/dealSizeM/currency) ride the SAME create call as
-  // name/targetCompany/members — createDeal() also stamps the `setup`
-  // skeleton whose basics/team steps are already done by this very call.
-  const deal = controlStore.createDeal({
+  //
+  // [security] WR-01/WR-02 (Phase 8 review fix): the dedup check and the
+  // create used to be two separate, unguarded controlStore calls — a
+  // cross-process TOCTOU (two `node server.js` processes could each observe
+  // "no existing unfinished deal" and each insert a row) that the D-09
+  // `.immediate`-wrap pattern elsewhere in this file did not originally
+  // cover. controlStore.createDealDeduped() now wraps BOTH the dedup read
+  // and the create (seq-read included) in one `.immediate` transaction on
+  // control.db — see its own doc comment in db/controlStore.js.
+  const { deal: dealResult, resumed } = controlStore.createDealDeduped({
     name, targetCompany, members, createdBy: req.portalUser.username,
     dealType, signingDate, expectedClose, day1Date, dealSizeM, currency,
   });
+  if (resumed) {
+    return res.json({ success: true, deal: dealResult, resumed: true });
+  }
+  // D-05/WIZ-01: the wizard's optional basics fields (dealType/signingDate/
+  // expectedClose/day1Date/dealSizeM/currency) ride the SAME create call as
+  // name/targetCompany/members — createDealDeduped() also stamps the `setup`
+  // skeleton whose basics/team steps are already done by this very call.
+  const deal = dealResult;
   try {
     // T-03-23: provision the deal's own database file AFTER the registry row
     // exists, matching an existing id — if this throws, the registry row is
