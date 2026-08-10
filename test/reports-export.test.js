@@ -577,7 +577,15 @@ test('reports-export (j): the RAID clearance parity from test (a) holds in BOTH 
   }
 });
 
-test('reports-export (k): the three datasets with NO per-item clearance concept (workstreams, tasks, synergies) return the IDENTICAL set for all four identities — an accidental over-filter is caught as loudly as a leak', async () => {
+// 260810-erm (T-ERM-01): tasks now DOES carry a conditional clearance
+// concept — a task converted from a dd-finding/flight-risk stamps its
+// resolved area and is filtered via reportTaskRows(), exactly like RAID.
+// This test's own fixture below uses only an UNRESTRICTED manual task (no
+// source, so resolveTaskClearanceArea() resolves it to null), so the
+// identical-id-set assertion still holds for all three datasets here; a
+// dedicated over/under-filter proof for a RESTRICTED (converted) task lives
+// in test/task-access-filter.test.js.
+test('reports-export (k): workstreams and synergies carry NO per-item clearance concept, and this fixture\'s tasks are all unrestricted (manual) — all three return the IDENTICAL set for all four identities', async () => {
   const server = app.listen(0);
   try {
     const { port } = server.address();

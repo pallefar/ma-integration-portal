@@ -2938,10 +2938,19 @@ function taskLane(db) {
 // the client's own `if (!ts.length) return '';` skip. Do NOT let a second
 // consumer re-derive the RAG band from a percentage independently — call
 // this function instead.
-function computeWorkstreamRollup(db) {
+//
+// [security] T-ERM-01/T-ERM-03 (260810-erm): `deal`/`portalUser` are now
+// REQUIRED — the per-workstream task count is derived from reportTaskRows()
+// (the same clearance-filtered read GET /api/integration-tasks uses), not
+// the raw taskLane(db), so a hidden hr-retention task can no longer inflate
+// the ws_hr count (and therefore the RAG band and pctComplete) for a caller
+// who is not cleared to see that task exist at all — closes the count-
+// inference side channel a purely-boolean/percentage rollup would otherwise
+// leave open even after the title-level filter above closes the direct leak.
+function computeWorkstreamRollup(db, deal, portalUser) {
   const template = (db.checklistTemplates || [])[0];
   const workstreams = (template && template.workstreams) || [];
-  const tasks = taskLane(db);
+  const tasks = reportTaskRows(db, deal, portalUser);
   const rows = [];
   workstreams.forEach((w) => {
     const ts = tasks.filter((t) => t.workstreamId === w.id);
@@ -2962,7 +2971,11 @@ const TASK_PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
 
 app.get('/api/integration-tasks', (req, res) => {
   const db = readDb();
-  res.json(taskLane(db));
+  // [security] T-ERM-01 (260810-erm): routed through the single clearance-
+  // filtered reportTaskRows() read — mirrors GET /api/raid's identical
+  // reportRaidRows() delegation immediately above in the RAID section.
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  res.json(reportTaskRows(db, deal, req.portalUser));
 });
 
 // Create or update a task (upsert by id, like departments/processes)
@@ -4063,6 +4076,51 @@ function resolveRaidEntryClearanceArea(entry, db) {
   return null;
 }
 
+// [security] T-ERM-01/T-ERM-02 (260810-erm, milestone-close Fable 5 review):
+// the task-lane TWIN of resolveRaidEntryClearanceArea() immediately above —
+// structurally identical, on purpose. A converted TASK carries the exact
+// same MNPI title as its RAID counterpart (`${employeeName} — retention
+// risk mitigation`, or a DD finding's own `.title`), but until this fix the
+// task lane had NO clearance concept at all — every deal member saw every
+// task regardless of which RAID entry it was converted alongside. The stamp
+// (`task.clearanceArea`) is checked FIRST, before any source-parsing, so
+// deleting the originating dd-finding/flight-risk record can never
+// retroactively DEclassify a converted task back to the whole deal team
+// (fail-closed — mirrors WR-03). A task whose provenance resolves to null
+// (manually created with an empty/absent source, or an orphaned/
+// unrecognised source with no stamp) is returned UNRESTRICTED — an ordinary
+// Day-1/100-day task is not MNPI; only content republished FROM a
+// restricted source is gated.
+function resolveTaskClearanceArea(task, db) {
+  if (task && task.clearanceArea) return task.clearanceArea;
+  const source = task && task.source;
+  if (!source) return null;
+  const ddMatch = /^dd-finding:(.+)$/.exec(source);
+  if (ddMatch) {
+    const finding = ddFindingsLane(db).find((f) => f.id === ddMatch[1]);
+    return finding ? finding.area : null;
+  }
+  // Retention clearance is always the fixed `hr` area, mirroring
+  // resolveRaidEntryClearanceArea's identical rule for the RAID twin.
+  if (source.indexOf('org-flightrisk:') === 0) return 'hr';
+  return null;
+}
+
+// [security] T-ERM-01: the SINGLE clearance-filtered task read — every
+// title-emitting task exit (GET /api/integration-tasks, the export
+// dataset=tasks branch, the PDF pack, and computeWorkstreamRollup's own
+// per-workstream task counts) must call this, never re-derive its own
+// filter, mirroring reportRaidRows()'s "one filtered read path" guarantee
+// (WR-04) for the task lane — a future edit can never make one of these
+// exits disagree with the others about which tasks a given caller may see.
+function reportTaskRows(db, deal, portalUser) {
+  ddFindingsLane(db);
+  return taskLane(db).filter((task) => {
+    const area = resolveTaskClearanceArea(task, db);
+    return area === null || accessPolicy.hasAreaGrant(deal, portalUser, area);
+  });
+}
+
 // RPT-01/RPT-02 (07-06 Task 2/T-07-28): the SINGLE clearance-filtered RAID
 // read GET /api/reports/export's raid branch, GET /api/reports/pack, AND the
 // live GET /api/raid screen route all call — factored out so there is
@@ -4840,6 +4898,13 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
         due: '',
         status: 'todo',
         source,
+        // [security] T-ERM-01/WR-03 (260810-erm): retention clearance is
+        // always the fixed `hr` area, stamped here at conversion time —
+        // mirrors this same route's RAID-entry stamp a few lines below, so
+        // resolveTaskClearanceArea() never needs to re-derive it from
+        // `source`, and deleting this flight-risk entry later can never
+        // widen this task's audience back to the whole deal team.
+        clearanceArea: 'hr',
         createdAt: new Date().toISOString(),
       };
       tLane.push(task);
@@ -5404,6 +5469,13 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
         due: '',
         status: 'todo',
         source,
+        // [security] T-ERM-01/WR-03 (260810-erm): the resolved clearance
+        // area is stamped onto the TASK at conversion time, mirroring this
+        // same route's RAID-entry stamp a few lines below —
+        // resolveTaskClearanceArea() prefers this stamp over source-
+        // parsing, so deleting this finding later can never widen this
+        // task's audience back to the whole deal team.
+        clearanceArea: finding.area,
         createdAt: new Date().toISOString(),
       };
       tLane.push(task);
@@ -5567,6 +5639,15 @@ app.get('/api/notifications', (req, res) => {
     }
   }
   const today = new Date(nowMs).toISOString().slice(0, 10);
+  // [security] T-ERM-08 (260810-erm): DOCUMENTED ACCEPTED RESIDUAL — the
+  // tasks_overdue/tasks_blocked nudge counts below are computed over the
+  // UNfiltered taskLane(db), not reportTaskRows(), deliberately. They are
+  // aggregate integers with no title/name/owner attached, exactly matching
+  // the existing accepted treatment of the raidHigh nudge count immediately
+  // below (which is likewise computed over the unfiltered raidLane(db)) —
+  // an uncleared viewer learns only a count, never which task or entry it
+  // is. Do not "fix" this to reportTaskRows() without also revisiting the
+  // raidHigh precedent it mirrors.
   const tasks = taskLane(db);
   const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
   if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
@@ -5641,7 +5722,10 @@ app.get('/api/reports/export', (req, res) => {
     } else if (dataset === 'workstreams') {
       // Single server-side implementation — see computeWorkstreamRollup(db)
       // next to taskLane(db) above. Never re-derived here.
-      rows = computeWorkstreamRollup(db);
+      // [security] T-ERM-03 (260810-erm): caller-aware since Task 1 — a
+      // hidden hr-retention task can no longer inflate the ws_hr count for
+      // an uncleared viewer.
+      rows = computeWorkstreamRollup(db, deal, req.portalUser);
       columns = [
         { key: 'id', header: 'ID' },
         { key: 'label', header: 'Label' },
@@ -5652,9 +5736,12 @@ app.get('/api/reports/export', (req, res) => {
         { key: 'ragStatus', header: 'RAG status' },
       ];
     } else if (dataset === 'tasks') {
-      // No per-item clearance concept exists on tasks today — every deal
-      // member sees every task, so no filter applies here (07-02-PLAN.md).
-      rows = taskLane(db);
+      // [security] T-ERM-01 (260810-erm): tasks now carry the SAME clearance
+      // concept as RAID — reportTaskRows() is the single filtered read
+      // GET /api/integration-tasks and the PDF pack both call too, so a
+      // converted MNPI task (hr-flight-risk or dd-finding provenance) is
+      // never republished here to a caller uncleared for its stamped area.
+      rows = reportTaskRows(db, deal, req.portalUser);
       columns = [
         { key: 'id', header: 'ID' },
         { key: 'title', header: 'Title' },
@@ -5801,9 +5888,14 @@ app.get('/api/reports/pack', async (req, res) => {
     // and the CSV disagree. No internal HTTP request to the app's own routes
     // is issued anywhere in this handler — every read below is a direct
     // function call.
+    // [security] T-ERM-01/T-ERM-03 (260810-erm): reportTaskRows() and the
+    // now caller-aware computeWorkstreamRollup() are the SAME clearance-
+    // filtered reads the CSV export uses above, so the pack's model.tasks,
+    // hasAnyData, and audit rowCounts.tasks all reflect the caller's own
+    // cleared set automatically.
     const raid = reportRaidRows(db, deal, req.portalUser);
-    const workstreams = computeWorkstreamRollup(db);
-    const tasks = taskLane(db);
+    const workstreams = computeWorkstreamRollup(db, deal, req.portalUser);
+    const tasks = reportTaskRows(db, deal, req.portalUser);
     const synergyCtx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
     // RPT-03 (D-04 Section 4, amended 2026-08-09): each synergy row also
     // carries `stageAtBaseline`, resolved server-side from the SAME
@@ -6794,6 +6886,12 @@ module.exports.derivedDecisionFor = derivedDecisionFor;
 // deleted from a hand-built lane) directly, without needing a live DELETE
 // sequence against a real finding first.
 module.exports.resolveRaidEntryClearanceArea = resolveRaidEntryClearanceArea;
+// [security] T-ERM-01 (260810-erm): exposed for the same pure-function
+// unit-check rationale as resolveRaidEntryClearanceArea immediately above —
+// a test can drive the orphaned-provenance and stamp-wins cases directly
+// against a hand-built task, without a live convert-then-DELETE sequence.
+module.exports.resolveTaskClearanceArea = resolveTaskClearanceArea;
+module.exports.reportTaskRows = reportTaskRows;
 // D-19/D-21 (06-07): exposed so Plan 08's seed verification and any
 // Phase-7 consumer can call the SAME rollup implementation this route uses,
 // without booting the HTTP server for every pure-tally case.
