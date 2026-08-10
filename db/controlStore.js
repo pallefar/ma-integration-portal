@@ -64,15 +64,26 @@ function findUser(username) {
  * so a call site that typos a username fails loudly instead of silently
  * doing nothing.
  */
+// D-09 (Phase 8): updateUser() is a direct-SQL writer that bypasses
+// writeDb() entirely, so it needs its own lock acquisition to be covered by
+// the phase's serialization contract. The SELECT that finds the account row
+// now runs INSIDE the wrapped transaction (via the same captured `conn`
+// handle, `.immediate` acquiring BEGIN IMMEDIATE up front) rather than
+// before it — a read left outside the transaction would re-open the exact
+// last-writer-wins window this wrap exists to close (08-RESEARCH.md Pitfall
+// 4 / Open Question 1).
 function updateUser(username, patch) {
   const conn = controlConn();
-  const row = conn.prepare('SELECT id, data FROM users').all()
-    .map((r) => ({ id: r.id, user: JSON.parse(r.data) }))
-    .find((r) => r.user.username === username);
-  if (!row) throw new Error(`db/controlStore.js: updateUser() found no account for username '${username}'`);
-  const updated = { ...row.user, ...patch };
-  conn.prepare('UPDATE users SET data = ? WHERE id = ?').run(JSON.stringify(updated), row.id);
-  return updated;
+  const apply = conn.transaction((username, patch) => {
+    const row = conn.prepare('SELECT id, data FROM users').all()
+      .map((r) => ({ id: r.id, user: JSON.parse(r.data) }))
+      .find((r) => r.user.username === username);
+    if (!row) throw new Error(`db/controlStore.js: updateUser() found no account for username '${username}'`);
+    const updated = { ...row.user, ...patch };
+    conn.prepare('UPDATE users SET data = ? WHERE id = ?').run(JSON.stringify(updated), row.id);
+    return updated;
+  }).immediate;
+  return apply(username, patch);
 }
 
 // --- deals (blob-per-row + `status` metadata column, control-schema.sql) --
@@ -229,12 +240,21 @@ function findUnfinishedDealFor({ createdBy, name, targetCompany }) {
  * `members`, `memberGrants`, `status` and every other field survive
  * untouched — only `setup` is ever touched by this function.
  */
+// D-09 (Phase 8): a direct-SQL writer bypassing writeDb() — wrapped exactly
+// like updateDealMembers()/setDealMemberGrants() below, so this read-modify-
+// write pair is covered by the phase's serialization contract. getDeal()'s
+// read now runs INSIDE the transaction (same captured `conn`, so it's part
+// of the same `.immediate`-acquired locked section), not before it.
 function updateDealSetup(dealId, patch) {
-  const deal = getDeal(dealId);
-  if (!deal) throw new Error(`db/controlStore.js: updateDealSetup() found no deal '${dealId}'`);
-  const updated = { ...deal, setup: { ...(deal.setup || {}), ...(patch || {}) } };
-  controlConn().prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
-  return updated;
+  const conn = controlConn();
+  const apply = conn.transaction((dealId, patch) => {
+    const deal = getDeal(dealId);
+    if (!deal) throw new Error(`db/controlStore.js: updateDealSetup() found no deal '${dealId}'`);
+    const updated = { ...deal, setup: { ...(deal.setup || {}), ...(patch || {}) } };
+    conn.prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
+    return updated;
+  }).immediate;
+  return apply(dealId, patch);
 }
 
 /** D-03: replace a deal's members[] allowlist wholesale. Throws (does not
@@ -242,12 +262,24 @@ function updateDealSetup(dealId, patch) {
  * an upsert" contract above. Does NOT release any removed member's session
  * binding — that is server.js route handler's job (it has req/sessions
  * access this module deliberately does not, see this file's header). */
+// D-09 (Phase 8): closes 08-RESEARCH.md Pitfall 4 / Open Question 1 — this is
+// a direct-SQL writer bypassing writeDb(), so without its own lock
+// acquisition, two concurrent calls each read the deal, each mutate their
+// own copy of `members`, and the second UPDATE silently clobbers the first —
+// no SQLITE_BUSY, no thrown error, just a lost membership change on MNPI
+// access-control data. getDeal()'s read now runs INSIDE the `.immediate`
+// transaction (same captured `conn`), so both statements execute under one
+// acquired write lock.
 function updateDealMembers(dealId, members) {
-  const deal = getDeal(dealId);
-  if (!deal) throw new Error(`db/controlStore.js: updateDealMembers() found no deal '${dealId}'`);
-  const updated = { ...deal, members: Array.from(new Set((members || []).map(String))) };
-  controlConn().prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
-  return updated;
+  const conn = controlConn();
+  const apply = conn.transaction((dealId, members) => {
+    const deal = getDeal(dealId);
+    if (!deal) throw new Error(`db/controlStore.js: updateDealMembers() found no deal '${dealId}'`);
+    const updated = { ...deal, members: Array.from(new Set((members || []).map(String))) };
+    conn.prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
+    return updated;
+  }).immediate;
+  return apply(dealId, members);
 }
 
 /**
@@ -264,16 +296,25 @@ function updateDealMembers(dealId, members) {
  * the security event, exactly like the deal-create/deal-archive/deal-members
  * call sites already do.
  */
+// D-09 (Phase 8): same wrap as updateDealMembers() above, for the same
+// reason — DD-area clearance grants are MNPI access-control data, and an
+// unwrapped read-modify-write pair here means two concurrent grants to
+// different users on the same deal can silently drop one. getDeal()'s read
+// now runs INSIDE the `.immediate` transaction.
 function setDealMemberGrants(dealId, username, ddAreas) {
-  const deal = getDeal(dealId);
-  if (!deal) throw new Error(`db/controlStore.js: setDealMemberGrants() found no deal '${dealId}'`);
-  const set = new Set((ddAreas || []).map(String));
-  const ordered = DD_AREA_IDS.filter((id) => set.has(id));
-  const memberGrants = { ...(deal.memberGrants || {}) };
-  memberGrants[username] = { ddAreas: ordered };
-  const updated = { ...deal, memberGrants };
-  controlConn().prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
-  return updated;
+  const conn = controlConn();
+  const apply = conn.transaction((dealId, username, ddAreas) => {
+    const deal = getDeal(dealId);
+    if (!deal) throw new Error(`db/controlStore.js: setDealMemberGrants() found no deal '${dealId}'`);
+    const set = new Set((ddAreas || []).map(String));
+    const ordered = DD_AREA_IDS.filter((id) => set.has(id));
+    const memberGrants = { ...(deal.memberGrants || {}) };
+    memberGrants[username] = { ddAreas: ordered };
+    const updated = { ...deal, memberGrants };
+    conn.prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
+    return updated;
+  }).immediate;
+  return apply(dealId, username, ddAreas);
 }
 
 /** DD-04: the whole `memberGrants` map for `dealId`, or `{}` when the deal
@@ -290,12 +331,20 @@ function getDealMemberGrants(dealId) {
  * agree). Leaves the deal's own database file on disk completely untouched —
  * archival is reversible-in-spirit (the file survives), unlike deleteDeal()
  * below. Throws if the deal does not exist. */
+// D-09 (Phase 8): a direct-SQL writer bypassing writeDb() — wrapped like the
+// other four functions in this file so this read-modify-write pair is
+// covered by the phase's serialization contract. getDeal()'s read now runs
+// INSIDE the `.immediate` transaction.
 function archiveDeal(dealId) {
-  const deal = getDeal(dealId);
-  if (!deal) throw new Error(`db/controlStore.js: archiveDeal() found no deal '${dealId}'`);
-  const updated = { ...deal, status: 'archived' };
-  controlConn().prepare('UPDATE deals SET status = ?, data = ? WHERE id = ?').run('archived', JSON.stringify(updated), dealId);
-  return updated;
+  const conn = controlConn();
+  const apply = conn.transaction((dealId) => {
+    const deal = getDeal(dealId);
+    if (!deal) throw new Error(`db/controlStore.js: archiveDeal() found no deal '${dealId}'`);
+    const updated = { ...deal, status: 'archived' };
+    conn.prepare('UPDATE deals SET status = ?, data = ? WHERE id = ?').run('archived', JSON.stringify(updated), dealId);
+    return updated;
+  }).immediate;
+  return apply(dealId);
 }
 
 /**
