@@ -66,3 +66,10 @@ graphify-out/
 # showcase (CLAUDE.md Constraints) must keep working, so it stays tracked.
 public/sent_emails/*
 !public/sent_emails/comm_1783454326531.html
+
+# Security review write-ups that analyze STILL-DOWNLOADABLE old public release
+# artifacts (v1.x-v2.0.1) at file:line — kept local-only so they do not become a
+# public exploit guide for bundles that cannot be patched. Milestone-review reports
+# for FIXED, never-shipped bugs remain tracked.
+.planning/security/RELEASED-TAGS-REVIEW.md
+.planning/security/HISTORY-SUPPLYCHAIN-REVIEW.md
