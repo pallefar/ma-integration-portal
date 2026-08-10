@@ -1,168 +1,253 @@
-# Project Research Summary
+# Research Summary: v2.2.0 Shared-Host Multi-User Milestone
 
-**Project:** M&A Integration Portal — Real-Deal Milestone
-**Domain:** Foundation hardening (file-store to SQLite, mandatory auth, audit log, validation) plus M&A/IMO integration software (due diligence, synergy value capture, IMO reporting/exports, org design and talent retention)
-**Researched:** 2026-07-23
-**Confidence:** HIGH (stack, architecture), MEDIUM (features, pitfalls — cross-checked against multiple vendor/practice sources, no single-source claims presented as fact)
+**Domain:** Transforming a single-process, laptop-local M&A integration portal into a shared-host tool with concurrent multi-user collaboration  
+**Researched:** 2026-08-10  
+**Overall Confidence:** HIGH (concurrency and deployment guidance grounded in codebase and sqlite.org; feature dependencies mapped against existing app structure; pitfall coverage comprehensive)
+
+---
 
 ## Executive Summary
 
-This milestone turns a demo-shaped Express/vanilla-JS app into a tool an Integration Lead runs a real acquisition on, and all four researchers converged strongly on the same shape of answer. The foundation work — replacing db.json with SQLite, making auth mandatory, adding an audit log, and validating every write — is not incremental hardening on top of the current architecture; it is a structural rewrite of exactly the mechanisms (readDb/writeDb, stashActiveCustomProject/snapshotCms, the opt-in PORTAL_AUTH gate) that make demo/real separation fragile today. The single most important convergent finding is that demo/real separation should be file-per-deal SQLite (control.db + demo.db + deals/<id>.db), not a demoMode boolean/column — both Stack and Architecture research independently arrived at this, and Pitfalls research explains precisely why the column approach is the current bug class (40+ scattered demoMode checks, shadow custom* arrays) rather than a new risk.
+This milestone transforms the existing Phase-1-validated demo portal into a production-ready, multi-user tool suitable for running a real TE acquisition with 1 Integration Lead + 4–10 workstream leads collaborating on shared records. The research converges across three independent sources (STACK, ARCHITECTURE, and direct code verification) on a single concurrency architecture: **Option B — native SQLite multi-process WAL write-serialization with `.immediate()` transactions and busy-retry/503 handling**. This requires only two targeted changes to `db/store.js` (no call-site changes to the ~90 existing endpoints) and delivers the milestone's core safety guarantees—concurrent writes are file-level atomic, and same-record conflicts are detectable and recoverable through optimistic locking (version column), a separate phase sequenced after the concurrency architecture lands. Deployment patterns split into three shapes (self-managed Linux host, container/platform-run with `replicas: 1`, app-only) with a clean MNPI boundary enforced through `.dockerignore` mirroring `.gitignore`. The highest concentration of new pitfalls surfaces in containerization, role/clearance-change revocation, and session management at scale; these are well-understood by domain and addressable through explicit threat-model passes during planning phases. The milestone is achievable within existing vanilla-JS + SQLite + Express constraints without Postgres migration (deferred to a speculative v3.0), without a single-writer broker (unnecessary complexity at this team scale), and without real-time collaborative editing (ruled out by the user's chosen optimistic-locking architecture). Total engineering cost is **medium** (7–8 phases, ~35–45 story-points total estimated by research); the gating dependency is the concurrency architecture proof (multi-process soak test) before multi-user collaboration features can ship safely.
 
-The recommended build order is F0 (schema/migration) then F1 (mandatory auth + roles) then F2 (deal-resolver + audit triggers, where "must never share a store" is actually satisfied in code) then F3 (write validation), using better-sqlite3@13 (synchronous API matching the existing readDb/writeDb mental model, N-API prebuilt binaries fitting the zero-install-bundle precedent already set by @napi-rs/canvas) and zod for validation. Clean-room enforcement is a bounded RESOURCE_POLICY middleware over roughly 10-15 sensitive endpoints (DD, org design, retention, synergy financials) rather than a rewrite of all ~90 routes — but Pitfalls research is emphatic that this must be field-level server-side filtering, not route-level gating or frontend hiding, and that unauthorized read of MNPI (not just write) is the actual compliance event, so read-endpoint gating cannot be deferred to a later phase.
-
-After the foundation, the four capability areas sequence by data dependency, not by headline importance: DD workspace and synergy value capture can build in parallel (both extend existing entities — integrationTasks/raidEntries via the proven from-remediation linkage, and synergyInitiatives with new baseline/phasing/CTA/stage columns); org/talent design is the most independent and the safest to trim first if scope needs to shrink; IMO reporting is last because its rollups need DD and synergy data to exist, but the cheap CSV/JSON export should ship as an immediate quick win independent of the fancier PDF pack, since the app currently has zero export endpoints at all. The key risks are schema debt disguised as "drop-in migration" (Pitfall 1), auth-retrofit route gaps from enumerating sensitive endpoints by memory instead of programmatically (Pitfall 5), clean-room implemented as UI-only field hiding (Pitfall 7), and synergy/IMO numbers nobody trusts because baseline/staleness/ownership aren't first-class (Pitfall 12) — each has a concrete, cheap prevention documented below and mapped to a phase.
+---
 
 ## Key Findings
 
-### Recommended Stack
+### From STACK.md: Core Technologies & Versions
 
-Core additions are minimal and deliberately avoid new build tooling: better-sqlite3@13.0.1 for the persistence layer, zod@4.4.3 for write-path validation, and express-rate-limit@8.6.0 to replace the ad hoc login throttle. Password hashing (crypto.scryptSync) and session cookies (custom HMAC-signed) are already correctly implemented and should be promoted/tuned, not replaced. node:sqlite is explicitly rejected as still experimental until Node 26 (the bundled portable Node is 22.23.1); sqlite3 (async) is rejected for its legacy per-ABI native-binary model, which is a worse version of the exact packaging problem better-sqlite3's N-API binaries solve. No ORM — hand-written parameterized SQL plus numbered .sql migration files, matching the codebase's zero-abstraction, no-build-step style.
+**New dependencies (v2.2.0 only):**
+- `express-rate-limit@8.6.2` — only new npm dependency; in-memory store correct for single-process recommendation
+- systemd / container runtime — OS-native process supervision, no new npm deps
+- Caddy 2.11.4 or nginx 1.30.4 — TLS termination + reverse proxy (not inside Node)
 
-**Core technologies:**
-- better-sqlite3 13.0.1: SQLite/WAL persistence layer — synchronous API matches existing readDb()/writeDb() style; single-thread execution eliminates the concurrent-write race outright without a mutex
-- zod 4.4.3: schema validation on every write endpoint — zero build step, directly closes CONCERNS.md's Critical input-validation gap
-- express-rate-limit 8.6.0: maintained login-throttle replacement, once auth is mandatory and network-reachable
+**Critical constraints:**
+- `better-sqlite3@13.0.1` prebuilds require **glibc >= 2.38** (not Alpine/musl)
+- Optimistic locking via version field inside JSON blob (reuses `json_extract()`, no schema migration)
+- Backup strategy: `better-sqlite3`'s `.backup()` API (WAL-aware), not raw file copy
 
-### Expected Features
-
-Four capability areas, each researched against Midaxo/Devensoft/DealRoom/SecureDocs practice and PMI/HR consulting sources. The consistent theme: build the minimum realistic version of each capability for a single-IL internal tool, and explicitly reject the "market product" version (full VDR, ML flight-risk scoring, PPTX generation, HRIS-grade org charts) as disproportionate scope for this milestone.
-
-**Must have (table stakes):**
-- DD request list + functional-area taxonomy (~10 standard categories) with findings register routing to task/RAID via the existing remediation linkage
-- Clean-room accessTier (core_team/extended_team) field on DD records, enforced by role
-- Synergy baseline, cost-to-achieve, and phasing (planned/realized per period) fields — fixes the "single euro-M pair" problem named in PROJECT.md
-- Synergy confidence stage-gating (idea to validated to committed to captured) and synergy-to-task linkage
-- CSV/JSON raw data export — closes the "no export endpoint exists at all" gap at the lowest possible effort
-- Org role-mapping table (role, level, reports-to, mapped employee, decision status) — no visual org chart needed
-
-**Should have (differentiators):**
-- Auto-computed net benefit/variance and rollups feeding the reporting pack
-- Cadence-aware pack variants (weekly operating view vs. monthly board view)
-- Flight-risk register with rubric-based (not ML) risk levels, redundancy-communication-overdue nudges
-
-**Defer (v2+):**
-- Generated PDF/PPTX steering-committee pack (build after Areas 1-2 data is proven), historical pack archive, two-stage org design tracking, any AI-assisted document extraction, interactive BI dashboarding, full VDR/document ACL system, automated ML flight-risk scoring, scheduled/emailed report cadence
-
-### Architecture Approach
-
-The system splits server.js (~3,200 lines) into routes/*.js + services/*.js + middleware/*.js, mounted around a small pipeline: session gate, then deal-resolver (attaches req.dealId/req.isDemo/req.dealDb), then access-policy (RESOURCE_POLICY-driven 403s), then actor-stamp (for audit triggers), then route handler. This is a refactor into plain require()/express.Router(), not a framework migration — consistent with the vanilla-JS, no-build-step constraint.
-
-**Major components:**
-1. db/dealResolver.js — maps selected deal to a physical SQLite file/connection, replacing stashActiveCustomProject/snapshotCms/applyCmsToTopLevel
-2. middleware/accessPolicy.js — data-driven RESOURCE_POLICY config gating ~10-15 sensitive endpoints (DD, org design, retention) by role + workstream, leaving the other ~75+ content/CMS endpoints to the mandatory-auth gate alone
-3. db/triggers.sql + middleware/auditActor.js — SQLite AFTER INSERT/UPDATE/DELETE triggers write to audit_log in control.db, so every write path (including future ones nobody remembers to instrument) is captured automatically
-
-### Critical Pitfalls
-
-1. **Migration reshapes data instead of normalizing it** — treat the SQLite migration as a schema-design exercise for tables new capabilities depend on (DD findings, synergy, audit log, users), not a 1:1 JSON-blob-to-table serialization swap; CMS/i18n/slide content is legitimately fine as JSON columns.
-2. **Migration is a one-way door** — make it idempotent/re-runnable against a fresh db.json snapshot, with a diff/checksum verification step, and keep the pre-migration file archived permanently as a rollback oracle.
-3. **Auth retrofit has route-shaped holes** — enumerate all ~90 endpoints programmatically (not by memory) and require an explicit auth decision per route via a global allow-list, not per-route opt-in; re-run the enumeration whenever new capability-area routes are added.
-4. **Clean-room built as route-level gating instead of field-level filtering** — sensitive fields (valuation, DD findings, retention data) must be filtered server-side per clean-room membership on every response; verify by curling the raw API as a non-clean-room user, not just checking the UI.
-5. **Synergy/IMO numbers management doesn't trust** — model baseline changes as an append-only history table (not a mutable field), give every initiative a single owner with overlap flags, and distinguish last_confirmed_at (owner-attested) from last_updated_at (system-touched) so generated packs visibly flag stale line items.
-
-## Implications for Roadmap
-
-Based on research, suggested phase structure:
-
-### Phase 1: Schema & Migration (F0)
-**Rationale:** Gates everything else — no capability area can attach data until tables exist. Getting normalization right here is cheap; getting it wrong under real deal data is expensive to fix later (Pitfall 1).
-**Delivers:** control.schema.sql / deal.schema.sql / demo.schema.sql, a re-runnable/diffable migrate-from-json.js, vendored better-sqlite3 prebuilt binaries for all four release-zip platforms.
-**Uses:** better-sqlite3@13.0.1, hand-numbered migration files, WAL/pragma configuration.
-**Avoids:** Pitfall 1 (reshaping not normalizing), Pitfall 2 (one-way-door migration), Pitfall 11 (real DB file committed to git — gitignore/naming designed together with the schema).
-
-### Phase 2: Mandatory Auth + Roles (F1)
-**Rationale:** Promotes existing PORTAL_AUTH rather than rebuilding — the hard part (scrypt hashing, HMAC-signed sessions) is already correct; the work is enforcement completeness and role granularity. Must land before any real deal data, and before F2 (access policy needs real roles).
-**Delivers:** Mandatory session gate (no "unset = open" branch), expanded role enum (il, ws_lead_*), programmatically-generated 100%-coverage route/auth-decision checklist, first-run admin bootstrap.
-**Addresses:** Every capability area's access requirements downstream.
-**Avoids:** Pitfall 5 (route gaps from memory-based enumeration), Pitfall 6 (read-endpoint MNPI exposure deprioritized vs. writes).
-
-### Phase 3: Deal-Resolver + Audit Log (F2)
-**Rationale:** This is where "real-deal data must never share a store" is actually satisfied in code, not just in policy — the file-per-deal pattern (Stack + Architecture converged independently). Must follow F0 (files to resolve to) and F1 (req.user for audit-actor stamping).
-**Delivers:** db/dealResolver.js, middleware/auditActor.js, generated audit triggers on every table, demo-only functions (time-travel, XP/leaderboard) gated at their own entry point (not just route/UI level), client-storage keys namespaced by mode.
-**Implements:** Architecture Pattern 1 (file-per-mode persistence) and Pattern 4 (trigger-based audit log).
-**Avoids:** Pitfall 3 (stale-cache reintroduction), Pitfall 4 (wrong transaction boundaries), Pitfall 8 (audit log not tamper-resistant), Pitfall 9 (demo/real shared mutating functions), Pitfall 10 (frontend global-state mode leak).
-
-### Phase 4: Write Validation (F3)
-**Rationale:** Natural byproduct of the routes/ split happening table-by-table in F0-F2; closes CONCERNS.md's Critical input-validation gap with the exact fields it names.
-**Delivers:** zod schema per resource type (validators/projects.js, etc.), applied at every write endpoint.
-**Uses:** zod@4.4.3.
-
-### Phase 5: Due Diligence Workspace
-**Rationale:** First capability area because clean-room is the other hard architectural requirement besides mode separation; validates accessPolicy.js before org design reuses the same pattern.
-**Delivers:** DD request list + functional-area taxonomy, findings register with severity/owner, findings-to-task/RAID routing (reusing from-remediation), accessTier clean-room field enforced server-side (field-level, not route-level).
-**Addresses:** FEATURES.md Area 1 table stakes + P1 differentiators.
-**Avoids:** Pitfall 7 (clean-room as route-gate not field-filter) — the pattern established here is reused by Areas 3 and 4.
-
-### Phase 6: Synergy Value Capture (can run in parallel with Phase 5)
-**Rationale:** Lowest new-architecture risk — extends the existing synergyInitiatives table with new columns and a time-series child table, no new access model, shares no new middleware surface with DD.
-**Delivers:** baseline, costToAchieve, stage, stageHistory[], phasing[], deliveredByTaskIds[] on synergyInitiatives; append-only synergy_baseline_events table; last_confirmed_at/last_confirmed_by staleness signal.
-**Addresses:** FEATURES.md Area 2 table stakes.
-**Avoids:** Pitfall 12 (untrustworthy synergy numbers — double-counting, baseline drift, stale-as-current).
-
-### Phase 7: IMO Reporting & Exports
-**Rationale:** Last by data dependency, though it's the headline deliverable — its rollups need Phase 5 (DD) and Phase 6 (synergy) data to exist, plus the audit log (Phase 3) for the change-log section. Ship CSV/JSON export first as a standalone quick win, independent of the PDF pack.
-**Delivers:** CSV/JSON data export of tasks/RAID/synergies (P1, immediate); generated PDF steering-committee pack with weekly/monthly cadence variants (P2, after Phase 5/6 data is proven); staleness-visible report rendering (confirmed vs. carried-over line items).
-**Addresses:** FEATURES.md Area 3 — closes the "app has import but zero export endpoints" gap named as near-blocker-severity in PROJECT.md.
-**Avoids:** Pitfall 12 (shared staleness-visibility convention with Phase 6), UX pitfall of packs presenting stale numbers with equal visual confidence.
-
-### Phase 8: Org Design & Talent Retention
-**Rationale:** Most independent of the four capability areas — touches only employees, nothing else in the milestone depends on it. Safest to trim first if the milestone needs to shrink. Sequenced after DD so its pre_close_restricted access rule reuses the already-proven accessPolicy.js pattern rather than inventing it twice.
-**Delivers:** orgRoles (role/level/reports-to/mapped-employee/decision status), flightRiskRegister (rubric-based risk level, not ML), redundancy-communication-overdue nudge.
-**Addresses:** FEATURES.md Area 4 table stakes.
-
-### Phase Ordering Rationale
-
-- Foundation (Phases 1-4) gates all four capability areas per PROJECT.md's own explicit "foundation first" decision — this isn't a new finding, all four researchers independently confirmed the sequencing holds because DD clean-room, flight-risk/redundancy visibility, and steerco pack contents all touch the most sensitive data in the app.
-- DD and synergy (Phases 5-6) can build in parallel post-foundation since they extend independent existing entities with no shared new middleware surface.
-- Reporting (Phase 7) is sequenced last by data dependency, not by priority — it would ship with two of five sections empty if built before DD/synergy data models exist.
-- Org design (Phase 8) is the safest scope-cut candidate — nothing else in the milestone depends on it.
-
-### Research Flags
-
-Phases likely needing deeper research during planning:
-- **Phase 1 (Schema & Migration):** MEDIUM confidence on the exact better-sqlite3 v13 bundled-platform binary manifest — verify by inspecting node_modules/better-sqlite3/ after install, before assuming all four release-zip platforms are covered.
-- **Phase 7 (IMO Reporting):** PDF-generation approach for this vanilla-JS/no-build-step stack needs concrete implementation research (which existing print-to-PDF pattern in the app to reuse) once this phase is reached.
-- **Phase 5 (DD Workspace):** exact workstream-lead role taxonomy is an open question (see Gaps below) — needs resolution before accessPolicy.js's RESOURCE_POLICY can be finalized.
-
-Phases with standard patterns (skip research-phase):
-- **Phase 2 (Mandatory Auth):** existing PORTAL_AUTH implementation is already correct; this is enforcement completeness, well-documented pattern.
-- **Phase 6 (Synergy):** pure schema extension of an existing entity, no new architecture.
-- **Phase 4 (Write Validation):** zod usage pattern is standard and already demonstrated in STACK.md.
-
-## Confidence Assessment
-
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | HIGH | All package versions verified live against npm registry; only the exact better-sqlite3 v13 bundled-binary platform manifest is MEDIUM (needs post-install verification) |
-| Features | MEDIUM | Cross-checked against multiple vendor sources (Midaxo, Devensoft, DealRoom/SecureDocs) and PMI/HR consulting guides; exact vendor UI specifics flagged LOW inline where noted |
-| Architecture | HIGH | Grounded directly in this codebase's server.js and .planning/codebase/*; SQLite/audit-trigger patterns cross-checked against current library docs |
-| Pitfalls | MEDIUM-HIGH | SQLite/WAL mechanics verified against sqlite.org + better-sqlite3 official docs; auth/MNPI/reporting-trust pitfalls are established patterns applied specifically to this codebase's documented shape |
-
-**Overall confidence:** HIGH — all four researchers converged independently on the same architectural conclusions (file-per-deal, foundation-first, bounded access-policy middleware), which is a strong cross-validation signal.
-
-### Gaps to Address
-
-- **SQLCipher (at-rest encryption) vs. OS full-disk encryption (FileVault/BitLocker) as baseline expectation** — Pitfalls research flags this as an open security decision; needs to be resolved before real deal data is entered, not deferred silently. Flag for requirements gate.
-- **Whether the shared-host move happens within this milestone or after** — affects whether multi-process WAL concurrency and the "WAL doesn't work over network filesystems" constraint need addressing now or can wait.
-- **TE export format: PDF vs. PPTX** — FEATURES.md recommends PDF-only (rejecting native PPTX as disproportionate engineering investment) but this is a stakeholder expectation question, not purely technical; confirm with TE before Phase 7.
-- **Whether TE already licenses a VDR (Datasite/Intralinks)** — directly affects how thin the DD clean-room feature can legitimately be; if TE has no VDR, the DD workspace's document-tracking scope may need to expand slightly beyond the "reference/link only" recommendation.
-- **Exact workstream-lead role taxonomy** (ws_lead_hr, ws_lead_legal, etc.) — Architecture research proposes examples but this needs concrete definition before Phase 2's role enum and Phase 5's RESOURCE_POLICY can be finalized.
-
-## Sources
-
-### Primary (HIGH confidence)
-- npm registry, verified live via npm view (2026-07-23): better-sqlite3 13.0.1, zod 4.4.3, express-rate-limit 8.6.0, csrf-csrf 4.0.3
-- SQLite WAL official docs (sqlite.org/wal.html), better-sqlite3 performance docs (GitHub WiseLibs), Node.js SQLite docs (nodejs.org/api/sqlite.html)
-- Direct codebase inspection: /Users/karstenhaldan/M&A/server.js, .planning/codebase/CONCERNS.md, .planning/codebase/ARCHITECTURE.md, .planning/codebase/STRUCTURE.md, .planning/PROJECT.md
-
-### Secondary (MEDIUM confidence)
-- Midaxo (midaxo.com/platform/m-a-due-diligence), Devensoft (devensoft.com/platform/synergy-tracking), DealRoom/SecureDocs (securedocs.com), BCG synergy PMI, L.E.K. synergy, Umbrex PMI Playbook 2025, WTW org design/talent flight, KPMG talent flight
-- Simon Willison — SQLite JSON audit log pattern
-
-### Tertiary (LOW confidence)
-- Exact better-sqlite3 v13.0.0 GitHub release asset manifest — inferred from release commentary, not directly enumerated; verify post-install before final release build
+**What to avoid:**
+- Node cluster/PM2 cluster mode, Alpine base image, cross-process advisory locks, network-filesystem-backed SQLite
 
 ---
-*Research completed: 2026-07-23*
-*Ready for roadmap: yes*
+
+### From FEATURES.md: MVP Scope & Dependencies
+
+**P1 (v2.2.0 launch):**
+1. Optimistic-locking conflict UX (version + 409 + reload) — prevents silent same-record data loss
+2. Workstream-lead invite/assign + per-area clearance — the milestone's defining collaboration feature
+3. Idle session timeout — MNPI leak vector control
+4. Self-service active-session list + revoke — "left myself logged in" self-recovery
+5. Inline "who last touched this" attribution — trust signal via existing audit log
+
+**P2 (post-v2.2.0, with real-usage validation):**
+- Per-step wizard ownership handoff + multi-user resume state
+- User-facing activity feed (read-only audit projection)
+- Coarse presence signal ("N on this deal")
+- Admin-forced revoke of another user's session
+
+**Explicitly rejected (anti-features):**
+- Real-time collaborative editing (contradicts optimistic locking)
+- WebSocket live presence, field-level locking, rich notifications, anomaly detection
+
+---
+
+### From ARCHITECTURE.md: The Concurrency Decision (Converged Finding)
+
+**Critical insight:** The premise "snapshot merge is in-process only" is half right, and the half that's wrong matters enormously.
+
+`writeDb()` compares **this request's own snapshot** against payload ids, issuing real INSERT/UPDATE/DELETE by id inside one SQLite transaction against **the live file**. Nothing about that algorithm depends on reader/writer being the same OS process. It depends on:
+1. `readDb()` reading actually-current rows (WAL handles this for any process)
+2. Transaction atomicity (SQLite's cross-process locking via WAL handles this; already configured)
+
+Same-record concurrent edits remain unsafe (no version check) — **optimistic locking closes this, identically whether one or five Node processes**. WAL's cross-process locking already protects collection-membership edits (insert/delete races).
+
+**Recommendation: Option B — native SQLite WAL with `.immediate()` + busy-retry**
+
+| Criterion | Option A: Broker | **Option B: Native WAL** | Option C: Postgres |
+|-----------|---|---|---|
+| Correctness | Preserved (redundant) | **Preserved — no change** | Preserved |
+| New components | Writer + IPC | **None** | Store, pool, migrations |
+| Call-site changes | None | **None** | None (C1 facade) |
+| Horizontal scaling (N>1) | Yes | **No — replicas: 1 only** | Yes |
+| Zero-install zip | Survives | **Survives** | Breaks (needs server) |
+| Demo showcase | Survives | **Survives** | Survives (if dual-backend) |
+| Engineering cost | Medium-high | **Low** | High |
+| Version | v2.2.0 | **v2.2.0** | Likely v3.0 |
+
+**Option B implementation (two tiny changes):**
+1. `.immediate()` on transaction in `writeDb()` — acquire write lock at start, fail fast under contention
+2. Busy-retry wrapper catching `SQLITE_BUSY`, jittered backoff, map to `503 Retry-After`
+3. Two-process soak test opening two `better-sqlite3` connections from two Node processes, concurrent writes
+
+**Optimistic locking (independent, sequences after architecture decision):**
+- Add `version INTEGER DEFAULT 1` inside item's JSON (reuses `json_extract()`)
+- Conditional UPDATE: `WHERE id=? AND version=?`, checking `.changes` to distinguish delete from conflict
+- Scope per-collection: RAID, tasks, DD findings, synergy, org/decision log
+- Separate phase after concurrency architecture lands
+
+---
+
+### From PITFALLS.md: 13 Critical Pitfalls Mapped to Phases
+
+| # | Pitfall | Prevention Phase | Severity |
+|---|---------|---------|----------|
+| 1 | Concurrency trap — multi-process without coordination | Concurrency architecture | CRITICAL |
+| 2 | Optimistic locking not atomic (TOCTOU) | Same as #1 | CRITICAL |
+| 3 | WAL checkpoint contention / unbounded `-wal` | Operational hardening | MAJOR |
+| 4 | Role/clearance change doesn't revoke sessions | Workstream-lead collaboration | MAJOR |
+| 5 | Session cookie loses `Secure` on real TLS | Deployment (self-managed host) | MAJOR |
+| 6 | No idle timeout / session inventory | Operational hardening | MAJOR |
+| 7 | Audit gaps on new collaborative routes | Workstream-lead + wizard | MAJOR |
+| 8 | Presence/activity leaks deal identity (MNPI) | Workstream-lead collaboration | CRITICAL |
+| 9 | `DEMO_OPEN=1` on shared host | Deployment | CRITICAL |
+| 10 | Backups unencrypted/unmanaged | Deployment + ops | MAJOR |
+| 11 | Rolling restarts drop writes / dual-process window | Deployment | MAJOR |
+| 12 | Demo/real separation erodes in packaging | Deployment (container) | MAJOR |
+| 13 | Container build/runtime MNPI + libc mistakes | Deployment (container) | MAJOR |
+
+**Key integration gotchas:**
+- TLS proxy + `ENABLE_HSTS=1` on Node — two independent setup steps
+- `DEMO_OPEN=1` inheritance from demo unit/image — must explicitly unset
+- Backups to unencrypted or non-TE-controlled locations — must be in runbook
+- Demo and real deployments on same volume — config contract must forbid
+
+---
+
+## Roadmap Implications: 7–8 Phase Build Order
+
+### Phase 1: Concurrency Architecture Decision + Proof (GATING)
+**Deliverable:** Two-process soak test proving Option B holds under realistic load  
+**Scope:** Multi-process test harness, concurrent-write scenarios, silent-loss detection  
+**Confidence:** HIGH  
+**Story points:** 13–21
+
+### Phase 2: Storage-Layer Hardening (GATES 3–7)
+**Deliverables:**
+- `.immediate()` + busy-retry in `writeDb()` (2 changes, 0 call-site mods)
+- Schema-migration runner (`schema_migrations` table, numbered `.sql` files)
+- `DATA_DIR` env-overridable, loopback-bind + trust-proxy, `uncaughtException` → log-then-exit
+- Health split: `/healthz` (liveness) + `/readyz` (readiness, migrations complete)
+
+**Confidence:** HIGH  
+**Story points:** 13–21
+
+### Phase 3: Optimistic Locking (AFTER 2; GATES 7)
+**Deliverables:**
+- Version-column migration for co-edited collections
+- Conditional UPDATE + 409 conflict detection
+- Client reload UX (preserve in-progress edit, show diff, reapply)
+- Concurrency test suite
+
+**Confidence:** MEDIUM-HIGH  
+**Story points:** 13–21
+
+### Phase 4: Multi-Process Runtime (AFTER 1–2)
+**Deliverables:**
+- Process-supervisor config (systemd multi-instance or Node cluster)
+- Rolling-restart runbook (strictly sequential for Option B)
+- N-process load/soak test
+
+**Confidence:** MEDIUM  
+**Story points:** 8–13
+
+### Phase 5: Self-Managed Host Deployment (PARALLEL TO 6; AFTER 2–4)
+**Deliverables:**
+- Reverse-proxy config (TLS + loopback binding)
+- systemd unit (explicit `DEMO_OPEN` unset, `ENABLE_HSTS=1` mandatory)
+- Backup/restore via `.backup()` API with MNPI policy
+- Startup MNPI checks, runbook/checklist
+
+**Confidence:** MEDIUM  
+**Story points:** 13–21
+
+### Phase 6: Container/Platform Shape (PARALLEL TO 5; AFTER 2–4)
+**Deliverables:**
+- Dockerfile (`node:22-bookworm-slim`, no build, non-root `USER`)
+- `.dockerignore` audited vs. `.gitignore` (MNPI boundary)
+- Config contract with `replicas: 1` hard constraint + rationale
+- Startup check refusing real-deal traffic without persistent `/data/`
+- Separate images/tags for demo vs. real-deal
+
+**Confidence:** MEDIUM  
+**Story points:** 13–21
+
+### Phase 7: Workstream-Lead Collaboration (AFTER 2–3)
+**Deliverables:**
+- Invite flow + email activation, clearance-grant UI
+- Auto-revoke-on-change (follow `releaseSessionsForDeal()` pattern)
+- Self-service "my active sessions" view, idle-timeout + `last_activity`
+- Audit coverage validation, MNPI threat-model pass (server-side presence filtering)
+
+**Confidence:** MEDIUM  
+**Story points:** 21–34
+
+### Phase 8: Deal-Setup Wizard Enhancements (AFTER 7; **DEFERRED post-v2.2.0**)
+**Deliverables:**
+- Per-step ownership, multi-user resume state, handoff UI
+- Integration with Phase 7 clearance model
+
+**Confidence:** MEDIUM  
+**Story points:** 13–21  
+**Rationale:** First real deal may not need this; validate demand before building.
+
+### Critical Dependencies
+1. Phase 1 gates everything (architecture must lock first)
+2. Phase 2 gates 3–7 (storage foundation)
+3. Phase 3 gates 7 (optimistic locking before real concurrency)
+4. Phases 5 & 6 parallel (deployment-shape variations)
+5. Phase 7 gates Phase 8
+
+### Validation Checkpoints
+
+**Phase 1:** 2+ real processes, concurrent writes → no silent loss  
+**Phase 2:** DB connection explicit close; soak test; WAL checkpoint manageable  
+**Phase 3:** Race-window test → 409, not last-write-wins  
+**Phase 4:** Rolling restart → old process fully exits before new starts  
+**Phase 5:** Backup restore under load; inspect `Set-Cookie` for `Secure`; `ENABLE_HSTS=1` set  
+**Phase 6:** `docker history` zero MNPI; startup check with/without `/data/` mounted  
+**Phase 7:** Audit coverage per new endpoint; non-member cannot see presence for deals they're not on
+
+### TE IT Confirmation Needed
+
+- **Container platform constraint:** Can it pin `replicas: 1` with persistent RWO volume?
+  - YES → stay with Option B (SQLite) throughout v2.2.0
+  - NO (requires horizontal autoscaling) → Option B not viable; escalate to A or C as v2.2.0 fork or v3.0 redirect
+
+---
+
+## Confidence Summary
+
+| Area | Confidence | Known Gap |
+|------|------------|-----------|
+| Concurrency architecture | **HIGH** | 409 UX implications need real-user Phase 3 UAT |
+| Stack (deps, ops tools) | **HIGH** | Minor version bumps not risk-assessed |
+| Features & MVP | **MEDIUM-HIGH** | First real deal may reprioritize P2 features |
+| Pitfalls | **HIGH** | Presence MNPI (Pitfall #8) needs Phase 7 spec deep dive |
+| Deployment shapes | **MEDIUM** | TE IT infrastructure (K8s, storage, registry) unconfirmed |
+| WAL checkpoint | **MEDIUM** | No real multi-user load test of this app's write patterns |
+
+**Largest risks:**
+1. Real multi-user UX friction in conflict resolution or session management (Phase 3 UAT)
+2. TE IT platform constraints diverging from Option B assumptions (Phase 6 planning)
+3. Backup restore reliability under multi-collection concurrent load (Phase 5 test)
+4. Single Node process event-loop saturation under realistic deal workload (Phase 4 load test)
+
+---
+
+## Ready for Planning
+
+**Architecture:** Locked on Option B  
+**Stack:** Determined (express-rate-limit, systemd/Caddy, version-in-JSON)  
+**Features:** P1 scoped; P2 deferred post-validation  
+**Pitfalls:** All 13 mapped with prevention phases and verification criteria  
+**Phases:** 7–8 with clear dependencies; gating decision explicit (Phase 1)  
+**Validation:** Load tests, UAT checkpoints, TE IT confirmations, per-phase verification checklists  
+
+**Next:** `/gsd-plan-phase --research-phase 1 Concurrency Architecture Decision + Proof`
+
+---
+
+*Synthesized from STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md (2026-08-10)*  
+*v2.2.0 Shared-Host Multi-User Milestone*  
+*Overall Confidence: HIGH*

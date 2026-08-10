@@ -1,337 +1,245 @@
-# Architecture Research
+# Architecture Research — v2.2.0 Shared-Host Multi-User Concurrency
 
-**Domain:** Internal M&A integration portal — Express 4 + vanilla JS, single-file JSON store migrating to SQLite, adding mandatory auth, mode separation (demo vs real-deal) and clean-room access control
-**Researched:** 2026-07-23
-**Confidence:** HIGH (grounded directly in this codebase's `server.js`, `.planning/codebase/*`, and `.planning/PROJECT.md`; SQLite/audit-trigger patterns cross-checked against current library docs and community practice)
+**Domain:** Multi-process/multi-user concurrency for an existing Express + better-sqlite3 M&A integration portal
+**Researched:** 2026-08-10
+**Confidence:** HIGH for all claims grounded directly in `db/store.js`/`db/resolver.js`/`db/dbFiles.js`/`server.js`; MEDIUM (verified against sqlite.org's own WAL documentation) for general SQLite multi-process locking behavior; explicitly flagged where this research corrects the premise stated in the research question.
 
-## Standard Architecture
+## Key Finding: The "in-process only" premise needs a precise correction
 
-### System Overview
+The question's framing — *"the `__snapshot` merge is in-process only; multiple OS processes writing the same SQLite file would reintroduce the Phase-1 lost-update race"* — is **half right and the half that's wrong matters a lot for the recommendation below.**
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Browser (public/*.html + public/js/*.js — unchanged shape)           │
-│  dashboard.js  pmo.js  admin.js  employee.js  + NEW: dd.js, org.js    │
-└───────────────────────────────┬────────────────────────────────────┘
-                                 │ fetch('/api/...', {credentials:'include'})
-                                 ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│ Express app (server.js — thin bootstrap only after this milestone)   │
-│                                                                        │
-│  1. Session gate (existing PORTAL_AUTH cookie check, now MANDATORY)   │
-│     → req.user = { id, username, role }                              │
-│                                                                        │
-│  2. Deal-resolver middleware (NEW)                                    │
-│     reads X-Deal-Id header (or session default) → looks up in        │
-│     control.db `projects` table → attaches:                          │
-│       req.dealId, req.isDemo, req.dealDb  (open sqlite connection)    │
-│     Demo mode selected  → req.dealDb = demo.db connection             │
-│     Real deal selected  → req.dealDb = deals/<dealId>.db connection   │
-│                                                                        │
-│  3. Access-policy middleware (NEW, data-driven, ~1 file)              │
-│     looks up req.path in RESOURCE_POLICY table → if resource is       │
-│     workstream-scoped or clean-room, checks req.user against a       │
-│     `workstream_access` grant table for req.dealId; 403 if absent     │
-│                                                                        │
-│  4. Actor-stamp middleware (NEW, ~10 lines)                            │
-│     before any mutating request: writes req.user into a 1-row         │
-│     `audit_actor` table on req.dealDb so DB triggers can attribute    │
-│     the change that follows                                          │
-│                                                                        │
-│  5. Route handlers (routes/*.js, split out of server.js)              │
-│     unchanged business logic, but read/write via req.dealDb           │
-│     instead of the global readDb()/writeDb()                         │
-└───────────────────────────────┬────────────────────────────────────┘
-                                 │
-                 ┌───────────────┼────────────────────┐
-                 ▼               ▼                    ▼
-       ┌─────────────────┐ ┌───────────────┐ ┌─────────────────────┐
-       │  control.db      │ │  demo.db      │ │ deals/<id>.db (×N)   │
-       │  (SQLite, WAL)   │ │ (SQLite, WAL) │ │ (SQLite, WAL, one    │
-       │  users, projects │ │ showcase data │ │  file per real deal) │
-       │  catalog, audit  │ │ time-travel,  │ │ employees, tasks,    │
-       │  log, workstream │ │ XP/leaderbrd, │ │ RAID, synergy, DD    │
-       │  _access grants  │ │ easter egg    │ │ requests/findings,   │
-       └─────────────────┘ └───────────────┘ │ org design, CMS      │
-                                              └─────────────────────┘
+Reading `db/store.js` line by line: `writeDb()`'s lost-update protection comes from comparing **the ids in this request's own `readDb()` snapshot** against **the ids in the payload being written**, then issuing real `INSERT`/`UPDATE`/`DELETE` statements *by id* inside one SQLite transaction against the **live, current file** — never against a second in-memory cache of "current state." Nothing about that algorithm's correctness depends on the reader and the writer being the same OS process. It depends on:
+
+1. `readDb()` reading the actually-current committed rows (true under WAL for any process, same or different, via the wal-index — this is exactly what WAL is *for*), and
+2. `writeDb()`'s transaction being atomic against the live file (true for any process, via SQLite's own cross-process locking, which is what `journal_mode=WAL` + `busy_timeout=5000` in `db/dbFiles.js`'s `openDbFile()` already configure).
+
+Trace the classic scenario with two different **processes**: Process A reads `[1,2,3]`, deletes id 2 in its own JS memory, writes `[1,3]` — A's snapshot has `{1,2,3}`, so it deletes id 2 (an id neither request "invented," it's the same id in the shared file). Concurrently, Process B (different OS process) also read `[1,2,3]` and adds id 4, writing `[1,2,3,4]`. B's snapshot also has `{1,2,3}` — for id 2, B still thinks it's a normal `UPDATE`; when B's transaction runs (whenever SQLite's writer lock lets it in, possibly *after* A committed), the `UPDATE ... WHERE id=2` affects **0 rows** because A already deleted it — exactly the documented "harmless 0-row no-op rather than a resurrection" (`db/store.js` comment on `CR-02`). Id 4, new to B's snapshot, inserts cleanly. **No corruption, no lost update, regardless of which process ran which request.**
+
+**What genuinely *is* single-process-only** is the `__snapshot` **object itself** — a JS `Map` living in one process's heap, non-enumerably attached to one `readDb()` call's return value (`db/store.js` lines 239–253). That object cannot be handed to a *different* process without serializing it (Maps aren't JSON-native) — but nothing in the current architecture ever tries to. Each request's `readDb()` → mutate → `writeDb()` cycle already runs start-to-finish in whichever single process handled that HTTP request. Scaling to N OS processes doesn't require moving the snapshot across a process boundary; it only requires that N processes independently doing this cycle against **the same file** stay correct — which is exactly what SQLite's own WAL cross-process locking is designed to guarantee, and does, without any code change.
+
+**Where the "WAL corruption" risk is real:** not from "too many processes," but from **network/shared filesystems** with unreliable POSIX advisory-lock semantics (classic NFS, some clustered/Docker-Desktop-on-Windows bind-mount edge cases) — SQLite's own documentation is explicit that WAL requires the filesystem to honor `fcntl` locks correctly, which a local disk (ext4/APFS/NTFS) or a cloud-VM's local/attached block volume does, and a network filesystem often doesn't. This distinction — *same-host-local-disk is safe, distributed/network storage is not* — drives the container-shape caveat under Option B below.
+
+This finding reshapes the whole evaluation: **Option A (broker) is not required to close a real correctness gap that Options B/C would otherwise reopen.** It's an *availability/throughput* choice (single write path, simpler mental model, one place to add a request queue) with real costs, not a *safety* requirement. Evaluate it on those terms.
+
+---
+
+## System Overview — Current (v2.1.0, verified against code)
+
+```text
+┌───────────────────────────────────────────────────────────────────┐
+│  Single Node process ("node server.js", app.listen() behind        │
+│  require.main === module)                                          │
+│                                                                      │
+│  Express routes ──► dealResolverMiddleware (db/resolver.js)         │
+│         │              resolves control.db / demo.db / deals/<id>.db│
+│         │              binds ONE connection via AsyncLocalStorage   │
+│         ▼                                                           │
+│  route handler: readDb() → mutate in JS memory → writeDb(data)      │
+│         │              (db/store.js — whole-object facade,          │
+│         │               __snapshot diff-merge inside one txn)       │
+│         ▼                                                           │
+│  connectionCache: Map<resolvedPath, better-sqlite3 handle>          │
+│  (process-local; one handle per file per process)                   │
+└──────────────────────────┬───────────────────────────────────────--┘
+                            ▼
+   data/control.db  data/demo.db  data/runtime.db  data/audit.db
+   data/deals/<id>.db   (WAL mode, busy_timeout=5000, one host, one disk)
 ```
 
-### Component Responsibilities
+Confirmed facts used throughout this document (all read directly from source):
+- `server.js` already has `/healthz` (line 665), SIGTERM/SIGINT graceful shutdown with `server.close()` + a 10s hard-kill fallback and `requestTimeout`/`headersTimeout`/`keepAliveTimeout` tuning (lines 6857–6879), and an explicit note that `uncaughtException` is currently **log-only**, flagged in its own comment as needing to become "log-then-exit, let the supervisor restart" for a *supervised* production deploy — directly relevant to any multi-process shape.
+- `db/dbFiles.js`'s `openDbFile()` is the **single pragma contract** for every SQLite file the app opens: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000` — already the correct baseline for cross-process safety, not something that needs inventing.
+- `db/resolver.js` binds one connection per request via `AsyncLocalStorage`, refusing membership **at bind time** (never a post-hoc filter) — this is the property that must survive whichever concurrency option is chosen; none of the three options below touch it.
+- Sessions (`db/sessions.js`) are a dedicated hashed-token table, **not** part of the whole-object `readDb()`/`writeDb()` collection API — already multi-process-safe by the same WAL mechanism, no special handling needed.
+- No `express-session`/`cluster` module dependency exists today (`package.json`: only `better-sqlite3`, `compression`, `express`, `pdf-parse`, `zod`). Any multi-process shape is new plumbing, not a toggle.
 
-| Component | Responsibility | This codebase's file |
-|-----------|----------------|------------------------|
-| Session gate | Turn `PORTAL_AUTH` cookie logic from opt-in into the only mode; issue `req.user` | `server.js` lines 141–174 (`readSession`, the two `app.use('/api', ...)` gates) — promote, don't rewrite |
-| Deal resolver | Map the selected project/deal to a physical SQLite file + connection, replacing in-memory JSON swapping | NEW `db/dealResolver.js`; replaces `stashActiveCustomProject`, `snapshotCms`, `applyCmsToTopLevel` (lines 809–858) |
-| Access policy | Enforce need-to-know per role+workstream on a small, explicit list of sensitive resources | NEW `middleware/accessPolicy.js`, driven by a `RESOURCE_POLICY` config object, not per-route edits |
-| Audit trail | Record who changed what, before/after, when — for every write, present and future | NEW `middleware/auditActor.js` (~10 lines) + SQLite `AFTER INSERT/UPDATE/DELETE` triggers generated by a migration script |
-| Route handlers | Existing CRUD logic for projects, departments, processes, assessments, tasks, RAID, synergy, CMS | Split `server.js` (currently ~3,200 lines) into `routes/*.js` by resource |
-| Data access | Prepared statements against `req.dealDb` (better-sqlite3), replacing `readDb()`/`writeDb()` | NEW `db/index.js` (connection cache) + `db/schema.sql` (per-file schema) |
-| Demo showcase mechanics | Time-travel day-scaling, XP/leaderboard, easter egg — must be physically unreachable outside demo mode | Existing logic in `server.js` (`timeTravelDay`, `scaleEmployeesForDay`, synergy-quest) moves into a `services/demoOnly.js` module gated by `if (!req.isDemo) return res.status(404).end()` |
+---
 
-## Recommended Project Structure
+## Option A — Single-Writer Broker
 
-```
-server.js                     # bootstrap only: express(), middleware wiring, app.listen — target <150 lines
-db/
-├── index.js                  # openDeal(dealId) / openDemo() / openControl() — connection cache, WAL pragmas
-├── control.schema.sql        # users, projects, workstream_access, audit_log (survives deal deletion)
-├── deal.schema.sql           # per-deal tables: employees, assessments, integrationTasks, raidEntries,
-│                              #   synergyInitiatives, ddRequests, ddFindings, orgRoles, retentionRisks, cms tables
-├── demo.schema.sql           # same shape as deal.schema.sql + demo-only tables (xp_ledger, leaderboard, timeTravelState)
-├── migrate-from-json.js      # one-time script: db.json -> control.db + demo.db (proj_demo) + deals/*.db per existing custom project
-└── triggers.sql              # generated AFTER INSERT/UPDATE/DELETE triggers -> audit_log, applied to every table
-middleware/
-├── auth.js                   # session cookie verify, mandatory (was optional PORTAL_AUTH gate)
-├── dealResolver.js           # attaches req.dealId / req.isDemo / req.dealDb
-├── accessPolicy.js           # RESOURCE_POLICY-driven workstream/need-to-know 403s
-└── auditActor.js             # stamps acting user before writes so triggers can attribute them
-services/
-├── aiService.js              # unchanged (Gemini integration)
-├── ragService.js             # unchanged (playbook RAG — stays a GLOBAL shared asset, not deal-scoped)
-├── ddService.js               # NEW: DD request/finding CRUD + remediation-linkage reuse
-├── synergyService.js          # NEW: baseline/phasing/cost-to-achieve/stage-gate logic
-├── reportingService.js        # NEW: steering-pack + status-report generation, export
-└── orgDesignService.js        # NEW: org structure, role mapping, retention/flight-risk
-routes/
-├── projects.js  departments.js  processes.js  cms.js  i18n.js   # existing resources, lifted out of server.js
-├── execution.js raid.js synergy.js                                # existing resources, lifted out
-├── dd.js  reporting.js  org-design.js                              # NEW capability areas
-└── demo.js                                                          # time-travel/XP/leaderboard, gated by req.isDemo
-public/js/
-├── dashboard.js pmo.js admin.js employee.js transitions.js   # unchanged files, NOT extended further
-└── dd.js  org-design.js  reporting.js                          # NEW: one small module per new capability area
-```
+**Shape:** N "web" processes handle HTTP + reads directly (each opens its own connection to the shared file, same as today, just N of them). Every **write** is proxied to one dedicated writer process that is the *only* process ever calling the real `writeDb()`.
 
-### Structure Rationale
+### Integration points against `db/store.js`
 
-- **One SQLite file per mode/deal, not a mode column.** This is the direct, code-level fix for `.planning/PROJECT.md`'s hard requirement A ("real-deal data must not share a store"). A `WHERE demoMode = 0` filter is exactly the pattern already in production today (`db.settings.demoMode === false` checked ~40+ times across `server.js`) and it is precisely what caused the current architecture to need a "custom" shadow-array per resource (`customEmployees`, `customHrbps`, `customAssessmentInstances`, `customIntegrationTasks`, `customSynergyInitiatives`, `customRaidEntries`) instead of real isolation. A missed `isCustom` check is a silent MNPI leak or a corrupted demo; a wrong file path is a 404. Physical separation is enforceable by code review and by the OS file-permission boundary, not by auditing every query.
-- **`routes/` and `services/` split, not a framework migration.** `.planning/codebase/ARCHITECTURE.md` already flags `server.js` (~3,200 lines) and the four largest frontend files as a named anti-pattern with a documented fix ("split each dashboard tab into a separate module"). This milestone is the forcing function to actually do it on the backend, using plain `require()`/`module.exports` and `express.Router()` — no bundler, no framework change, consistent with the constraint that vanilla JS + no build step is a hard requirement.
-- **`ragService.js` stays global, not per-deal.** It indexes the static 52-slide HR playbook PDF (a TE-authored reference document, not deal data), so it is correctly a shared asset across demo and every deal. Confirm this stays out of the per-deal SQLite files — it has no MNPI content.
+- The ~90 existing call sites (`readDb()`/`writeDb()`) must **not** change (matches the codebase's existing D-03 zero-call-site-change discipline). The seam is inside `db/store.js` itself: at process startup, an env var (e.g. `WRITER_ROLE=writer|worker`) selects which implementation `writeDb` resolves to — the real transactional function (writer process) or an RPC stub that forwards to the writer (worker process). `readDb()` stays local/unchanged in every process — reads never need to leave the process, because WAL gives every process's own connection a live, current view of the writer's last commit (no extra staleness beyond ordinary request timing).
+- **The real new cost:** the `__snapshot` `Map` captured by a worker's `readDb()` call must cross the process boundary to reach the writer, because `writeDb()`'s diff needs it. Maps aren't JSON-serializable — a worker-side client must convert each collection's snapshot `Map` to an array of `[id, rawJson]` pairs before sending, and the writer-side server must reconstruct it as a `Map` before calling the *real* `writeDb(data)`. This is genuinely new serialization plumbing, not a thin proxy — it's the one piece of engineering this option requires that B does not.
+- Transport: recommend a **Unix domain socket** on the host running both writer and workers (measured ~30–45% lower p99 latency than TCP loopback, no port to manage, filesystem-permission-scoped — fits self-managed-host and single-node-container shapes where a socket path/volume is shared). Fall back to loopback TCP (`127.0.0.1:PORT`) only where a shared socket path isn't practical (e.g. some Windows self-managed configurations).
+- The audit hook (`db/auditHook.js`) currently runs **inside** `writeDb()` in-process, reading `actor`/`request` off the AsyncLocalStorage-bound context. Under Option A that context (actor identity, request metadata) must also cross the RPC boundary to the writer process — another concrete addition, not automatic.
 
-## Architectural Patterns
+### New / modified components
+- New: `db/writerServer.js` (Unix-socket listener in the writer process; calls the real `writeDb()`), `db/writerClient.js` (worker-process stub that serializes `data` + `__snapshot` + audit `actor`/`request`, sends, awaits result/error).
+- Modified: `db/store.js` (dispatch seam for `writeDb`), process bootstrap (`server.js` or a new launcher) to start one writer + N workers.
 
-### Pattern 1: File-per-mode / file-per-deal persistence (replaces mode column)
+### Build order
+1. Extract the `writeDb`-dispatch seam with a **same-process fake RPC** (function call, not a socket) first — prove the seam introduces zero behavior change against the existing suite before touching transport.
+2. Build the Unix-socket writer server/client with a length-prefixed JSON protocol; writer boots first and lazily opens db files exactly like the resolver does today.
+3. Convert deployment to N workers + 1 writer (via `cluster`, or N `systemd` instances + one dedicated writer instance) routed through the client.
+4. Add reconnect/backoff and a write-path 503 when the writer is unreachable (a *new* failure mode this option introduces — see tradeoffs).
+5. Soak-test contention; verify audit rows still land correctly with the cross-process actor context.
 
-**What:** `control.db` is a small always-open SQLite file holding `users`, `projects` (the deal catalog: id, name, isDemo, dbFilePath, createdAt, archivedAt), `workstream_access` grants, and the durable `audit_log`. `demo.db` holds the entire showcase (proj_demo — employees, time-travel state, XP ledger, leaderboard, easter egg unlock state). Every real deal gets its own `deals/<dealId>.db` file with the identical business-table schema as `demo.db` minus the showcase-only tables.
+### Survival verdict
+- **Zero-install turnkey zip:** SURVIVES. Still one committed `.db` file per deal, no external DB server — the "writer" is just another `node server.js`-family process from the same codebase; a launcher script can start two Node processes instead of one.
+- **Demo showcase:** SURVIVES unaffected — demo mode doesn't need multi-writer semantics and can either stay single-process or transparently route through the same broker with no behavior change.
 
-**When to use:** Whenever "must never share a store" is a stated hard requirement (as it is here) rather than a soft preference — physical file separation is the only approach that removes an entire class of bugs (a missing filter, a copy-paste `demoMode` check) as a way to leak or corrupt data.
+### Honest costs
+- **New single point of failure for writes**: if the writer process dies, every deal's writes 503 until it's restarted, whereas today a crash only affects the request that caused it.
+- Extra network hop on every write (latency), a real new serialization layer (Map↔array bridging) that is a plausible source of subtle bugs, and a second process to supervise, health-check, and graceful-shutdown *in the correct order* (workers must drain before the writer, or in-flight write RPCs hang against a dead socket).
+- **Buys little at this app's actual concurrency profile.** Its main benefit — avoiding `SQLITE_BUSY` contention under heavy concurrent writes — addresses a load level (many simultaneous writers) this app (an Integration Lead + a handful of workstream leads on one active deal) is unlikely to reach. See Option B's throughput analysis.
 
-**Trade-offs:** Cross-deal reporting/portfolio views become harder later (must open N files and aggregate in application code) — but `.planning/PROJECT.md` explicitly defers "portfolio view across multiple simultaneous deals" out of scope, so this is the right cost to pay now, not a real one yet. Schema migrations must run against every open file (demo.db + each deals/*.db), not once — mitigate with a `migrations/` folder + a `runMigrations(db)` function called by `db/index.js` on every `openDeal()`/`openDemo()` call (idempotent, cheap given SQLite's `user_version` pragma for tracking applied migrations per file).
+---
 
-**Example:**
-```js
-// db/index.js
-const Database = require('better-sqlite3');
-const openConnections = new Map(); // dealId -> Database instance, kept warm
+## Option B — Cross-Process Advisory Lock (native SQLite WAL write-serialization, hardened)
 
-function openDeal(dealId) {
-  if (openConnections.has(dealId)) return openConnections.get(dealId);
-  const project = controlDb.prepare('SELECT * FROM projects WHERE id = ?').get(dealId);
-  if (!project) throw new Error('Unknown deal: ' + dealId);
-  const db = new Database(project.isDemo ? DEMO_DB_PATH : `deals/${dealId}.db`);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  runMigrations(db, project.isDemo ? 'demo' : 'deal');
-  openConnections.set(dealId, db);
-  return db;
-}
-module.exports = { openDeal, openControl };
-```
+**Shape:** N OS processes (via Node `cluster`, N `systemd`-supervised instances, or N container replicas on **one host with local/attached disk**) each open their own `better-sqlite3` connection to the same file — exactly today's per-request `readDb()`→mutate→`writeDb()` cycle, just run concurrently by multiple processes. Coordination is SQLite's own engine-level writer lock (already active via WAL), hardened with two small, additive changes.
 
-### Pattern 2: Deal-resolver middleware (replaces `activeProjectId` + stash/snapshot swapping)
+### Integration points against `db/store.js`
 
-**What:** A single middleware, mounted once, that reads the caller's selected deal (an `X-Deal-Id` header sent by the frontend, mirroring today's client-side `active_demo_role`/`activeProjectId` pattern in `transitions.js`) and attaches `req.dealId`, `req.isDemo`, `req.dealDb` to every request. Route handlers stop calling the global `readDb()`/`writeDb()` and use `req.dealDb.prepare(...)` instead.
+- **No change needed** to `db/resolver.js` or the `connectionCache` — each process's cache is already process-local, and that's correct: it just avoids reopening a file twice within one process, and doesn't conflict with a second process's own cache/connection to the same file.
+- **Two targeted changes inside `writeDb()`:**
+  1. Force `conn.transaction(applyWrite)` to acquire the write lock at transaction *start* rather than escalating mid-transaction: better-sqlite3 exposes this as `.immediate` on the transaction function (`conn.transaction(applyWrite).immediate(data)`). This fails fast under contention instead of the default deferred-then-upgrade behavior, which is the standard recommendation for any write-heavy multi-process SQLite app.
+  2. Wrap the call with a small busy-retry helper: catch `err.code === 'SQLITE_BUSY'`, retry with jittered backoff a few times (the existing `busy_timeout=5000` already retries at the C level before throwing; this adds an app-level fallback and, on final failure, maps to an HTTP `503` + `Retry-After` rather than a bare `500`).
+- No change to the `__snapshot` merge algorithm itself — per the Key Finding above, it already works correctly for N processes because each process's snapshot never leaves that process.
 
-**When to use:** Any time a request needs to be scoped to "which deal" before touching data — i.e., every `/api/*` route except the small set that is truly global (`/api/auth/*`, `/api/i18n` if you decide translations stay app-wide, static playbook content).
+### New / modified components
+- Modified: `db/store.js` (`.immediate()` + busy-retry wrapper — small, additive, no call-site changes).
+- New (optional): `db/busyRetry.js` helper module.
+- New: a process-supervisor config (systemd unit template with multiple instances behind a proxy, or a `cluster`-module primary). **No new IPC layer, no new broker process.**
 
-**Trade-offs:** This retires `stashActiveCustomProject()`, `snapshotCms()`, `applyCmsToTopLevel()` (`server.js` lines 809–858) entirely — those functions exist only because the current architecture has one shared "custom" staging area that must be copied in and out on every project switch. Deleting that machinery is a net simplification, not new complexity.
+### Build order
+1. Add `.immediate()` + busy-retry to `writeDb()`. Write a **new test class** that opens two real `better-sqlite3` connections to the same temp file from two Node processes (or two worker threads as a proxy) and hammers concurrent writes — this is a genuinely new test category; Phase 1's tests only ever exercised one process.
+2. Run the app as N real OS processes locally (`node server.js` × 3 sharing one `data/` dir behind a small round-robin proxy) and soak-test.
+3. Layer the version-column optimistic-locking change on top (see below — independent of A/B/C).
+4. Wire into the target deployment shape: systemd multi-instance + nginx `upstream`, or `cluster`-module workers.
 
-**Example:**
-```js
-// middleware/dealResolver.js
-module.exports = function dealResolver(req, res, next) {
-  const dealId = req.get('X-Deal-Id') || controlDb.prepare(
-    'SELECT value FROM app_state WHERE key = ?').get('activeDealId')?.value || 'proj_demo';
-  const project = controlDb.prepare('SELECT * FROM projects WHERE id = ?').get(dealId);
-  if (!project) return res.status(404).json({ error: 'Unknown deal' });
-  req.dealId = dealId;
-  req.isDemo = !!project.isDemo;
-  req.dealDb = openDeal(dealId);
-  next();
-};
-```
+### Throughput cost
+Negligible at this app's scale. SQLite full write serialization (every writer takes turns) costs almost nothing when each write is a small single-collection diff (sub-millisecond to low-single-digit-ms) and the realistic write rate is a handful of named users occasionally saving a task/RAID entry/synergy update — several orders of magnitude below SQLite's documented sustained-write ceiling on local SSD/NVMe (SQLite's own WAL documentation and cross-checked general guidance both describe multi-writer serialization, not multi-writer parallelism — writes queue briefly, they don't corrupt or block indefinitely given a sane `busy_timeout`).
 
-### Pattern 3: Data-driven access policy (need-to-know without touching all ~90 routes)
+### Survival verdict
+- **Zero-install turnkey zip:** SURVIVES. Identical file-per-deal committed-`.db` model; the shipped executable's *shape* doesn't change — it's just runnable as N copies.
+- **Demo showcase:** SURVIVES unaffected — demo mode never needed multi-process writes, but would be safe for free if ever run that way.
 
-**What:** One config object lists ONLY the resources that carry MNPI or need workstream scoping — DD requests/findings, org design/role decisions, flight-risk register, and optionally synergy financials. Everything else (i18n, menus, courses, banners, pages, settings, departments, process catalog) is content/config, not deal data, and needs no change beyond the existing mandatory-auth gate. A single middleware consults the table by path prefix; a small `filterByAccess()` helper is called at the point each of those ~10–15 sensitive endpoints builds its response array.
+### The one sharp edge to flag for the container/platform shape
+This option is **host-local only**: every writer process must share the *same local filesystem* (real POSIX/NTFS advisory locking). It is explicitly **not** safe over NFS or most network-attached/shared-cluster filesystems, and — critically for a container platform — **not safe with N>1 replicas each on a different node with their own disk** (a Kubernetes `Deployment` with `replicas: 3` and no shared volume silently diverges into three independent copies of the data with no coordination at all; even a shared `ReadWriteMany` volume is usually NFS-backed, which is exactly the unreliable-locking case). **Recommendation for the container shape under Option B: pin to `replicas: 1`** with a persistent local/attached volume — this is not a limitation invented for this milestone, it's the existing single-process story unchanged, just running in a container. N>1 replica horizontal scaling is *only* safely achievable under Option A (broker, still single-writer under the hood) or Option C (Postgres).
 
-**When to use:** When the requirement is "restrict a known, bounded set of sensitive resources by role+workstream," not "authorize every field of every resource" — matches this codebase's actual sensitivity profile (most of the ~90 endpoints are CMS/content, not deal secrets).
+---
 
-**Trade-offs:** Requires enumerating and keeping the policy table current as new sensitive resources are added — acceptable because the four new capability areas are exactly where new sensitivity is introduced, so updating `RESOURCE_POLICY` is part of building each one, not a separate retrofitting pass.
+## Option C — Postgres Migration
 
-**Example:**
-```js
-// middleware/accessPolicy.js
-const RESOURCE_POLICY = {
-  '/api/dd/requests':  { sensitivity: 'need_to_know', workstreamField: 'workstreamId' },
-  '/api/dd/findings':  { sensitivity: 'need_to_know', workstreamField: 'workstreamId' },
-  '/api/org-design':   { sensitivity: 'pre_close_restricted', workstreamField: null },
-  '/api/retention':    { sensitivity: 'pre_close_restricted', workstreamField: null },
-};
-module.exports = function accessPolicy(req, res, next) {
-  const rule = matchPrefix(RESOURCE_POLICY, req.path);
-  if (!rule) return next(); // not sensitive -> auth gate already covered this
-  if (rule.sensitivity === 'pre_close_restricted' && !['admin', 'il'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'Restricted: pre-close information.' });
-  }
-  if (rule.workstreamField) req.accessRule = rule; // route handler filters rows using it
-  next();
-};
+**Shape:** Replace `better-sqlite3`/`db/store.js`'s internals with a Postgres-backed store.
 
-// inside routes/dd.js findings GET handler:
-const rows = req.dealDb.prepare('SELECT * FROM dd_findings').all();
-res.json({ findings: req.accessRule ? filterByAccess(rows, req.user, req.dealId) : rows });
-```
+### What breaks, concretely
 
-### Pattern 4: Trigger-based audit log (before/after, without rewriting write handlers)
+- **The whole-object `readDb()`/`writeDb()` signature.** The ~90 call sites depend on getting a full in-memory array per collection and handing back a mutated version wholesale. Two paths:
+  - **C1 (facade-preserving):** Reimplement `writeDb()`'s internals against Postgres using the *same* id-diff algorithm (SELECT all rows per collection table ordered by `seq`; INSERT/UPDATE/DELETE by id inside one `BEGIN`/`COMMIT`) — preserves all ~90 call sites unchanged. This is the **only realistic path** without a full route-by-route rewrite.
+  - **C2 (Postgres-native):** Rewrite every write endpoint to do targeted `UPDATE ... WHERE id=$1` calls instead of whole-collection round-trips — architecturally cleaner, but touches every one of the ~90 write endpoints individually. **Out of scope for this milestone**; a future initiative in its own right.
+  - Recommend C1 as the only viable scope if C is ever chosen.
+- **`__snapshot` merge → row-level concurrency.** Under C1 the same diff algorithm ports almost verbatim (it's just SQL dialect). Postgres's real advantage is that `UPDATE ... SET data=$1, version=version+1 WHERE id=$2 AND version=$3` is the idiomatic, first-reached-for pattern there — but this exact pattern is equally achievable on SQLite (see the optimistic-locking section below). **Postgres is not required to get optimistic locking** — that's a separate, portable feature, not a reason to migrate.
+- **File-per-deal → schema/row scoping.** SQLite's one-file-per-deal model gives *free* physical isolation: a bug literally cannot cross-deal-write because the connection was never opened against another deal's file (`db/resolver.js`'s bind-time refusal, the app's core MNPI-isolation property). Postgres has no per-file analog. Two options:
+  - **Schema-per-deal** (`CREATE SCHEMA deal_xyz`, per-request `SET search_path`) is the closer analog — a connection literally can't see another deal's tables without an explicit path change, preserving "can't accidentally open the wrong deal" *by construction*.
+  - **Shared tables + a `deal_id` column filtered in every query** is the common multi-tenant SaaS pattern, but reintroduces exactly the bug class `db/resolver.js` was built to make structurally impossible — a missed `WHERE deal_id=?` becomes a cross-deal MNPI leak discoverable only by code review, not by the architecture. Given this app's explicit MNPI/clean-room framing, **recommend schema-per-deal over shared-table-with-deal_id** if C is ever pursued — this is a real, non-obvious migration cost a superficial "just add a column" plan would silently give up.
+- **Committed `.db` + zero-install turnkey zips.** **Breaks outright.** A turnkey zip today ships a portable Node + the app + a committed SQLite file — no server process to install. Postgres requires a *separately running database server*, an entirely different binary outside Node's process model. The closest zero-install analogs (bundling a portable Postgres + auto-`initdb`, or an embedded/WASM Postgres like pglite) are exotic and unproven for this app's needs — a new engineering surface on their own, not a drop-in swap.
+- **The demo showcase's committed `demo.db`.** The demo's whole value proposition — a double-click showcase with pre-seeded, git-committed, diffable data — is SQLite-native. A Postgres dump/restore step is a materially worse showcase experience for a sales artifact that today "just works." Realistic path: **keep demo mode on SQLite permanently**, matching PROJECT.md's own "demo mode is a maintained deliverable" constraint, and make Postgres an opt-in backend *only* for real-deal mode on the container/platform shape.
 
-**What:** A one-row `audit_actor` table set by a ~10-line middleware immediately before any mutating request reaches its handler; `AFTER INSERT/UPDATE/DELETE` triggers on every business table read that row and write `(table, row_id, action, old_json, new_json, actor_username, actor_role, deal_id, ts)` into `audit_log` in `control.db`. Because triggers fire at the SQLite layer, every write path — existing and future, including ones a developer forgets to instrument — is captured automatically.
+### New / modified components
+- New: `db/pgStore.js` (Postgres-backed C1 facade), a driver-selection seam (`STORAGE_BACKEND=sqlite|postgres`) in `db/store.js`, a real versioned migration runner (Postgres schema changes are a first-class ops concern SQLite's ad hoc `CREATE TABLE IF NOT EXISTS`-on-open never had to be), connection pooling (`pg`/`pg-pool` — Postgres connections are expensive relative to SQLite's in-process handle; every process needs a *pool*, not one handle per file).
+- **Must-port, currently overlooked if scoped narrowly:** `db/auditHook.js`, `db/sessions.js`, `db/controlStore.js` are raw hand-written SQLite SQL *outside* the whole-object facade (`?` placeholders, `PRAGMA` calls, SQLite-specific `ON CONFLICT` syntax) — none of it is portable verbatim to Postgres. This is real, easy-to-underestimate scope.
 
-**When to use:** When "audit every write, including ones we haven't built yet" matters more than fine-grained control over the audit message text — the standard trade-off for retrofitting an audit trail onto ~90 existing endpoints without touching each one.
+### Build order (only if pursued)
+1. Stand up Postgres + pooling in dev/CI.
+2. Build `db/pgStore.js` behind the identical facade signature; prove one collection's CRUD round-trips against the existing suite by swapping the store under it.
+3. Port `auditHook.js`/`sessions.js`/`controlStore.js` to Postgres dialect.
+4. Design schema-per-deal provisioning + a real migration runner.
+5. Add the backend-selection seam; keep SQLite as the demo/app-only default.
+6. Full regression suite against the Postgres backend.
+7. Container image + connection-string/secret wiring + a readiness check that verifies Postgres reachability, not just process liveness.
+8. Rebuild backup/restore tooling — SQLite's "copy the file" story disappears; need `pg_dump`/managed-snapshot tooling instead.
 
-**Trade-offs:** Trigger-based logs record raw row diffs, not human-readable "what changed" summaries — acceptable for a compliance trail; a thin formatter can render the JSON diff for the IMO reporting UI. Audit log lives in `control.db`, not the deal file, specifically so deleting or archiving a deal database cannot also erase its own audit history.
+### Survival verdict
+- **Zero-install turnkey zip:** **DOES NOT SURVIVE** for real-deal mode as currently defined (self-managed/app-only shapes) — a Postgres decision either retires those shapes for real-deal mode or requires redefining "app-only" as "app + operator-provisioned Postgres," a scope decision this research surfaces rather than assumes.
+- **Demo showcase:** should stay on SQLite regardless of this decision — not a Postgres migration, a *dual-backend* addition, which is why PROJECT.md itself already flags this as bump-to-v3.0-scale scope, not a v2.2.0-sized change.
 
-**Example:**
-```sql
--- db/triggers.sql (generated for each table in deal.schema.sql / demo.schema.sql)
-CREATE TRIGGER audit_dd_findings_upd AFTER UPDATE ON dd_findings BEGIN
-  INSERT INTO main.audit_log (table_name, row_id, action, old_json, new_json, actor, deal_id, ts)
-  SELECT 'dd_findings', OLD.id, 'update', json_object(...OLD...), json_object(...NEW...),
-         (SELECT username FROM audit_actor WHERE id = 1), :deal_id, strftime('%Y-%m-%dT%H:%M:%fZ','now');
-END;
-```
-*(`audit_log` physically lives in `control.db`; use SQLite's `ATTACH DATABASE` from each deal connection, or — simpler and equally correct — have the trigger write into a local `audit_log_local` table per deal file and have `reportingService.js` union them on read. Prefer the union approach: it avoids cross-file `ATTACH` fragility across platforms in the zero-install bundles.)*
+---
 
-## Data Flow
+## Optimistic Locking (version column) — layers onto any of the three, independently
 
-### Request Flow (any `/api/*` call, post-milestone)
+`PROJECT.md` names this as a **separate** deliverable ("optimistic locking on co-edited records — version + 409 + reload UX") from the multi-writer architecture decision, and it should be planned that way: it's a business-level co-edit-conflict UX, not a storage-engine safety mechanism. SQLite's write lock (Options A/B) already guarantees the *database* can't be corrupted by concurrent writers; it does nothing to stop User A's stale read from silently overwriting User B's just-saved edit with old data — that's what optimistic locking is for.
 
-```
-Browser fetch('/api/dd/findings', {headers: {'X-Deal-Id': dealId}})
-    ↓
-[auth.js] verify session cookie -> req.user {id, username, role}      (401 if missing/expired)
-    ↓
-[dealResolver.js] look up dealId in control.db.projects -> req.dealId, req.isDemo, req.dealDb   (404 if unknown)
-    ↓
-[accessPolicy.js] match req.path against RESOURCE_POLICY -> 403 if role/workstream not granted
-    ↓
-[auditActor.js] (writes only) stamp req.user into req.dealDb.audit_actor
-    ↓
-routes/dd.js handler -> req.dealDb.prepare(...).all()/.run()          (SQLite trigger fires on write)
-    ↓
-res.json(filterByAccess(rows, req.user, req.dealId))                  (only for policy-listed resources)
-```
+- **Schema:** add `version INTEGER NOT NULL DEFAULT 1` per mutable row (or reuse an `updated_at` timestamp — an integer version is simpler to reason about and compare).
+- **Read path:** every GET response includes the row's current `version`.
+- **Write path:** the client echoes back the version it last read. Inside `writeDb()`'s existing per-item diff loop, the branch that currently does an unconditional `UPDATE key SET ... WHERE id=?` (id already in this request's own snapshot) becomes `UPDATE key SET ..., version=version+1 WHERE id=? AND version=?` (binding the version this request's snapshot captured). `better-sqlite3` exposes `.changes` (rows affected): **0 changes** now means one of two things that must be *distinguished*, not conflated — the row was concurrently **deleted** (today's existing `CR-02` no-op case, harmless) or its **version moved** (a genuine co-edit conflict needing a 409). A follow-up `SELECT` to tell these apart is the one real addition to the merge algorithm's per-item branch.
+- **This is identical work on SQLite (Options A/B) or Postgres (Option C)** — Postgres's `UPDATE ... WHERE id=$1 AND version=$2 RETURNING *` is the same shape, just idiomatic Postgres syntax. Postgres is not needed to get this feature; it should not factor into the A/B/C decision at all.
+- Sequence this as its **own phase, after** the concurrency-architecture decision is locked in (since it touches the same `writeDb()` per-item loop Option A/B would also touch), but its design is unaffected by which of A/B/C wins.
 
-### Key Data Flows
+---
 
-1. **Deal switch (replaces `/api/projects/:id/activate`'s in-memory JSON swap):** admin picks a deal in the project switcher → `PUT /api/app-state/active-deal` updates `control.db.app_state` → frontend re-sends `X-Deal-Id` on subsequent calls (or the server keeps a per-session default) → `dealResolver` opens/reuses the corresponding SQLite file. No JSON is copied; nothing is "stashed."
-2. **DD finding → remediation task (extends existing linkage):** `POST /api/dd/findings/:id/remediate` reuses the exact pattern already proven at `POST /api/integration-tasks/from-remediation` (`server.js` ~line 2159, `REMEDIATION_WS` map) — same dimension→workstream mapping idea, same "create an integrationTasks row from a flagged finding" shape, just sourced from `dd_findings` instead of assessment red flags.
-3. **Audit trail read (IMO reporting):** `reportingService.js` reads `control.db.audit_log WHERE deal_id = ?`, joins against the deal's own tables (opened via `openDeal(dealId)`) to render a human-readable change log inside the generated steering-committee pack.
+## TLS / Reverse-Proxy Termination (self-managed shape)
 
-## Build Order / Dependencies
+Recommend TLS terminate at a reverse proxy (nginx or Caddy) in front of the Node process(es), **not** inside `server.js`. Rationale: automatic cert renewal (Let's Encrypt/Caddy), a natural multiplexing point for N `server.js` instances behind one public `:443` (which Option B already needs anyway for load distribution), a natural place for rate limiting (a stated milestone goal) and compression (today's `compression` middleware could then be dropped or kept as defense-in-depth), and keeping cert/secret material off the Node process entirely.
 
-This maps directly onto `.planning/PROJECT.md`'s "Foundation first, then the four capability gaps" decision — the phases below are the concrete dependency graph behind that sentence.
+Concrete, currently-missing hardening step: `server.js`'s `app.listen(PORT, ...)` binds all interfaces by default. Behind a reverse proxy it should bind **loopback only** (`127.0.0.1:PORT`), and `app.set('trust proxy', ...)` needs to be set correctly so `req.ip` (already used in session-creation audit metadata, and needed for rate limiting) reflects the real client, not the proxy.
 
-**Phase F0 — Schema & migration (gates everything)**
-- Design `control.schema.sql` / `deal.schema.sql` / `demo.schema.sql`.
-- Write `migrate-from-json.js`: `db.json` → `control.db` (users, one `projects` row per existing project incl. `proj_demo`) + `demo.db` (today's demo arrays) + one `deals/<id>.db` per existing non-demo `projects[]` entry (if any exist beyond the seeded demo).
-- Vendor `better-sqlite3` prebuilt binaries for win32-x64, darwin-x64, darwin-arm64, linux-x64 into the repo, following the exact precedent already established for `@napi-rs/canvas` (`.planning/codebase/INTEGRATIONS.md` / `STRUCTURE.md` note this was solved once already for the zero-install bundles — reuse that playbook, don't re-derive it).
-- **Gates:** literally everything below; no capability area can attach data until tables exist to attach it to.
+For the container/platform shape, TLS more commonly terminates at the platform's own ingress/load balancer (outside this app's control); the container itself should serve plain HTTP internally under the same "bind loopback, trust the proxy" posture, enforced by the platform rather than a hand-rolled nginx config.
 
-**Phase F1 — Mandatory auth + roles**
-- Promote `PORTAL_AUTH` from opt-in to the only mode (delete the "unset = open" branch in the two `app.use('/api', ...)` gates, `server.js` lines 141–174).
-- Expand roles beyond `admin`/`hrbp`/`pmo` to include whatever workstream-lead roles the DD clean-room needs (e.g., `il`, `ws_lead_hr`, `ws_lead_legal`, `ws_lead_finance`, ...) — this is a `users.role` enum change plus the `workstream_access` grant table design.
-- **Depends on:** F0 (users table now lives in `control.db`, not `db.json`).
-- **Gates:** F2 (access policy needs real roles to check) and the clean-room requirement generally.
+## Container Config Contract
 
-**Phase F2 — Demo/real separation (deal resolver) + audit log**
-- Build `dealResolver.js`, retire `stashActiveCustomProject`/`snapshotCms`/`applyCmsToTopLevel`.
-- Build `auditActor.js` + generate triggers for every table.
-- Gate every time-travel/XP/leaderboard/easter-egg route with `if (!req.isDemo) return res.status(404)`.
-- **Depends on:** F0 (files must exist to resolve to) + F1 (req.user must exist for the audit actor stamp).
-- **Gates:** requirement A (hard "no shared store") is only actually satisfied once this phase ships — do not consider foundation done before this lands.
+- **Env vars:** extend the existing `PORT`, `PUBLIC_BASE_URL`, `DEMO_OPEN`, `MA_CONTROL_DB_PATH`/`MA_RUNTIME_DB_PATH`/`MA_AUDIT_DB_PATH`/`MA_DEMO_DB_PATH`/`MA_DEALS_DIR` family (already overridable per `db/dbFiles.js`) with `NODE_ENV=production`, real session/secret config (retiring `ADMIN_TOKEN`), `STORAGE_BACKEND` (only relevant if Option C is ever added), a single `DATA_DIR` root (today `db/dbFiles.js` hardcodes `path.join(__dirname, '..', 'data')` — needs to become the base for a container's mounted volume, e.g. `/data`), and `TRUST_PROXY=1`.
+- **Health/readiness:** `/healthz` already exists (`server.js:665`) but should be split per standard container-probe convention: `/healthz` = liveness (process responsive), `/readyz` = readiness (confirm storage is actually openable/writable — a trivial `SELECT 1` against `control.db` — and migrations are complete, not just "the process started").
+- **Migration-on-boot:** today's `openDbFile()` runs `CREATE TABLE IF NOT EXISTS` idempotently on every open — fine for SQLite's schema-is-just-a-file model, but not a real migration system (no versioning, no story for altering a table that already has real deal data in it). Recommend a lightweight migration runner (`schema_migrations` table + numbered `.sql` files applied at startup before `app.listen()`) **regardless of which storage option is chosen** — the version-column addition above *is itself* a schema migration with no formal mechanism today to apply to an already-deployed deal's `.db` file. Mandatory if Option C is ever pursued.
+- **Volume for deal DBs:** the container image must be stateless (only the committed `demo.db`/`control.db` seed pair baked in) with `DATA_DIR` mounted as a persistent volume. Per Option B's edge case above, that volume must be a single-writer-accessible local/attached (RWO) volume with `replicas: 1`, unless a broker (A) or Postgres (C) is introduced specifically to unlock N>1 replicas safely.
 
-**Phase F3 — Schema validation on write paths**
-- Add a small validation layer (hand-rolled length/type checks, matching the existing style at `server.js` lines 718/791, or a lightweight schema-validation library) applied per `routes/*.js` module as each is lifted out of `server.js`.
-- **Depends on:** the `routes/` split happening as part of F0–F2's refactor (natural byproduct, not extra work if the route-lifting is done table-by-table alongside schema work).
+## Graceful Shutdown / Restart With In-Flight Writes
 
-**Then, in this order, the four capability areas — each gated by F0–F3 as a set:**
+`server.js` already does this correctly for the single-process case (lines 6857–6879): `server.close()` on SIGTERM/SIGINT stops accepting new connections, lets in-flight requests finish, with a 10s hard-kill fallback. Because `better-sqlite3` is a **synchronous** binding, a write that has already entered `conn.transaction()` cannot be left half-committed by a signal arriving mid-call — Node's event loop won't even process the SIGTERM handler until the current synchronous call stack (including the transaction) returns. This is a genuine, non-obvious strength of the driver choice worth stating explicitly: it's already shutdown-safe by construction.
 
-1. **Due diligence workspace** — needs `accessPolicy.js` (clean-room is its headline requirement) which needs F1's roles. Build DD request/findings tables + `ddService.js` + reuse the remediation-linkage pattern. **First** among the four because clean-room is the other hard architectural requirement besides mode separation, and validating the access-policy pattern here proves it out before org design reuses it.
-2. **Synergy value capture** — lowest new-architecture risk: extends the existing `synergyInitiatives` table (baseline/phasing/cost-to-achieve/stage-gate are new columns + a time-series child table, not a new access model) and the existing `POST /api/integration-tasks/from-remediation`-style linkage. Can run in parallel with DD once F0–F3 land, since it shares no new middleware surface with DD.
-3. **IMO reporting & exports** — depends on DD (findings feed the report) and synergy (financials feed the report) having real data to report on, plus the audit log (F2) for the change-log section, plus this is also the first place a generic **export** endpoint is needed at all (`.planning/PROJECT.md` notes the app currently has import but zero export endpoints) — build `reportingService.js` after 1 and 2 have at least their read models stable.
-4. **Org design & talent retention** — mostly independent of 1–3 (new tables: `org_roles`, `redundancy_decisions`, `retention_risks`), but its access rule (`pre_close_restricted`, IL/admin-only) reuses `accessPolicy.js` from DD, so building it after DD (not before) means the access pattern is already proven rather than being invented twice.
+- **Option B (N processes, no broker):** each process's shutdown is identical to today's story, unchanged. The only new requirement is a **rolling restart** at the supervisor level (stop process 1, wait for health, start its replacement, then process 2, …) rather than `killall` — zero new application-level engineering.
+- **Option A (broker):** shutdown ordering now matters — read workers must drain (stop accepting HTTP) *before* the writer drains, or writes already in flight when the writer exits first will hang against a dead socket rather than fail fast.
+- **Option C (Postgres):** the Node process(es) side is simple (identical shutdown + `pool.end()`), but Postgres itself becomes a separate lifecycle entirely (its own graceful stop) — the platform's or systemd's job, outside this app's process boundary.
+- `server.js`'s current `uncaughtException`/`unhandledRejection` handlers are explicitly **log-only** today, with an existing code comment noting this needs to become log-then-exit for a *supervised* deploy so the supervisor restarts a process left in an undefined state. This becomes load-bearing under any multi-process shape (A or B) — flag as a required change, not optional polish.
 
-## Scaling Considerations
+---
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| Laptop-local, 1 Integration Lead | Current design as specified: `better-sqlite3` synchronous calls are fine — one operator generates negligible write contention, and WAL mode means reads never block on the rare write |
-| Shared internal host, small IMO + workstream-lead team (5–20 users) | Still fine — SQLite's single-writer model only becomes a real constraint under high write concurrency (e.g. many simultaneous form submits per second), which a handful of named users editing a checklist/RAID log will never approach. Keep the connection cache warm per deal (`db/index.js`'s `Map`) rather than opening a new connection per request |
-| Multiple simultaneous active deals (explicitly out of scope this milestone) | The file-per-deal design already supports this for free — `openDeal(dealId)` just needs to be callable concurrently for N different `dealId`s instead of one "active" pointer. No re-architecture needed later, unlike the current shared-staging-array approach, which would need exactly this rewrite if portfolio view were ever added |
+## Recommendation
 
-### Scaling Priorities
+### Default: **Option B** (native SQLite multi-process WAL write-serialization, hardened with `.immediate()` transactions + busy-retry/503), single-host, `replicas: 1` for the container shape — plus the version-column optimistic-locking layer as its own additive phase.
 
-1. **First real constraint if it ever appears:** `better-sqlite3` is synchronous and runs on the main thread — a slow multi-second write (unlikely at this data volume) would briefly block the Node event loop for all other requests. If this ever becomes visible, move that specific write path to a worker thread; don't pre-optimize for it now.
-2. **Second:** if the app ever needs true multi-writer concurrency across many named users hitting the same deal file at once, that is the point to evaluate a client-server database (Postgres) — not before, and not as part of this milestone.
+| | Option A: Broker | **Option B: Native WAL (recommended)** | Option C: Postgres |
+|---|---|---|---|
+| Correctness vs. Phase-1 lost-update race | Preserved (by construction, same as B) | **Preserved** — no code change needed to the merge algorithm itself | Preserved, different mechanism |
+| New components | Writer process + IPC layer + serialization bridge | **None** — `.immediate()` + retry wrapper inside existing `writeDb()` | New store module, pooling, migration runner, ported audit/session/control modules |
+| Call-site changes (~90 sites) | None (facade dispatch seam) | **None** | None if C1; all 90 if C2 (out of scope) |
+| Horizontal (N>1 host/replica) scaling | Yes, still single-writer under the hood | **No — pinned to one host/one disk** | Yes, natively |
+| Throughput ceiling at this app's scale | Comfortably sufficient | **Comfortably sufficient** (writes are small, users are few) | Comfortably sufficient, headroom to spare |
+| New failure mode | Writer-process outage = app-wide write outage | **None new** | DB-server outage = app-wide outage (same class, different process) |
+| Zero-install turnkey zip | Survives | **Survives** | Does not survive as currently defined |
+| Demo showcase | Survives unaffected | **Survives unaffected** | Survives only if kept on a separate SQLite path (dual-backend) |
+| Container/platform replica count | N (via broker) | **1** (unless paired with A or C later) | N |
+| Engineering cost this milestone | Medium-high (new protocol, serialization) | **Low** (two small, targeted `writeDb()` changes + process supervision) | High (new backend, schema-per-deal, migration runner, dual-backend facade) |
+| Version impact | v2.2.0 | **v2.2.0** | Likely v3.0 (per PROJECT.md's own flag) |
 
-## Anti-Patterns
+**Why B and not A:** the Key Finding above shows the broker isn't required for correctness — SQLite's own cross-process locking already extends the existing lost-update fix to N processes with zero changes to the merge algorithm. A buys horizontal (multi-host) scaling and a single write-serialization choke point this app's realistic concurrency (an IL + a handful of workstream leads on one active deal) doesn't need, at the cost of a new failure mode, new IPC/serialization plumbing, and added write latency. Keep it as a documented **future escape hatch** — reach for it only if write volume or a genuine multi-host requirement ever actually materializes.
 
-### Anti-Pattern 1: Mode column with app-level `WHERE`/ternary filtering
+**Why B and not C:** Postgres is the architecturally "correct" long-term answer for true multi-writer, multi-host scaling and idiomatic row-level locking — but it breaks the zero-install turnkey-zip and app-only shapes outright, requires a schema-per-deal redesign to preserve the MNPI isolation property `db/resolver.js` currently gives for free, and forces either retiring those deployment shapes or building a dual-backend facade — a substantially larger scope than the rest of this milestone. PROJECT.md itself already anticipates this ("a Postgres decision may reshape scope and bump the version to v3.0"); the recommendation here is that v2.2.0 does not need to make that trade, because Option B satisfies the milestone's actual stated deployment shapes (self-managed host, container/platform *at replica=1*, app-only) without it.
 
-**What people do (and what this codebase does today):** a single `demoMode` boolean plus parallel shadow arrays (`employees` vs `customEmployees`, `integrationTasks` vs `customIntegrationTasks`, etc.), checked via `db.settings.demoMode === false` scattered across 40+ locations in `server.js`.
-**Why it's wrong:** every new endpoint must remember to add the same ternary; a single missed check either leaks real deal data into a demo export or lets a demo-mode gamification write mutate what looks like real data. This is precisely the mechanism requirement A (`.planning/PROJECT.md`) is written to prevent.
-**Do this instead:** physically separate files (Pattern 1 above) — the correctness of the separation no longer depends on every route author remembering a conditional.
+**Honest tradeoff being accepted:** Option B caps the container/platform shape at a single replica per deal-serving instance and does not enable multi-host horizontal scaling. If TE's shared host ever needs true multi-replica horizontal scaling (not just multi-user concurrency on one host), that is a real future migration (to A or C) — not a limitation this research recommends papering over, but one that matches PROJECT.md's stated shape ("a shared internal host," not a distributed cluster) closely enough to defer deliberately.
 
-### Anti-Pattern 2: Retrofitting audit logging endpoint-by-endpoint
+### Suggested phase build order for the milestone
 
-**What people do:** add `logAudit(...)` calls inside each of the ~90 route handlers as they're touched, one at a time.
-**Why it's wrong:** guaranteed incomplete coverage (whichever routes aren't touched this milestone stay unaudited), and it re-litigates "what does before/after mean" per author.
-**Do this instead:** Pattern 4 (DB triggers + one middleware) — coverage is a property of the schema, not of route-handler discipline.
-
-### Anti-Pattern 3: Growing the four already-monolithic frontend files further
-
-**What people do:** add each new capability area's UI as another tab inside `dashboard.js` (2,411 lines) or `admin.js` (2,454 lines), because that's where the existing "IL portal" and "admin console" already live.
-**Why it's wrong:** `.planning/codebase/ARCHITECTURE.md` already names this exact anti-pattern for the existing dashboard tabs and prescribes the fix; adding four more capability areas the same way compounds a documented problem instead of fixing it.
-**Do this instead:** each new capability area gets its own `public/js/{area}.js` + a distinct nav entry (DD workspace, org design, reporting each earn their own page/module — matching the "New Feature (Page + Portal)" convention already documented in `.planning/codebase/STRUCTURE.md`), rather than another tab bolted onto `dashboard.js`.
-
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Gemini API (`aiService.js`) | Unchanged — still reads `geminiApiKey` from settings, now sourced from `control.db` or the active deal's settings table instead of `db.json.settings` | No architectural change needed; just repoint the settings read |
-| Playbook RAG (`ragService.js`) | Unchanged — indexes the static PDF, a shared global asset | Confirm it is NOT moved into per-deal files; it has no MNPI content and every deal should retrieve from the same index |
-| better-sqlite3 (new dependency) | Synchronous native binding; vendor prebuilt binaries per platform in the release zips | Direct precedent already solved in this repo for `@napi-rs/canvas` — reuse that exact packaging approach for the zero-install bundles |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `dealResolver` ↔ route handlers | `req.dealDb` object passed via Express request object | Route handlers never call a global `readDb()` again; this is the seam that makes mode separation enforceable rather than conventional |
-| `accessPolicy` ↔ `reportingService`/`ddService`/`orgDesignService` | Shared `RESOURCE_POLICY` config consulted by the generic middleware; sensitive routes additionally call `filterByAccess()` before responding | Only ~10–15 routes need the extra `filterByAccess()` call; the other ~75+ existing endpoints (CMS, i18n, menus, settings) need nothing beyond the now-mandatory auth gate |
-| `auditActor`/triggers ↔ `control.db.audit_log` | Local `audit_log_local` table per deal file, unioned at read time by `reportingService.js` | Avoids cross-file `ATTACH DATABASE` fragility across the Windows/macOS/any-OS zero-install bundles |
+1. **Concurrency architecture decision + proof.** Lock in Option B; build the new two-process (or N-process) soak test proving `.immediate()` + busy-retry holds under realistic load. This gates everything below.
+2. **Storage-layer hardening.** `.immediate()` transactions + busy-retry/503 mapping in `writeDb()`; migration-runner scaffold (`schema_migrations` table); `DATA_DIR` env-overridable path; loopback-bind + `trust proxy` correctness; `uncaughtException` switched to log-then-exit for supervised deploys.
+3. **Optimistic locking.** Version column migration + conditional `UPDATE`/409 distinguishing "deleted" from "conflicted" + client reload UX — the user-facing deliverable PROJECT.md names explicitly.
+4. **Multi-process runtime.** Process-supervisor config (systemd unit template or `cluster` primary/worker wiring), rolling-restart runbook, N-process soak/load test.
+5. **Self-managed host deployment.** Reverse proxy (nginx/Caddy) + TLS + loopback binding + backup/restore tooling (file-copy + WAL-checkpoint-aware) + secrets management retiring `ADMIN_TOKEN`.
+6. **Container/platform shape.** Dockerfile, `/readyz` split from `/healthz`, volume contract, `replicas: 1` documented as a hard constraint, CI image build.
+7. **Workstream-lead collaboration + deal-setup wizard enhancements.** Sequenced last — depends on the multi-user-safe storage layer and sessions-at-scale being solid first; lower architectural risk, mostly UI + extending the existing membership/clearance model.
+8. **Deferred, not this milestone:** Postgres dual-backend — revisit only if a concrete need for N>1-replica horizontal write scaling emerges, or TE IT mandates a managed-Postgres platform and the zero-install/app-only shapes are explicitly retired or kept SQLite-only.
 
 ## Sources
 
-- This codebase: `/Users/karstenhaldan/M&A/server.js` (lines 95–350, 619–2908 — auth gate, `readDb`/`writeDb`, project/CMS swap machinery, `demoMode`/`isCustom` branch points, `workstreamId` usage) — HIGH confidence, direct code read
-- `.planning/PROJECT.md` — hard requirements A/B, out-of-scope decisions (single-active-deal, no portfolio view), foundation-first sequencing — HIGH confidence, project source of truth
-- `.planning/codebase/ARCHITECTURE.md`, `STRUCTURE.md`, `INTEGRATIONS.md` (refreshed 2026-07-18) — component map, monolithic-file findings, existing conventions for adding resources/pages — HIGH confidence
-- [better-sqlite3 — npm](https://www.npmjs.com/package/better-sqlite3) / [WiseLibs/better-sqlite3 GitHub](https://github.com/JoshuaWise/better-sqlite3) — synchronous API, WAL mode guidance, single-writer concurrency limits — MEDIUM-HIGH confidence, current library docs
-- [How to Use SQLite in Node.js Applications](https://oneuptime.com/blog/post/2026-02-02-sqlite-nodejs/view) — WAL-mode concurrency behavior in Express contexts — MEDIUM confidence, secondary source, consistent with official docs
-- [Tracking SQLite table history using a JSON audit log — Simon Willison](https://til.simonwillison.net/sqlite/json-audit-log) / [SQLite CREATE TRIGGER — DbSchema](https://dbschema.com/blog/sqlite/create-trigger/) — OLD/NEW trigger-based audit pattern — MEDIUM-HIGH confidence, well-established SQLite technique
+- `db/store.js`, `db/resolver.js`, `db/dbFiles.js`, `db/sessions.js`, `server.js` (this repository) — read directly, HIGH confidence.
+- [Write-Ahead Logging — sqlite.org](https://www.sqlite.org/wal.html) — official WAL semantics (multiple readers + one writer, cross-process, `busy_timeout` retry behavior) — MEDIUM confidence (verified/cross-checked).
+- [SQLITE_BUSY / concurrent writers discussion — DeepWiki (better-sqlite3)](https://deepwiki.com/WiseLibs/better-sqlite3/3.4-wal-mode-and-performance-tuning) — MEDIUM confidence.
+- [The Node.js Developer's Guide to Unix Domain Sockets](https://nodevibe.substack.com/p/the-nodejs-developers-guide-to-unix) — Unix-socket vs. TCP-loopback latency figures cited for Option A's transport choice — MEDIUM confidence.
 
 ---
-*Architecture research for: Express/vanilla-JS M&A portal — foundation + four capability areas milestone*
-*Researched: 2026-07-23*
+*Architecture research for: v2.2.0 Shared-Host Multi-User milestone*
+*Researched: 2026-08-10*
