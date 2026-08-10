@@ -2,12 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0.1
 milestone_name: milestone
-current_phase: 07
-current_phase_name: imo-reporting-exports
-status: verifying
+current_phase: 1
+current_phase_name: Schema & Migration
+status: awaiting_formal_close
 stopped_at: Completed 07-07-PLAN.md
-last_updated: "2026-08-09T07:28:10.855Z"
-last_activity: 2026-08-09
+last_updated: "2026-08-10T07:49:28.096Z"
+last_activity: 2026-08-10
+last_activity_desc: Phase 7 complete — all 7 phases executed; Phase 1 formal close (deferred Win/Linux boots) pending at release-cut
 progress:
   total_phases: 7
   completed_phases: 7
@@ -22,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-23)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 07 — imo-reporting-exports
+**Current focus:** Milestone close — audit, Phase 1 formal close, whole-codebase security review, release cut
 
 ## Current Position
 
-Phase: 07 (imo-reporting-exports) — EXECUTING
-Plan: 7 of 7
-Status: Phase complete — ready for verification
-Last activity: 2026-08-09
+Phase: 1 — Schema & Migration (code-complete since 2026-07-23; formal close deferred to release-cut)
+Plan: 3/3 executed; open items = Win/Linux turnkey boot verification + /gsd-verify-work 1
+Status: Milestone close in progress — all 7 phases executed, Phases 2-7 formally closed
+Last activity: 2026-08-10 — Phase 7 complete (review 0-crit, verifier passed 12/12, SECURED 40/40)
 
 Progress: [██████████] 100%
 
@@ -37,7 +38,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 35
+- Total plans completed: 42
 - Average duration: - min
 - Total execution time: 0 hours
 
@@ -50,6 +51,7 @@ Progress: [██████████] 100%
 | 4 | 10 | - | - |
 | 5 | 8 | - | - |
 | 6 | 8 | - | - |
+| 7 | 7 | - | - |
 
 **Recent Trend:**
 

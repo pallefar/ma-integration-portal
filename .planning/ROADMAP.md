@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Due Diligence Workspace** - New-deal setup wizard (guided onboarding incl. readiness assessments), DD request lists, findings register, and server-side clean-room access control (completed 2026-08-03)
 - [x] **Phase 5: Synergy Value Capture** - Baseline, phasing, cost-to-achieve and confidence stage-gating on synergy initiatives (completed 2026-08-06)
 - [x] **Phase 6: Org Design & Talent Retention** - Organisation structure, redundancy decisions, and a flight-risk register (completed 2026-08-08)
-- [ ] **Phase 7: IMO Reporting & Exports** - CSV/JSON data export and a generated steering-committee pack
+- [x] **Phase 7: IMO Reporting & Exports** - CSV/JSON data export and a generated steering-committee pack (completed 2026-08-10)
 
 ## Phase Details
 
@@ -314,4 +314,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 (Phases 4
 | 4. Due Diligence Workspace | 10/10 | Complete    | 2026-08-03 |
 | 5. Synergy Value Capture | 8/8 | Complete    | 2026-08-06 |
 | 6. Org Design & Talent Retention | 8/8 | Complete    | 2026-08-08 |
-| 7. IMO Reporting & Exports | 7/7 | In Progress|  |
+| 7. IMO Reporting & Exports | 7/7 | Complete    | 2026-08-10 |
