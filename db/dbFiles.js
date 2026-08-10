@@ -11,10 +11,24 @@
 // module — the connection cache is the resolver's job (Plan 03).
 //
 // openDbFile() reproduces db/store.js's initDb() pragma contract exactly
-// (journal_mode WAL, synchronous NORMAL, foreign_keys ON, busy_timeout 5000)
+// (journal_mode WAL, synchronous NORMAL, foreign_keys ON, busy_timeout 1000)
 // so every new file is opened under the same concurrency-safety guarantees
 // Phase 1 already established for data/ma-portal.db — this is one storage-
 // layer contract, not two.
+//
+// D-03/D-05/CONC-01 (Phase 8): busy_timeout is 1000ms (was 5000ms pre-Phase-8)
+// — the server-side contention budget is ~1 second, and the wait happens
+// INSIDE SQLite (a blocking C-level wait), not in an app-level retry loop.
+// D-04: because better-sqlite3 is synchronous, a contended write blocks that
+// process's event loop for the duration of the wait, so every user served by
+// that process stalls for up to ~1s while one write waits for another. This
+// is accepted eyes-open at ~15-person deal-team scale (the reason the budget
+// is 1s rather than the previous 5s) — do NOT add async machinery, a worker
+// thread, or a promise-based retry wrapper to avoid it; that would mean
+// converting ~90 synchronous writeDb()/readDb() call sites (D-03's explicit
+// non-goal). A writer that exhausts this budget throws a SqliteError with
+// `.code` starting 'SQLITE_BUSY', which propagates uncaught to server.js's
+// central error middleware and becomes a 503 Retry-After (D-06).
 
 const fs = require('fs');
 const path = require('path');
@@ -83,7 +97,7 @@ function openDbFile(dbFilePath, schemaPath) {
   conn.pragma('journal_mode = WAL');
   conn.pragma('synchronous = NORMAL');
   conn.pragma('foreign_keys = ON');
-  conn.pragma('busy_timeout = 5000');
+  conn.pragma('busy_timeout = 1000'); // D-03/D-05/CONC-01 (Phase 8): see file header
 
   const schema = fs.readFileSync(schemaPath, 'utf8');
   conn.exec(schema);

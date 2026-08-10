@@ -43,7 +43,9 @@ test('db-file-layout: all four db kinds open with the Phase-1 pragma contract', 
         assert.strictEqual(conn.pragma('journal_mode', { simple: true }), 'wal', `${label}: journal_mode must be WAL`);
         assert.strictEqual(conn.pragma('synchronous', { simple: true }), 1, `${label}: synchronous must be NORMAL (1)`);
         assert.strictEqual(conn.pragma('foreign_keys', { simple: true }), 1, `${label}: foreign_keys must be ON (1)`);
-        assert.strictEqual(conn.pragma('busy_timeout', { simple: true }), 5000, `${label}: busy_timeout must be 5000`);
+        // D-03/D-05/CONC-01 (Phase 8): busy_timeout is 1000ms as of Phase 8
+        // (was 5000ms pre-Phase-8) — see db/dbFiles.js's file header.
+        assert.strictEqual(conn.pragma('busy_timeout', { simple: true }), 1000, `${label}: busy_timeout must be 1000 (Phase 8)`);
       } finally {
         conn.close();
       }
