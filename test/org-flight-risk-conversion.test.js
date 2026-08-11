@@ -413,7 +413,11 @@ test('org-flight-risk-convert (l): public/js/org.js carries the corrected D-17 c
 
 test('org-flight-risk-convert (m): the conversion click handler refreshes state.flightRisks from the server rather than mutating the clicked entry object in place', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'org.js'), 'utf8');
-  const fnStart = src.indexOf('function convertFlightRisk(entryId, toTask, toRaid) {');
+  // CONC-02 (Phase 9, Plan 05): the signature gained a fourth `version`
+  // parameter to thread the optimistic-lock precondition — updated here to
+  // match, mirroring test/synergy-staleness.test.js's identical Plan 01
+  // precedent for a cross-cutting signature change.
+  const fnStart = src.indexOf('function convertFlightRisk(entryId, toTask, toRaid, version) {');
   assert.ok(fnStart !== -1, 'expected to locate convertFlightRisk');
   const fnBody = src.slice(fnStart, src.indexOf('\n  }\n', fnStart));
   assert.ok(fnBody.includes("fetch('/api/org/flight-risk')"), 'the handler must re-fetch the register from the server on success');

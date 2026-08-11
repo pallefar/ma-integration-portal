@@ -884,13 +884,17 @@
       // a clearance boundary, and the one place in this plan where disabled
       // is the correct treatment (UI-SPEC Surface Contract 6).
       taskBtn.disabled = hasTask;
-      taskBtn.addEventListener('click', function () { convertFlightRisk(entry.id, true, false); });
+      // CONC-02 (Phase 9, Plan 05): threads the version of the in-memory
+      // `entry` this row was rendered from — the closed-over variable, not
+      // a re-fetched copy — mirroring public/js/due-diligence.js's
+      // convertFinding() call sites.
+      taskBtn.addEventListener('click', function () { convertFlightRisk(entry.id, true, false, entry.version); });
       convertRow.appendChild(taskBtn);
 
       var raidBtn = el('button', { className: 'btn btn-secondary', text: 'Create RAID entry' });
       raidBtn.type = 'button';
       raidBtn.disabled = hasRaid;
-      raidBtn.addEventListener('click', function () { convertFlightRisk(entry.id, false, true); });
+      raidBtn.addEventListener('click', function () { convertFlightRisk(entry.id, false, true, entry.version); });
       convertRow.appendChild(raidBtn);
     }
 
@@ -927,7 +931,7 @@
   // the row's link arrays and disabled-button state always reflect the
   // authoritative record, mirroring buildFlightRiskForm()'s own
   // refresh-after-write convention above.
-  function convertFlightRisk(entryId, toTask, toRaid) {
+  function convertFlightRisk(entryId, toTask, toRaid, version) {
     function showConvertError(message) {
       var errorEl = document.querySelector('.org-risk-form-error');
       if (!errorEl) return;
@@ -936,10 +940,15 @@
       // countermeasure (Copywriting Contract).
       errorEl.style.display = 'block';
     }
+    // CONC-02 (Phase 9, Plan 05): sends the version only when the caller's
+    // in-memory entry actually carries one (a freshly created entry hasn't
+    // been stamped yet, per D-09 lazy adoption) — never a synthesized 0.
+    var payload = { toTask: toTask, toRaid: toRaid };
+    if (version !== undefined) payload.version = version;
     fetch('/api/org/flight-risk/' + entryId + '/convert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ toTask: toTask, toRaid: toRaid }),
+      body: JSON.stringify(payload),
     }).then(function (r) {
       return r.json().then(function (data) { return { ok: r.ok, data: data }; });
     }).then(function (result) {
