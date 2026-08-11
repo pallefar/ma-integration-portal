@@ -87,12 +87,12 @@ Plans:
   2. On a 409 the user sees a reload-and-reapply path that preserves their in-progress edit instead of discarding it.
   3. Two users editing different records concurrently both save successfully — the lock bites only on the same record, not the whole collection.
 
-**Plans**: 7 plans
+**Plans**: 1/7 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md — Tracer: stale RAID edit rejected with a 409 and recovered end-to-end (storage WHERE clause → 409 middleware → fetch wrapper → compare dialog → reapply)
+- [x] 09-01-PLAN.md — Tracer: stale RAID edit rejected with a 409 and recovered end-to-end (storage WHERE clause → 409 middleware → fetch wrapper → compare dialog → reapply)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -183,7 +183,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Concurrency & Storage Foundation | v2.2.0 | 5/5 | Complete    | 2026-08-11 |
-| 9. Optimistic Locking & Conflict Recovery | v2.2.0 | 0/TBD | Not started | - |
+| 9. Optimistic Locking & Conflict Recovery | v2.2.0 | 1/7 | In Progress|  |
 | 10. Runtime Hardening & Deployment Readiness | v2.2.0 | 0/TBD | Not started | - |
 | 11. Deployment Shapes | v2.2.0 | 0/TBD | Not started | - |
 | 12. Workstream-Lead Collaboration | v2.2.0 | 0/TBD | Not started | - |
