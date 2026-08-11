@@ -90,6 +90,11 @@ const TaskUpsertSchema = z.object({
   due: z.string().trim().max(30).optional(),
   status: z.enum(TASK_STATUSES).optional(),
   source: z.string().trim().max(160).optional(),
+  // CONC-02 (Phase 9, Plan 02, Pitfall 2 recurrence): without this explicit
+  // field zod v4 strips an incoming `version` key by default and the
+  // route-level precheck silently never fires — see RaidUpsertSchema's
+  // identical comment below (Plan 01), the same trap on a second schema.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Task title is required.',
   path: ['title'],
@@ -172,6 +177,9 @@ const GeneratePhasingSchema = z.object({
   runRateM: SynMoneyUnion,
   startMonth: z.string().trim().refine(isValidMonth, { message: 'Start month must be a valid YYYY-MM month.' }),
   curveShape: z.enum(['cost', 'revenue', 'linear']),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above.
+  version: z.number().int().nonnegative().optional(),
 });
 
 // D-06/D-25: the dedicated per-month sub-route body — targetM is accepted on
@@ -183,6 +191,9 @@ const GeneratePhasingSchema = z.object({
 const PhasingMonthSchema = z.object({
   targetM: SynMoneyUnion.optional(),
   realizedM: SynMoneyUnion.optional(),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.targetM !== undefined || data.realizedM !== undefined, {
   message: 'At least one of targetM or realizedM is required.',
 });
@@ -198,6 +209,10 @@ const CostEntrySchema = z.object({
   }),
   amountM: SynMoneyUnion,
   note: z.string().trim().max(TEXT_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition on
+  // the OWNING initiative — see SynergyUpsertSchema's identical
+  // field/comment above.
+  version: z.number().int().nonnegative().optional(),
 });
 
 // SYN-04/D-22/D-23: the id array is capped generously below the file's other
@@ -242,6 +257,16 @@ const SynergyUpsertSchema = z.object({
   // route, rides the existing upsert. server.js validates every id against
   // taskLane(db) before mutating (T-05-18); this schema only shape-checks.
   taskIds: z.array(z.string().trim().min(1).max(ID_MAX)).max(TASK_IDS_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 02): this is the OPTIMISTIC-LOCK version of the
+  // initiative record itself, stamped by db/store.js's writeDb() on every
+  // versioned-collection write — distinct from the per-entry `version` field
+  // inside this same record's nested `baselines` array (D-14's "deal case"
+  // numbering, pushBaseline()), which is an unrelated counter the word
+  // `version` already meant in this object before this phase. Without this
+  // explicit field zod v4 strips an incoming `version` key by default and
+  // the route-level precheck silently never fires (Plan 01's RaidUpsertSchema
+  // carries the identical trap/comment).
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Initiative title is required.',
   path: ['title'],
@@ -270,6 +295,11 @@ registerSchema('POST', '/api/synergies/:id/phasing/:month', PhasingMonthSchema);
 const StageChangeSchema = z.object({
   targetStage: z.enum(SYN_STAGES),
   reason: z.string().trim().max(TEXT_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above. This is a
+  // SEPARATE 409 from the route's own unrecognized-current-stage 409 — see
+  // server.js's conflictIfStale() call site comment on this route.
+  version: z.number().int().nonnegative().optional(),
 });
 registerSchema('POST', '/api/synergies/:id/stage', StageChangeSchema);
 
@@ -279,16 +309,25 @@ registerSchema('POST', '/api/synergies/:id/stage', StageChangeSchema);
 // D-09's "trimmed before the emptiness check" rule.
 const RebaselineSchema = z.object({
   reason: z.string().trim().min(1, 'A reason is required to re-baseline.').max(TEXT_MAX),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above.
+  version: z.number().int().nonnegative().optional(),
 });
 registerSchema('POST', '/api/synergies/:id/rebaseline', RebaselineSchema);
 
-// D-16: the confirm-current route accepts NO FIELDS — this is the structural
-// half of D-16's guarantee. There is no field on this request through which
-// a title or a note could ride along with a confirmation, so a confirmation
-// and a content edit can never be the same request. Matches the shape of
-// this file's other empty-body registrations (EmptyBodySchema) but is kept
-// as its own named schema per this plan's artifact roster.
-const ConfirmCurrentSchema = z.object({});
+// D-16: the confirm-current route accepts NO CONTENT FIELDS — this is the
+// structural half of D-16's guarantee. There is no field on this request
+// through which a title or a note could ride along with a confirmation, so
+// a confirmation and a content edit can never be the same request.
+// CONC-02 (Phase 9, Plan 02 Task 2) adds `version` as the SOLE exception —
+// it carries no content of its own, only the optimistic-lock precondition,
+// and this route mutates the initiative (stamps lastConfirmedAt) so D-02
+// gives it no exemption from the version check either. Otherwise matches
+// the shape of this file's other empty-body registrations (EmptyBodySchema)
+// but is kept as its own named schema per this plan's artifact roster.
+const ConfirmCurrentSchema = z.object({
+  version: z.number().int().nonnegative().optional(),
+});
 registerSchema('POST', '/api/synergies/:id/confirm-current', ConfirmCurrentSchema);
 
 // ---------------------------------------------------------------------------
