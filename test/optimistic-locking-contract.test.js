@@ -1245,3 +1245,331 @@ test('optimistic-locking-contract (35, structural): conflictIfStale() is called 
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection on all seven
+// in-scope DELETE routes. Every route carries no JSON body (EmptyBodySchema)
+// — the precondition travels exclusively via `?expectedVersion=`, resolved
+// through the same parseExpectedVersion()/conflictIfStale() dual-channel
+// contract already proven on the query-channel cost-entries DELETE route
+// (tests 13/14). Each test below proves the same four-part shape: a stale
+// delete is rejected 409 with the record surviving; a current-version delete
+// succeeds; repeating the delete afterwards returns the route's own
+// not-found response with no conflict field; and an invalid (negative)
+// expectedVersion is rejected 400 before any mutation.
+// ---------------------------------------------------------------------------
+
+function delWithVersion(base, urlPath, token, version) {
+  const q = version === undefined ? '' : `?expectedVersion=${version}`;
+  return fetch(`${base}${urlPath}${q}`, { method: 'DELETE', headers: { Cookie: cookieHeader(token) } });
+}
+
+test('optimistic-locking-contract (36): DELETE /api/raid/:id — stale delete 409s with the record surviving, current delete succeeds, repeat delete 404s with no conflict field, and a negative expectedVersion 400s', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc36');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/raid', token, { title: 'Delete fixture', type: 'risk', severity: 'medium' });
+    const { entry } = await createRes.json();
+    // Stamp version:1 via an ordinary edit (POST /api/raid handles both
+    // create — no id — and edit — id present — per test 1's own fixture shape).
+    const stampRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'stamped' });
+    assert.strictEqual(stampRes.status, 200);
+    assert.strictEqual((await stampRes.json()).entry.version, 1);
+
+    const negRes = await delWithVersion(base, `/api/raid/${entry.id}`, token, -1);
+    assert.strictEqual(negRes.status, 400, 'a negative expectedVersion must 400 before any mutation');
+    let reread = (await (await getJSON(base, '/api/raid', token)).json()).find((r) => r.id === entry.id);
+    assert.ok(reread, 'the record must still exist after the invalid-version delete attempt');
+
+    const staleRes = await delWithVersion(base, `/api/raid/${entry.id}`, token, 0);
+    assert.strictEqual(staleRes.status, 409);
+    const staleBody = await staleRes.json();
+    assert.strictEqual(staleBody.conflict, true);
+    assert.strictEqual(staleBody.conflictKind, 'version');
+    reread = (await (await getJSON(base, '/api/raid', token)).json()).find((r) => r.id === entry.id);
+    assert.ok(reread, 'the record must still exist after the stale delete attempt');
+
+    const currentRes = await delWithVersion(base, `/api/raid/${entry.id}`, token, 1);
+    assert.strictEqual(currentRes.status, 200);
+    assert.strictEqual((await currentRes.json()).success, true);
+    reread = (await (await getJSON(base, '/api/raid', token)).json()).find((r) => r.id === entry.id);
+    assert.strictEqual(reread, undefined, 'the record must be gone after the current-version delete');
+
+    const repeatRes = await delWithVersion(base, `/api/raid/${entry.id}`, token, 1);
+    assert.strictEqual(repeatRes.status, 404, 'deleting an already-gone record must return the route\'s own not-found status, not a conflict');
+    const repeatBody = await repeatRes.json();
+    assert.ok(!('conflict' in repeatBody), 'a genuine not-found response must carry no conflict field');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (37): DELETE /api/integration-tasks/:id — stale delete 409s with the record surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc37');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'Delete fixture task', workstreamId: 'ws_imo', phase: 'd30' });
+    const { task } = await createRes.json();
+    const stampRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'stamped' });
+    assert.strictEqual(stampRes.status, 200);
+    assert.strictEqual((await stampRes.json()).task.version, 1);
+
+    const staleRes = await delWithVersion(base, `/api/integration-tasks/${task.id}`, token, 0);
+    assert.strictEqual(staleRes.status, 409);
+    assert.strictEqual((await staleRes.json()).conflict, true);
+    let reread = (await (await getJSON(base, '/api/integration-tasks', token)).json()).find((t) => t.id === task.id);
+    assert.ok(reread, 'the task must still exist after the stale delete attempt');
+
+    const currentRes = await delWithVersion(base, `/api/integration-tasks/${task.id}`, token, 1);
+    assert.strictEqual(currentRes.status, 200);
+    reread = (await (await getJSON(base, '/api/integration-tasks', token)).json()).find((t) => t.id === task.id);
+    assert.strictEqual(reread, undefined);
+
+    const repeatRes = await delWithVersion(base, `/api/integration-tasks/${task.id}`, token, 1);
+    assert.strictEqual(repeatRes.status, 404);
+    assert.ok(!('conflict' in (await repeatRes.json())));
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (38): DELETE /api/synergies/:id — stale delete 409s with the record surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc38');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Delete fixture initiative', category: 'revenue', targetM: 2 });
+    const { initiative } = await createRes.json();
+    const stampRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'stamped' });
+    assert.strictEqual((await stampRes.json()).initiative.version, 1);
+
+    const staleRes = await delWithVersion(base, `/api/synergies/${initiative.id}`, token, 0);
+    assert.strictEqual(staleRes.status, 409);
+    assert.strictEqual((await staleRes.json()).conflict, true);
+    let reread = (await (await getJSON(base, '/api/synergies', token)).json()).find((s) => s.id === initiative.id);
+    assert.ok(reread, 'the initiative must still exist after the stale delete attempt');
+
+    const currentRes = await delWithVersion(base, `/api/synergies/${initiative.id}`, token, 1);
+    assert.strictEqual(currentRes.status, 200);
+    reread = (await (await getJSON(base, '/api/synergies', token)).json()).find((s) => s.id === initiative.id);
+    assert.strictEqual(reread, undefined);
+
+    const repeatRes = await delWithVersion(base, `/api/synergies/${initiative.id}`, token, 1);
+    assert.strictEqual(repeatRes.status, 404);
+    assert.ok(!('conflict' in (await repeatRes.json())));
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (39): DELETE /api/org/positions/:id — stale delete 409s with the position surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc39');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/org/positions', token, { title: 'Delete fixture position', level: 'Manager' });
+    const { position } = await createRes.json();
+    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped' });
+    assert.strictEqual((await stampRes.json()).position.version, 1);
+
+    const staleRes = await delWithVersion(base, `/api/org/positions/${position.id}`, token, 0);
+    assert.strictEqual(staleRes.status, 409);
+    assert.strictEqual((await staleRes.json()).conflict, true);
+    let reread = (await (await getJSON(base, '/api/org/positions', token)).json()).find((p) => p.id === position.id);
+    assert.ok(reread, 'the position must still exist after the stale delete attempt');
+
+    const currentRes = await delWithVersion(base, `/api/org/positions/${position.id}`, token, 1);
+    assert.strictEqual(currentRes.status, 200);
+    reread = (await (await getJSON(base, '/api/org/positions', token)).json()).find((p) => p.id === position.id);
+    assert.strictEqual(reread, undefined);
+
+    const repeatRes = await delWithVersion(base, `/api/org/positions/${position.id}`, token, 1);
+    assert.strictEqual(repeatRes.status, 404);
+    assert.ok(!('conflict' in (await repeatRes.json())));
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (40): DELETE /api/org/flight-risk/:id — stale delete 409s with the entry surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc40');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+    const employee = await createEmployee(base, token, 'Olc40 Employee');
+
+    const createRes = await postJSON(base, '/api/org/flight-risk', token, { employeeId: employee.id, riskLevel: 'medium', owner: 'admin' });
+    const { entry } = await createRes.json();
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    assert.strictEqual((await stampRes.json()).entry.version, 1);
+
+    const staleRes = await delWithVersion(base, `/api/org/flight-risk/${entry.id}`, token, 0);
+    assert.strictEqual(staleRes.status, 409);
+    assert.strictEqual((await staleRes.json()).conflict, true);
+    let reread = (await (await getJSON(base, '/api/org/flight-risk', token)).json()).find((r) => r.id === entry.id);
+    assert.ok(reread, 'the entry must still exist after the stale delete attempt');
+
+    const currentRes = await delWithVersion(base, `/api/org/flight-risk/${entry.id}`, token, 1);
+    assert.strictEqual(currentRes.status, 200);
+    reread = (await (await getJSON(base, '/api/org/flight-risk', token)).json()).find((r) => r.id === entry.id);
+    assert.strictEqual(reread, undefined);
+
+    const repeatRes = await delWithVersion(base, `/api/org/flight-risk/${entry.id}`, token, 1);
+    assert.strictEqual(repeatRes.status, 404);
+    assert.ok(!('conflict' in (await repeatRes.json())));
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (41): DELETE /api/dd/request-items/:id — stale delete 409s with the item surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc41');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/request-items', token, { area: 'financial', text: 'Delete fixture item' });
+    const { item } = await createRes.json();
+    const stampRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped' });
+    assert.strictEqual((await stampRes.json()).item.version, 1);
+
+    const staleRes = await delWithVersion(base, `/api/dd/request-items/${item.id}`, token, 0);
+    assert.strictEqual(staleRes.status, 409);
+    assert.strictEqual((await staleRes.json()).conflict, true);
+    let reread = (await (await getJSON(base, '/api/dd/request-items?area=financial', token)).json()).find((i) => i.id === item.id);
+    assert.ok(reread, 'the item must still exist after the stale delete attempt');
+
+    const currentRes = await delWithVersion(base, `/api/dd/request-items/${item.id}`, token, 1);
+    assert.strictEqual(currentRes.status, 200);
+    reread = (await (await getJSON(base, '/api/dd/request-items?area=financial', token)).json()).find((i) => i.id === item.id);
+    assert.strictEqual(reread, undefined);
+
+    // DD's ddAreaRefused() by-id guard (T-04-02/T-04-03) is deliberately
+    // indistinguishable between "missing" and "uncleared" — a missing item
+    // resolves `areaId` to null, which is never a granted area for any role,
+    // so the route's OWN existing not-found response is a 403 anti-
+    // enumeration refusal, not a literal 404. This plan's Task 1 leaves that
+    // pre-existing response untouched (per its own action text: "do not
+    // change it, and do not turn a not-found into a conflict").
+    const repeatRes = await delWithVersion(base, `/api/dd/request-items/${item.id}`, token, 1);
+    assert.strictEqual(repeatRes.status, 403, 'DD\'s by-id guard resolves a missing item to the SAME 403 anti-enumeration refusal as an uncleared one — this route\'s existing not-found response');
+    assert.ok(!('conflict' in (await repeatRes.json())));
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (42): DELETE /api/dd/findings/:id — stale delete 409s with the finding surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc42');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'it', title: 'Delete fixture finding', severity: 'low' });
+    const { finding } = await createRes.json();
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    assert.strictEqual((await stampRes.json()).finding.version, 1);
+
+    const staleRes = await delWithVersion(base, `/api/dd/findings/${finding.id}`, token, 0);
+    assert.strictEqual(staleRes.status, 409);
+    assert.strictEqual((await staleRes.json()).conflict, true);
+    let reread = (await (await getJSON(base, '/api/dd/findings?area=it', token)).json()).find((f) => f.id === finding.id);
+    assert.ok(reread, 'the finding must still exist after the stale delete attempt');
+
+    const currentRes = await delWithVersion(base, `/api/dd/findings/${finding.id}`, token, 1);
+    assert.strictEqual(currentRes.status, 200);
+    reread = (await (await getJSON(base, '/api/dd/findings?area=it', token)).json()).find((f) => f.id === finding.id);
+    assert.strictEqual(reread, undefined);
+
+    // Same DD by-id anti-enumeration shape as request-items (see test 41's
+    // comment) — a missing finding resolves to the same 403 refusal.
+    const repeatRes = await delWithVersion(base, `/api/dd/findings/${finding.id}`, token, 1);
+    assert.strictEqual(repeatRes.status, 403, 'DD\'s by-id guard resolves a missing finding to the SAME 403 anti-enumeration refusal as an uncleared one — this route\'s existing not-found response');
+    assert.ok(!('conflict' in (await repeatRes.json())));
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (43): DELETE with no expectedVersion still deletes — the route-level precheck is a no-op when the client supplies nothing, matching every other route\'s conflictIfStale() contract', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc43');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/raid', token, { title: 'No-version delete fixture', type: 'issue', severity: 'low' });
+    const { entry } = await createRes.json();
+    // No version stamp at all — deleting a freshly created, never-edited record.
+    const delRes = await fetch(`${base}/api/raid/${entry.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(token) } });
+    assert.strictEqual(delRes.status, 200, 'a delete with no expectedVersion at all must still succeed — the storage-layer WHERE clause still guards the cross-process case');
+    const reread = (await (await getJSON(base, '/api/raid', token)).json()).find((r) => r.id === entry.id);
+    assert.strictEqual(reread, undefined);
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (44, structural): all seven in-scope DELETE routes call conflictIfStale() before writeDb(db)/the array reassignment, and the two DD delete routes pass a clearanceFilter matching their POST siblings', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const routeMarkers = [
+    "app.delete('/api/raid/:id',",
+    "app.delete('/api/integration-tasks/:id',",
+    "app.delete('/api/synergies/:id',",
+    "app.delete('/api/org/positions/:id',",
+    "app.delete('/api/org/flight-risk/:id',",
+    "app.delete('/api/dd/request-items/:id',",
+    "app.delete('/api/dd/findings/:id',",
+  ];
+  routeMarkers.forEach((marker) => {
+    // Find the DECLARATION of this exact route (not a later reference to the
+    // same path inside a different route's comment/body) by scanning every
+    // occurrence and taking the one immediately followed by a function body.
+    const start = src.indexOf(marker);
+    assert.ok(start !== -1, `route marker not found: ${marker}`);
+    const rest = src.slice(start + marker.length);
+    const nextAppIdx = rest.search(/\napp\.(get|post|put|delete|use)\(/);
+    const body = nextAppIdx === -1 ? rest : rest.slice(0, nextAppIdx);
+    const conflictIdx = body.indexOf('conflictIfStale(');
+    const writeDbIdx = body.search(/writeDb\(db\)|lane\.splice\(idx, 1\)/);
+    assert.ok(conflictIdx !== -1, `${marker} must call conflictIfStale()`);
+    assert.ok(writeDbIdx !== -1, `${marker} must mutate the lane after the precheck`);
+    assert.ok(conflictIdx < writeDbIdx, `${marker} must call conflictIfStale() BEFORE mutating the lane`);
+  });
+
+  // The two DD delete routes must pass the SAME clearanceFilter shape their
+  // POST siblings pass (T-09-27) — asserted structurally since the HTTP-level
+  // "denied" scenario is unreachable given ddAreaRefused()'s prior gate
+  // (identical reasoning to Plan 04's test 22/25).
+  ["app.delete('/api/dd/request-items/:id',", "app.delete('/api/dd/findings/:id',"].forEach((marker) => {
+    const start = src.indexOf(marker);
+    const rest = src.slice(start + marker.length);
+    const nextAppIdx = rest.search(/\napp\.(get|post|put|delete|use)\(/);
+    const body = nextAppIdx === -1 ? rest : rest.slice(0, nextAppIdx);
+    assert.ok(body.includes('clearanceFilter:'), `${marker} must pass a clearanceFilter to conflictIfStale()`);
+    const areaIdx = body.indexOf('ddAreaRefused(');
+    const conflictIdx = body.indexOf('conflictIfStale(');
+    assert.ok(areaIdx !== -1 && areaIdx < conflictIdx, `${marker} must call ddAreaRefused() BEFORE conflictIfStale() (T-09-19 ordering)`);
+  });
+});

@@ -3183,8 +3183,16 @@ app.post('/api/integration-tasks', (req, res) => {
 app.delete('/api/integration-tasks/:id', (req, res) => {
   const db = readDb();
   const lane = taskLane(db);
+  const task = lane.find(t => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found.' });
+  // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection — this route
+  // carries no JSON body (EmptyBodySchema), so the precondition travels via
+  // ?expectedVersion=, resolved through the same parseExpectedVersion()
+  // dual-channel contract conflictIfStale() already delegates to (Plan 02).
+  // Deleting something already gone is not a conflict (the 404 above already
+  // covers it) — this only fires when the record is present but stale.
+  if (conflictIfStale(req, res, task)) return;
   const filtered = lane.filter(t => t.id !== req.params.id);
-  if (filtered.length === lane.length) return res.status(404).json({ error: 'Task not found.' });
   if (db.settings && db.settings.demoMode === false) db.customIntegrationTasks = filtered;
   else db.integrationTasks = filtered;
   writeDb(db);
@@ -3898,8 +3906,12 @@ app.post('/api/synergies', (req, res) => {
 app.delete('/api/synergies/:id', (req, res) => {
   const db = readDb();
   const lane = synergyLane(db);
+  const item = lane.find(s => s.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection, same
+  // query-channel contract as the sibling sub-routes above.
+  if (conflictIfStale(req, res, item)) return;
   const filtered = lane.filter(s => s.id !== req.params.id);
-  if (filtered.length === lane.length) return res.status(404).json({ error: 'Initiative not found.' });
   if (db.settings && db.settings.demoMode === false) db.customSynergyInitiatives = filtered;
   else db.synergyInitiatives = filtered;
   writeDb(db);
@@ -4653,6 +4665,12 @@ app.delete('/api/org/positions/:id', (req, res) => {
   const idx = lane.findIndex((p) => p.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Position not found.' });
   const target = lane[idx];
+  // CONC-02 (Phase 9, Plan 06 / D-08): placed before the direct-reports
+  // structural check, mirroring Plan 05's positionGraphFailure() precedent —
+  // a delete that is both stale AND blocked by direct reports returns 409,
+  // not 400, so the caller learns their view is stale (the more fundamental
+  // problem) before the business-rule refusal.
+  if (conflictIfStale(req, res, target)) return;
   const directReports = lane.filter((p) => p.reportsToId === target.id);
   if (directReports.length) {
     return res.status(400).json({ error: `This position has ${directReports.length} direct report(s) — reassign them before deleting.` });
@@ -5123,6 +5141,8 @@ app.delete('/api/org/flight-risk/:id', (req, res) => {
   const lane = orgFlightRiskLane(db);
   const item = lane.find((r) => r.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Flight-risk entry not found.' });
+  // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection.
+  if (conflictIfStale(req, res, item)) return;
   db.orgFlightRisks = lane.filter((r) => r.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
@@ -5456,6 +5476,15 @@ app.delete('/api/dd/request-items/:id', (req, res) => {
   const lane = ddRequestLane(db);
   const item = lane.find((i) => i.id === req.params.id);
   if (ddAreaRefused(req, res, deal, item ? item.area : null)) return;
+  // CONC-02 (Phase 9, Plan 06 / D-08, T-09-27): the same clearanceFilter as
+  // this route's POST sibling — a race that moved the item into an area this
+  // caller is no longer cleared for cannot leak the record into a delete
+  // conflict body, even though the ddAreaRefused() gate above already
+  // guarantees this is unreachable via a single HTTP request (Plan 04's own
+  // documented reasoning applies identically here).
+  if (conflictIfStale(req, res, item, {
+    clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? publicDdItem(record) : null,
+  })) return;
   db.ddRequestItems = lane.filter((i) => i.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
@@ -5682,6 +5711,11 @@ app.delete('/api/dd/findings/:id', (req, res) => {
   const lane = ddFindingsLane(db);
   const finding = lane.find((f) => f.id === req.params.id);
   if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+  // CONC-02 (Phase 9, Plan 06 / D-08, T-09-27): the same clearanceFilter as
+  // this route's POST sibling.
+  if (conflictIfStale(req, res, finding, {
+    clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
+  })) return;
   db.ddFindings = lane.filter((f) => f.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
@@ -6004,8 +6038,12 @@ app.get('/api/notifications', (req, res) => {
 app.delete('/api/raid/:id', (req, res) => {
   const db = readDb();
   const lane = raidLane(db);
+  const entry = lane.find(r => r.id === req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Entry not found.' });
+  // CONC-02 (Phase 9, Plan 06 / D-08): the representative route — stale-delete
+  // rejection via the query-channel version precondition.
+  if (conflictIfStale(req, res, entry)) return;
   const filtered = lane.filter(r => r.id !== req.params.id);
-  if (filtered.length === lane.length) return res.status(404).json({ error: 'Entry not found.' });
   if (db.settings && db.settings.demoMode === false) db.customRaidEntries = filtered;
   else db.raidEntries = filtered;
   writeDb(db);

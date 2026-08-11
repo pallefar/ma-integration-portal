@@ -586,13 +586,26 @@
       if (!window.confirm('Delete position? This cannot be undone.')) return;
       clearDeleteError();
       deleteBtn.disabled = true;
-      fetch('/api/org/positions/' + node.position.id, { method: 'DELETE' })
+      // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
+      // holds for this position, taken from the in-memory node it was
+      // rendered from — never a re-fetch. Omitted entirely when the held
+      // position has no version yet (D-09 lazy adoption).
+      var delUrl = '/api/org/positions/' + node.position.id;
+      if (node.position.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(node.position.version);
+      fetch(delUrl, { method: 'DELETE' })
         .then(function (r) {
           return r.json().then(function (data) { return { ok: r.ok, data: data }; });
         })
         .then(function (result) {
           if (!result.ok) {
-            showDeleteError((result.data && result.data.error) || 'Could not delete that position.');
+            // [Rule 1] CONC-02/D-08: a stale-delete 409 is already fully
+            // handled by the shared conflict dialog (public/js/transitions.js's
+            // fetch wrapper renders it as a side effect of this same fetch) —
+            // this generic inline banner must not ALSO fire for that case, or
+            // the user sees two contradictory messages for one refusal.
+            if (!(result.data && result.data.conflict === true)) {
+              showDeleteError((result.data && result.data.error) || 'Could not delete that position.');
+            }
             deleteBtn.disabled = false;
             return;
           }
