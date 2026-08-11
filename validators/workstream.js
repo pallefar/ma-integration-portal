@@ -90,6 +90,11 @@ const TaskUpsertSchema = z.object({
   due: z.string().trim().max(30).optional(),
   status: z.enum(TASK_STATUSES).optional(),
   source: z.string().trim().max(160).optional(),
+  // CONC-02 (Phase 9, Plan 02, Pitfall 2 recurrence): without this explicit
+  // field zod v4 strips an incoming `version` key by default and the
+  // route-level precheck silently never fires — see RaidUpsertSchema's
+  // identical comment below (Plan 01), the same trap on a second schema.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Task title is required.',
   path: ['title'],
@@ -242,6 +247,16 @@ const SynergyUpsertSchema = z.object({
   // route, rides the existing upsert. server.js validates every id against
   // taskLane(db) before mutating (T-05-18); this schema only shape-checks.
   taskIds: z.array(z.string().trim().min(1).max(ID_MAX)).max(TASK_IDS_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 02): this is the OPTIMISTIC-LOCK version of the
+  // initiative record itself, stamped by db/store.js's writeDb() on every
+  // versioned-collection write — distinct from the per-entry `version` field
+  // inside this same record's nested `baselines` array (D-14's "deal case"
+  // numbering, pushBaseline()), which is an unrelated counter the word
+  // `version` already meant in this object before this phase. Without this
+  // explicit field zod v4 strips an incoming `version` key by default and
+  // the route-level precheck silently never fires (Plan 01's RaidUpsertSchema
+  // carries the identical trap/comment).
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Initiative title is required.',
   path: ['title'],

@@ -188,11 +188,28 @@
         var task = state.tasks.find(function (t) { return t.id === id; });
         if (!task) return;
         var next = STATUS_ORDER[(STATUS_ORDER.indexOf(task.status) + 1) % STATUS_ORDER.length];
+        // CONC-02/D-02 (Phase 9): a single-field kanban status flip goes
+        // through the SAME version check as a full edit — no exemptions.
+        // Send the version this page already holds in memory for this
+        // record; send nothing when the held record has no version (the
+        // server treats an absent version as "no precondition supplied",
+        // and the WHERE-clause layer in db/store.js still covers the
+        // cross-process case for it) — mirrors the RAID status-flip site.
+        var body = { id: id, status: next };
+        if (task.version !== undefined) body.version = task.version;
         fetch('/api/integration-tasks', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: id, status: next })
+          body: JSON.stringify(body)
         }).then(function (r) { return r.json(); }).then(function (res) {
-          if (res && res.success) { task.status = next; render(); }
+          if (res && res.success) {
+            // Refresh BOTH status and version from the server's own
+            // response — without refreshing version, the NEXT click in this
+            // same tab would resubmit the now-stale version and
+            // self-conflict against its own prior write.
+            task.status = res.task.status;
+            task.version = res.task.version;
+            render();
+          }
         }).catch(function (e) { console.error('status update failed', e); });
       });
       row.querySelector('.ex-del').addEventListener('click', function () {
@@ -837,12 +854,17 @@
       if (headerRealizedInput) {
         headerRealizedInput.addEventListener('change', function (ev) {
           var val = parseFloat(ev.target.value) || 0;
-          fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, realizedM: val }) })
+          // CONC-02/D-02 (Phase 9): send the version this page already holds
+          // for this initiative; nothing sent when the held record has none.
+          var existingItem = state.synergies.find(function (s) { return s.id === id; });
+          var body = { id: id, realizedM: val };
+          if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
+          fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             .then(function (r) { return r.json(); })
             .then(function (res) {
               if (res && res.success) {
                 var item = state.synergies.find(function (s) { return s.id === id; });
-                if (item) item.realizedM = res.initiative.realizedM;
+                if (item) { item.realizedM = res.initiative.realizedM; item.version = res.initiative.version; }
                 renderSynergy(); applyI18n();
               } else {
                 // Rule 1 fix: once an initiative has phasing rows, D-04

@@ -260,3 +260,213 @@ test('optimistic-locking-contract (4, negative control): the pre-existing empty-
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Plan 02 Task 1: integration tasks and synergy initiatives — the two main
+// upsert routes. Mirrors the RAID proofs above, on the SAME contract, plus
+// the D-02 no-exemptions proof on a kanban-shaped quick action and the
+// dual-channel (query) bounds check.
+// ---------------------------------------------------------------------------
+
+test('optimistic-locking-contract (5): a stale-version integration-task update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc5');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'Original task title', workstreamId: 'ws_imo', phase: 'd30' });
+    assert.strictEqual(createRes.status, 201);
+    const { task } = await createRes.json();
+    assert.strictEqual(task.version, undefined, 'a freshly created task carries no version field yet');
+
+    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'First real edit' });
+    assert.strictEqual(firstEditRes.status, 200);
+    const firstEditBody = await firstEditRes.json();
+    assert.strictEqual(firstEditBody.task.version, 1);
+
+    const staleRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'Stale clobber attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409);
+    const staleBody = await staleRes.json();
+    assert.strictEqual(staleBody.conflict, true, 'the 409 body must carry the conflict:true marker');
+    assert.strictEqual(staleBody.conflictKind, 'version');
+    assert.strictEqual(staleBody.currentVersion, 1);
+    assert.strictEqual(staleBody.currentRecord.title, 'First real edit');
+
+    const rereadRes = await getJSON(base, '/api/integration-tasks', token);
+    const reread = (await rereadRes.json()).find((t) => t.id === task.id);
+    assert.strictEqual(reread.title, 'First real edit', 'the stale write must not have overwritten the title');
+    assert.strictEqual(reread.version, 1, 'the stale write must not have bumped the version');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (6): a current-version integration-task update returns 200 and the stored version is exactly one higher', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc6');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'v2 fixture', workstreamId: 'ws_imo' });
+    const { task } = await createRes.json();
+
+    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'edit 1', version: 0 });
+    assert.strictEqual(firstEditRes.status, 200);
+    assert.strictEqual((await firstEditRes.json()).task.version, 1);
+
+    const secondEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'edit 2', version: 1 });
+    assert.strictEqual(secondEditRes.status, 200);
+    const secondEditBody = await secondEditRes.json();
+    assert.strictEqual(secondEditBody.task.version, 2, 'a current-version write must bump the stored version by exactly one');
+    assert.strictEqual(secondEditBody.task.title, 'edit 2');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (7): a status-only stale integration-task update (id, status, version only — the kanban flip shape) also returns 409, with no quick-action exemption', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc7');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'kanban fixture', workstreamId: 'ws_imo' });
+    const { task } = await createRes.json();
+
+    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'stamped' });
+    assert.strictEqual((await firstEditRes.json()).task.version, 1);
+
+    const staleFlipRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, status: 'doing', version: 0 });
+    assert.strictEqual(staleFlipRes.status, 409, 'a status-only quick action must be rejected identically to a full edit — D-02 has no exemptions');
+    const staleFlipBody = await staleFlipRes.json();
+    assert.strictEqual(staleFlipBody.conflict, true);
+
+    const rereadRes = await getJSON(base, '/api/integration-tasks', token);
+    const reread = (await rereadRes.json()).find((t) => t.id === task.id);
+    assert.strictEqual(reread.status, 'todo', 'the stale status flip must not have changed the stored status');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (8): POST /api/integration-tasks/instantiate with no version in its payload still returns its normal success status — creates are exempt', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc8');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    // A freshly-created deal database is seeded with NO checklistTemplates
+    // rows (db/dealSeed.js's DEAL_SEED_COLLECTIONS is copied from an empty
+    // temp demo.db in this test harness, not db.json) — insert one directly
+    // into this deal's own SQLite file, mirroring
+    // test/reports-export.test.js's seedChecklistTemplate() helper, since
+    // there is no API surface to create a checklist template.
+    const dealConn = store.getOrOpenConnection(dbFiles.dealDbPath(deal.id), dbFiles.DEAL_SCHEMA_PATH);
+    dealConn.prepare('INSERT INTO checklistTemplates (id, project_id, seq, data) VALUES (?, NULL, 0, ?)').run(
+      'ctpl_olc8',
+      JSON.stringify({ id: 'ctpl_olc8', workstreams: [{ id: 'ws_imo', label: 'IMO' }], items: [{ id: 'item_1', text: 'Seed item', workstreamId: 'ws_imo', phase: 'd30' }] })
+    );
+
+    const res = await postJSON(base, '/api/integration-tasks/instantiate', token, { checklistTemplateId: 'ctpl_olc8' });
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.created, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (9): a stale-version synergy-initiative update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc9');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Original synergy title', category: 'revenue', targetM: 5 });
+    assert.strictEqual(createRes.status, 201);
+    const { initiative } = await createRes.json();
+    assert.strictEqual(initiative.version, undefined, 'a freshly created initiative carries no version field yet');
+
+    const firstEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'First real edit' });
+    assert.strictEqual(firstEditRes.status, 200);
+    const firstEditBody = await firstEditRes.json();
+    assert.strictEqual(firstEditBody.initiative.version, 1);
+
+    const staleRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'Stale clobber attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409);
+    const staleBody = await staleRes.json();
+    assert.strictEqual(staleBody.conflict, true);
+    assert.strictEqual(staleBody.conflictKind, 'version');
+    assert.strictEqual(staleBody.currentVersion, 1);
+    assert.strictEqual(staleBody.currentRecord.title, 'First real edit');
+
+    const rereadRes = await getJSON(base, '/api/synergies', token);
+    const reread = (await rereadRes.json()).find((s) => s.id === initiative.id);
+    assert.strictEqual(reread.title, 'First real edit', 'the stale write must not have overwritten the title');
+    assert.strictEqual(reread.version, 1, 'the stale write must not have bumped the version');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (10): a current-version synergy-initiative update returns 200 and the stored version is exactly one higher', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc10');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'v2 synergy fixture', category: 'cost', targetM: 2 });
+    const { initiative } = await createRes.json();
+
+    const firstEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'edit 1', version: 0 });
+    assert.strictEqual(firstEditRes.status, 200);
+    assert.strictEqual((await firstEditRes.json()).initiative.version, 1);
+
+    const secondEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'edit 2', version: 1 });
+    assert.strictEqual(secondEditRes.status, 200);
+    const secondEditBody = await secondEditRes.json();
+    assert.strictEqual(secondEditBody.initiative.version, 2, 'a current-version write must bump the stored version by exactly one');
+    assert.strictEqual(secondEditBody.initiative.title, 'edit 2');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (11): a query-channel ?expectedVersion that is not a non-negative integer returns 400 before any record is mutated', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc11');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'query-channel fixture', workstreamId: 'ws_imo' });
+    const { task } = await createRes.json();
+
+    const badRes = await fetch(`${base}/api/integration-tasks?expectedVersion=abc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookieHeader(token) },
+      body: JSON.stringify({ id: task.id, title: 'should not apply' }),
+    });
+    assert.strictEqual(badRes.status, 400);
+
+    const rereadRes = await getJSON(base, '/api/integration-tasks', token);
+    const reread = (await rereadRes.json()).find((t) => t.id === task.id);
+    assert.strictEqual(reread.title, 'query-channel fixture', 'the invalid expectedVersion must not have let the write through');
+  } finally {
+    server.close();
+  }
+});

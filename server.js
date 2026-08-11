@@ -386,14 +386,40 @@ function conflictBody(detail) {
   };
 }
 
+// [security] CONC-02 (Phase 9, Plan 02): the SINGLE input-resolution helper
+// for the version precondition — reads `req.body.version` when present (the
+// JSON-body routes this plan and plan 01 wire), and falls back to
+// `req.query.expectedVersion` when it is not, so the same contract also
+// covers body-less DELETE-shaped routes (starting with
+// `DELETE /api/synergies/:id/cost-entries/:eid` in this plan). There is no
+// query-schema validation mechanism in validators/index.js — it validates
+// `req.body` only (see `validationMiddleware` there) — so the bounds check
+// on the query-channel form lives HERE, the one place both `conflictIfStale`
+// call shapes go through, rather than being duplicated per route. A query
+// value that is not a non-negative integer is flagged `invalid: true` and
+// NEVER coerced — no `parseInt` fallthrough to `NaN`, no silent truncation
+// of a decimal or a leading/trailing-junk string like "3abc". `conflictIfStale`
+// turns `invalid: true` into a 400 before any record is mutated.
+function parseExpectedVersion(req) {
+  const b = req.body || {};
+  if (b.version !== undefined) return { version: b.version, invalid: false };
+  const q = req.query && req.query.expectedVersion;
+  if (q === undefined) return { version: undefined, invalid: false };
+  if (typeof q !== 'string' || !/^\d+$/.test(q)) return { version: undefined, invalid: true };
+  const n = Number(q);
+  if (!Number.isInteger(n) || n < 0) return { version: undefined, invalid: true };
+  return { version: n, invalid: false };
+}
+
 // CONC-02 (Phase 9, PD-2 route-level precheck layer): a fast, informative
 // 409 in the common single-process case, using THIS request's own freshly-
 // read `record` — never a substitute for the WHERE-clause layer in
 // db/store.js's writeDb(), which is the one that is actually race-free
 // against Phase 8's multi-process model (09-RESEARCH.md Pattern 2). Fires
-// ONLY when the client actually supplied a version (req.body.version !==
-// undefined) — a client that supplies none is not blocked at this layer,
-// the WHERE clause still covers the cross-process case for it.
+// ONLY when the client actually supplied a version (via `parseExpectedVersion`
+// above — either `req.body.version` or `req.query.expectedVersion`) — a
+// client that supplies none is not blocked at this layer, the WHERE clause
+// still covers the cross-process case for it.
 //
 // `opts.clearanceFilter`, when given, is applied to `record` before it is
 // echoed into the 409 body — the hook plans 04/05 pass the existing
@@ -406,10 +432,14 @@ function conflictBody(detail) {
 // without mutating/writing anything further), `false` otherwise.
 function conflictIfStale(req, res, record, opts) {
   const options = opts || {};
-  const b = req.body || {};
-  if (b.version === undefined) return false;
+  const parsed = parseExpectedVersion(req);
+  if (parsed.invalid) {
+    res.status(400).json({ error: 'expectedVersion must be a non-negative integer.' });
+    return true;
+  }
+  if (parsed.version === undefined) return false;
   const currentVersion = (record && typeof record.version === 'number') ? record.version : 0;
-  if (b.version === currentVersion) return false;
+  if (parsed.version === currentVersion) return false;
   const filtered = options.clearanceFilter ? options.clearanceFilter(record) : record;
   res.status(409).json(conflictBody({
     conflictKind: 'version',
@@ -3104,6 +3134,11 @@ app.post('/api/integration-tasks', (req, res) => {
   if (b.id) {
     const task = lane.find(t => t.id === b.id);
     if (!task) return res.status(404).json({ error: 'Task not found.' });
+    // CONC-02 (Phase 9): the route-level precheck fast path — placed BEFORE
+    // any field mutation below, including the status-flip branch (a kanban
+    // quick action goes through the identical check as a full edit, D-02 —
+    // no exemptions for a single-field payload).
+    if (conflictIfStale(req, res, task)) return;
     // Validate EVERYTHING before touching the object — readDb() hands back the
     // shared cache, so a mutation followed by a 400 would silently stick.
     // VAL-01: status/phase enum membership is now owned exclusively by
@@ -3721,6 +3756,10 @@ app.post('/api/synergies', (req, res) => {
   if (b.id) {
     const item = lane.find(s => s.id === b.id);
     if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+    // CONC-02 (Phase 9): the route-level precheck fast path — placed BEFORE
+    // any field mutation below, including the SYN-05 stamping-field
+    // computation next.
+    if (conflictIfStale(req, res, item)) return;
     // SYN-05/D-16: computed from the RAW body before any mutation below —
     // whether this edit touches ANY field in the SYNERGY_STAMPING_FIELDS
     // allowlist. Title and notes are deliberately absent from that list.
@@ -7080,6 +7119,10 @@ module.exports.isBusyError = isBusyError;
 module.exports.isConflictError = isConflictError;
 module.exports.conflictBody = conflictBody;
 module.exports.conflictIfStale = conflictIfStale;
+// CONC-02 (Phase 9, Plan 02): exposed alongside conflictIfStale so a test can
+// assert the dual-channel (body/query) resolution and its bounds check
+// directly, without needing a full HTTP round trip for every case.
+module.exports.parseExpectedVersion = parseExpectedVersion;
 // Exposed alongside app for the same reason (ISO-02): lets a test unit-check
 // isDemoOnlyPath()/DEMO_ONLY_PREFIXES directly against the live route
 // inventory without booting the HTTP server for every case.
