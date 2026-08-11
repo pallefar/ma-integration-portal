@@ -90,12 +90,29 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 09-01-PLAN.md — Tracer: stale RAID edit rejected with a 409 and recovered end-to-end (storage WHERE clause → 409 middleware → fetch wrapper → compare dialog → reapply)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 09-02-PLAN.md — Integration tasks and synergy initiatives, including all seven synergy sub-routes (D-02 no-exemptions)
 - [ ] 09-03-PLAN.md — Conflict dialog completed against every resolved UI-SPEC consideration, plus the wrapper-behavior harness
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 09-04-PLAN.md — DD findings, request items and the finding conversion, with the clearance-filtered conflict body
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 09-05-PLAN.md — Org positions, flight-risk register and its conversion; the append-only org-decisions exemption recorded
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 09-06-PLAN.md — Stale-delete (D-08) across all seven in-scope DELETE routes, with the destructive dialog variant
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 09-07-PLAN.md — Coverage gate, cross-collection concurrency proof, conflict-aware soak, validation sign-off
 
 **UI hint**: yes
