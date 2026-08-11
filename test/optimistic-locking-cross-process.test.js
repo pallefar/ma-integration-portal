@@ -41,8 +41,18 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('node:child_process');
 
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-optimistic-locking-cross-process-split-'));
+
+// Plan 07 hardening: every temp deal-db file this test creates lives INSIDE
+// this file's own TMP_DIR, never directly under the shared system os.tmpdir()
+// root — a real intermittent flake ("SqliteError: unable to open database
+// file") was observed twice this session under concurrent temp-dir load
+// (multiple sibling worktree agents' test suites hammering the SAME shared
+// system tmp directory at once). Scoping every file this test opens to a
+// directory this process alone owns removes that shared-contention surface
+// entirely, rather than merely retrying through it.
 function tempDbPath(label) {
-  return path.join(os.tmpdir(), `gsd-optimistic-locking-cross-process-${label}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.db`);
+  return path.join(TMP_DIR, `gsd-optimistic-locking-cross-process-${label}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.db`);
 }
 function cleanupDbFile(dbPath) {
   for (const ext of ['', '-wal', '-shm']) {
@@ -50,7 +60,25 @@ function cleanupDbFile(dbPath) {
   }
 }
 
-const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-optimistic-locking-cross-process-split-'));
+/**
+ * Retries a synchronous SQLite-opening operation on the specific transient
+ * "unable to open database file" (SQLITE_CANTOPEN) failure shape — never on
+ * any other error, which surfaces immediately. Belt-and-braces alongside the
+ * TMP_DIR-scoping above: even a directory this process alone owns can still
+ * see a rare transient stat/open failure on a heavily-loaded shared host.
+ */
+function openWithRetry(fn, attempts = 3, delayMs = 40) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return fn();
+    } catch (e) {
+      const msg = String((e && e.message) || '');
+      if (i === attempts - 1 || !/unable to open database file/i.test(msg)) throw e;
+      const until = Date.now() + delayMs * (i + 1);
+      while (Date.now() < until) { /* deliberate synchronous busy-wait — this path is a rare fallback, not the common case */ }
+    }
+  }
+}
 process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
 process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
 process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
@@ -76,20 +104,40 @@ const STORE_ABS_PATH = path.join(__dirname, '..', 'db', 'store.js');
 // caught typed conflict (e.isConflict) is a SUCCESSFUL proof outcome, not a
 // script failure — it exits 0 either way, reporting a JSON RESULT line the
 // parent parses.
+//
+// Plan 07: generalized from a RAID-only script (`db.raidEntries` hardcoded)
+// to take the target COLLECTION as its own argv entry — argv[1] — so the
+// SAME script proves the identical per-record guarantee on integration
+// tasks and synergy initiatives, not just RAID. `store.initDb(dbPath)` is
+// wrapped in the SAME open-retry the parent process uses (see
+// openWithRetry() above) for the identical "unable to open database file"
+// hardening, since this open happens in a freshly-spawned child process
+// that has no visibility into the parent's own retry.
 const CHILD_SCRIPT = `
   const store = require(${JSON.stringify(STORE_ABS_PATH)});
   const dbPath = process.argv[1];
-  const recordId = process.argv[2];
-  const action = process.argv[3]; // 'update' or 'delete'
-  const newTitle = process.argv[4] || '';
-  store.initDb(dbPath);
+  const collection = process.argv[2];
+  const recordId = process.argv[3];
+  const action = process.argv[4]; // 'update' or 'delete'
+  const newTitle = process.argv[5] || '';
+  function openWithRetryChild(fn, attempts, delayMs) {
+    for (let i = 0; i < attempts; i++) {
+      try { return fn(); } catch (e) {
+        const msg = String((e && e.message) || '');
+        if (i === attempts - 1 || !/unable to open database file/i.test(msg)) throw e;
+        const until = Date.now() + delayMs * (i + 1);
+        while (Date.now() < until) { /* deliberate synchronous busy-wait */ }
+      }
+    }
+  }
+  openWithRetryChild(() => store.initDb(dbPath), 3, 40);
   const db = store.readDb();
-  const item = db.raidEntries.find((r) => r.id === recordId);
+  const item = db[collection].find((r) => r.id === recordId);
   process.stdout.write('READY\\n');
   process.stdin.once('data', () => {
     try {
       if (action === 'delete') {
-        db.raidEntries = db.raidEntries.filter((r) => r.id !== recordId);
+        db[collection] = db[collection].filter((r) => r.id !== recordId);
       } else {
         item.title = newTitle;
       }
@@ -113,10 +161,11 @@ const CHILD_SCRIPT = `
  * the child's stdin gate; `done` resolves with the parsed RESULT JSON once
  * the child exits (rejecting on a non-zero exit or a missing RESULT line).
  * Every promise is bounded so a hung child fails the test loudly rather than
- * stalling the suite.
+ * stalling the suite. `collection` names the target ARRAY_COLLECTIONS table
+ * (e.g. 'raidEntries', 'integrationTasks', 'synergyInitiatives').
  */
-function spawnRaceChild(dbPath, recordId, action, newTitle) {
-  const child = spawn(process.execPath, ['-e', CHILD_SCRIPT, '--', dbPath, recordId, action, newTitle || ''], {
+function spawnRaceChild(dbPath, collection, recordId, action, newTitle) {
+  const child = spawn(process.execPath, ['-e', CHILD_SCRIPT, '--', dbPath, collection, recordId, action, newTitle || ''], {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   let stdout = '';
@@ -158,15 +207,15 @@ function spawnRaceChild(dbPath, recordId, action, newTitle) {
 test('optimistic-locking-cross-process (same record): two real processes racing an edit on the SAME record — exactly one commits, the other is rejected as a version conflict, and the survivor holds one writer\'s FULL submission, never a blend', async () => {
   const dealDbPath = tempDbPath('same-record');
   try {
-    runMigration(SOURCE_PATH, dealDbPath);
-    const seedConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    openWithRetry(() => runMigration(SOURCE_PATH, dealDbPath));
+    const seedConn = openWithRetry(() => store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH));
     const raidRow = seedConn.prepare('SELECT id FROM raidEntries LIMIT 1').get();
     assert.ok(raidRow, 'fixture must seed at least one raidEntries row for this test to be meaningful');
     const recordId = raidRow.id;
     store.closeConnection(dealDbPath);
 
-    const childA = spawnRaceChild(dealDbPath, recordId, 'update', 'Child A submission');
-    const childB = spawnRaceChild(dealDbPath, recordId, 'update', 'Child B submission');
+    const childA = spawnRaceChild(dealDbPath, 'raidEntries', recordId, 'update', 'Child A submission');
+    const childB = spawnRaceChild(dealDbPath, 'raidEntries', recordId, 'update', 'Child B submission');
     await Promise.all([childA.ready, childB.ready]);
     childA.release();
     childB.release();
@@ -193,15 +242,15 @@ test('optimistic-locking-cross-process (same record): two real processes racing 
 test('optimistic-locking-cross-process (different records): two real processes racing edits on TWO DIFFERENT records in the same collection — both commit and both versions advance; the lock bites per record, never per collection', async () => {
   const dealDbPath = tempDbPath('different-records');
   try {
-    runMigration(SOURCE_PATH, dealDbPath);
-    const seedConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    openWithRetry(() => runMigration(SOURCE_PATH, dealDbPath));
+    const seedConn = openWithRetry(() => store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH));
     const rows = seedConn.prepare('SELECT id FROM raidEntries LIMIT 2').all();
     assert.strictEqual(rows.length, 2, 'fixture must seed at least two raidEntries rows for this test to be meaningful');
     const [idA, idB] = rows.map((r) => r.id);
     store.closeConnection(dealDbPath);
 
-    const childA = spawnRaceChild(dealDbPath, idA, 'update', 'Child A own record');
-    const childB = spawnRaceChild(dealDbPath, idB, 'update', 'Child B own record');
+    const childA = spawnRaceChild(dealDbPath, 'raidEntries', idA, 'update', 'Child A own record');
+    const childB = spawnRaceChild(dealDbPath, 'raidEntries', idB, 'update', 'Child B own record');
     await Promise.all([childA.ready, childB.ready]);
     childA.release();
     childB.release();
@@ -226,15 +275,15 @@ test('optimistic-locking-cross-process (different records): two real processes r
 test('optimistic-locking-cross-process (update vs delete): one process updates while another deletes the SAME record — the surviving outcome is a clean delete or a clean update, never a resurrected row, and the losing writer sees a typed conflict, never a false success', async () => {
   const dealDbPath = tempDbPath('update-vs-delete');
   try {
-    runMigration(SOURCE_PATH, dealDbPath);
-    const seedConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    openWithRetry(() => runMigration(SOURCE_PATH, dealDbPath));
+    const seedConn = openWithRetry(() => store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH));
     const row = seedConn.prepare('SELECT id FROM raidEntries LIMIT 1 OFFSET 2').get();
     assert.ok(row, 'fixture must seed at least three raidEntries rows for this test to be meaningful');
     const recordId = row.id;
     store.closeConnection(dealDbPath);
 
-    const updater = spawnRaceChild(dealDbPath, recordId, 'update', 'Racing update');
-    const deleter = spawnRaceChild(dealDbPath, recordId, 'delete');
+    const updater = spawnRaceChild(dealDbPath, 'raidEntries', recordId, 'update', 'Racing update');
+    const deleter = spawnRaceChild(dealDbPath, 'raidEntries', recordId, 'delete');
     await Promise.all([updater.ready, deleter.ready]);
     updater.release();
     deleter.release();
@@ -257,6 +306,158 @@ test('optimistic-locking-cross-process (update vs delete): one process updates w
       assert.strictEqual(JSON.parse(finalRow.data).title, updateResult.title, 'the surviving record must hold the committed update\'s value');
       assert.strictEqual(deleteResult.conflictKind, 'version', "the losing delete must see conflictKind 'version' (D-08), never a false { success: true } for a delete that persisted nothing");
     }
+  } finally {
+    store.closeConnection(dealDbPath);
+    cleanupDbFile(dealDbPath);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Plan 07 (Task 2): the per-record granularity claim must be proven on MORE
+// than one collection, not only on a shape (RAID entries) that happens to be
+// unique to RAID. Same mechanism as the three RAID cases above, generalized
+// via CHILD_SCRIPT's own `collection` argv entry — no new storage-layer or
+// harness code, only new target collections.
+// ---------------------------------------------------------------------------
+
+test('optimistic-locking-cross-process (integration tasks, same record): two real processes racing an edit on the SAME integration task — exactly one commits, the other is rejected as a version conflict', async () => {
+  const dealDbPath = tempDbPath('task-same-record');
+  try {
+    openWithRetry(() => runMigration(SOURCE_PATH, dealDbPath));
+    const seedConn = openWithRetry(() => store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH));
+    const taskRow = seedConn.prepare('SELECT id FROM integrationTasks LIMIT 1').get();
+    assert.ok(taskRow, 'fixture must seed at least one integrationTasks row for this test to be meaningful');
+    const recordId = taskRow.id;
+    store.closeConnection(dealDbPath);
+
+    const childA = spawnRaceChild(dealDbPath, 'integrationTasks', recordId, 'update', 'Child A task submission');
+    const childB = spawnRaceChild(dealDbPath, 'integrationTasks', recordId, 'update', 'Child B task submission');
+    await Promise.all([childA.ready, childB.ready]);
+    childA.release();
+    childB.release();
+    const [resultA, resultB] = await Promise.all([childA.done, childB.done]);
+
+    const outcomes = [resultA.outcome, resultB.outcome].sort();
+    assert.deepStrictEqual(outcomes, ['committed', 'conflict'], `expected exactly one commit and one conflict, got A=${resultA.outcome} B=${resultB.outcome}`);
+    const winner = resultA.outcome === 'committed' ? resultA : resultB;
+    const loser = resultA.outcome === 'committed' ? resultB : resultA;
+    assert.strictEqual(loser.conflictKind, 'version', 'the losing writer must see a version conflict, not a deleted conflict');
+
+    const finalConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    const finalRow = finalConn.prepare('SELECT data FROM integrationTasks WHERE id = ?').get(recordId);
+    const finalData = JSON.parse(finalRow.data);
+    assert.strictEqual(finalData.title, winner.title, "the stored task must equal the winning child's ENTIRE submission, never a blend of both");
+    assert.strictEqual(finalData.version, 1, 'the version must have advanced by exactly one, from an unstamped legacy fixture record (D-09)');
+  } finally {
+    store.closeConnection(dealDbPath);
+    cleanupDbFile(dealDbPath);
+  }
+});
+
+test('optimistic-locking-cross-process (integration tasks, different records): two real processes racing edits on TWO DIFFERENT tasks — both commit and both versions advance; per-record, never per-collection', async () => {
+  const dealDbPath = tempDbPath('task-different-records');
+  try {
+    openWithRetry(() => runMigration(SOURCE_PATH, dealDbPath));
+    const seedConn = openWithRetry(() => store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH));
+    const rows = seedConn.prepare('SELECT id FROM integrationTasks LIMIT 2').all();
+    assert.strictEqual(rows.length, 2, 'fixture must seed at least two integrationTasks rows for this test to be meaningful');
+    const [idA, idB] = rows.map((r) => r.id);
+    store.closeConnection(dealDbPath);
+
+    const childA = spawnRaceChild(dealDbPath, 'integrationTasks', idA, 'update', 'Child A own task');
+    const childB = spawnRaceChild(dealDbPath, 'integrationTasks', idB, 'update', 'Child B own task');
+    await Promise.all([childA.ready, childB.ready]);
+    childA.release();
+    childB.release();
+    const [resultA, resultB] = await Promise.all([childA.done, childB.done]);
+
+    assert.strictEqual(resultA.outcome, 'committed', 'a write to task A must never see a conflict caused by an unrelated concurrent write to task B');
+    assert.strictEqual(resultB.outcome, 'committed', 'a write to task B must never see a conflict caused by an unrelated concurrent write to task A');
+
+    const finalConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    const finalA = JSON.parse(finalConn.prepare('SELECT data FROM integrationTasks WHERE id = ?').get(idA).data);
+    const finalB = JSON.parse(finalConn.prepare('SELECT data FROM integrationTasks WHERE id = ?').get(idB).data);
+    assert.strictEqual(finalA.version, 1, "task A's version must have advanced");
+    assert.strictEqual(finalB.version, 1, "task B's version must have advanced");
+    assert.strictEqual(finalA.title, 'Child A own task');
+    assert.strictEqual(finalB.title, 'Child B own task');
+  } finally {
+    store.closeConnection(dealDbPath);
+    cleanupDbFile(dealDbPath);
+  }
+});
+
+test('optimistic-locking-cross-process (synergy initiatives, same record): two real processes racing an edit on the SAME synergy initiative — exactly one commits, the other is rejected as a version conflict', async () => {
+  const dealDbPath = tempDbPath('synergy-same-record');
+  try {
+    openWithRetry(() => runMigration(SOURCE_PATH, dealDbPath));
+    const seedConn = openWithRetry(() => store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH));
+    const synRow = seedConn.prepare('SELECT id FROM synergyInitiatives LIMIT 1').get();
+    assert.ok(synRow, 'fixture must seed at least one synergyInitiatives row for this test to be meaningful');
+    const recordId = synRow.id;
+    store.closeConnection(dealDbPath);
+
+    const childA = spawnRaceChild(dealDbPath, 'synergyInitiatives', recordId, 'update', 'Child A synergy submission');
+    const childB = spawnRaceChild(dealDbPath, 'synergyInitiatives', recordId, 'update', 'Child B synergy submission');
+    await Promise.all([childA.ready, childB.ready]);
+    childA.release();
+    childB.release();
+    const [resultA, resultB] = await Promise.all([childA.done, childB.done]);
+
+    const outcomes = [resultA.outcome, resultB.outcome].sort();
+    assert.deepStrictEqual(outcomes, ['committed', 'conflict'], `expected exactly one commit and one conflict, got A=${resultA.outcome} B=${resultB.outcome}`);
+    const winner = resultA.outcome === 'committed' ? resultA : resultB;
+    const loser = resultA.outcome === 'committed' ? resultB : resultA;
+    assert.strictEqual(loser.conflictKind, 'version', 'the losing writer must see a version conflict, not a deleted conflict');
+
+    const finalConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    const finalRow = finalConn.prepare('SELECT data FROM synergyInitiatives WHERE id = ?').get(recordId);
+    const finalData = JSON.parse(finalRow.data);
+    assert.strictEqual(finalData.title, winner.title, "the stored initiative must equal the winning child's ENTIRE submission, never a blend of both");
+    assert.strictEqual(finalData.version, 1, 'the version must have advanced by exactly one, from an unstamped legacy fixture record (D-09)');
+  } finally {
+    store.closeConnection(dealDbPath);
+    cleanupDbFile(dealDbPath);
+  }
+});
+
+test('optimistic-locking-cross-process (cross-collection): two real processes writing DIFFERENT collections concurrently both commit — the version predicate does not serialize unrelated work beyond Phase 8\'s own per-file write lock', async () => {
+  const dealDbPath = tempDbPath('cross-collection');
+  try {
+    openWithRetry(() => runMigration(SOURCE_PATH, dealDbPath));
+    const seedConn = openWithRetry(() => store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH));
+    const raidRow = seedConn.prepare('SELECT id FROM raidEntries LIMIT 1').get();
+    const taskRow = seedConn.prepare('SELECT id FROM integrationTasks LIMIT 1').get();
+    assert.ok(raidRow, 'fixture must seed at least one raidEntries row for this test to be meaningful');
+    assert.ok(taskRow, 'fixture must seed at least one integrationTasks row for this test to be meaningful');
+    const raidId = raidRow.id;
+    const taskId = taskRow.id;
+    store.closeConnection(dealDbPath);
+
+    const raidChild = spawnRaceChild(dealDbPath, 'raidEntries', raidId, 'update', 'Cross-collection RAID write');
+    const taskChild = spawnRaceChild(dealDbPath, 'integrationTasks', taskId, 'update', 'Cross-collection task write');
+    await Promise.all([raidChild.ready, taskChild.ready]);
+    raidChild.release();
+    taskChild.release();
+    const [raidResult, taskResult] = await Promise.all([raidChild.done, taskChild.done]);
+
+    // Both must commit — a version conflict here would mean the version
+    // predicate is somehow entangling two UNRELATED collections' writes,
+    // which it must never do. Phase 8's per-file BEGIN IMMEDIATE lock still
+    // serializes the two commits at the SQLite level (this is a single deal
+    // file), but that serialization must never manifest as a version
+    // conflict for either write — each child holds its own record's OWN
+    // fresh-read version, entirely independent of the other's collection.
+    assert.strictEqual(raidResult.outcome, 'committed', 'a write to raidEntries must never see a conflict caused by a concurrent write to an unrelated collection (integrationTasks)');
+    assert.strictEqual(taskResult.outcome, 'committed', 'a write to integrationTasks must never see a conflict caused by a concurrent write to an unrelated collection (raidEntries)');
+
+    const finalConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
+    const finalRaid = JSON.parse(finalConn.prepare('SELECT data FROM raidEntries WHERE id = ?').get(raidId).data);
+    const finalTask = JSON.parse(finalConn.prepare('SELECT data FROM integrationTasks WHERE id = ?').get(taskId).data);
+    assert.strictEqual(finalRaid.version, 1, "the RAID record's version must have advanced");
+    assert.strictEqual(finalTask.version, 1, "the task's version must have advanced");
+    assert.strictEqual(finalRaid.title, 'Cross-collection RAID write');
+    assert.strictEqual(finalTask.title, 'Cross-collection task write');
   } finally {
     store.closeConnection(dealDbPath);
     cleanupDbFile(dealDbPath);
