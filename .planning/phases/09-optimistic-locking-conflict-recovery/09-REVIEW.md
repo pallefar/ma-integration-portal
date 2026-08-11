@@ -29,7 +29,7 @@ findings:
   warning: 2
   info: 1
   total: 4
-status: issues_found
+status: resolved
 ---
 
 # Phase 09: Code Review Report
@@ -238,3 +238,25 @@ otherwise thread `changedBy`/`changedAt` through the same `clearanceFilter` (ret
 _Reviewed: 2026-08-11_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Resolution (2026-08-11, orchestrator — Fable-verified then fixed)
+
+- **CR-01: FIXED** (`fb20b2b`). Verified real before fixing (route precheck filters, storage throw did not).
+  Fix shape = the review's own suggestion: `conflictIfStale()` arms `areaClearanceFilter` on the request's
+  db context (before its early returns, so it covers no-client-version requests), and `db/store.js`'s two
+  'version' throw sites route the echoed record through `conflictVisibleRecord()`. Fail-closed backstop:
+  new `CLEARANCE_SCOPED_COLLECTIONS` (`ddFindings`, `ddRequestItems`) in db/collections.js — when no filter
+  is armed, `currentRecord` is withheld entirely. Version + attribution stay disclosed (T-09-17).
+  Proof: 4 new contract tests "CR-01 (a–d)" — fail-closed backstop, raid regression (full echo kept),
+  arming side-effect, and armed-filter parity through a real WHERE-layer conflict.
+- **WR-01: FIXED** (`0acb509`). `synAlertFailure()` and the three inline `window.alert(res && res.error)`
+  sites now exempt `conflict === true` bodies, mirroring org.js's [Rule 1] guard.
+- **WR-02: FIXED** (`0acb509`). `convertFlightRisk()` error branch got the same guard as its sibling
+  position-delete handler.
+- **IN-01: ACCEPTED RISK.** `changedBy`/`changedAt` attribution across a clearance boundary is the
+  documented, deliberate T-09-17 trade-off (route comments + UI-SPEC attribution rule). Flagged for
+  `/gsd-secure-phase 9` to confirm at the security gate.
+
+Suite after fixes: 779/779.
