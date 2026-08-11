@@ -12,3 +12,5 @@ outbound HTTP call, and no new package is introduced (`09-RESEARCH.md` → "Inst
 `npm install` required this phase").
 
 No coverage matrix is produced because there is no external API surface to opt into or out of.
+
+No external API integration — in-repo stack only (SQLite/better-sqlite3, Express, zod, same-origin fetch); no SDK, service, or outbound HTTP introduced; detector hit was a research bibliography URL.
