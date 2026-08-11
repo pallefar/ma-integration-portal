@@ -27,6 +27,8 @@ created: 2026-08-11
 
 **Existing component to extend, not replace:** `.deal-modal-overlay` / `.deal-modal` (`public/css/style.css:8232-8249`) is the closest structural precedent — fixed-position centered overlay, `rgba(15,30,38,0.72)` scrim, `backdrop-filter: blur(3px)`, white card, `border-radius: 14px`, `box-shadow: 0 24px 70px rgba(0,0,0,0.4)`. The conflict dialog reuses this shell pattern under new class names (`.conflict-modal-overlay` / `.conflict-modal`) rather than inventing a new visual language, sized wider (see Spacing) to fit a field-diff list. The general `.modal-overlay`/`.modal-content` show/hide transition classes (`style.css:3005-3027`) may be reused for the open/close animation if convenient — not required.
 
+**Focal point and visual hierarchy (checker Dimension 2):** the **field-diff list is the focal point** — it is the decision surface comparing the user's value against the server's current value, and the "mine" value-box's orange left accent border is what draws the eye first. Visual hierarchy flows top-to-bottom: header (dialog title + attribution line) → diff-list body (the dominant region by area; scrollable on overflow) → action footer (one orange primary, one neutral secondary). No other element in the dialog may compete with the diff list for visual weight — the header and footer stay chrome-light so the comparison itself reads as the point of the dialog.
+
 ---
 
 ## Spacing Scale
@@ -90,6 +92,7 @@ Secondary structural color note: `--te-dark-teal` (`#244C5A`) is available (used
 | Secondary action (stale delete) | "Cancel" (keep the record, close dialog, no write is sent) |
 | In-flight button label (either primary action, mid re-submit) | "Applying…" / "Deleting…" — button disabled, no spinner icon (matches house convention of no icon dependency) |
 | Error state (reapply itself fails again — second conflict, network error, or server error) | Inline banner inside the dialog, above the actions: "That didn't go through — {reason}. Your edits are still here; review the fresh values below and try again." On a genuine second 409 the dialog re-renders in place with the newly fresh "theirs" values (never stacks a second dialog, never discards the "mine" column) |
+| Attribution fallback (409 body lacks actor and/or time fields) | "This record changed since you loaded it." — rendered in place of the attribution line; never render "Changed by undefined" or a blank line (defensive rule for D-09 lazy-stamped records or script-mutated data) |
 | Destructive confirmation | Delete-on-stale-version: no separate browser `confirm()` — the stale-delete dialog itself **is** the confirmation surface; "Delete anyway" is the single explicit destructive click, consistent with D-08 folding delete-confirmation into the conflict surface rather than stacking two prompts |
 
 **i18n decision (prescriptive, not deferred):** this dialog's copy ships as **hardcoded English literals via `textContent`, not wired through `data-i18n` / `applyPortalI18n()`**. Rationale: (1) it is dynamically constructed by JS from a fetch-wrapper interception point, exactly like Phase 8's `showBusyGiveUpToast()` (`transitions.js:57-99`, hardcoded `BUSY_GIVE_UP_MESSAGE`) — the direct precedent for this class of runtime-generated error/recovery text; (2) the attribution line interpolates dynamic data (name, relative time) into copy, which the existing static-key `t(key, lang)` resolver isn't built for; (3) Phase 7's own documented gap (`scripts/seed-reports-i18n.js` header) already treats JS string-literal error/status text as out of the app-wide i18n system's scope. Do not add new `strings.en.*` i18n keys for this component — this is a deliberate, consistent extension of existing house convention, not an oversight to fix later.
@@ -98,19 +101,42 @@ Secondary structural color note: `--te-dark-teal` (`#244C5A`) is available (used
 
 ## UI Considerations
 
-Applicable state considerations resolved: 9 covered, 0 backstop, 0 unresolved.
+Probe run 2026-08-11 (ui-consideration-probe, 4 elements: E1 conflict-field-diff-list = list-collection, E2 conflict-action-buttons = interactive-control, E3 stale-delete-confirm-dialog = interactive-control, E4 conflict-dialog-header = static-content; kinds user-confirmed). Applicable: 25 — **resolved 14 (all explicit), dismissed 11 with reason, 0 backstop, 0 unresolved.**
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| empty | conflict-field-diff-list (list-collection) | ✅ covered | If the intersection of "keys in the user's write payload" and "server's current record" yields zero rows (e.g. a version-only ping with no field changes), render the field-diff empty-fallback copy above instead of an empty box, and still offer "Apply my changes anyway" |
-| loading | conflict-action-buttons (interactive-control) | ✅ covered | On click, the clicked button (only) enters a disabled "Applying…"/"Deleting…" label state for the duration of the re-submit fetch; the other action stays enabled so the user can still change their mind mid-flight if the request is slow |
-| error | conflict-action-buttons (interactive-control) | ✅ covered | A second conflict, network failure, or 5xx on reapply renders the inline error banner (Copywriting Contract) and refreshes the "theirs" column with any new fresh data from a second 409; "mine" column and all in-progress values are never cleared or reset |
-| populated | conflict-field-diff-list (list-collection) | ✅ covered | Typical case: 1–4 changed fields, each a stacked two-column row ("mine" left, accent border; "theirs" right, neutral background) with the field's display label above |
-| partial | conflict-field-diff-list (list-collection) | ✅ covered | A changed field whose prior value (mine or theirs) is empty/null renders an explicit italic "(empty)" placeholder in that value box — never blank whitespace, which would read as a rendering bug |
-| overflow | conflict-field-diff-list (list-collection) | ✅ covered | Many changed fields (a full-form edit, e.g. 8+ DD-finding fields) scrolls the diff-list body internally within a `max-height` (dialog header and action footer stay pinned, non-scrolling) rather than growing the dialog past the viewport |
-| zero-one-many | conflict-field-diff-list (list-collection) | ✅ covered | A single-field change (e.g. a kanban status flip, D-02's uniform-check case) renders as one compact row with no excess dialog whitespace; a many-field change scrolls per the overflow row above — both read cleanly at the same dialog width |
-| long-text | conflict-field-diff-list values (static-content within list-collection) | ✅ covered | Long text values (e.g. a RAID description or DD-finding narrative) show the **full** value, wrapped, in a per-field scrollable box with a `max-height` — deliberately never truncated with an ellipsis, because the user must see the complete competing value to make an informed "apply mine" vs "keep theirs" decision; this is an intentional departure from typical truncate-by-default list styling |
-| error | stale-delete-confirm-dialog (interactive-control, D-08 variant) | ✅ covered | "Delete anyway" resubmitting into a second conflict (record changed again, or already deleted by someone else) re-renders the same dialog shell with refreshed attribution/values rather than silently succeeding or silently failing |
+**Resolved (verification: explicit):**
+
+| Category | Element | Resolution |
+|----------|---------|------------|
+| empty | E1 field-diff-list | Zero conflicting rows (e.g. version-only ping) renders the field-diff empty-fallback copy (Copywriting Contract) instead of an empty box, and still offers "Apply my changes anyway" |
+| populated | E1 field-diff-list | Typical case: 1–4 changed fields, each a stacked two-column row ("mine" left, orange accent border; "theirs" right, neutral background) with the field's display label above |
+| partial | E1 field-diff-list | A changed field whose value (mine or theirs) is empty/null renders an explicit italic "(empty)" placeholder in that value box — never blank whitespace, which would read as a rendering bug |
+| overflow | E1 field-diff-list | Many changed fields (8+ full-form edit) scrolls the diff-list body internally within a `max-height`; dialog header and action footer stay pinned, non-scrolling — dialog never grows past the viewport |
+| zero-one-many | E1 field-diff-list | A single-field change (kanban status flip, D-02) renders as one compact row with no excess whitespace; many fields scroll per the overflow rule — both read cleanly at the same dialog width |
+| long-text | E1 field-diff-list values | Long values (RAID description, DD-finding narrative) show the **full** value, wrapped, in a per-field scrollable `max-height` box — never ellipsis-truncated, because the user must see the complete competing value to decide "apply mine" vs "keep theirs" |
+| loading | E2 action-buttons | On click, the clicked button (only) enters a disabled "Applying…" label state for the duration of the re-submit fetch; the other action stays enabled so the user can change their mind mid-flight |
+| error | E2 action-buttons | Second conflict / network failure / 5xx on reapply renders the inline error banner (Copywriting Contract) and refreshes the "theirs" column from a second 409's fresh data; the "mine" column is never cleared or reset |
+| loading | E3 stale-delete dialog | "Delete anyway" enters a disabled "Deleting…" label state during the resubmit; "Cancel" stays enabled |
+| error | E3 stale-delete dialog | "Delete anyway" resubmitting into a second conflict (record changed again, or already deleted) re-renders the same dialog shell with refreshed attribution/values — never silently succeeds or silently fails |
+| partial | E3 stale-delete dialog | Attribution with missing actor/time follows the E4 fallback rule below |
+| empty | E4 header/attribution | 409 body lacking actor **and** time renders the attribution-fallback copy "This record changed since you loaded it." — never a blank line |
+| partial | E4 header/attribution | 409 body lacking actor **or** time (D-09 lazy-stamped v0 records, script-mutated data) renders the same fallback copy — never "Changed by undefined" |
+| long-text | E4 header/attribution | Long display names wrap onto a second line via `textContent`; the name is never truncated — the user must be able to identify the other editor |
+
+**Dismissed (reason recorded — no silent drops):**
+
+| Category | Element | Reason |
+|----------|---------|--------|
+| loading | E1 field-diff-list | The diff list renders synchronously from the in-hand 409 response body — no async fetch occurs, a loading state cannot exist |
+| error | E1 field-diff-list | The list itself cannot fail to load (data already in hand); the only failure surface is the reapply action, covered at E2-error |
+| empty | E2 action-buttons | The action pair is static chrome, not data-driven — always exactly two buttons |
+| partial | E2 action-buttons | No data-dependent content in the buttons |
+| long-text | E2 action-buttons | Button labels are fixed hardcoded English literals (Copywriting Contract) — no dynamic text |
+| empty | E3 stale-delete dialog | No collection inside this variant — content is title + attribution + actions, all static or covered by E4 rules |
+| overflow | E3 stale-delete dialog | Fixed content; if field values are ever shown they follow E1's overflow rule |
+| long-text | E3 stale-delete dialog | Same — defers to E1 long-text rule for any value display |
+| loading | E4 header/attribution | Rendered synchronously from the 409 body — nothing to load |
+| error | E4 header/attribution | No failure mode of its own; a malformed timestamp falls back per the E4-partial rule |
+| overflow | E4 header/attribution | The wrap rule (E4 long-text) handles width pressure; header height may grow by one line, no clipping |
 
 ---
 
@@ -125,11 +151,11 @@ Applicable state considerations resolved: 9 covered, 0 backstop, 0 unresolved.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS (initial FLAG — focal point / visual hierarchy not declared — resolved by adding the explicit hierarchy block to Design System)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-08-11 (gsd-ui-checker, 6/6 dimensions, 1 non-blocking FLAG applied)
