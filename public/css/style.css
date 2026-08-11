@@ -8281,7 +8281,7 @@ body.cms-inline-on [data-i18n-html]:hover {
    region by area, scrolling internally on overflow while the header/footer
    stay pinned — the dialog never grows past the viewport. */
 .conflict-diff-list { overflow-y: auto; max-height: 40vh; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
-.conflict-diff-empty-state { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-secondary); }
+.conflict-diff-empty { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-secondary); }
 .conflict-diff-row { display: flex; flex-direction: column; gap: 4px; }
 .conflict-diff-label { font-size: 13px; font-weight: 700; line-height: 1.4; color: var(--te-dark-teal); text-transform: capitalize; }
 .conflict-diff-values { display: flex; gap: 8px; }
@@ -8297,10 +8297,16 @@ body.cms-inline-on [data-i18n-html]:hover {
    component's own new rules. */
 .conflict-diff-mine { background: var(--bg-white); border: 1px solid var(--border-color); border-left: 3px solid var(--te-orange); }
 .conflict-diff-theirs { background: var(--bg-light); border: 1px solid var(--border-color); }
-.conflict-diff-empty-value { font-style: italic; color: var(--text-secondary); }
+.conflict-diff-value-empty { font-style: italic; color: var(--text-secondary); }
+/* E2-error: the inline reapply-failure banner — second conflict, network
+   failure, or 5xx. Sits above the action footer, inside the dialog; never a
+   separate toast/overlay. No destructive-red treatment (that's reserved for
+   the stale-delete variant's own button, not this recoverable banner). */
+.conflict-modal-error { margin: 0 0 8px; padding: 16px; border-radius: 8px; background: var(--bg-light); border: 1px solid var(--border-color); font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-primary); }
 .conflict-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .conflict-btn-apply, .conflict-btn-discard { font-size: 13px; font-weight: 700; }
 .conflict-btn-apply:disabled { opacity: 0.65; cursor: default; }
+/* end conflict modal */
 
 /* ===== Playbook slide-viewer modal (HR M&A Guidebook) ===== */
 .playbook-modal-overlay {

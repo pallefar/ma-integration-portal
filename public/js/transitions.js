@@ -114,6 +114,15 @@
   const CONFLICT_DISCARD_LABEL = 'Discard mine, keep theirs';
   const CONFLICT_APPLYING_LABEL = 'Applying…';
   const CONFLICT_EMPTY_DIFF = "No conflicting fields — the record's version changed without affecting anything you edited. Apply your changes to continue.";
+  // E2-error (Plan 03): the reapply-failure banner. One fixed prefix/suffix
+  // pair with a swapped-in reason — never a separate string per failure
+  // mode, so the copy stays exactly on the Copywriting Contract's sentence.
+  const CONFLICT_ERROR_PREFIX = "That didn't go through — ";
+  const CONFLICT_ERROR_SUFFIX = '. Your edits are still here; review the fresh values below and try again.';
+  const CONFLICT_ERROR_REASON_CONFLICT = 'the record changed again';
+  const CONFLICT_ERROR_REASON_NETWORK = 'a network error occurred';
+  const CONFLICT_ERROR_REASON_SERVER = 'the server reported an error';
+  const conflictErrorMessage = (reason) => CONFLICT_ERROR_PREFIX + reason + CONFLICT_ERROR_SUFFIX;
   // FA-2 (09-01-PLAN.md): a deliberate extension beyond the signed-off
   // 09-UI-SPEC.md Copywriting Contract — three literals for PD-4's "an
   // UPDATE arrived for a record someone else already deleted" surface,
@@ -175,22 +184,44 @@
 
   // UI-SPEC E1-partial: a changed field whose value (mine or theirs) is
   // empty/null renders an explicit italic "(empty)" placeholder — never
-  // blank whitespace, which would read as a rendering bug.
+  // blank whitespace, which would read as a rendering bug. A non-string
+  // value (array, nested object) is stringified to its JSON form — still
+  // set with textContent, never markup — so the user sees the real
+  // competing value rather than "[object Object]".
   function setConflictDiffValue(el, val) {
     if (val === undefined || val === null || val === '') {
-      el.classList.add('conflict-diff-empty-value');
+      el.classList.add('conflict-diff-value-empty');
       el.textContent = '(empty)';
+    } else if (typeof val === 'object') {
+      el.textContent = JSON.stringify(val);
     } else {
       el.textContent = String(val);
     }
   }
 
   // D-03: "Apply my changes anyway" is a genuine REAPPLY against fresh
-  // state, not a forced write carrying the stale value — parses init.body,
-  // overwrites `version` with the server's current one, and re-stringifies.
-  // Returns a NEW init object; never mutates the caller's own `init`.
+  // state, not a forced write carrying the stale value. Two shapes of
+  // version precondition exist across routes: the common case carries
+  // `version` inside the JSON body (rewritten below); a query-parameter
+  // route instead carries it as `?expectedVersion=` in the URL itself —
+  // detected structurally from the request URL, not from the HTTP method,
+  // so this works for any verb a future route uses (Plan 06's RAID DELETE
+  // is the first such route). Returns a NEW { input, init } pair; never
+  // mutates the caller's own `init`, and never rewrites both — a
+  // query-parameter route's body (if any) is left byte-identical.
   function withFreshVersion(input, init, url, method, freshVersion) {
     const newInit = Object.assign({}, init);
+    try {
+      const u = new URL(url, (typeof location !== 'undefined' && location.href) || undefined);
+      if (u.searchParams.has('expectedVersion')) {
+        u.searchParams.set('expectedVersion', freshVersion);
+        const rewrittenUrl = u.pathname + u.search + u.hash;
+        const newInput = (typeof input === 'string') ? rewrittenUrl : input;
+        return { input: newInput, init: newInit };
+      }
+    } catch (e) {
+      // Malformed/unparseable URL — fall through to the body-rewrite path.
+    }
     try {
       const parsed = JSON.parse((init && init.body) || '{}');
       parsed.version = freshVersion;
@@ -199,19 +230,35 @@
       // Body wasn't JSON (shouldn't happen for a route that emitted a
       // versioned conflict) — nothing safe to rewrite; leave it untouched.
     }
-    return newInit;
+    return { input: input, init: newInit };
   }
 
-  function showConflictDialog(body, input, init, url, method) {
-    closeActiveConflictDialog();
-
-    const overlay = document.createElement('div');
-    overlay.className = 'conflict-modal-overlay';
-    const modal = document.createElement('div');
-    modal.className = 'conflict-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    overlay.appendChild(modal);
+  // T-09-14/T-09-16: a second conflict (or a failed reapply) re-renders THIS
+  // SAME overlay/modal in place rather than closing and recreating it — the
+  // `activeConflictDialog` guard is checked first, and only a brand-new
+  // overlay is built when no dialog is currently open. `errorReason`, when
+  // present, means this call is a re-render triggered by a failed reapply
+  // (a second conflict, a network failure, or a 5xx) — it renders the
+  // inline `.conflict-modal-error` banner above the actions per the
+  // Copywriting Contract; a fresh first-time conflict passes no reason and
+  // gets no banner.
+  function showConflictDialog(body, input, init, url, method, errorReason) {
+    let overlay;
+    let modal;
+    const reusing = !!activeConflictDialog;
+    if (reusing) {
+      overlay = activeConflictDialog.overlay;
+      modal = activeConflictDialog.modal;
+      modal.textContent = ''; // clears all prior children — full rebuild below
+    } else {
+      overlay = document.createElement('div');
+      overlay.className = 'conflict-modal-overlay';
+      modal = document.createElement('div');
+      modal.className = 'conflict-modal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      overlay.appendChild(modal);
+    }
 
     const head = document.createElement('div');
     head.className = 'conflict-modal-head';
@@ -262,7 +309,7 @@
 
       if (fields.length === 0) {
         const empty = document.createElement('p');
-        empty.className = 'conflict-diff-empty-state';
+        empty.className = 'conflict-diff-empty';
         empty.textContent = CONFLICT_EMPTY_DIFF;
         diffList.appendChild(empty);
       } else {
@@ -299,6 +346,9 @@
       discardBtn.textContent = CONFLICT_DISCARD_LABEL;
       discardBtn.addEventListener('click', closeActiveConflictDialog);
 
+      // E2-loading: clicking APPLY disables only this button and swaps its
+      // label; DISCARD (above) stays enabled the whole time so the user can
+      // change their mind mid-flight.
       const applyBtn = document.createElement('button');
       applyBtn.type = 'button';
       applyBtn.className = 'btn btn-primary conflict-btn-apply';
@@ -307,33 +357,56 @@
         applyBtn.disabled = true;
         applyBtn.textContent = CONFLICT_APPLYING_LABEL;
         const freshVersion = body && body.currentVersion;
-        const newInit = withFreshVersion(input, init, url, method, freshVersion);
+        const fresh = withFreshVersion(input, init, url, method, freshVersion);
         // Goes through window.fetch (not origFetch) — a genuine second
-        // conflict re-enters THIS SAME wrapper's 409 branch below and
-        // re-renders this dialog with fresh server values (the
-        // activeConflictDialog guard replaces contents, not stacks a
+        // conflict re-enters THIS SAME wrapper's 409 branch below, which
+        // detects the still-open dialog and re-renders THIS overlay in
+        // place with fresh server values plus the error banner (the
+        // activeConflictDialog guard reuses the element, never stacks a
         // second overlay). This is correct behavior, not a loop to
-        // suppress.
-        window.fetch(input, newInit).then((res) => {
+        // suppress — the only re-fire path is this explicit user click.
+        window.fetch(fresh.input, fresh.init).then((res) => {
           if (res && res.ok) {
             closeActiveConflictDialog();
-          } else if (!res || res.status !== 409) {
-            applyBtn.disabled = false;
-            applyBtn.textContent = CONFLICT_APPLY_LABEL;
+            return;
           }
-          // A genuine second 409 has already re-rendered this dialog as a
-          // side effect of the 409 branch below — nothing further here.
+          if (!res || res.status !== 409) {
+            // E2-error, network/5xx branch: no fresh conflict body exists to
+            // render from, so this re-renders the SAME dialog from the
+            // closure's own unchanged body/input/init — the "mine" column
+            // is provably untouched, only the banner + button state change.
+            const reason = (res && res.status >= 500) ? CONFLICT_ERROR_REASON_SERVER : CONFLICT_ERROR_REASON_NETWORK;
+            showConflictDialog(body, input, init, url, method, reason);
+          }
+          // A genuine 409 has already re-rendered this dialog (with the
+          // error banner) as a side effect of the 409 branch below —
+          // nothing further needed here.
         }).catch(() => {
-          applyBtn.disabled = false;
-          applyBtn.textContent = CONFLICT_APPLY_LABEL;
+          showConflictDialog(body, input, init, url, method, CONFLICT_ERROR_REASON_NETWORK);
         });
       });
 
       actions.appendChild(discardBtn);
       actions.appendChild(applyBtn);
+
+      // E2-error: the inline banner sits above the action footer, inside
+      // the dialog — never a separate toast, never a second overlay.
+      if (errorReason) {
+        const errorBanner = document.createElement('p');
+        errorBanner.className = 'conflict-modal-error';
+        errorBanner.textContent = conflictErrorMessage(errorReason);
+        modal.appendChild(errorBanner);
+      }
     }
 
     modal.appendChild(actions);
+
+    if (reusing) {
+      // The overlay never left document.body — only its contents were
+      // rebuilt above — so there is nothing further to attach.
+      activeConflictDialog = { overlay, modal, onKeydown: activeConflictDialog.onKeydown };
+      return;
+    }
 
     // Close on overlay-background click, on Escape, and (edit variant) on
     // the discard action / (deleted variant) on the close action — every
@@ -344,7 +417,7 @@
     document.addEventListener('keydown', onKeydown);
 
     document.body.appendChild(overlay);
-    activeConflictDialog = { overlay, onKeydown };
+    activeConflictDialog = { overlay, modal, onKeydown };
   }
 
   // D-07: bounded, jittered silent retry for transient write contention (503).
@@ -405,7 +478,13 @@
     if (res.status === 409 && isApi(url)) {
       return res.clone().json().then((body) => {
         if (body && body.conflict === true) {
-          showConflictDialog(body, input, init, url, method);
+          // E2-error: a dialog already open when this 409 arrives means
+          // this fetch WAS a reapply attempt from that dialog's own apply
+          // button — a genuine second conflict, not a fresh one. The
+          // errorReason triggers the inline banner on the in-place
+          // re-render (T-09-14/T-09-16: same overlay, never stacked).
+          const reason = activeConflictDialog ? CONFLICT_ERROR_REASON_CONFLICT : undefined;
+          showConflictDialog(body, input, init, url, method, reason);
         }
         return res;
       }).catch(() => res);
