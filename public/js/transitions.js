@@ -175,11 +175,16 @@
 
   // UI-SPEC E1-partial: a changed field whose value (mine or theirs) is
   // empty/null renders an explicit italic "(empty)" placeholder — never
-  // blank whitespace, which would read as a rendering bug.
+  // blank whitespace, which would read as a rendering bug. A non-string
+  // value (array, nested object) is stringified to its JSON form — still
+  // set with textContent, never markup — so the user sees the real
+  // competing value rather than "[object Object]".
   function setConflictDiffValue(el, val) {
     if (val === undefined || val === null || val === '') {
-      el.classList.add('conflict-diff-empty-value');
+      el.classList.add('conflict-diff-value-empty');
       el.textContent = '(empty)';
+    } else if (typeof val === 'object') {
+      el.textContent = JSON.stringify(val);
     } else {
       el.textContent = String(val);
     }
@@ -262,7 +267,7 @@
 
       if (fields.length === 0) {
         const empty = document.createElement('p');
-        empty.className = 'conflict-diff-empty-state';
+        empty.className = 'conflict-diff-empty';
         empty.textContent = CONFLICT_EMPTY_DIFF;
         diffList.appendChild(empty);
       } else {
