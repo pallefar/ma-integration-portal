@@ -110,4 +110,4 @@ Resume file: .planning/phases/09-optimistic-locking-conflict-recovery/09-CONTEXT
 
 ## Operator Next Steps
 
-- Discuss the next phase: `/gsd-discuss-phase 9` (Optimistic Locking & Conflict Recovery — no CONTEXT.md yet)
+- Plan the phase: `/gsd-plan-phase 9` (context gathered 2026-08-11 — 9 decisions in 09-CONTEXT.md)
