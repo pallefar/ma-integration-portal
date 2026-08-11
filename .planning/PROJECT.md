@@ -54,11 +54,19 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - ✓ Org design & talent retention: org-position registry, append-only decision log, clearance-scoped flight-risk register, two-tier deal-home rollup — Phase 6
 - ✓ IMO reporting & exports: CSV/JSON exports of workstreams/tasks/RAID/synergies + TE-branded tri-language PDF steerco pack, all clearance-scoped and audited — Phase 7
 
+**Shared-Host Multi-User — v2.2.0 (in progress)**
+
+- ✓ CONC-01: Concurrent writers (overlapping in-process requests or separate processes on one host) serialize safely with zero lost updates — `BEGIN IMMEDIATE` + busy-retry → 503 Retry-After, audit append atomic with the deal commit, client silent retry + honest give-up toast, proven by a real multi-process soak (`npm run soak`) — Phase 8 (2026-08-11)
+
 ### Active
 
-<!-- Next milestone — TBD. Start with /gsd-new-milestone (questioning → research → requirements → roadmap). -->
+<!-- v2.2.0 Shared-Host Multi-User — 15 requirements across Phases 8–13; full text in .planning/REQUIREMENTS.md -->
 
-(None — v2.1.0 shipped and released. Candidate next-milestone threads: shared-host/multi-process hardening, TE SSO + HRIS integration, SQLCipher at-rest encryption, vendoring the AI-Insight model weights, and completing the client-side XSS sink-class audit.)
+- [ ] CONC-02: Optimistic locking — stale co-edited writes rejected 409 with a reload-and-reapply path (Phase 9)
+- [ ] DEPLOY-03 + OPS-01/02/03: App-layer runtime hardening — health/readiness, graceful shutdown, backup/restore, operational logging (Phase 10)
+- [ ] DEPLOY-01/02: Deployment shapes — self-managed Linux host service + container image with documented config contract, `replicas: 1` (Phase 11)
+- [ ] COLLAB-01..04: Workstream-lead collaboration — invite/clearance model, session revocation on role change, audit coverage on new routes (Phase 12)
+- [ ] WIZ-02/03/04: Collaborative deal-setup wizard enhancements — lead onboarding, ownership handoff, multi-user resume (Phase 13)
 
 ### Out of Scope
 
@@ -73,7 +81,7 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - Document storage / VDR in the DD workspace — TE already licenses a virtual data room; the DD workspace tracks request lists, findings and clean-room *access* and links out to the VDR rather than storing or exchanging documents (resolved at requirements gate 2026-07-23)
 - PPTX steerco-pack generation — export is CSV/JSON + formatted PDF only; PowerPoint generation is disproportionate for a laptop tool (resolved at requirements gate)
 - SQLCipher / application-level at-rest encryption — MNPI at-rest protection relies on OS full-disk encryption (FileVault/BitLocker) as a documented deployment requirement; SQLCipher noted as later hardening if the app moves to shared hosting (resolved at requirements gate)
-- Multi-process / network-filesystem SQLite hardening — the data layer is built concurrency-safe (WAL, single-writer-process) but multi-process and shared-host testing is deferred to the shared-host milestone (resolved at requirements gate)
+- Network-filesystem SQLite (NFS/SMB data dirs) — multi-process hardening on ONE host shipped in Phase 8 (v2.2.0); network filesystems remain out of scope (WAL locking is unreliable on them; deployment docs require a local volume)
 
 ## Context
 
@@ -115,6 +123,8 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 | Integration Lead / IMO is the primary user | Single named operator resolves who the tool is for and makes IMO reporting a first-class deliverable rather than a side feature | — Pending |
 | Extend the existing remediation linkage rather than build new plumbing for DD | `POST /api/integration-tasks/from-remediation` already turns assessment findings into tasks; DD findings are the same shape of problem | — Pending |
 | Make auth mandatory by promoting `PORTAL_AUTH`, not by rebuilding | Server-verified login with roles already exists and is tested; the work is enforcement and role granularity, not new authentication | — Pending |
+| Native SQLite WAL multi-process serialization (Option B), not a broker or Postgres | Stays zero-install, keeps the committed-DB turnkey bundle intact, and `BEGIN IMMEDIATE` + busy_timeout does the cross-process waiting inside SQLite itself | ✓ Shipped Phase 8 — soak-proven (thousands of writes, zero lost, audit 1:1) |
+| Audit append atomic with the deal commit (inside one transaction) | A 503 must truthfully mean "nothing persisted" — the post-commit audit ordering let a busy audit 503 an already-committed write, which the client's silent retry would have turned into duplicate MNPI rows (review CR-01) | ✓ Shipped Phase 8 — committedButUnaudited is now a hard soak violation, measured 0 |
 
 ## Evolution
 
@@ -134,4 +144,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 — started v2.2.0 (Shared-Host Multi-User) after v2.1.0 shipped.*
+*Last updated: 2026-08-11 after Phase 8 (Concurrency & Storage Foundation) — CONC-01 validated, suite 704/704.*

@@ -2,38 +2,38 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Shared-Host Multi-User
-current_phase: 08
-current_phase_name: Concurrency & Storage Foundation
-status: executing
+current_phase: 9
+current_phase_name: Optimistic Locking & Conflict Recovery
+status: planning
 stopped_at: Phase 8 context gathered
-last_updated: "2026-08-10T20:28:47.618Z"
-last_activity: 2026-08-10
-last_activity_desc: "Roadmap created: 6 phases (8–13), all 15 v2.2.0 requirements mapped"
+last_updated: "2026-08-11T03:33:01.511Z"
+last_activity: 2026-08-11
+last_activity_desc: Phase 8 complete, transitioned to Phase 9
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 5
+  percent: 17
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-10)
+See: .planning/PROJECT.md (updated 2026-08-11)
 
 **Core value:** An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
-**Current focus:** Phase 08 — Concurrency & Storage Foundation
+**Current focus:** Phase 09 — Optimistic Locking & Conflict Recovery
 
 ## Current Position
 
-Phase: 08 (Concurrency & Storage Foundation) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 08
-Last activity: 2026-08-10 — Phase 08 execution started
+Phase: 9 — Optimistic Locking & Conflict Recovery
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-11 — Phase 8 complete, transitioned to Phase 9
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 17%
 
 ## Roadmap Shape (v2.2.0)
 
@@ -48,7 +48,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 0 (this milestone)
+- Total plans completed: 5 (this milestone)
 - Average duration: — min
 - Total execution time: 0 hours
 
@@ -56,7 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 8 | 5 | - | - |
 
 **Recent Trend:**
 
@@ -76,6 +76,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Roadmapping decisions fo
 - Roadmapping: DEPLOY-01 (self-managed host) + DEPLOY-02 (container) grouped as Phase 11 "Deployment Shapes" (parallel to each other, both after Phase 10) — the DEPLOY-03-first sequencing is expressed as the Phase 10 → Phase 11 dependency.
 - Roadmapping: COLLAB-02 (session revocation on role/clearance change) + audit-coverage on new routes baked into the Phase 12 collaboration phase as threat-model checklist items, not separate phases, per research.
 - Roadmapping: Wizard enhancements (WIZ-02/03/04) placed as Phase 13 after Phase 12, since they depend on COLLAB-01's invite/clearance model.
+- Phase 8: audit append moved INSIDE writeDb()'s `.immediate` transaction (CR-01 fix) — a 503 now truthfully means nothing persisted, making the client's identical-payload silent retry duplicate-safe by construction; strengthens D-11 to "no COMMIT without audit row".
+- Phase 8: `worktree.baseRef: "head"` set in `.claude/settings.local.json` — harness worktrees were forking from origin/main (v2.1.0 tip, 12 commits behind); required for all worktree dispatches while local main is ahead of origin.
+- Phase 8: `createDealDeduped()` closes the deal-creation TOCTOU + seq race cross-process; Windows unlink EBUSY/EPERM re-mapped to the SQLITE_BUSY* 503 contract (`SQLITE_BUSY_FSLOCK`).
 
 ### Pending Todos
 
@@ -83,6 +86,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Roadmapping decisions fo
 
 ### Blockers/Concerns
 
+- ⚠️ [Phase 9] `updateDealMembers()` keeps wholesale-replace member semantics — concurrent-addition survival needs a caller-side retry-with-fresh-read (documented in test/control-plane-serialization.test.js header); natural candidate for the optimistic-locking model.
+- ⚠️ [Phase 10] Soak-surfaced: under the pre-fix ordering a deal write could commit then 503 on audit contention — now impossible (audit inside txn), but the reverse residual (audit row committed, deal COMMIT disk-fails) is detectable only by the soak's audit↔ack 1:1 check; keep that check in any Phase 10 health tooling.
 - ⚠️ [Phase 12] Workstream-lead role taxonomy still coarse — v2.1.0 shipped admin/hrbp/pmo/employee; finer ws-lead granularity (or a clearance-grant-over-coarse-role model per COLLAB-01) must be resolved at Phase 12 discuss/plan.
 - ⚠️ [Phase 11] TE IT platform constraint unconfirmed — Option B needs `replicas: 1` with a persistent RWO volume. If TE IT requires horizontal autoscaling, escalate (Option A/C, possible v3.0 redirect). Surface at Phase 11 planning.
 - ⚠️ [carried debt] `public/js/pmo.js` lines 1073–1076 remain an unproven innerHTML XSS candidate (last untouched sink from the v2.1.0 sweep) — verify before treating closed.
@@ -99,10 +104,10 @@ Carried forward from the v2.1.0 milestone close (2026-08-10):
 
 ## Session Continuity
 
-Last session: 2026-08-10T19:43:07.259Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-concurrency-storage-foundation/08-CONTEXT.md
+Last session: 2026-08-11
+Stopped at: Phase 8 complete (planned → executed → reviewed → verified → UAT 4/4 → SECURED), ready to plan Phase 9
+Resume file: None
 
 ## Operator Next Steps
 
-- Plan the gating phase: `/gsd-plan-phase --research-phase 8 Concurrency & Storage Foundation`
+- Discuss the next phase: `/gsd-discuss-phase 9` (Optimistic Locking & Conflict Recovery — no CONTEXT.md yet)

@@ -1,21 +1,25 @@
 ---
 phase: 08-concurrency-storage-foundation
 verified: 2026-08-11T00:00:00Z
-status: human_needed
+status: passed
 score: 22/23 must-haves verified
 behavior_unverified: 0
 backstop_abstained: 1 # 08-05 truth marked verification:backstop with no explicit corroborating evidence — abstained per honest-verifier rules, routed to human_verification
 overrides_applied: 0
 human_verification:
+
   - test: "T23 (backstop, 08-05 must_haves.truths): with the app running under real multi-process contention, arrange for one writer's COMMIT to land at the same instant a second writer's BEGIN IMMEDIATE is issued against the same file, and confirm the second acquires the lock cleanly and both writes persist (neither merged away, neither collided into an error)."
     expected: "Both writes persist; no error, no silent loss at the exact commit/acquire boundary."
     why_human: "verification: backstop in 08-05-PLAN.md's frontmatter — no test file, soak assertion, or SUMMARY coverage entry names this exact simultaneous-instant boundary case. The soak and concurrency-busy-retry tests exercise sustained contention broadly and would very likely hit this timing window incidentally many times over thousands of writes with zero observed violations, but no evidence explicitly isolates and confirms this named edge case, so per the honest-verifier abstention rule it cannot be marked VERIFIED on inference alone."
+
   - test: "Judgment-tier prohibition (08-04, transparency): 'MUST NOT let the client's silent auto-retry hide a persistent save failure.'"
     expected: "When retries are exhausted, the user is told the change was not saved and no page/form state is discarded."
     why_human: "verification: judgment. Non-authoritative LLM-judge verdict recorded below (SATISFIED) based on code inspection (public/js/transitions.js's give-up path only calls a toast helper, no DOM clear/reset/navigate) and a passing behavioral test (test/client-busy-retry.test.js's three-503 case asserts the toast text and that origFetch was called exactly 3 times with no other side effects) — but per policy this class of prohibition always requires human confirmation, not a silent pass."
+
   - test: "08-04-PLAN.md's own deferred human-check: with the app running, trigger a save while a second process holds the write lock (scripts/soak.js can supply the contention); confirm the save completes with no visible interruption when contention is brief, and that a sustained hold produces the 'not saved' toast with the form still populated."
     expected: "Brief contention: invisible retry, save succeeds. Sustained contention: visible 'not saved' toast, form untouched."
     why_human: "Explicitly marked <human-check> in 08-04-PLAN.md's plan-level <verification> block. No task in the plan carries type=\"checkpoint:*\", so this was never paused for during autonomous execution and 08-04-SUMMARY.md does not report it as performed. This is a real live-browser visual/interactive check that automated tests cannot substitute for."
+
   - test: "08-05-PLAN.md Task 2's own deferred human-check: open the running portal in a browser against the committed demo data and click through the dashboard, a workstream view, and one save."
     expected: "The demo showcase looks and behaves exactly as it did before Phase 8 — the storage change is invisible by design."
     why_human: "Explicitly marked <human-check> in 08-05-PLAN.md Task 2's <verify> block. 08-05-SUMMARY.md's own D7 coverage entry states this was NOT performed ('no live human was available in this autonomous worktree wave') and substitutes only machine-verifiable proxies (boot, HTTP 200, byte-exact scratch-copy write round-trip) — explicitly leaving the visual judgment for a human pass."

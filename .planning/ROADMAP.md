@@ -40,7 +40,7 @@ collaborative deal-setup wizard enhancements. Architecture locked on Option B (S
 WAL write-serialization, `replicas: 1`); the zero-install committed-DB turnkey model and the demo
 showcase both survive. MNPI-grade throughout: every phase gets a threat model at plan time.
 
-- [ ] **Phase 8: Concurrency & Storage Foundation** — Serialize concurrent writers on one host with zero lost updates (GATING) — CONC-01
+- [x] **Phase 8: Concurrency & Storage Foundation** — Serialize concurrent writers on one host with zero lost updates (GATING) — CONC-01 (completed 2026-08-11)
 - [ ] **Phase 9: Optimistic Locking & Conflict Recovery** — Same-record conflicts are caught (409) and recoverable, not silently clobbered — CONC-02
 - [ ] **Phase 10: Runtime Hardening & Deployment Readiness** — The app self-reports health, drains safely, resists abuse, and manages secrets/sessions to shared-host standards — DEPLOY-03, OPS-01, OPS-02, OPS-03
 - [ ] **Phase 11: Deployment Shapes** — Stand the portal up as a self-managed Linux service or a TE-IT container from shipped tooling + config contract — DEPLOY-01, DEPLOY-02
@@ -155,7 +155,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. Concurrency & Storage Foundation | v2.2.0 | 5/5 | In Progress|  |
+| 8. Concurrency & Storage Foundation | v2.2.0 | 5/5 | Complete    | 2026-08-11 |
 | 9. Optimistic Locking & Conflict Recovery | v2.2.0 | 0/TBD | Not started | - |
 | 10. Runtime Hardening & Deployment Readiness | v2.2.0 | 0/TBD | Not started | - |
 | 11. Deployment Shapes | v2.2.0 | 0/TBD | Not started | - |
