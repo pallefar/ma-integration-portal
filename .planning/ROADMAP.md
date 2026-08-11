@@ -87,7 +87,7 @@ Plans:
   2. On a 409 the user sees a reload-and-reapply path that preserves their in-progress edit instead of discarding it.
   3. Two users editing different records concurrently both save successfully — the lock bites only on the same record, not the whole collection.
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed
 
 Plans:
 **Wave 1**
@@ -113,7 +113,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 09-07-PLAN.md — Coverage gate, cross-collection concurrency proof, conflict-aware soak, validation sign-off
+- [x] 09-07-PLAN.md — Coverage gate, cross-collection concurrency proof, conflict-aware soak, validation sign-off
 
 **UI hint**: yes
 
@@ -183,7 +183,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Concurrency & Storage Foundation | v2.2.0 | 5/5 | Complete    | 2026-08-11 |
-| 9. Optimistic Locking & Conflict Recovery | v2.2.0 | 6/7 | In Progress|  |
+| 9. Optimistic Locking & Conflict Recovery | v2.2.0 | 7/7 | In Progress|  |
 | 10. Runtime Hardening & Deployment Readiness | v2.2.0 | 0/TBD | Not started | - |
 | 11. Deployment Shapes | v2.2.0 | 0/TBD | Not started | - |
 | 12. Workstream-Lead Collaboration | v2.2.0 | 0/TBD | Not started | - |
