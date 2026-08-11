@@ -1,0 +1,350 @@
+// CONC-02/D-05/Pitfall-1/Pitfall-11/T-09-14/T-09-16 (Phase 9 Plan 03): behavioral
+// proof of the shared conflict-recovery dialog's wrapper-detected 409 branch in
+// public/js/transitions.js — that a 409 is never machine-retried, that an
+// unrelated 409 opens no dialog, and that a second conflict re-renders one
+// overlay in place rather than stacking a second one.
+//
+// Built on test/client-busy-retry.test.js's own harness (Plan 04, Phase 8):
+// the same sentinel-delimited `ma-fetch-wrapper` region is extracted and run
+// through node:vm against a minimal stubbed browser global set. That harness's
+// `document` stub only records appendChild/removeChild calls — this file's
+// dialog assertions need a real (if tiny) DOM tree with class selectors, event
+// listeners and a `.click()` convenience, so this file builds its own richer
+// `document`/`createElement` stub rather than importing the other file's.
+//
+// This test's "second writer" is a scripted fake window.fetch returning a
+// queued response sequence — correct here because this proves CLIENT control
+// flow (dialog render/re-render, fetch call count/shape), not SQLite locking;
+// the real cross-process proof lives in
+// test/optimistic-locking-cross-process.test.js (Plan 01).
+//
+// node:test — Node's built-in runner. Run via `node --test
+// test/client-conflict-dialog.test.js` (or bare `node --test`). Never `node
+// --test test/` (the directory argument is mis-parsed on this Node version).
+
+const test = require('node:test');
+const assert = require('node:assert');
+const vm = require('node:vm');
+const fs = require('fs');
+const path = require('path');
+
+function extractWrapperRegion() {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'transitions.js'), 'utf8');
+  const beginMarker = 'ma-fetch-wrapper:begin';
+  const endMarker = 'ma-fetch-wrapper:end';
+  const beginIdx = src.indexOf(beginMarker);
+  const endIdx = src.indexOf(endMarker);
+  assert.ok(beginIdx >= 0 && endIdx > beginIdx, 'expected ma-fetch-wrapper:begin/end sentinels in transitions.js');
+  const afterBeginLineStart = src.indexOf('\n', beginIdx) + 1;
+  const beforeEndLineStart = src.lastIndexOf('\n', endIdx);
+  return src.slice(afterBeginLineStart, beforeEndLineStart);
+}
+
+const WRAPPER_SRC = extractWrapperRegion();
+
+// ---- Minimal DOM: text nodes + elements with class selectors, listeners,
+// and a real parent/child tree (needed for querySelectorAll + textContent
+// aggregation, which the dialog's own attribution-rendering relies on). ----
+
+function createTextNode(text) {
+  const node = {
+    nodeType: 3,
+    parentNode: null,
+    _text: text === undefined || text === null ? '' : String(text),
+  };
+  Object.defineProperty(node, 'textContent', {
+    get() { return node._text; },
+    set(v) { node._text = v === undefined || v === null ? '' : String(v); },
+  });
+  return node;
+}
+
+function createElement(tag) {
+  const el = {
+    nodeType: 1,
+    tagName: String(tag).toUpperCase(),
+    style: {},
+    attributes: {},
+    children: [],
+    parentNode: null,
+    disabled: false,
+    type: undefined,
+    _classes: new Set(),
+    _listeners: {},
+  };
+  Object.defineProperty(el, 'className', {
+    get() { return Array.from(el._classes).join(' '); },
+    set(v) { el._classes = new Set(String(v).split(/\s+/).filter(Boolean)); },
+  });
+  Object.defineProperty(el, 'textContent', {
+    get() { return el.children.map((c) => c.textContent).join(''); },
+    set(v) {
+      el.children = [];
+      const t = createTextNode(v);
+      t.parentNode = el;
+      el.children.push(t);
+    },
+  });
+  el.classList = {
+    add(c) { el._classes.add(c); },
+    remove(c) { el._classes.delete(c); },
+    contains(c) { return el._classes.has(c); },
+  };
+  el.appendChild = (child) => {
+    if (child.parentNode && child.parentNode.children) {
+      const idx = child.parentNode.children.indexOf(child);
+      if (idx >= 0) child.parentNode.children.splice(idx, 1);
+    }
+    child.parentNode = el;
+    el.children.push(child);
+    return child;
+  };
+  el.removeChild = (child) => {
+    const idx = el.children.indexOf(child);
+    if (idx >= 0) el.children.splice(idx, 1);
+    child.parentNode = null;
+    return child;
+  };
+  el.setAttribute = (k, v) => { el.attributes[k] = v; };
+  el.getAttribute = (k) => el.attributes[k];
+  el.addEventListener = (type, fn) => { (el._listeners[type] = el._listeners[type] || []).push(fn); };
+  el.removeEventListener = (type, fn) => {
+    if (el._listeners[type]) el._listeners[type] = el._listeners[type].filter((f) => f !== fn);
+  };
+  el.dispatchEvent = (evt) => { (el._listeners[evt.type] || []).forEach((fn) => fn(evt)); };
+  el.click = () => el.dispatchEvent({ type: 'click', target: el });
+  return el;
+}
+
+function makeDocument() {
+  const body = createElement('body');
+  const docListeners = {};
+  const document = {
+    body,
+    createElement,
+    createTextNode,
+    addEventListener(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); },
+    removeEventListener(type, fn) {
+      if (docListeners[type]) docListeners[type] = docListeners[type].filter((f) => f !== fn);
+    },
+    dispatchEvent(evt) { (docListeners[evt.type] || []).forEach((fn) => fn(evt)); },
+    // Supports only simple ".class" selectors — the only shape this dialog's
+    // markup (or these tests) ever need.
+    querySelectorAll(selector) {
+      const cls = String(selector).replace(/^\./, '');
+      const out = [];
+      (function walk(node) {
+        if (node.nodeType === 1 && node._classes && node._classes.has(cls)) out.push(node);
+        (node.children || []).forEach(walk);
+      })(body);
+      return out;
+    },
+  };
+  return document;
+}
+
+function buildSandbox(fetchImpl) {
+  const document = makeDocument();
+  const location = { href: 'https://example.test/execution.html', origin: 'https://example.test', pathname: '/execution.html' };
+  const window = { fetch: fetchImpl, location };
+  const storageData = {};
+  const localStorage = {
+    getItem(k) { return Object.prototype.hasOwnProperty.call(storageData, k) ? storageData[k] : null; },
+    setItem(k, v) { storageData[k] = String(v); },
+  };
+  const sandbox = { window, location, document, localStorage, URL, Headers, setTimeout, console };
+  vm.createContext(sandbox);
+  vm.runInContext(WRAPPER_SRC, sandbox);
+  return { sandbox, document };
+}
+
+// A fake Response: `.json()`/`.clone().json()` both resolve to the same
+// in-hand body object (no stream to consume twice, unlike a real Response —
+// faithful enough for this control-flow proof).
+function makeResponse(opts) {
+  const res = Object.assign({}, opts);
+  res.ok = opts.status >= 200 && opts.status < 300;
+  res.headers = opts.headers || new Headers();
+  res.json = () => Promise.resolve(opts.body);
+  res.clone = () => res;
+  return res;
+}
+
+// Scripted fake origFetch: returns the next response in a queue (staying on
+// the last entry if over-called) and records each call's input/init.
+function makeFakeFetch(responses) {
+  const calls = [];
+  const impl = (input, init) => {
+    calls.push({ input, init: init || {} });
+    const idx = Math.min(calls.length - 1, responses.length - 1);
+    return Promise.resolve(responses[idx]);
+  };
+  return { calls, impl };
+}
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+async function flushAll(times) {
+  for (let i = 0; i < (times || 6); i++) await flush();
+}
+
+test('client-conflict-dialog: a 409 with the conflict marker renders exactly one overlay; the wrapper makes no retry attempt of its own', async () => {
+  const conflictBody = {
+    conflict: true,
+    currentVersion: 4,
+    currentRecord: { id: 'rec1', title: 'Their title', notes: 'Their notes' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+
+  assert.strictEqual(fake.calls.length, 1, 'D-05/Pitfall 11: the wrapper must never itself re-fire a 409 request — the only re-fire path is a user click');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+});
+
+test('client-conflict-dialog: a 409 without the conflict marker renders no dialog and returns the response untouched', async () => {
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: { error: 'Cannot generate an empty steerco pack' } })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const res = await sandbox.window.fetch('/api/reports/steerco-pack', { method: 'POST', body: '{}' });
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, 'Pitfall 1: an unrelated 409 must open no dialog');
+  assert.strictEqual(res.status, 409, 'the original response must still reach the caller');
+  const body = await res.json();
+  assert.strictEqual(body.error, 'Cannot generate an empty steerco pack', 'the original body must still be readable by the caller');
+});
+
+test('client-conflict-dialog: clicking apply issues exactly one further fetch, carrying the fresh version, otherwise byte-identical', async () => {
+  const originalPayload = { id: 'rec1', version: 1, title: 'My title', notes: 'My notes' };
+  const conflictBody = {
+    conflict: true,
+    currentVersion: 9,
+    currentRecord: { id: 'rec1', title: 'Their title', notes: 'Their notes' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([
+    makeResponse({ status: 409, body: conflictBody }),
+    makeResponse({ status: 200, body: { ok: true } }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify(originalPayload) });
+  const applyBtn = document.querySelectorAll('.conflict-btn-apply')[0];
+  assert.ok(applyBtn, 'expected an apply button on the rendered dialog');
+  applyBtn.click();
+  await flushAll();
+
+  assert.strictEqual(fake.calls.length, 2, 'expected exactly one further fetch after the apply click');
+  const firstBody = JSON.parse(fake.calls[0].init.body);
+  const secondBody = JSON.parse(fake.calls[1].init.body);
+  assert.strictEqual(secondBody.version, 9, "the second call must carry the server's fresh version");
+  assert.notStrictEqual(firstBody.version, secondBody.version, 'the stale version must not be resubmitted');
+  delete firstBody.version;
+  delete secondBody.version;
+  assert.deepStrictEqual(firstBody, secondBody, 'every field other than version must be byte-identical to the original');
+});
+
+test('client-conflict-dialog: apply on a query-parameter route rewrites expectedVersion in the URL, not the body', async () => {
+  const conflictBody = {
+    conflict: true,
+    currentVersion: 7,
+    currentRecord: { id: 'rec1', title: 'Their title' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([
+    makeResponse({ status: 409, body: conflictBody }),
+    makeResponse({ status: 200, body: { ok: true } }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/widgets/rec1?expectedVersion=3', { method: 'PATCH', body: JSON.stringify({ title: 'My title' }) });
+  const applyBtn = document.querySelectorAll('.conflict-btn-apply')[0];
+  applyBtn.click();
+  await flushAll();
+
+  assert.strictEqual(fake.calls.length, 2);
+  assert.strictEqual(fake.calls[1].input, '/api/widgets/rec1?expectedVersion=7', 'the fresh version must land in the URL query parameter');
+  assert.strictEqual(fake.calls[1].init.body, fake.calls[0].init.body, 'the body must be untouched — this route carries its version precondition in the URL');
+});
+
+test('client-conflict-dialog: clicking discard issues no further fetch and removes the overlay', async () => {
+  const conflictBody = {
+    conflict: true,
+    currentVersion: 2,
+    currentRecord: { id: 'rec1', title: 'Their title' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+
+  const discardBtn = document.querySelectorAll('.conflict-btn-discard')[0];
+  discardBtn.click();
+  await flushAll();
+
+  assert.strictEqual(fake.calls.length, 1, 'discard must never issue a further fetch');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, 'discard must remove the overlay');
+});
+
+test('client-conflict-dialog: a second conflict on reapply leaves exactly one overlay, refreshes theirs, and never touches mine', async () => {
+  const firstConflict = {
+    conflict: true,
+    currentVersion: 3,
+    currentRecord: { id: 'rec1', title: 'Their v3 title' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const secondConflict = {
+    conflict: true,
+    currentVersion: 4,
+    currentRecord: { id: 'rec1', title: 'Their v4 title' },
+    changedBy: 'priya',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([
+    makeResponse({ status: 409, body: firstConflict }),
+    makeResponse({ status: 409, body: secondConflict }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  const applyBtn = document.querySelectorAll('.conflict-btn-apply')[0];
+  applyBtn.click();
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'T-09-14/T-09-16: a second conflict must never stack a second overlay');
+  const mine = document.querySelectorAll('.conflict-diff-mine')[0];
+  const theirs = document.querySelectorAll('.conflict-diff-theirs')[0];
+  assert.ok(mine && theirs, 'expected a re-rendered diff row');
+  assert.strictEqual(mine.textContent, 'My title', "the user's own column must never be cleared or reset on a second conflict");
+  assert.strictEqual(theirs.textContent, 'Their v4 title', 'the server-side column must refresh to the newest conflict data');
+  const banner = document.querySelectorAll('.conflict-modal-error');
+  assert.strictEqual(banner.length, 1, 'the inline error banner must appear on the re-rendered dialog');
+});
+
+test('client-conflict-dialog: a 503 on a same-origin /api write still takes the pre-existing busy-retry path, undisturbed by the 409 work', async () => {
+  const fake = makeFakeFetch([
+    makeResponse({ status: 503, headers: new Headers({ 'Retry-After': '0' }) }),
+    makeResponse({ status: 200, body: { ok: true } }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  // Swap in a recording, immediately-firing fake per the harness's own
+  // documented caveat (test/client-busy-retry.test.js) — the sandbox uses
+  // the real setTimeout otherwise.
+  const scheduled = [];
+  sandbox.setTimeout = (fn, ms) => { scheduled.push(ms); return setTimeout(fn, 0); };
+
+  const res = await sandbox.window.fetch('/api/pulses', { method: 'POST', body: '{}' });
+
+  assert.strictEqual(fake.calls.length, 2, 'the initial attempt plus exactly one retry — the 409 work must not have disturbed the 503 path');
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, 'a 503 must never open the conflict dialog');
+});
