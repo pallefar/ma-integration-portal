@@ -402,6 +402,10 @@
     closeSynStageMenu();
     var body = { targetStage: targetStage };
     if (reason) body.reason = reason;
+    // CONC-02/D-02 (Phase 9): send the version this page already holds for
+    // this initiative; nothing sent when the held record has none.
+    var existingItem = state.synergies.find(function (s) { return s.id === id; });
+    if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
     fetch('/api/synergies/' + encodeURIComponent(id) + '/stage', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(function (res) {
@@ -787,13 +791,17 @@
         openSynStageMenu(card.querySelector('.syn-stage-wrap'), item, id);
       });
       // UI-SPEC §6/D-16: its OWN button, hitting its OWN dedicated route
-      // with a payload carrying no content fields at all (an empty object,
+      // with a payload carrying no CONTENT fields at all (an empty object
+      // plus, per CONC-02/D-02, the held version as the sole precondition —
       // never derived from any input on the page) — structurally distinct
       // from every title/notes change handler, so a confirmation and a
       // content edit can never be the same request.
       card.querySelector('.syn-confirm-btn').addEventListener('click', function () {
+        var existingItem = state.synergies.find(function (s) { return s.id === id; });
+        var confirmBody = {};
+        if (existingItem && existingItem.version !== undefined) confirmBody.version = existingItem.version;
         fetch('/api/synergies/' + encodeURIComponent(id) + '/confirm-current', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(confirmBody)
         }).then(function (r) { return r.json(); }).then(function (res) {
           if (res && res.success) {
             var idx = state.synergies.findIndex(function (s) { return s.id === id; });
@@ -831,6 +839,9 @@
             startMonth: startEl.value,
             curveShape: curveEl.value
           };
+          // CONC-02/D-02 (Phase 9): `existing` above is the same held record —
+          // send its version; nothing sent when it has none.
+          if (existing && existing.version !== undefined) body.version = existing.version;
           fetch('/api/synergies/' + encodeURIComponent(id) + '/generate-phasing', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
           }).then(function (r) { return r.json(); }).then(function (res) {
@@ -889,6 +900,10 @@
           var field = cell.classList.contains('syn-target-input') ? 'targetM' : 'realizedM';
           var body = {};
           body[field] = parseFloat(ev.target.value) || 0;
+          // CONC-02/D-02 (Phase 9): send the version this page already holds
+          // for this initiative; nothing sent when the held record has none.
+          var existingItem = state.synergies.find(function (s) { return s.id === id; });
+          if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
           fetch('/api/synergies/' + encodeURIComponent(id) + '/phasing/' + encodeURIComponent(month), {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
           }).then(function (r) { return r.json(); }).then(function (res) {
@@ -916,8 +931,13 @@
           if (reason === null) return;
           reason = reason.trim();
           if (!reason) return;
+          // CONC-02/D-02 (Phase 9): send the version this page already holds
+          // for this initiative; nothing sent when the held record has none.
+          var existingItem = state.synergies.find(function (s) { return s.id === id; });
+          var rebaselineBody = { reason: reason };
+          if (existingItem && existingItem.version !== undefined) rebaselineBody.version = existingItem.version;
           fetch('/api/synergies/' + encodeURIComponent(id) + '/rebaseline', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason })
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rebaselineBody)
           }).then(function (r) { return r.json(); }).then(function (res) {
             if (res && res.success) {
               var idx = state.synergies.findIndex(function (s) { return s.id === id; });
@@ -948,6 +968,10 @@
           var body = { date: date, amountM: parseFloat(amountRaw) || 0 };
           var note = noteEl.value.trim();
           if (note) body.note = note;
+          // CONC-02/D-02 (Phase 9): send the version this page already holds
+          // for this initiative; nothing sent when the held record has none.
+          var existingItem = state.synergies.find(function (s) { return s.id === id; });
+          if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
           fetch('/api/synergies/' + encodeURIComponent(id) + '/cost-entries', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
           }).then(function (r) { return r.json(); }).then(function (res) {
@@ -969,13 +993,30 @@
           var row = delBtn.parentNode;
           var eid = row.getAttribute('data-cost-entry');
           if (!window.confirm('Delete this cost entry?')) return;
-          fetch('/api/synergies/' + encodeURIComponent(id) + '/cost-entries/' + encodeURIComponent(eid), { method: 'DELETE' })
+          // CONC-02/D-02 (Phase 9): this route carries no JSON body — the
+          // version precondition travels as a query parameter, resolved by
+          // the server's shared parseExpectedVersion() dual-channel
+          // contract. Send the version this page already holds for this
+          // initiative; nothing appended when the held record has none.
+          var existingItem = state.synergies.find(function (s) { return s.id === id; });
+          var delUrl = '/api/synergies/' + encodeURIComponent(id) + '/cost-entries/' + encodeURIComponent(eid);
+          if (existingItem && existingItem.version !== undefined) {
+            delUrl += '?expectedVersion=' + encodeURIComponent(existingItem.version);
+          }
+          fetch(delUrl, { method: 'DELETE' })
             .then(function (r) { return r.json(); })
             .then(function (res) {
               if (res && res.success) {
                 var item = state.synergies.find(function (s) { return s.id === id; });
-                if (item && Array.isArray(item.costEntries)) {
-                  item.costEntries = item.costEntries.filter(function (e) { return e.id !== eid; });
+                if (item) {
+                  if (Array.isArray(item.costEntries)) {
+                    item.costEntries = item.costEntries.filter(function (e) { return e.id !== eid; });
+                  }
+                  // Refresh the version from the server's response — without
+                  // it, the NEXT write in this same tab would resubmit the
+                  // now-stale version and self-conflict against its own
+                  // successful delete.
+                  if (res.initiative && res.initiative.version !== undefined) item.version = res.initiative.version;
                 }
                 renderSynergy(); applyI18n();
               } else {

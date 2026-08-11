@@ -3918,6 +3918,10 @@ app.post('/api/synergies/:id/cost-entries', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  // CONC-02 (Phase 9, Plan 02 Task 2): a cost-entry addition mutates the
+  // owning initiative record — D-02 gives it no exemption from the version
+  // precondition, even though the entry itself is a nested sub-object.
+  if (conflictIfStale(req, res, item)) return;
 
   item.costEntries = Array.isArray(item.costEntries) ? item.costEntries : [];
   const entry = { id: newId('cost'), date: b.date, amountM: roundSynergyMoney(b.amountM), note: String(b.note || '').slice(0, 2000) };
@@ -3936,6 +3940,13 @@ app.delete('/api/synergies/:id/cost-entries/:eid', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  // CONC-02 (Phase 9, Plan 02 Task 2): this route carries no JSON body — its
+  // precondition travels in the ?expectedVersion query parameter, resolved
+  // by the SAME conflictIfStale()/parseExpectedVersion() dual-channel
+  // contract Task 1 built. This is an UPDATE of the initiative (deleting a
+  // nested entry from it), never a record delete, so it uses the ordinary
+  // conflict path rather than a later plan's stale-delete surface.
+  if (conflictIfStale(req, res, item)) return;
 
   const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
   const filtered = entries.filter(e => e.id !== req.params.eid);
@@ -3943,7 +3954,13 @@ app.delete('/api/synergies/:id/cost-entries/:eid', (req, res) => {
   item.costEntries = filtered;
 
   writeDb(db);
-  res.json({ success: true });
+  // [Rule 1 fix] CONC-02: echo the updated initiative (matching every other
+  // synergy sub-route's response shape) so the client can refresh the
+  // version it holds in memory — without this, the NEXT write in the same
+  // tab would resubmit the now-stale version and self-conflict against its
+  // own successful delete (mirrors the RAID/task status-flip refresh
+  // pattern established in Plan 01/Task 1).
+  res.json({ success: true, initiative: item });
 });
 
 // SYN-01/D-01/D-05/D-25: dedicated sub-route mirroring
@@ -3958,6 +3975,11 @@ app.post('/api/synergies/:id/generate-phasing', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  // CONC-02 (Phase 9, Plan 02 Task 2): this route wholesale-replaces
+  // item.phasing (a destructive act the client already confirms) — the
+  // version precondition is checked here too, D-02, before any of the
+  // fields below are touched.
+  if (conflictIfStale(req, res, item)) return;
 
   item.runRateM = roundSynergyMoney(b.runRateM);
   item.startMonth = b.startMonth;
@@ -4012,6 +4034,10 @@ app.post('/api/synergies/:id/phasing/:month', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  // CONC-02 (Phase 9, Plan 02 Task 2): placed immediately after the
+  // not-found guard — before the month-shape/row-existence checks below —
+  // and before the first mutation of the resolved initiative (D-02).
+  if (conflictIfStale(req, res, item)) return;
 
   // SYN-01/D-25: a malformed :month path param is a 400 (bad request shape),
   // distinct from a well-formed month that simply has no row (404 below) —
@@ -4058,6 +4084,15 @@ app.post('/api/synergies/:id/stage', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  // CONC-02 (Phase 9, Plan 02 Task 2): placed BEFORE the CR-02
+  // unrecognized-stage 409 below — that pre-existing 409's own body must
+  // stay exactly as it is and must NEVER gain the conflict:true marker (it
+  // is a business-rule refusal, not a version conflict; a dedicated
+  // negative-control test asserts this). This call is a SEPARATE check that
+  // fires and returns first whenever a stale version is supplied, regardless
+  // of whether the request would otherwise hit the same-stage no-op, the
+  // unrecognized-stage refusal, or a real stage move.
+  if (conflictIfStale(req, res, item)) return;
 
   const targetStage = b.targetStage;
   const reason = String(b.reason || '').trim();
@@ -4126,6 +4161,9 @@ app.post('/api/synergies/:id/rebaseline', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  // CONC-02 (Phase 9, Plan 02 Task 2): after the not-found guard, before
+  // any mutation (D-02).
+  if (conflictIfStale(req, res, item)) return;
 
   const reason = String(b.reason || '').trim();
   if (!reason) return res.status(400).json({ error: 'A reason is required to re-baseline.' });
@@ -4137,17 +4175,22 @@ app.post('/api/synergies/:id/rebaseline', (req, res) => {
 });
 
 // SYN-05/D-16: the ONLY route whose purpose is stamping lastConfirmedAt as a
-// deliberate confirmation act. ConfirmCurrentSchema accepts no fields, so
-// there is no field on this request through which a title or a note could
-// ride along with a confirmation. This handler assigns EXACTLY ONE field
-// (lastConfirmedAt) and touches nothing else — a reviewer can verify by
-// inspection that a confirmation and a content edit can never be the same
-// request.
+// deliberate confirmation act. ConfirmCurrentSchema accepts no CONTENT
+// fields, so there is no field on this request through which a title or a
+// note could ride along with a confirmation — CONC-02 (Phase 9, Plan 02
+// Task 2) added `version` to that schema as the sole exception, since it
+// carries no content of its own, only the optimistic-lock precondition
+// (must_haves: every route that mutates an existing initiative enforces the
+// version precondition, this one included, D-02/D-06). This handler still
+// assigns EXACTLY ONE content field (lastConfirmedAt) and touches nothing
+// else — a reviewer can verify by inspection that a confirmation and a
+// content edit can never be the same request.
 app.post('/api/synergies/:id/confirm-current', (req, res) => {
   const db = readDb();
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
+  if (conflictIfStale(req, res, item)) return;
 
   item.lastConfirmedAt = new Date().toISOString();
   writeDb(db);

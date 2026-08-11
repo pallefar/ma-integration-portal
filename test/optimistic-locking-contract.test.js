@@ -470,3 +470,174 @@ test('optimistic-locking-contract (11): a query-channel ?expectedVersion that is
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Plan 02 Task 2: the seven synergy sub-routes that mutate an initiative —
+// stage, cost-entries (add/delete, the query-channel proof), plus the
+// structural coverage scan and the unrecognized-stage negative control.
+// ---------------------------------------------------------------------------
+
+// RPT-04/D-14-style direct SQLite manipulation of the deal's own
+// synergyInitiatives row — mirrors test/reports-export.test.js's
+// patchSynergyRow() helper, since there is no API surface that can put an
+// initiative into an unrecognized-stage state (every route that sets
+// `stage` validates it against SYN_STAGES).
+function patchSynergyRow(dealId, synergyId, patch) {
+  const conn = store.getOrOpenConnection(dbFiles.dealDbPath(dealId), dbFiles.DEAL_SCHEMA_PATH);
+  const row = conn.prepare('SELECT data FROM synergyInitiatives WHERE id = ?').get(synergyId);
+  const item = Object.assign(JSON.parse(row.data), patch);
+  conn.prepare('UPDATE synergyInitiatives SET data = ? WHERE id = ?').run(JSON.stringify(item), synergyId);
+}
+
+test('optimistic-locking-contract (12): a stale-version POST to the stage sub-route returns 409 with the conflict marker, and the initiative\'s stage is unchanged', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc12');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'stage stale fixture', category: 'revenue', targetM: 3 });
+    const { initiative } = await createRes.json();
+    assert.strictEqual(initiative.stage, 'idea');
+
+    // Stamp version:1 via an ordinary edit (idea -> validated has no gate,
+    // but this stamps the version cleanly without touching stage yet).
+    const stampRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'stamped' });
+    assert.strictEqual((await stampRes.json()).initiative.version, 1);
+
+    const staleStageRes = await postJSON(base, `/api/synergies/${initiative.id}/stage`, token, { targetStage: 'validated', version: 0 });
+    assert.strictEqual(staleStageRes.status, 409);
+    const staleStageBody = await staleStageRes.json();
+    assert.strictEqual(staleStageBody.conflict, true);
+    assert.strictEqual(staleStageBody.conflictKind, 'version');
+
+    const rereadRes = await getJSON(base, '/api/synergies', token);
+    const reread = (await rereadRes.json()).find((s) => s.id === initiative.id);
+    assert.strictEqual(reread.stage, 'idea', 'the stale stage-change attempt must not have moved the stage');
+    assert.strictEqual(reread.version, 1, 'the stale stage-change attempt must not have bumped the version');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (13): a stale-version query-channel DELETE to the cost-entry sub-route returns 409 with the conflict marker, and the entry is still present', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc13');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'cost-entry stale fixture', category: 'cost', targetM: 1 });
+    const { initiative } = await createRes.json();
+
+    const addRes = await postJSON(base, `/api/synergies/${initiative.id}/cost-entries`, token, { date: '2026-01-15', amountM: 0.5 });
+    assert.strictEqual(addRes.status, 200);
+    const addBody = await addRes.json();
+    assert.strictEqual(addBody.initiative.version, 1, 'the first write to an unstamped initiative must stamp version:1');
+    const entry = addBody.initiative.costEntries[0];
+    assert.ok(entry && entry.id);
+
+    // A stale expectedVersion (0, the "no version yet" value) on the
+    // query-channel-only DELETE route.
+    const staleDelRes = await fetch(`${base}/api/synergies/${initiative.id}/cost-entries/${entry.id}?expectedVersion=0`, {
+      method: 'DELETE',
+      headers: { Cookie: cookieHeader(token) },
+    });
+    assert.strictEqual(staleDelRes.status, 409);
+    const staleDelBody = await staleDelRes.json();
+    assert.strictEqual(staleDelBody.conflict, true);
+    assert.strictEqual(staleDelBody.conflictKind, 'version');
+
+    const rereadRes = await getJSON(base, '/api/synergies', token);
+    const reread = (await rereadRes.json()).find((s) => s.id === initiative.id);
+    assert.strictEqual(reread.costEntries.length, 1, 'the stale delete must not have removed the cost entry');
+    assert.strictEqual(reread.version, 1, 'the stale delete must not have bumped the version');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (14): a current-version query-channel DELETE to the cost-entry sub-route succeeds, and the initiative\'s version advances by one', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc14');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'cost-entry current fixture', category: 'cost', targetM: 1 });
+    const { initiative } = await createRes.json();
+
+    const addRes = await postJSON(base, `/api/synergies/${initiative.id}/cost-entries`, token, { date: '2026-02-20', amountM: 0.75 });
+    const addBody = await addRes.json();
+    assert.strictEqual(addBody.initiative.version, 1);
+    const entry = addBody.initiative.costEntries[0];
+
+    const delRes = await fetch(`${base}/api/synergies/${initiative.id}/cost-entries/${entry.id}?expectedVersion=1`, {
+      method: 'DELETE',
+      headers: { Cookie: cookieHeader(token) },
+    });
+    assert.strictEqual(delRes.status, 200);
+    const delBody = await delRes.json();
+    assert.strictEqual(delBody.success, true);
+    assert.strictEqual(delBody.initiative.version, 2, 'a current-version write must bump the stored version by exactly one');
+    assert.strictEqual(delBody.initiative.costEntries.length, 0);
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (15, negative control): the pre-existing unrecognized-stage 409 does not carry the conflict:true marker', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc15');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'unrecognized-stage fixture', category: 'revenue', targetM: 2 });
+    const { initiative } = await createRes.json();
+
+    // Force the stored record into an unrecognized-stage state — no API
+    // surface can reach this, so it is patched directly (mirrors
+    // test/reports-export.test.js's patchSynergyRow()).
+    patchSynergyRow(deal.id, initiative.id, { stage: 'legacy_unknown' });
+
+    // No `version` in the body — this must reach the CR-02 branch, not the
+    // conflictIfStale() precheck (which is a no-op when no version is sent).
+    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, token, { targetStage: 'validated' });
+    assert.strictEqual(res.status, 409, 'an unrecognized current stage must still 409');
+    const body = await res.json();
+    assert.notStrictEqual(body.conflict, true, 'the pre-existing unrecognized-stage 409 must never carry the conflict:true marker');
+    assert.ok(typeof body.error === 'string' && body.error.length > 0, 'the pre-existing 409 keeps its own single-string error shape');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (16, structural): all seven synergy sub-routes call conflictIfStale() before their writeDb(db) call', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const routeMarkers = [
+    "app.post('/api/synergies/:id/cost-entries',",
+    "app.delete('/api/synergies/:id/cost-entries/:eid',",
+    "app.post('/api/synergies/:id/generate-phasing',",
+    "app.post('/api/synergies/:id/phasing/:month',",
+    "app.post('/api/synergies/:id/stage',",
+    "app.post('/api/synergies/:id/rebaseline',",
+    "app.post('/api/synergies/:id/confirm-current',",
+  ];
+  routeMarkers.forEach((marker) => {
+    const start = src.indexOf(marker);
+    assert.ok(start !== -1, `route marker not found: ${marker}`);
+    const rest = src.slice(start + marker.length);
+    const nextAppIdx = rest.search(/\napp\.(get|post|put|delete|use)\(/);
+    const body = nextAppIdx === -1 ? rest : rest.slice(0, nextAppIdx);
+    const conflictIdx = body.indexOf('conflictIfStale(');
+    const writeDbIdx = body.indexOf('writeDb(db)');
+    assert.ok(conflictIdx !== -1, `${marker} must call conflictIfStale()`);
+    assert.ok(writeDbIdx !== -1, `${marker} must call writeDb(db)`);
+    assert.ok(conflictIdx < writeDbIdx, `${marker} must call conflictIfStale() BEFORE writeDb(db)`);
+  });
+});

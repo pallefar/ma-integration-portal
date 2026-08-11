@@ -177,6 +177,9 @@ const GeneratePhasingSchema = z.object({
   runRateM: SynMoneyUnion,
   startMonth: z.string().trim().refine(isValidMonth, { message: 'Start month must be a valid YYYY-MM month.' }),
   curveShape: z.enum(['cost', 'revenue', 'linear']),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above.
+  version: z.number().int().nonnegative().optional(),
 });
 
 // D-06/D-25: the dedicated per-month sub-route body — targetM is accepted on
@@ -188,6 +191,9 @@ const GeneratePhasingSchema = z.object({
 const PhasingMonthSchema = z.object({
   targetM: SynMoneyUnion.optional(),
   realizedM: SynMoneyUnion.optional(),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.targetM !== undefined || data.realizedM !== undefined, {
   message: 'At least one of targetM or realizedM is required.',
 });
@@ -203,6 +209,10 @@ const CostEntrySchema = z.object({
   }),
   amountM: SynMoneyUnion,
   note: z.string().trim().max(TEXT_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition on
+  // the OWNING initiative — see SynergyUpsertSchema's identical
+  // field/comment above.
+  version: z.number().int().nonnegative().optional(),
 });
 
 // SYN-04/D-22/D-23: the id array is capped generously below the file's other
@@ -285,6 +295,11 @@ registerSchema('POST', '/api/synergies/:id/phasing/:month', PhasingMonthSchema);
 const StageChangeSchema = z.object({
   targetStage: z.enum(SYN_STAGES),
   reason: z.string().trim().max(TEXT_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above. This is a
+  // SEPARATE 409 from the route's own unrecognized-current-stage 409 — see
+  // server.js's conflictIfStale() call site comment on this route.
+  version: z.number().int().nonnegative().optional(),
 });
 registerSchema('POST', '/api/synergies/:id/stage', StageChangeSchema);
 
@@ -294,16 +309,25 @@ registerSchema('POST', '/api/synergies/:id/stage', StageChangeSchema);
 // D-09's "trimmed before the emptiness check" rule.
 const RebaselineSchema = z.object({
   reason: z.string().trim().min(1, 'A reason is required to re-baseline.').max(TEXT_MAX),
+  // CONC-02 (Phase 9, Plan 02 Task 2): the optimistic-lock precondition —
+  // see SynergyUpsertSchema's identical field/comment above.
+  version: z.number().int().nonnegative().optional(),
 });
 registerSchema('POST', '/api/synergies/:id/rebaseline', RebaselineSchema);
 
-// D-16: the confirm-current route accepts NO FIELDS — this is the structural
-// half of D-16's guarantee. There is no field on this request through which
-// a title or a note could ride along with a confirmation, so a confirmation
-// and a content edit can never be the same request. Matches the shape of
-// this file's other empty-body registrations (EmptyBodySchema) but is kept
-// as its own named schema per this plan's artifact roster.
-const ConfirmCurrentSchema = z.object({});
+// D-16: the confirm-current route accepts NO CONTENT FIELDS — this is the
+// structural half of D-16's guarantee. There is no field on this request
+// through which a title or a note could ride along with a confirmation, so
+// a confirmation and a content edit can never be the same request.
+// CONC-02 (Phase 9, Plan 02 Task 2) adds `version` as the SOLE exception —
+// it carries no content of its own, only the optimistic-lock precondition,
+// and this route mutates the initiative (stamps lastConfirmedAt) so D-02
+// gives it no exemption from the version check either. Otherwise matches
+// the shape of this file's other empty-body registrations (EmptyBodySchema)
+// but is kept as its own named schema per this plan's artifact roster.
+const ConfirmCurrentSchema = z.object({
+  version: z.number().int().nonnegative().optional(),
+});
 registerSchema('POST', '/api/synergies/:id/confirm-current', ConfirmCurrentSchema);
 
 // ---------------------------------------------------------------------------

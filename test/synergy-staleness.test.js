@@ -548,7 +548,18 @@ test('synergy-staleness-ui (a): the confirm-current handler is attached to its o
   assert.ok(handlerMatch, 'a .syn-confirm-btn click handler must be attached, distinct from every other control');
   const body = handlerMatch[1];
   assert.match(body, /\/confirm-current/, 'the handler must POST to the dedicated confirm-current sub-route');
-  assert.match(body, /body: JSON\.stringify\(\{\}\)/, 'the request body must be an empty object literal — no content field of any kind');
+  // CONC-02 (Phase 9, Plan 02 Task 2): the request body is now built as a
+  // variable (starting from an empty object literal) rather than an inline
+  // `{}` literal, so the optimistic-lock `version` field — the SOLE
+  // exception to D-16's "no content fields" guarantee, per Plan 02's
+  // must_haves — can be conditionally attached. Assert BOTH halves of that
+  // guarantee still hold: the body starts genuinely empty, and the ONLY
+  // property ever assigned onto it is `version` — never a title, a note, or
+  // any other content field.
+  assert.match(body, /var confirmBody = \{\};/, 'the request body must start from a genuinely empty object literal');
+  assert.match(body, /body: JSON\.stringify\(confirmBody\)/, 'the fetch call must send the confirmBody variable, not a second inline literal');
+  const assignedProps = [...body.matchAll(/confirmBody\.(\w+)\s*=/g)].map((m) => m[1]);
+  assert.deepStrictEqual(assignedProps, ['version'], 'the ONLY property ever assigned onto confirmBody must be the optimistic-lock version — no content field of any kind');
 });
 
 test('synergy-staleness-ui (b): no title or notes change handler in the file references the confirm-current route', () => {
