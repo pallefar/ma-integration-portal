@@ -5435,6 +5435,20 @@ app.post('/api/dd/request-items', (req, res) => {
   if (b.id) {
     const item = lane.find((i) => i.id === b.id);
     if (ddAreaRefused(req, res, deal, item ? item.area : null)) return;
+    // CONC-02 (Phase 9, Plan 04, T-09-17/T-09-18): the 409 conflict body's
+    // `currentRecord` is filtered through the SAME area-clearance gate the
+    // route's own read path applies, evaluated against the item's CURRENT
+    // area — a concurrent writer may have moved it into an area this caller
+    // is no longer cleared for, which is exactly the race this conflict is
+    // reporting. On refusal the filter returns null, so the response still
+    // carries the version and attribution (the caller learns their write
+    // was rejected) but no field value from the item. When granted,
+    // `currentRecord` is run through publicDdItem() — the same projection
+    // the route's own success response below applies — so the conflict path
+    // never discloses a wider shape than the route's 200 response would.
+    if (conflictIfStale(req, res, item, {
+      clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? publicDdItem(record) : null,
+    })) return;
     // Validate everything before mutating the shared readDb() cache (see
     // the task/RAID/synergy handlers' identical ordering comment above).
     // VAL-01: text-required-when-id-absent is owned by the schema's own
@@ -5646,6 +5660,17 @@ app.post('/api/dd/findings', (req, res) => {
   if (b.id) {
     const finding = lane.find((f) => f.id === b.id);
     if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+    // CONC-02 (Phase 9, Plan 04, T-09-17): the 409 conflict body's
+    // `currentRecord` is filtered through the SAME area-clearance gate the
+    // route's own read path applies, evaluated against the finding's
+    // CURRENT area — a concurrent writer may have moved it into an area
+    // this caller is no longer cleared for, which is exactly the race this
+    // conflict is reporting. On refusal the filter returns null, so the
+    // response still carries the version and attribution (the caller
+    // learns their write was rejected) but no field value from the finding.
+    if (conflictIfStale(req, res, finding, {
+      clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
+    })) return;
     // VAL-01: title-required-when-id-absent is owned by the schema's own
     // refine(); this empty-title-on-UPDATE guard stays here because the
     // schema's refine only requires title when `id` is absent (see the
@@ -5715,6 +5740,17 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
   // returned — the convert route must never become a side channel that
   // confirms a finding exists in an area the caller cannot see.
   if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
+  // CONC-02 (Phase 9, Plan 04, D-02): this route mutates the finding itself
+  // (it writes linkedTaskIds/linkedRaidIds below), so it carries the same
+  // version precondition as any other finding edit — a conversion based on
+  // a stale finding is refused rather than applied. Placed BEFORE `source`/
+  // `workstreamId` are derived and before the task/RAID lanes are touched,
+  // so a stale-version conflict leaves the finding, the task lane and the
+  // RAID lane all untouched (Pitfall 6) — nothing here has mutated anything
+  // yet. Same clearance-filtered conflict body as POST /api/dd/findings.
+  if (conflictIfStale(req, res, finding, {
+    clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
+  })) return;
 
   const source = 'dd-finding:' + finding.id;
   const workstreamId = DD_AREA_WORKSTREAM[finding.area] || 'ws_imo';
