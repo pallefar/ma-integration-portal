@@ -181,3 +181,25 @@ test('client-busy-retry: Retry-After: 2 schedules the retry at least 2000ms afte
   const gapMs = fake.calls[1].t - fake.calls[0].t;
   assert.ok(gapMs >= 2000, `expected a recorded gap of at least 2000ms between attempts, got ${gapMs}ms`);
 });
+
+test('client-busy-retry: an absurd Retry-After is clamped to 60s — the retry never parks for hours (T-08-12)', async () => {
+  const fake = makeFakeFetch([
+    { status: 503, headers: new Headers({ 'Retry-After': '999999' }) },
+    { status: 200, headers: new Headers() },
+  ]);
+  const { sandbox } = buildSandbox(fake.impl);
+
+  // Swap the context's setTimeout for a recording, immediately-firing fake
+  // (the wrapper resolves `setTimeout` from the context global at call time),
+  // so the test observes the SCHEDULED delay without actually waiting for it.
+  const scheduledDelays = [];
+  sandbox.setTimeout = (fn, ms) => { scheduledDelays.push(ms); return setTimeout(fn, 0); };
+
+  await sandbox.window.fetch('/api/pulses', { method: 'POST', body: '{}' });
+
+  assert.strictEqual(fake.calls.length, 2, 'expected the initial attempt plus exactly one retry');
+  assert.strictEqual(scheduledDelays.length, 1, 'expected exactly one scheduled retry wait');
+  // 60s clamp + up-to-300ms jitter — never the ~277 hours a raw 999999s header implies.
+  assert.ok(scheduledDelays[0] >= 60000 && scheduledDelays[0] <= 60300,
+    `expected the scheduled wait to be clamped into [60000, 60300]ms, got ${scheduledDelays[0]}ms`);
+});

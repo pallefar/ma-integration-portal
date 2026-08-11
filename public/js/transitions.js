@@ -102,11 +102,16 @@
   const BUSY_RETRY_MAX_RETRIES = 2; // 2 retries = 3 total attempts
   const BUSY_RETRY_FALLBACK_WAIT_MS = 1000; // used when Retry-After is absent/unparseable
   const BUSY_RETRY_JITTER_MAX_MS = 300; // retry-storm avoidance: desynchronizes tabs
+  // [security] T-08-12: an absurd server-sent Retry-After (finite but huge) must
+  // never park the retry timer for hours — clamp to a 60s ceiling.
+  const BUSY_RETRY_MAX_WAIT_SECONDS = 60;
 
   const parseRetryAfterMs = (res) => {
     const raw = res.headers && typeof res.headers.get === 'function' ? res.headers.get('Retry-After') : null;
     const seconds = parseInt(raw, 10);
-    return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : BUSY_RETRY_FALLBACK_WAIT_MS;
+    return Number.isFinite(seconds) && seconds >= 0
+      ? Math.min(seconds, BUSY_RETRY_MAX_WAIT_SECONDS) * 1000
+      : BUSY_RETRY_FALLBACK_WAIT_MS;
   };
 
   // A stream body, or an already-consumed Request object's body, can't be
