@@ -215,7 +215,15 @@
       row.querySelector('.ex-del').addEventListener('click', function () {
         var msg = (window.__assessDict && null) || 'Delete this task?';
         if (!window.confirm(msg)) return;
-        fetch('/api/integration-tasks/' + encodeURIComponent(id), { method: 'DELETE' })
+        // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
+        // holds for this record, taken from the same in-memory list the row
+        // was rendered from — never a re-fetch. Omitted entirely when the
+        // held record has no version (D-09's lazy adoption — the
+        // storage-layer WHERE clause still guards the cross-process case).
+        var task = state.tasks.find(function (t) { return t.id === id; });
+        var delUrl = '/api/integration-tasks/' + encodeURIComponent(id);
+        if (task && task.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(task.version);
+        fetch(delUrl, { method: 'DELETE' })
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (res && res.success) {
@@ -1038,7 +1046,14 @@
       }
       card.querySelector('.ex-del').addEventListener('click', function () {
         if (!window.confirm('Delete this initiative?')) return;
-        fetch('/api/synergies/' + encodeURIComponent(id), { method: 'DELETE' })
+        // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
+        // holds for this initiative, taken from the same in-memory list the
+        // card was rendered from — never a re-fetch. Omitted entirely when
+        // the held record has no version yet (D-09 lazy adoption).
+        var item = state.synergies.find(function (s) { return s.id === id; });
+        var delUrl = '/api/synergies/' + encodeURIComponent(id);
+        if (item && item.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(item.version);
+        fetch(delUrl, { method: 'DELETE' })
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (res && res.success) {
@@ -1117,7 +1132,14 @@
       });
       row.querySelector('.ex-del').addEventListener('click', function () {
         if (!window.confirm('Delete this entry?')) return;
-        fetch('/api/raid/' + encodeURIComponent(id), { method: 'DELETE' })
+        // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
+        // holds for this entry, taken from the same in-memory list the row
+        // was rendered from — never a re-fetch. Omitted entirely when the
+        // held record has no version yet (D-09 lazy adoption).
+        var entry = state.raid.find(function (r) { return r.id === id; });
+        var delUrl = '/api/raid/' + encodeURIComponent(id);
+        if (entry && entry.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(entry.version);
+        fetch(delUrl, { method: 'DELETE' })
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (res && res.success) {
