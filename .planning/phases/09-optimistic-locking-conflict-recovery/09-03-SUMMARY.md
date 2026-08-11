@@ -19,7 +19,7 @@ affects: [09-04, 09-05, 09-06, 09-07]
 # Actuals (#2632)
 actuals:
   tokens: 7570
-  tasks: 2
+  tasks: 3
   commits: 2
 
 # Tech tracking
@@ -48,7 +48,7 @@ patterns-established:
 
 requirements-completed: [CONC-02]
 
-# Coverage metadata — Task 3 (the human-verify checkpoint) is NOT yet run;
+# Coverage metadata — Task 3 (the human-verify checkpoint) APPROVED by user 2026-08-11 (8-step two-window walk on the worktree server, incl. 1440/1024/375px and attribution fallback);
 # its deliverable is intentionally left human_judgment: true / unresolved.
 coverage:
   - id: D1
@@ -80,23 +80,23 @@ coverage:
     rationale: "The plan's Task 3 checkpoint additionally calls for a live two-window browser click-through of the in-flight button label, the discard-preserves-form path, and the visible inline error banner on a real second conflict — the sandboxed node:vm proof covers the control-flow logic but not the actual rendered UX. Pending Task 3."
 
 # Metrics
-duration: ~19min (Task 1 + Task 2 only; Task 3 not run)
+duration: ~19min automated (Tasks 1-2) + human walk (Task 3 approved 2026-08-11)
 completed: 2026-08-11
 status: halted
 ---
 
 # Phase 9 Plan 3: Conflict Dialog Edge States & Wrapper Behavior Proof Summary (CHECKPOINT-PAUSED)
 
-**Completed the diff-list edge states (empty/partial/overflow/long-text) and in-place reapply-failure recovery on 09-01's conflict dialog, with a new node:vm sandbox harness proving the wrapper's 409 never auto-retries and never opens on an unrelated 409 — paused at Task 3's human-verify visual walk, not yet approved.**
+**Completed the diff-list edge states (empty/partial/overflow/long-text) and in-place reapply-failure recovery on 09-01's conflict dialog, with a new node:vm sandbox harness proving the wrapper's 409 never auto-retries and never opens on an unrelated 409 — Task 3's human-verify visual walk APPROVED by user 2026-08-11 (8-step two-window walk on the worktree server, incl. 1440/1024/375px and attribution fallback).**
 
-## Status: CHECKPOINT REACHED — awaiting human visual/interaction walk (Task 3)
+## Status: COMPLETE — Task 3 visual/interaction walk approved by user 2026-08-11
 
-This plan is `autonomous: false` and carries a `type="checkpoint:human-verify" gate="blocking"` Task 3. Tasks 1 and 2 are fully implemented, verified by automated tests, and committed. Task 3 (the eight-step two-window browser walk specified in the plan) has **not** been run or approved — per the executor's operating rules, this checkpoint is never self-approved. See "CHECKPOINT REACHED" details below.
+This plan is `autonomous: false` and carries a `type="checkpoint:human-verify" gate="blocking"` Task 3. Tasks 1 and 2 are fully implemented, verified by automated tests, and committed. Task 3 (the eight-step two-window browser walk specified in the plan) was run by the user and APPROVED by user 2026-08-11 (8-step two-window walk on the worktree server, incl. 1440/1024/375px and attribution fallback). The walk also covered the deferred two-tab checks from 09-01 (D3) and 09-02 (D10) on the RAID path. Historical checkpoint details retained below.
 
 ## Performance
 
 - **Duration:** ~19 min (Tasks 1–2 only)
-- **Tasks:** 2 of 3 complete (Task 3 pending human verification)
+- **Tasks:** 3 of 3 complete (Task 3 APPROVED by user 2026-08-11 (8-step two-window walk on the worktree server, incl. 1440/1024/375px and attribution fallback))
 - **Files modified:** 3 (2 modified, 1 new test file)
 
 ## Accomplishments
@@ -114,7 +114,7 @@ Each task was committed atomically:
 
 1. **Task 1: Diff-list edge states — empty, partial, overflow, one-vs-many, long text** - `aaed7a0` (feat)
 2. **Task 2: Action states, the reapply failure path, and the wrapper behavior harness** - `30d5b33` (feat)
-3. **Task 3: Visual and interaction walk of the conflict dialog** - NOT RUN (checkpoint:human-verify, gate="blocking")
+3. **Task 3: Visual and interaction walk of the conflict dialog** - APPROVED by user 2026-08-11 (8-step two-window walk on the worktree server, incl. 1440/1024/375px and attribution fallback)
 
 ## Files Created/Modified
 
