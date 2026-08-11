@@ -4522,6 +4522,17 @@ app.post('/api/org/positions', (req, res) => {
         return res.status(404).json({ error: 'That employee could not be found.' });
       }
     }
+    // CONC-02 (Phase 9, Plan 05): placed after the not-found guard and the
+    // employee-existence check above, and BEFORE the shallow-merge candidate
+    // evaluation and positionGraphFailure() call below — nothing may mutate
+    // the stored row before either refusal, per that comment's own rule. A
+    // request that is BOTH stale AND structurally invalid gets the
+    // conflict, not the 400 — the conflict is the actionable one for the
+    // user. No clearanceFilter: the whole route is gated on a single `hr`
+    // area grant checked at the top, so a caller reaching this path is
+    // already cleared for every record the route can resolve — a
+    // per-record filter would be a second, parallel check of the same fact.
+    if (conflictIfStale(req, res, item)) return;
     // Evaluate a shallow merge of the existing row and the incoming keys
     // BEFORE any field of the stored row is mutated — readDb() hands back a
     // shared cache, so a mutation followed by a refusal would stick.
@@ -4943,6 +4954,20 @@ app.post('/api/org/decisions', (req, res) => {
   // Append-only (D-13/T-06-28): ALWAYS push a NEW entry — never search for
   // and mutate an existing one. A reversal is a new entry, not an edit, and
   // no route anywhere exposes an update or delete path for a decision.
+  //
+  // [security] CONC-02 (Phase 9, Plan 05) EXEMPTION, recorded deliberately
+  // rather than left for a future reader to wonder whether it was missed:
+  // CONC-02's own text ("A user whose edit to a co-edited record (RAID
+  // entry, integration task, DD finding, synergy initiative, org decision)
+  // is based on stale data has that write rejected with a 409...") names
+  // "org decision" among its examples, but this route only ever PUSHES a
+  // new entry — there is no update or delete path for a decision anywhere
+  // in this file for a version precondition to guard. A decision record
+  // therefore never carries a `version` field, and `orgDecisions` is
+  // deliberately absent from db/collections.js's VERSIONED_COLLECTIONS set
+  // (see that file's own comment for the identical reasoning, and
+  // test/optimistic-locking-contract.test.js's structural assertion that
+  // orgDecisions is excluded).
   orgDecisionsLane(db).push(entry);
   writeDb(db);
   res.status(201).json({ success: true, decision: entry });
@@ -5030,8 +5055,13 @@ app.post('/api/org/flight-risk', (req, res) => {
       if (!employeeList.find((e) => e.id === b.employeeId)) {
         return res.status(404).json({ error: 'That employee could not be found.' });
       }
-      item.employeeId = b.employeeId;
     }
+    // CONC-02 (Phase 9, Plan 05): same placement as POST /api/org/positions
+    // above — after the not-found guard and the employee-existence check,
+    // before the first field of the stored row is mutated. No
+    // clearanceFilter, for the same reason given there.
+    if (conflictIfStale(req, res, item)) return;
+    if (b.employeeId !== undefined) item.employeeId = b.employeeId;
     if (b.riskLevel !== undefined) item.riskLevel = b.riskLevel;
     // WR-02 (06-REVIEW.md): a blank/whitespace-only owner defaults to the
     // CALLER'S OWN session identity, mirroring how decidedBy is stamped

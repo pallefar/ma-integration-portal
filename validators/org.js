@@ -54,6 +54,12 @@ const OrgPositionUpsertSchema = z.object({
   reportsToId: z.string().trim().max(ID_MAX).nullable().optional(),
   employeeId: z.string().trim().max(ID_MAX).nullable().optional(),
   state: z.enum(ORG_STATES).optional(),
+  // CONC-02 (Phase 9, Plan 05): without this explicit field zod v4 strips
+  // an incoming `version` key by default and the route-level precheck
+  // (conflictIfStale()) silently never fires — see validators/dd.js's
+  // identical comment on DdFindingUpsertSchema, the same trap recurring on
+  // a fourth schema.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Position title is required.',
   path: ['title'],
@@ -166,6 +172,10 @@ const FlightRiskUpsertSchema = z.object({
   owner: z.string().trim().max(120).optional(),
   mitigation: z.string().trim().max(TEXT_MAX).optional(),
   notes: z.string().trim().max(TEXT_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 05): without this explicit field zod v4 strips
+  // an incoming `version` key by default and the route-level precheck
+  // silently never fires — same trap as OrgPositionUpsertSchema above.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => !!(data.id || data.employeeId), {
   message: 'employeeId is required.',
   path: ['employeeId'],
