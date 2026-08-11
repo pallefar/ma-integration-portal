@@ -364,6 +364,64 @@ function isBusyError(err) {
   return !!(err && typeof err.code === 'string' && err.code.startsWith('SQLITE_BUSY'));
 }
 
+// [security] CONC-02 (Phase 9, PD-3): the SINGLE 409 conflict-body builder —
+// direct sibling of isBusyError()'s single-definition discipline above.
+// Fixed shape, nothing else: never echoes err.message, a stack, a file path
+// or a SQL string (the T-08-01 generic-safe-body precedent). `conflict: true`
+// is the discriminating marker the client checks — NEVER the status code
+// alone, because two unrelated 409s already exist elsewhere in this file
+// (the empty-deal steerco-pack refusal and the unrecognized-synergy-stage
+// refusal, 09-RESEARCH.md Pitfall 1). `currentRecord` may already have been
+// passed through an area-clearance filter by the caller (see
+// conflictIfStale()'s `clearanceFilter` option below) before it reaches here.
+function conflictBody(detail) {
+  return {
+    conflict: true,
+    conflictKind: detail.conflictKind,
+    recordId: detail.recordId,
+    currentRecord: detail.currentRecord || null,
+    currentVersion: detail.currentVersion !== undefined ? detail.currentVersion : null,
+    changedBy: detail.changedBy || null,
+    changedAt: detail.changedAt || null,
+  };
+}
+
+// CONC-02 (Phase 9, PD-2 route-level precheck layer): a fast, informative
+// 409 in the common single-process case, using THIS request's own freshly-
+// read `record` — never a substitute for the WHERE-clause layer in
+// db/store.js's writeDb(), which is the one that is actually race-free
+// against Phase 8's multi-process model (09-RESEARCH.md Pattern 2). Fires
+// ONLY when the client actually supplied a version (req.body.version !==
+// undefined) — a client that supplies none is not blocked at this layer,
+// the WHERE clause still covers the cross-process case for it.
+//
+// `opts.clearanceFilter`, when given, is applied to `record` before it is
+// echoed into the 409 body — the hook plans 04/05 pass the existing
+// DD/org area-clearance gates through, so a race where the record's area
+// concurrently changed to one the caller isn't cleared for cannot leak the
+// full current record (09-RESEARCH.md Architecture Pattern 3). RAID entries
+// are not area-gated, so this plan passes none.
+//
+// Returns `true` when it has already responded (caller must return early
+// without mutating/writing anything further), `false` otherwise.
+function conflictIfStale(req, res, record, opts) {
+  const options = opts || {};
+  const b = req.body || {};
+  if (b.version === undefined) return false;
+  const currentVersion = (record && typeof record.version === 'number') ? record.version : 0;
+  if (b.version === currentVersion) return false;
+  const filtered = options.clearanceFilter ? options.clearanceFilter(record) : record;
+  res.status(409).json(conflictBody({
+    conflictKind: 'version',
+    recordId: record && record.id,
+    currentRecord: filtered,
+    currentVersion,
+    changedBy: record ? record.updatedBy : null,
+    changedAt: record ? record.updatedAt : null,
+  }));
+  return true;
+}
+
 // ISO-02: the demo-only showcase mechanics (time-travel day-scaling, the
 // XP/merit-award/lesson-completion endpoints that drive points/badges/
 // leaderboards) — gated ONCE here in the consolidated gate, in the exact
@@ -691,7 +749,7 @@ app.get('/healthz', (req, res) => {
 // reads are sub-millisecond and in-process, so the store is the single source of
 // truth on every call (RESEARCH.md Pitfall 3). db.json is retained on disk only
 // as a frozen, read-only pre-migration archive — no live code path reads/writes it.
-const { initDb, readDb, writeDb, getOrOpenConnection } = require('./db/store');
+const { initDb, readDb, writeDb, getOrOpenConnection, isConflictError } = require('./db/store');
 const sessions = require('./db/sessions');
 
 // ISO-01 (Phase 3 cutover): open the three live stores through the SAME
@@ -4212,6 +4270,9 @@ app.post('/api/raid', (req, res) => {
   if (b.id) {
     const item = lane.find(r => r.id === b.id);
     if (!item) return res.status(404).json({ error: 'Entry not found.' });
+    // CONC-02 (Phase 9, tracer): the route-level precheck fast path — RAID
+    // entries carry no area-clearance gate, so no clearanceFilter is passed.
+    if (conflictIfStale(req, res, item)) return;
     // Validate before mutating the shared readDb() cache (see task update).
     // VAL-01: status enum membership is now owned exclusively by
     // validators/workstream.js's RaidUpsertSchema (z.enum); the
@@ -6937,6 +6998,28 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+// [security] CONC-02/PD-3 (Phase 9): the central 409 conflict middleware —
+// direct sibling of the 503 middleware immediately above, same guard order
+// (res.headersSent first) and same fixed generic-safe-body discipline
+// (T-08-01: never echo err.message/a stack/a file path). Mapped from
+// db/store.js's typed conflict throw (isConflictError(err)/err.conflictDetail)
+// the exact same way isBusyError(err) maps a SqliteError — new versioned-
+// collection routes inherit this contract for free. Mounted BEFORE the
+// final generic 500 handler below so non-conflict errors still fall through
+// to it, and it must be reachable even when a route's own precheck
+// (conflictIfStale() above) did NOT catch the race — that fast-path helper
+// only covers the single-process common case; this middleware is what makes
+// the WHERE-clause layer's throw (the actually race-free layer) visible on
+// the wire.
+app.use((err, req, res, next) => {
+  if (isConflictError(err)) {
+    if (res.headersSent) return next(err);
+    const detail = err.conflictDetail || {};
+    return res.status(409).json(conflictBody(detail));
+  }
+  next(err);
+});
+
 // Final error handler — log server-side, return a generic message without internal details
 app.use((err, req, res, next) => {
   console.error('Unhandled route error:', err && err.stack ? err.stack : err);
@@ -6990,6 +7073,13 @@ module.exports.roleAllowedForWrite = roleAllowedForWrite;
 // prefix-detection predicate directly, and so plan 08-03's re-throw guards
 // share this SAME definition rather than re-declaring a second copy.
 module.exports.isBusyError = isBusyError;
+// CONC-02 (Phase 9): re-exported the same way isBusyError is — server.js
+// imports it FROM db/store.js (the single definition), and re-exposes it
+// here so a test can assert against server.js's own module surface without
+// reaching into db/store.js separately.
+module.exports.isConflictError = isConflictError;
+module.exports.conflictBody = conflictBody;
+module.exports.conflictIfStale = conflictIfStale;
 // Exposed alongside app for the same reason (ISO-02): lets a test unit-check
 // isDemoOnlyPath()/DEMO_ONLY_PREFIXES directly against the live route
 // inventory without booting the HTTP server for every case.
