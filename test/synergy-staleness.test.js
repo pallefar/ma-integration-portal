@@ -109,7 +109,14 @@ test('synergy-staleness (a): POST /api/synergies/:id/confirm-current sets a fres
     const changedKeys = Object.keys(created).filter((k) => JSON.stringify(created[k]) !== JSON.stringify(confirmed[k]));
     const newKeys = Object.keys(confirmed).filter((k) => !(k in created));
     assert.deepStrictEqual(changedKeys, [], 'no pre-existing field may change value');
-    assert.deepStrictEqual(newKeys, ['lastConfirmedAt'], 'lastConfirmedAt must be the ONLY new field introduced by confirm-current');
+    // CONC-02 (Phase 9): synergyInitiatives is a VERSIONED_COLLECTIONS member
+    // (D-06 names it explicitly), so ANY write that changes a field —
+    // including this route's own lastConfirmedAt stamp — now also stamps
+    // version/updatedAt/updatedBy (db/store.js writeDb(), PD-1). This is the
+    // new, correct cross-cutting behavior this phase introduces uniformly
+    // across every in-scope collection, not a regression specific to this
+    // route.
+    assert.deepStrictEqual(newKeys, ['lastConfirmedAt', 'version', 'updatedAt', 'updatedBy'], 'lastConfirmedAt plus the Phase 9 version/updatedAt/updatedBy stamp must be the only new fields introduced by confirm-current');
 
     const unknownRes = await postJSON(base, '/api/synergies/syn_totally_unknown/confirm-current', token, {});
     assert.strictEqual(unknownRes.status, 404);

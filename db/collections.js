@@ -119,6 +119,41 @@ if (unclassified.length) {
   throw new Error(`db/collections.js: COLLECTION_TARGETS is missing/invalid for: ${unclassified.join(', ')}`);
 }
 
+// CONC-02 (Phase 9, D-06/PD-1): the collection-level gating set for
+// optimistic-locking version enforcement inside db/store.js's writeDb() —
+// the direct analog of db/auditHook.js's AUDITED_DB_KINDS (a kind-level
+// set; this is collection-level, since the scope boundary here is
+// per-collection, not per-database-kind). Both lanes of every demo/custom
+// split collection are listed explicitly — omitting a `custom*` lane would
+// leave every real-deal (non-demo) write on that feature unprotected while
+// demo-mode tests still pass (09-RESEARCH.md Pitfall 7).
+//
+// [security] `orgDecisions` is deliberately ABSENT: `POST /api/org/decisions`
+// is append-only with no update or delete route anywhere in server.js
+// (09-RESEARCH.md Pitfall 8) — there is no mutable write path for a version
+// check to ever run against, so listing it here would be dead code with
+// nothing to protect. CMS/settings singletons and whole-document admin
+// blobs (pages, menus, courses, settings) are out of scope per D-06 — they
+// are admin-edited documents, not co-edited records, and are never
+// ARRAY_COLLECTIONS members subject to this per-row check in the first
+// place.
+const VERSIONED_COLLECTIONS = new Set([
+  'raidEntries', 'customRaidEntries',
+  'integrationTasks', 'customIntegrationTasks',
+  'synergyInitiatives', 'customSynergyInitiatives',
+  'ddFindings', 'ddRequestItems',
+  'orgPositions', 'orgFlightRisks',
+]);
+
+if (VERSIONED_COLLECTIONS.size !== 10) {
+  throw new Error(`db/collections.js: expected 10 versioned collections, got ${VERSIONED_COLLECTIONS.size}`);
+}
+for (const key of VERSIONED_COLLECTIONS) {
+  if (!ARRAY_COLLECTIONS.includes(key)) {
+    throw new Error(`db/collections.js: VERSIONED_COLLECTIONS entry '${key}' is not a real ARRAY_COLLECTIONS table`);
+  }
+}
+
 // ISO-01 / D-07: the two credential-bearing settings field PATHS (dotted,
 // for nested lookup) lifted out of the demo `settings` singleton into
 // runtime.db's gitignored `secretSettings` app_state row when the store is
@@ -127,4 +162,4 @@ if (unclassified.length) {
 // already keeps these two fields out of every API response.
 const SECRET_SETTINGS_FIELDS = ['geminiApiKey', 'databaseConfig.connectionDetails'];
 
-module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS };
+module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS, VERSIONED_COLLECTIONS };

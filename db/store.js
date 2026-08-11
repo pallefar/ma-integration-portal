@@ -44,7 +44,7 @@
 const fs = require('fs');
 const path = require('path');
 const { AsyncLocalStorage } = require('node:async_hooks');
-const { ARRAY_COLLECTIONS, SINGLETON_KEYS } = require('./collections');
+const { ARRAY_COLLECTIONS, SINGLETON_KEYS, VERSIONED_COLLECTIONS } = require('./collections');
 const { openDbFile } = require('./dbFiles');
 // AUD-01/D-08/D-09/D-11 (Phase 3 Plan 05): the store-layer audit hook.
 // db/auditHook.js has NO require() back to this module (it opens its own
@@ -166,6 +166,30 @@ function projectIdOf(item) {
   if (item.projectId !== undefined && item.projectId !== null) return String(item.projectId);
   if (item.project_id !== undefined && item.project_id !== null) return String(item.project_id);
   return null;
+}
+
+/**
+ * CONC-02 (Phase 9, PD-3): the single typed-error shape a versioned write's
+ * WHERE-clause mismatch throws inside writeDb()'s `.immediate` transaction —
+ * the direct sibling of isBusyError()'s discrimination-by-SqliteError-code
+ * (server.js), but discriminated by an own-property flag instead, since this
+ * is an application-level throw, not a SqliteError. `detail` carries exactly
+ * PD-3's fixed 409 body fields (conflictKind, collection, recordId,
+ * currentRecord, currentVersion, changedBy, changedAt) so server.js's central
+ * 409 middleware and this module's own conflict-throw sites share ONE
+ * definition of the shape.
+ */
+function isConflictError(err) {
+  return !!(err && err.isConflict === true);
+}
+
+function makeConflictError(detail) {
+  const err = new Error(
+    `db/store.js: writeDb() detected a version conflict on ${detail.collection}/${detail.recordId} (${detail.conflictKind})`
+  );
+  err.isConflict = true;
+  err.conflictDetail = detail;
+  return err;
 }
 
 /**
@@ -326,6 +350,7 @@ function writeDb(data) {
   const applyWrite = conn.transaction((payload) => {
     for (const key of ARRAY_COLLECTIONS) {
       const beforeMap = before[key] || new Map();
+      before[key] = beforeMap; // FA-4: so a later refresh below is visible to a second writeDb() call reusing this same snapshot.
       const afterArr = payload[key] || [];
       const afterIds = new Set();
 
@@ -337,15 +362,102 @@ function writeDb(data) {
       );
       const del = conn.prepare(`DELETE FROM ${key} WHERE id = ?`);
 
+      // CONC-02 (Phase 9, PD-1/PD-2/D-09): a versioned branch, taken ONLY
+      // when this collection is in VERSIONED_COLLECTIONS — every other
+      // collection's statements/behavior above are byte-for-byte unchanged.
+      // The three extra prepared statements below are gated the same way,
+      // so a non-versioned collection's writeDb() call pays zero extra
+      // parse/plan cost.
+      const versioned = VERSIONED_COLLECTIONS.has(key);
+      const versionedUpdate = versioned
+        ? conn.prepare(
+          `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ? AND (json_extract(data,'$.version') IS NULL OR json_extract(data,'$.version') = ?)`
+        )
+        : null;
+      const versionedDelete = versioned
+        ? conn.prepare(
+          `DELETE FROM ${key} WHERE id = ? AND (json_extract(data,'$.version') IS NULL OR json_extract(data,'$.version') = ?)`
+        )
+        : null;
+      // Pitfall 5: changes===0 from either statement above cannot by itself
+      // distinguish "stale version" from "row concurrently deleted" — this
+      // disambiguating SELECT runs inside the SAME transaction (the write
+      // lock is already held, so it adds no race) whenever that happens.
+      const conflictSelect = versioned ? conn.prepare(`SELECT data FROM ${key} WHERE id = ?`) : null;
+
       afterArr.forEach((item, i) => {
         const id = idOf(item);
         afterIds.add(id);
-        const serialized = JSON.stringify(item);
         const priorRaw = beforeMap.get(id);
         if (priorRaw === undefined) {
           // This request's own snapshot never saw this id — genuinely new.
+          // D-09: a freshly INSERTed row starts with no version field at
+          // all (unversioned == version 0, the same lazy-adoption state as
+          // a pre-Phase-9 legacy row) — its FIRST subsequent edit is what
+          // stamps version:1, exactly like any other unstamped row.
+          const serialized = JSON.stringify(item);
           insert.run(id, projectIdOf(item), i, serialized);
           if (deltas) deltas.push({ collection: key, rowId: id, action: 'insert', before: null, after: serialized });
+        } else if (versioned) {
+          // This request's own snapshot already had this id, and this
+          // collection is version-checked (CONC-02/D-01/D-02: uniform
+          // check, no exemptions — a single-field kanban status flip goes
+          // through the identical path as a full edit).
+          const priorObj = JSON.parse(priorRaw);
+          const expectedVersion = (priorObj && typeof priorObj.version === 'number') ? priorObj.version : null;
+          const candidate = JSON.stringify(item);
+          if (candidate === priorRaw) {
+            // CR-01 (Phase 1): untouched row — unconditional update, no
+            // version bump, exactly like the non-versioned path below.
+            // Preserves pure reorders / non-tail inserts persisting without
+            // manufacturing a conflict for every other user.
+            update.run(projectIdOf(item), i, candidate, id);
+            if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: candidate });
+          } else {
+            // A changed row is stamped BEFORE serialization (PD-1): version
+            // becomes the numeric baseline (0 for a legacy/unstamped row)
+            // plus one; updatedAt is the current ISO timestamp; updatedBy is
+            // the request actor's username when one is resolvable from the
+            // AsyncLocalStorage store (D-11-style — never synthesized), and
+            // is left untouched when it is not (server startup, migration
+            // scripts, tests) — Pitfall 10: never sourced from audit.db,
+            // which structurally excludes demo-mode writes.
+            const baseline = expectedVersion === null ? 0 : expectedVersion;
+            item.version = baseline + 1;
+            item.updatedAt = new Date().toISOString();
+            if (scoped && scoped.actor && scoped.actor.username) {
+              item.updatedBy = scoped.actor.username;
+            }
+            const serialized = JSON.stringify(item);
+            const result = versionedUpdate.run(projectIdOf(item), i, serialized, id, expectedVersion);
+            if (result.changes === 0) {
+              const row = conflictSelect.get(id);
+              if (row) {
+                // Row still exists: a genuine version conflict — someone
+                // else's write landed between this request's readDb() and
+                // this writeDb() call (the cross-process window Phase 8's
+                // multi-process WAL model introduced).
+                const current = JSON.parse(row.data);
+                throw makeConflictError({
+                  conflictKind: 'version', collection: key, recordId: id,
+                  currentRecord: current, currentVersion: current.version !== undefined ? current.version : null,
+                  changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
+                });
+              }
+              // PD-4: row is now gone — a concurrent delete, scoped ONLY to
+              // versioned collections (every other collection keeps the
+              // pre-Phase-9 CR-02 silent no-resurrect no-op verbatim).
+              throw makeConflictError({
+                conflictKind: 'deleted', collection: key, recordId: id,
+                currentRecord: null, currentVersion: null, changedBy: null, changedAt: null,
+              });
+            }
+            // FA-4: refresh THIS request's own snapshot for `id` so a
+            // handler that calls writeDb(db) twice against one readDb()
+            // result does not self-conflict on its own second call.
+            beforeMap.set(id, serialized);
+            if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: serialized });
+          }
         } else {
           // This request's own snapshot already had this id: always UPDATE
           // (never insert-or-upsert here). If the row still exists this
@@ -353,6 +465,7 @@ function writeDb(data) {
           // inserts persist (CR-01). If a concurrent writer already deleted
           // this row, the UPDATE affects 0 rows and does NOT resurrect it
           // (CR-02).
+          const serialized = JSON.stringify(item);
           update.run(projectIdOf(item), i, serialized, id);
           if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: serialized });
         }
@@ -363,7 +476,33 @@ function writeDb(data) {
       // writer's concurrent same-collection addition).
       for (const id of beforeMap.keys()) {
         if (!afterIds.has(id)) {
-          del.run(id);
+          if (versioned) {
+            // D-08 (Phase 9): a delete based on a stale version gets the
+            // same typed conflict as an update — bound to THIS request's
+            // own snapshot-remembered version, closing the same
+            // cross-process window the update branch above closes.
+            const priorRaw = beforeMap.get(id);
+            const priorObj = JSON.parse(priorRaw);
+            const expectedVersion = (priorObj && typeof priorObj.version === 'number') ? priorObj.version : null;
+            const result = versionedDelete.run(id, expectedVersion);
+            if (result.changes === 0) {
+              const row = conflictSelect.get(id);
+              if (row) {
+                const current = JSON.parse(row.data);
+                throw makeConflictError({
+                  conflictKind: 'version', collection: key, recordId: id,
+                  currentRecord: current, currentVersion: current.version !== undefined ? current.version : null,
+                  changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
+                });
+              }
+              // Row already gone (concurrent delete elsewhere): this
+              // writer's own intent — the record being gone — is already
+              // satisfied. CR-02's idempotent no-resurrect no-op, not a
+              // conflict.
+            }
+          } else {
+            del.run(id);
+          }
           if (deltas) deltas.push({ collection: key, rowId: id, action: 'delete', before: beforeMap.get(id), after: null });
         }
       }
@@ -448,4 +587,7 @@ module.exports = {
   // ISO-03 (Phase 3): request-scoped connection resolution.
   requestDbStorage, getOrOpenConnection, runWithDb, currentDbContext, closeAllConnections,
   closeConnection,
+  // CONC-02 (Phase 9): the shared conflict-error predicate/factory — server.js
+  // re-exports isConflictError the same way it exports isBusyError.
+  isConflictError, makeConflictError,
 };

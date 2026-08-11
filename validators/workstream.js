@@ -321,6 +321,13 @@ const RaidUpsertSchema = z.object({
   // D-12: the reverse half of a bidirectional DD-finding<->RAID link — see
   // server.js's POST /api/dd/findings/:id/convert.
   source: z.string().trim().max(160).optional(),
+  // CONC-02 (Phase 9, Pitfall 2): without this explicit field zod v4 strips
+  // an incoming `version` key by default and the route-level precheck
+  // silently never fires. This is the optimistic-locking per-record version
+  // (db/store.js writeDb()) — unrelated to a DIFFERENT pre-existing
+  // `version` field used elsewhere (assessment templates, synergy baseline
+  // entries) — see 09-RESEARCH.md Pitfall 9.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Entry title is required.',
   path: ['title'],
