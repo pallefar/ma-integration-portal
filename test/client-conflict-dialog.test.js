@@ -329,6 +329,131 @@ test('client-conflict-dialog: a second conflict on reapply leaves exactly one ov
   assert.strictEqual(banner.length, 1, 'the inline error banner must appear on the re-rendered dialog');
 });
 
+// ---------------------------------------------------------------------------
+// CONC-02/D-08 (Phase 9, Plan 06): the stale-delete confirmation variant —
+// selected from the intercepted request's DELETE method. Same 409 body
+// shape as the edit-conflict tests above; the fixtures below carry no
+// currentRecord field diffs since this variant renders no diff list.
+// ---------------------------------------------------------------------------
+
+test('client-conflict-dialog: a 409 on a DELETE renders the destructive stale-delete variant with no diff-list element and a delete button', async () => {
+  const conflictBody = {
+    conflict: true,
+    conflictKind: 'version',
+    currentVersion: 4,
+    currentRecord: { id: 'rec1', title: 'Their title' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-row').length, 0, 'the stale-delete variant must render no diff-list rows');
+  const deleteBtn = document.querySelectorAll('.conflict-btn-delete');
+  assert.strictEqual(deleteBtn.length, 1, 'expected exactly one .conflict-btn-delete on the rendered dialog');
+  assert.strictEqual(deleteBtn[0].textContent, 'Delete anyway');
+  const cancelBtn = document.querySelectorAll('.conflict-btn-discard');
+  assert.strictEqual(cancelBtn.length, 1);
+  assert.strictEqual(cancelBtn[0].textContent, 'Cancel');
+});
+
+test('client-conflict-dialog: clicking "Delete anyway" issues exactly one further fetch, whose URL carries the fresh expectedVersion and is otherwise unchanged', async () => {
+  const conflictBody = {
+    conflict: true,
+    conflictKind: 'version',
+    currentVersion: 6,
+    currentRecord: { id: 'rec1', title: 'Their title' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([
+    makeResponse({ status: 409, body: conflictBody }),
+    makeResponse({ status: 200, body: { success: true } }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const deleteBtn = document.querySelectorAll('.conflict-btn-delete')[0];
+  assert.ok(deleteBtn, 'expected a delete button on the rendered dialog');
+  deleteBtn.click();
+  await flushAll();
+
+  assert.strictEqual(fake.calls.length, 2, 'expected exactly one further fetch after the delete click');
+  assert.strictEqual(fake.calls[1].input, '/api/raid/rec1?expectedVersion=6', 'the fresh version must land in the URL query parameter, every other part of the URL unchanged');
+  assert.strictEqual(deleteBtn.textContent, 'Deleting…', 'the button must swap to the in-flight label');
+  assert.strictEqual(deleteBtn.disabled, true, 'the button must disable while the resubmit is in flight');
+});
+
+test('client-conflict-dialog: clicking "Cancel" on the stale-delete variant issues no further fetch and removes the overlay', async () => {
+  const conflictBody = {
+    conflict: true,
+    conflictKind: 'version',
+    currentVersion: 3,
+    currentRecord: { id: 'rec1', title: 'Their title' },
+    changedBy: 'karen',
+    changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+
+  const cancelBtn = document.querySelectorAll('.conflict-btn-discard')[0];
+  cancelBtn.click();
+  await flushAll();
+
+  assert.strictEqual(fake.calls.length, 1, 'cancel must never issue a further fetch — the record is kept, nothing is sent');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, 'cancel must remove the overlay');
+});
+
+test('client-conflict-dialog: a second conflict on the delete resubmission leaves exactly one overlay in the document, with the destructive-variant chrome intact', async () => {
+  const firstConflict = {
+    conflict: true, conflictKind: 'version', currentVersion: 3,
+    currentRecord: { id: 'rec1', title: 'Their v3 title' },
+    changedBy: 'karen', changedAt: new Date().toISOString(),
+  };
+  const secondConflict = {
+    conflict: true, conflictKind: 'version', currentVersion: 4,
+    currentRecord: { id: 'rec1', title: 'Their v4 title' },
+    changedBy: 'priya', changedAt: new Date().toISOString(),
+  };
+  const fake = makeFakeFetch([
+    makeResponse({ status: 409, body: firstConflict }),
+    makeResponse({ status: 409, body: secondConflict }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const deleteBtn = document.querySelectorAll('.conflict-btn-delete')[0];
+  deleteBtn.click();
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'a second conflict on the delete resubmission must never stack a second overlay');
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-delete').length, 1, 'the re-rendered dialog must still be the destructive variant');
+  const banner = document.querySelectorAll('.conflict-modal-error');
+  assert.strictEqual(banner.length, 1, 'the inline error banner must appear on the re-rendered dialog');
+});
+
+test('client-conflict-dialog: a stale-delete 409 body with no actor and no time renders the attribution fallback sentence', async () => {
+  const conflictBody = {
+    conflict: true, conflictKind: 'version', currentVersion: 2,
+    currentRecord: { id: 'rec1', title: 'Their title' },
+    changedBy: null, changedAt: null,
+  };
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+
+  const attribution = document.querySelectorAll('.conflict-modal-attribution')[0];
+  assert.ok(attribution, 'expected an attribution element');
+  assert.strictEqual(attribution.textContent, 'This record changed since you loaded it.');
+});
+
 test('client-conflict-dialog: a 503 on a same-origin /api write still takes the pre-existing busy-retry path, undisturbed by the 409 work', async () => {
   const fake = makeFakeFetch([
     makeResponse({ status: 503, headers: new Headers({ 'Retry-After': '0' }) }),

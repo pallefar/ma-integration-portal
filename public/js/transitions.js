@@ -133,6 +133,28 @@
   const CONFLICT_DELETED_INTRO = 'Someone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.';
   const CONFLICT_CLOSE_LABEL = 'Close';
 
+  // D-08 (Phase 9, Plan 06): the stale-delete confirmation variant, taken
+  // when the intercepted request's method is DELETE — distinct from
+  // CONFLICT_TITLE_DELETED above (PD-4's "my EDIT landed on an
+  // already-deleted record"), which describes the opposite direction and can
+  // never arise for a DELETE request itself (db/store.js's versioned-delete
+  // branch either succeeds, throws a version conflict, or silently no-ops
+  // when the row is already gone — never a conflictKind:'deleted' throw).
+  // The server's 409 body shape is otherwise identical to an edit conflict
+  // (conflictKind: 'version') — selecting the copy from the request method
+  // the wrapper already holds means no new server field is needed and the
+  // two surfaces stay one component.
+  const CONFLICT_TITLE_DELETE = 'Someone else updated this — still delete it?';
+  const CONFLICT_DELETE_LABEL = 'Delete anyway';
+  const CONFLICT_DELETING_LABEL = 'Deleting…';
+  const CONFLICT_CANCEL_LABEL = 'Cancel';
+  // Reapply-failure reason for the one outcome unique to the delete variant:
+  // resubmitting "Delete anyway" lands on a record someone else already
+  // finished deleting (the route's own not-found response). Plugged into the
+  // SAME conflictErrorMessage()/CONFLICT_ERROR_* mechanism plan 03 built —
+  // no new banner component, per the plan's own instruction to reuse it.
+  const CONFLICT_ERROR_REASON_ALREADY_DELETED = 'someone else already deleted this record';
+
   // Single-instance guard in the shape of activeGiveUpToast above — a
   // second conflict while one dialog is open replaces its contents rather
   // than stacking a second overlay.
@@ -272,14 +294,78 @@
 
     const intro = document.createElement('p');
     intro.className = 'conflict-modal-intro';
-    modal.appendChild(intro);
 
     const actions = document.createElement('div');
     actions.className = 'conflict-modal-actions';
 
-    const isDeleted = body && body.conflictKind === 'deleted';
+    // D-08: selected purely from the intercepted request's method — this
+    // MUST be checked before conflictKind, since a DELETE request's own
+    // conflictKind is always 'version' (see the constant's own doc comment
+    // above for why 'deleted' can never arise here).
+    const isDelete = method === 'DELETE';
+    const isDeleted = !isDelete && body && body.conflictKind === 'deleted';
 
-    if (isDeleted) {
+    if (isDelete) {
+      // UI-SPEC E3: "No collection inside this variant — content is title +
+      // attribution + actions, all static or covered by E4 rules." No intro
+      // paragraph, no diff list — the title question IS the confirmation.
+      title.textContent = CONFLICT_TITLE_DELETE;
+      renderConflictAttribution(attribution, body);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn-secondary conflict-btn-discard';
+      cancelBtn.textContent = CONFLICT_CANCEL_LABEL;
+      cancelBtn.addEventListener('click', closeActiveConflictDialog);
+
+      // E3-loading: "Delete anyway" enters a disabled "Deleting…" state
+      // during the resubmit; "Cancel" stays enabled throughout. This dialog
+      // itself IS the destructive confirmation — no window.confirm() is ever
+      // stacked on top of it (D-08, asserted by the grep gate in the test).
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-danger conflict-btn-delete';
+      deleteBtn.textContent = CONFLICT_DELETE_LABEL;
+      deleteBtn.addEventListener('click', () => {
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = CONFLICT_DELETING_LABEL;
+        const freshVersion = body && body.currentVersion;
+        const fresh = withFreshVersion(input, init, url, method, freshVersion);
+        // Goes through window.fetch, exactly like the edit variant's apply
+        // handler — a genuine second conflict re-enters this SAME wrapper's
+        // 409 branch below and re-renders this overlay in place.
+        window.fetch(fresh.input, fresh.init).then((res) => {
+          if (res && res.ok) {
+            closeActiveConflictDialog();
+            return;
+          }
+          if (!res || res.status !== 409) {
+            // E3-error: a second conflict has already re-rendered this
+            // dialog (via the 409 branch below) as a side effect — this
+            // covers the remaining non-409 outcomes: a not-found (someone
+            // else already completed the delete), a network failure, or a
+            // 5xx. Never a silent success or a silent failure.
+            const reason = (res && res.status === 404) ? CONFLICT_ERROR_REASON_ALREADY_DELETED
+              : (res && res.status >= 500) ? CONFLICT_ERROR_REASON_SERVER
+              : CONFLICT_ERROR_REASON_NETWORK;
+            showConflictDialog(body, input, init, url, method, reason);
+          }
+        }).catch(() => {
+          showConflictDialog(body, input, init, url, method, CONFLICT_ERROR_REASON_NETWORK);
+        });
+      });
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(deleteBtn);
+
+      if (errorReason) {
+        const errorBanner = document.createElement('p');
+        errorBanner.className = 'conflict-modal-error';
+        errorBanner.textContent = conflictErrorMessage(errorReason);
+        modal.appendChild(errorBanner);
+      }
+    } else if (isDeleted) {
+      modal.appendChild(intro);
       title.textContent = CONFLICT_TITLE_DELETED;
       intro.textContent = CONFLICT_DELETED_INTRO;
       renderConflictAttribution(attribution, body);
@@ -291,6 +377,7 @@
       closeBtn.addEventListener('click', closeActiveConflictDialog);
       actions.appendChild(closeBtn);
     } else {
+      modal.appendChild(intro);
       title.textContent = CONFLICT_TITLE_EDIT;
       intro.textContent = CONFLICT_INTRO_EDIT;
       renderConflictAttribution(attribution, body);

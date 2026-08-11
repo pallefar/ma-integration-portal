@@ -8304,8 +8304,12 @@ body.cms-inline-on [data-i18n-html]:hover {
    the stale-delete variant's own button, not this recoverable banner). */
 .conflict-modal-error { margin: 0 0 8px; padding: 16px; border-radius: 8px; background: var(--bg-light); border: 1px solid var(--border-color); font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-primary); }
 .conflict-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-.conflict-btn-apply, .conflict-btn-discard { font-size: 13px; font-weight: 700; }
-.conflict-btn-apply:disabled { opacity: 0.65; cursor: default; }
+.conflict-btn-apply, .conflict-btn-discard, .conflict-btn-delete { font-size: 13px; font-weight: 700; }
+.conflict-btn-apply:disabled, .conflict-btn-delete:disabled { opacity: 0.65; cursor: default; }
+/* D-08 stale-delete variant: .conflict-btn-delete rides the pre-existing
+   .btn-danger color treatment (--status-danger) — the only coloured action
+   in this variant, per the UI-SPEC's Destructive color row. No new color
+   rule needed here beyond the shared disabled/font-size line above. */
 /* end conflict modal */
 
 /* ===== Playbook slide-viewer modal (HR M&A Guidebook) ===== */
