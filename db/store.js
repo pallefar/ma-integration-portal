@@ -407,12 +407,29 @@ function writeDb(data) {
           const expectedVersion = (priorObj && typeof priorObj.version === 'number') ? priorObj.version : null;
           const candidate = JSON.stringify(item);
           if (candidate === priorRaw) {
-            // CR-01 (Phase 1): untouched row — unconditional update, no
-            // version bump, exactly like the non-versioned path below.
-            // Preserves pure reorders / non-tail inserts persisting without
-            // manufacturing a conflict for every other user.
-            update.run(projectIdOf(item), i, candidate, id);
-            if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: candidate });
+            // CR-01 (Phase 1) + CONC-02 correctness: untouched-by-THIS-
+            // writer, so no version bump — but writeDb()'s per-collection
+            // loop still visits EVERY row in the array on EVERY call
+            // (whole-object snapshot-diff, D-03), including ids this
+            // writer never intended to touch. A plain unconditional
+            // update() here would silently overwrite another process's
+            // ALREADY-COMMITTED change to this same row with this
+            // writer's now-stale copy of it — exactly the class of
+            // cross-process clobber CONC-02 exists to close, just
+            // reached through the "reorder/no-op" path instead of an
+            // explicit edit. So this still goes through the SAME
+            // version-checked WHERE clause as a real edit: on a match it
+            // rewrites seq/data (preserving CR-01 reordering); on a
+            // mismatch, someone else already changed (or deleted) this
+            // row since this writer's own readDb() — since this writer
+            // never intended to modify ITS CONTENT, that is silently NOT
+            // this writer's conflict to raise; the other write's newer
+            // state stands untouched (CR-02's no-resurrect precedent
+            // applies identically when the row is now gone).
+            const untouchedResult = versionedUpdate.run(projectIdOf(item), i, candidate, id, expectedVersion);
+            if (untouchedResult.changes > 0 && deltas) {
+              deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: candidate });
+            }
           } else {
             // A changed row is stamped BEFORE serialization (PD-1): version
             // becomes the numeric baseline (0 for a legacy/unstamped row)
