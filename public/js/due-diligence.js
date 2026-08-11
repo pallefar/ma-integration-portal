@@ -104,8 +104,16 @@
     });
   }
 
-  function updateItem(id, patch) {
-    var body = Object.assign({ id: id }, patch);
+  // CONC-02 (Phase 9, Plan 04): `item` is the in-memory record this row was
+  // rendered from (state.itemsByArea, populated by the most recent load()/
+  // refresh() — never a re-fetch), so `item.version` is exactly the version
+  // this user's edit form was built against. Sent only when the held record
+  // actually has one (D-09: a never-yet-edited item carries no version
+  // field at all) — omitting it here, rather than coercing to some default,
+  // is what keeps a first-ever edit exempt from the precondition.
+  function updateItem(item, patch) {
+    var body = Object.assign({ id: item.id }, patch);
+    if (item.version !== undefined) body.version = item.version;
     return fetch('/api/dd/request-items', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(refresh);
@@ -126,27 +134,27 @@
       if (item.status === s) opt.selected = true;
       statusSel.appendChild(opt);
     });
-    statusSel.addEventListener('change', function () { updateItem(item.id, { status: statusSel.value }); });
+    statusSel.addEventListener('change', function () { updateItem(item, { status: statusSel.value }); });
     controls.appendChild(statusSel);
 
     var dueInput = document.createElement('input');
     dueInput.type = 'date';
     dueInput.value = item.dueDate || '';
-    dueInput.addEventListener('change', function () { updateItem(item.id, { dueDate: dueInput.value }); });
+    dueInput.addEventListener('change', function () { updateItem(item, { dueDate: dueInput.value }); });
     controls.appendChild(dueInput);
 
     var ownerInput = document.createElement('input');
     ownerInput.type = 'text';
     ownerInput.placeholder = 'Owner';
     ownerInput.value = item.owner || '';
-    ownerInput.addEventListener('change', function () { updateItem(item.id, { owner: ownerInput.value }); });
+    ownerInput.addEventListener('change', function () { updateItem(item, { owner: ownerInput.value }); });
     controls.appendChild(ownerInput);
 
     var blockedLabel = el('label');
     var blockedCheckbox = document.createElement('input');
     blockedCheckbox.type = 'checkbox';
     blockedCheckbox.checked = !!item.blocked;
-    blockedCheckbox.addEventListener('change', function () { updateItem(item.id, { blocked: blockedCheckbox.checked }); });
+    blockedCheckbox.addEventListener('change', function () { updateItem(item, { blocked: blockedCheckbox.checked }); });
     blockedLabel.appendChild(blockedCheckbox);
     blockedLabel.appendChild(document.createTextNode(' Blocked'));
     controls.appendChild(blockedLabel);
@@ -159,11 +167,15 @@
 
   // DD-05/D-17: `vdrLink` is set/cleared through the SAME upsert route every
   // other item field already uses — never a second route. An explicit
-  // `vdrLink: null` clears it.
-  function updateVdrLink(itemId, vdrLink) {
+  // `vdrLink: null` clears it. CONC-02 (Phase 9, Plan 04): `item` is the
+  // in-memory record renderVdrLinkEditor() was called with — the same
+  // record the rest of this row's edit controls thread version from.
+  function updateVdrLink(item, vdrLink) {
+    var body = { id: item.id, vdrLink: vdrLink };
+    if (item.version !== undefined) body.version = item.version;
     return fetch('/api/dd/request-items', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: itemId, vdrLink: vdrLink })
+      body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(refresh);
   }
 
@@ -200,7 +212,7 @@
       current.appendChild(el('span', { className: 'dd-vdr-folder', text: ' (' + link.folderRef + ')' }));
       var clearBtn = el('button', { className: 'btn btn-tertiary', text: 'Clear' });
       clearBtn.type = 'button';
-      clearBtn.addEventListener('click', function () { updateVdrLink(item.id, null); });
+      clearBtn.addEventListener('click', function () { updateVdrLink(item, null); });
       current.appendChild(clearBtn);
       wrap.appendChild(current);
     } else {
@@ -219,7 +231,7 @@
         var url = urlInput.value.trim();
         var folderRef = folderInput.value.trim();
         if (!url || !folderRef) return;
-        updateVdrLink(item.id, { url: url, folderRef: folderRef, label: labelInput.value.trim() });
+        updateVdrLink(item, { url: url, folderRef: folderRef, label: labelInput.value.trim() });
       });
       wrap.appendChild(urlInput);
       wrap.appendChild(folderInput);
@@ -229,8 +241,13 @@
     return wrap;
   }
 
-  function updateFinding(id, patch) {
-    var body = Object.assign({ id: id }, patch);
+  // CONC-02 (Phase 9, Plan 04): `finding` is the in-memory record this row
+  // was rendered from (state.findingsByArea, populated by the most recent
+  // load()/refresh() — never a re-fetch), mirroring updateItem()'s identical
+  // rationale above.
+  function updateFinding(finding, patch) {
+    var body = Object.assign({ id: finding.id }, patch);
+    if (finding.version !== undefined) body.version = finding.version;
     return fetch('/api/dd/findings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(refresh);
@@ -240,11 +257,16 @@
   // re-renders the finding with its linked ids as short read-only labels and
   // the corresponding button disabled — a repeat click on an already-disabled
   // button is impossible from the UI, and the server itself treats a repeat
-  // POST as a dedup no-op regardless.
-  function convertFinding(id, toTask, toRaid) {
-    return fetch('/api/dd/findings/' + encodeURIComponent(id) + '/convert', {
+  // POST as a dedup no-op regardless. CONC-02 (Phase 9, Plan 04): this route
+  // mutates the finding's own link arrays, so it carries the same version
+  // precondition as updateFinding() above — threaded from the SAME
+  // in-memory `finding` record this button was rendered from.
+  function convertFinding(finding, toTask, toRaid) {
+    var body = { toTask: toTask, toRaid: toRaid };
+    if (finding.version !== undefined) body.version = finding.version;
+    return fetch('/api/dd/findings/' + encodeURIComponent(finding.id) + '/convert', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ toTask: toTask, toRaid: toRaid })
+      body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(refresh);
   }
 
@@ -263,14 +285,14 @@
       if (finding.severity === s) opt.selected = true;
       sevSel.appendChild(opt);
     });
-    sevSel.addEventListener('change', function () { updateFinding(finding.id, { severity: sevSel.value }); });
+    sevSel.addEventListener('change', function () { updateFinding(finding, { severity: sevSel.value }); });
     meta.appendChild(sevSel);
 
     var ownerInput = document.createElement('input');
     ownerInput.type = 'text';
     ownerInput.placeholder = 'Owner';
     ownerInput.value = finding.owner || '';
-    ownerInput.addEventListener('change', function () { updateFinding(finding.id, { owner: ownerInput.value }); });
+    ownerInput.addEventListener('change', function () { updateFinding(finding, { owner: ownerInput.value }); });
     meta.appendChild(ownerInput);
 
     var statusSel = document.createElement('select');
@@ -281,7 +303,7 @@
       if (finding.status === s) opt.selected = true;
       statusSel.appendChild(opt);
     });
-    statusSel.addEventListener('change', function () { updateFinding(finding.id, { status: statusSel.value }); });
+    statusSel.addEventListener('change', function () { updateFinding(finding, { status: statusSel.value }); });
     meta.appendChild(statusSel);
 
     main.appendChild(meta);
@@ -295,13 +317,13 @@
     var taskBtn = el('button', { className: 'btn btn-secondary', text: 'Create Day-1 task' });
     taskBtn.type = 'button';
     taskBtn.disabled = hasTask;
-    taskBtn.addEventListener('click', function () { convertFinding(finding.id, true, false); });
+    taskBtn.addEventListener('click', function () { convertFinding(finding, true, false); });
     convertRow.appendChild(taskBtn);
 
     var raidBtn = el('button', { className: 'btn btn-secondary', text: 'Create RAID entry' });
     raidBtn.type = 'button';
     raidBtn.disabled = hasRaid;
-    raidBtn.addEventListener('click', function () { convertFinding(finding.id, false, true); });
+    raidBtn.addEventListener('click', function () { convertFinding(finding, false, true); });
     convertRow.appendChild(raidBtn);
 
     if (hasTask) {
