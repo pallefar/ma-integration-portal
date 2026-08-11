@@ -20,6 +20,11 @@
   // server's own stated reason is always shown verbatim (D-08's hard-gate
   // refusal, D-09's empty-reason 400, D-15's authz 403, etc).
   function synAlertFailure(res) {
+    // [Rule 1] CONC-02 (09-REVIEW WR-01): a 409 conflict body is already
+    // fully handled by the shared conflict dialog rendered by
+    // transitions.js's fetch wrapper — this alert must not ALSO fire for
+    // that case, or the user sees two contradictory messages for one save.
+    if (res && res.conflict === true) return;
     window.alert((res && res.error) || 'That action could not be completed. Please try again.');
   }
 
@@ -858,7 +863,7 @@
               if (idx !== -1) state.synergies[idx] = res.initiative;
               renderSynergy(); applyI18n();
             } else {
-              window.alert(res && res.error);
+              if (!(res && res.conflict === true)) window.alert(res && res.error);
             }
           });
         });
@@ -889,7 +894,7 @@
                 // Rule 1 fix: once an initiative has phasing rows, D-04
                 // refuses this direct write with 400 — this field must not
                 // fail silently (UI-SPEC's "never silently fail" contract).
-                window.alert(res && res.error);
+                if (!(res && res.conflict === true)) window.alert(res && res.error);
               }
             });
         });
@@ -920,7 +925,7 @@
               if (idx !== -1) state.synergies[idx] = res.initiative;
               renderSynergy(); applyI18n();
             } else {
-              window.alert(res && res.error);
+              if (!(res && res.conflict === true)) window.alert(res && res.error);
             }
           });
         });

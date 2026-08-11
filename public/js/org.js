@@ -966,7 +966,12 @@
       return r.json().then(function (data) { return { ok: r.ok, data: data }; });
     }).then(function (result) {
       if (!result.ok) {
-        showConvertError((result.data && result.data.error) || 'Could not convert that flight-risk entry.');
+        // [Rule 1] CONC-02 (09-REVIEW WR-02): a stale-version 409 is already
+        // fully handled by the shared conflict dialog — same guard as the
+        // position-delete handler above.
+        if (!(result.data && result.data.conflict === true)) {
+          showConvertError((result.data && result.data.error) || 'Could not convert that flight-risk entry.');
+        }
         return;
       }
       return fetch('/api/org/flight-risk').then(function (r2) { return r2.json(); }).then(function (risks) {
