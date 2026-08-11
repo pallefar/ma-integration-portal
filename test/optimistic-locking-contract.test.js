@@ -84,12 +84,119 @@ test.after(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Structural: VERSIONED_COLLECTIONS shape (also independently proven by the
-// PLAN.md acceptance-criteria `node -e` one-liners run at verification time —
-// re-asserted here so a `node --test` run alone is sufficient).
+// Part 1 (Plan 07): the structural coverage gate — no future route ships
+// unprotected. Reuses test/busy-503-contract.test.js's exact recipe: a
+// character-index brace-matching handler-body isolation over the LIVE
+// server.js source text, never a hand-maintained list of route paths. A NEW
+// route that resolves a record from one of the seven versioned lane helpers
+// (raidLane/taskLane/synergyLane/ddFindingsLane/ddRequestLane/
+// orgPositionsLane/orgFlightRiskLane) and calls writeDb( without first
+// calling conflictIfStale( fails this test by default (T-09-31) — the
+// allow-list below is the ONLY escape hatch, and every entry must carry a
+// one-line reason a future developer has to consciously accept.
 // ---------------------------------------------------------------------------
 
-test('optimistic-locking-contract (structural): VERSIONED_COLLECTIONS carries exactly the 10 in-scope table names, both lanes of every demo/custom split, and excludes orgDecisions', () => {
+/**
+ * Character-index brace matching, identical to
+ * test/busy-503-contract.test.js's braceMatch() — kept as a local copy
+ * rather than importing a test-internal helper across files.
+ */
+function braceMatchOLC(src, openIdx) {
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+const VERSIONED_LANE_RE = /\b(raidLane|taskLane|synergyLane|ddFindingsLane|ddRequestLane|orgPositionsLane|orgFlightRiskLane)\(db\)/;
+
+/**
+ * Every `app.(post|put|patch|delete)('/path', (req, res[, next]) => { ... })`
+ * handler registered in server.js, isolated via brace matching from the
+ * LIVE source (not a hand-maintained route inventory) — the same simple
+ * no-middleware-chain shape every write route in this codebase uses
+ * (verified: every one of the 93 app.post/put/patch/delete registrations in
+ * server.js matches this exact pattern, the same count a plain
+ * `grep -c '^app\.(post|put|delete|patch)('` finds). Returns every handler
+ * whose body BOTH references a versioned lane helper AND calls writeDb(,
+ * with whether conflictIfStale( appears before that writeDb( call.
+ */
+function findVersionedLaneWriteHandlers(source) {
+  const re = /app\.(post|put|patch|delete)\(\s*(['"])((?:[^'"\\]|\\.)*)\2\s*,\s*(async\s+)?\(\s*req\s*,\s*res(?:\s*,\s*next)?\s*\)\s*=>\s*\{/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(source))) {
+    const openIdx = m.index + m[0].length - 1;
+    const closeIdx = braceMatchOLC(source, openIdx);
+    if (closeIdx === -1) continue;
+    const body = source.slice(openIdx, closeIdx + 1);
+    const laneMatch = VERSIONED_LANE_RE.exec(body);
+    const writeIdx = body.indexOf('writeDb(');
+    if (!laneMatch || writeIdx === -1) continue;
+    const conflictIdx = body.indexOf('conflictIfStale(');
+    out.push({
+      method: m[1].toUpperCase(),
+      path: m[3],
+      key: `${m[1].toUpperCase()} ${m[3]}`,
+      lane: laneMatch[1],
+      guarded: conflictIdx !== -1 && conflictIdx < writeIdx,
+    });
+  }
+  return out;
+}
+
+// The allow-list: every route this scan finds that touches a versioned lane
+// helper and calls writeDb() WITHOUT a version precheck, each with the
+// one-line reason a reviewer must consciously accept. A route NOT on this
+// list is caught by default. Never hand-maintain a list of PROTECTED routes
+// (that list rots) — this is the opposite: a list of deliberately EXEMPT
+// routes, small by construction, that the scan itself cross-checks against
+// the live source below.
+const VERSIONED_WRITE_ALLOWLIST = {
+  'POST /api/integration-tasks/instantiate': 'create-only: pushes new tasks derived from a checklist template, never mutates an existing task',
+  'POST /api/integration-tasks/from-remediation': 'create-only: pushes new tasks derived from assessment remediation advice, never mutates an existing task',
+  'POST /api/org/positions/copy-to-target': 'create-only: clones current-state positions into new target-state rows, never mutates an existing position',
+  'POST /api/org/positions/import': 'create-only: bulk-paste import validates every row then pushes new position rows, never mutates an existing position',
+  'POST /api/dd/request-items/instantiate': 'create-only: pushes new request items derived from a DD request template, never mutates an existing item',
+  'POST /api/org/decisions': 'append-only (09-RESEARCH.md Pitfall 8 / CONC-02\'s own named exemption): reads orgPositionsLane(db) only to validate positionId exists, then pushes a NEW orgDecisions entry — orgDecisions has no update/delete route anywhere in server.js, so there is no mutable write for a version check to guard (see db/collections.js\'s matching VERSIONED_COLLECTIONS comment)',
+  'DELETE /api/employees/:id': 'reads orgPositionsLane(db) only as a pre-delete occupancy guard (refuses to delete an employee who still occupies a position) — the writeDb(db) call in this handler mutates employees/customEmployees, never orgPositions',
+};
+
+test('optimistic-locking-contract (Part 1, structural coverage gate): every server.js route handler that resolves a record via a versioned lane helper and calls writeDb() enforces the version precondition first, except an explicitly reasoned allow-list entry', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const handlers = findVersionedLaneWriteHandlers(src);
+  assert.ok(handlers.length > 0, 'the structural scan matched zero versioned-lane write handlers — it must fail loudly rather than pass vacuously if the scan itself breaks');
+
+  const violations = handlers.filter((h) => !h.guarded && !VERSIONED_WRITE_ALLOWLIST[h.key]);
+  assert.deepStrictEqual(
+    violations.map((v) => v.key),
+    [],
+    `The following route(s) touch a versioned lane and call writeDb() without a conflictIfStale() precheck, and are not on the allow-list:\n${violations.map((v) => `  ${v.key} (${v.lane})`).join('\n')}`
+  );
+
+  // The allow-list itself must never rot: every entry must correspond to a
+  // route the live scan actually found, and that route must genuinely still
+  // lack a precheck — a stale entry (naming a removed route, or one that has
+  // since GAINED a precheck) silently widens the exemption for nothing.
+  const foundByKey = new Map(handlers.map((h) => [h.key, h]));
+  for (const key of Object.keys(VERSIONED_WRITE_ALLOWLIST)) {
+    const entry = foundByKey.get(key);
+    assert.ok(entry, `allow-list entry '${key}' does not correspond to any live versioned-lane write handler — remove the stale entry`);
+    assert.strictEqual(entry.guarded, false, `allow-list entry '${key}' now HAS a conflictIfStale() precheck — remove it from the allow-list, it is no longer an exemption`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Part 2 (Plan 07): live inventory cross-check, both directions.
+// ---------------------------------------------------------------------------
+
+test('optimistic-locking-contract (Part 2, structural): VERSIONED_COLLECTIONS carries exactly the 10 in-scope table names, both lanes of every demo/custom split, and excludes orgDecisions', () => {
   const collections = require('../db/collections.js');
   const expected = [
     'raidEntries', 'customRaidEntries',
@@ -102,10 +209,58 @@ test('optimistic-locking-contract (structural): VERSIONED_COLLECTIONS carries ex
   for (const key of expected) {
     assert.ok(collections.VERSIONED_COLLECTIONS.has(key), `expected VERSIONED_COLLECTIONS to include '${key}'`);
   }
-  assert.ok(!collections.VERSIONED_COLLECTIONS.has('orgDecisions'), 'orgDecisions must be excluded — append-only, no update/delete route');
+  // [security] orgDecisions is deliberately absent — 09-RESEARCH.md Pitfall 8
+  // and CONC-02's own requirement text name "org decision" among its
+  // examples, but the route only ever PUSHES a new entry (see
+  // db/collections.js's matching comment and this file's
+  // VERSIONED_WRITE_ALLOWLIST entry for 'POST /api/org/decisions' above) —
+  // there is no update/delete path for a version precondition to guard.
+  assert.ok(!collections.VERSIONED_COLLECTIONS.has('orgDecisions'), 'orgDecisions must be excluded — append-only, no update/delete route (09-RESEARCH.md Pitfall 8)');
   for (const key of collections.VERSIONED_COLLECTIONS) {
     assert.ok(collections.ARRAY_COLLECTIONS.includes(key), `VERSIONED_COLLECTIONS entry '${key}' must be a real ARRAY_COLLECTIONS table`);
   }
+});
+
+test('optimistic-locking-contract (Part 2, structural, reverse direction): every lane helper referenced by an in-scope route resolves to a collection that is a VERSIONED_COLLECTIONS member — the check that would catch a missing custom* lane', () => {
+  const collections = require('../db/collections.js');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const LANE_HELPERS = ['raidLane', 'taskLane', 'synergyLane', 'ddFindingsLane', 'ddRequestLane', 'orgPositionsLane', 'orgFlightRiskLane'];
+  const laneCollectionKeys = {};
+  LANE_HELPERS.forEach((helper) => {
+    const marker = `function ${helper}(db) {`;
+    const start = src.indexOf(marker);
+    assert.ok(start !== -1, `lane helper not found: ${helper}`);
+    const openIdx = start + marker.length - 1;
+    const closeIdx = braceMatchOLC(src, openIdx);
+    assert.ok(closeIdx !== -1, `could not isolate the body of ${helper}(db)`);
+    const body = src.slice(openIdx, closeIdx + 1);
+    const keys = new Set();
+    const dbKeyRe = /db\.([A-Za-z_][A-Za-z0-9_]*)/g;
+    let km;
+    while ((km = dbKeyRe.exec(body))) {
+      if (km[1] === 'settings') continue; // read-only demoMode discriminator, not a collection
+      keys.add(km[1]);
+    }
+    assert.ok(keys.size > 0, `${helper}(db) must reference at least one db.<collection> key`);
+    laneCollectionKeys[helper] = [...keys];
+  });
+
+  const violations = [];
+  Object.entries(laneCollectionKeys).forEach(([helper, keys]) => {
+    keys.forEach((key) => {
+      if (!collections.VERSIONED_COLLECTIONS.has(key)) violations.push(`${helper}(db) references db.${key}, which is NOT in VERSIONED_COLLECTIONS`);
+    });
+  });
+  assert.deepStrictEqual(violations, [], `Every collection a versioned lane helper resolves to must itself be a VERSIONED_COLLECTIONS member:\n${violations.join('\n')}`);
+
+  // And the demo/custom dual-lane collections specifically: raidLane/
+  // taskLane/synergyLane must EACH resolve to exactly two collection keys
+  // (the demo lane and its custom* shadow) — a helper that resolved to only
+  // one would mean a missing custom* lane went unnoticed (09-RESEARCH.md
+  // Pitfall 7).
+  ['raidLane', 'taskLane', 'synergyLane'].forEach((helper) => {
+    assert.strictEqual(laneCollectionKeys[helper].length, 2, `${helper}(db) must resolve to exactly 2 collection keys (demo + custom*), found ${laneCollectionKeys[helper].length}`);
+  });
 });
 
 test('optimistic-locking-contract (structural): db/store.js\'s versioned WHERE clause always binds the expected version as a parameter, never interpolates it', () => {
@@ -1573,3 +1728,136 @@ test('optimistic-locking-contract (44, structural): all seven in-scope DELETE ro
     assert.ok(areaIdx !== -1 && areaIdx < conflictIdx, `${marker} must call ddAreaRefused() BEFORE conflictIfStale() (T-09-19 ordering)`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Part 3 (Plan 07): the dual-lane proof for the three demo/custom-split
+// collections. Every test above (1-44) ran against the fixture's default
+// demoMode (undefined, which raidLane()/taskLane()/synergyLane() all treat
+// as "not custom" — `db.settings.demoMode === false` is false when the field
+// is undefined) — a suite that only ever exercised the demo lane would pass
+// while every real-deal (demoMode:false) write on RAID/tasks/synergies
+// stayed unprotected (09-RESEARCH.md Pitfall 7). Each case below toggles
+// demoMode:false via POST /api/settings BEFORE creating its fixture, so the
+// SAME route under test (POST /api/raid etc.) resolves through the custom*
+// lane, then confirms — by reading the deal's own SQLite file directly, not
+// just via the API — that the row physically lives in the custom* table and
+// NOT in the demo table.
+// ---------------------------------------------------------------------------
+
+function dealTableRow(dealId, table, id) {
+  const conn = store.getOrOpenConnection(dbFiles.dealDbPath(dealId), dbFiles.DEAL_SCHEMA_PATH);
+  const row = conn.prepare(`SELECT data FROM ${table} WHERE id = ?`).get(id);
+  return row ? JSON.parse(row.data) : undefined;
+}
+
+async function enableCustomMode(base, token) {
+  const res = await postJSON(base, '/api/settings', token, { demoMode: false });
+  assert.strictEqual(res.status, 200, 'POST /api/settings {demoMode:false} must succeed for the dual-lane fixture setup');
+}
+
+test('optimistic-locking-contract (Part 3, dual-lane 1): in custom (demoMode:false) mode, a stale-version RAID update returns 409 and a current-version update advances the version by exactly one — and the row lives in customRaidEntries, never raidEntries', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olcdual1');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+    await enableCustomMode(base, token);
+
+    const createRes = await postJSON(base, '/api/raid', token, { title: 'Custom-lane fixture', type: 'risk', severity: 'medium' });
+    assert.strictEqual(createRes.status, 201);
+    const { entry } = await createRes.json();
+    assert.ok(dealTableRow(deal.id, 'customRaidEntries', entry.id), 'the created entry must be stored in customRaidEntries when demoMode is false');
+    assert.strictEqual(dealTableRow(deal.id, 'raidEntries', entry.id), undefined, 'the created entry must NOT be stored in the demo raidEntries table');
+
+    const firstEditRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'First real edit' });
+    assert.strictEqual(firstEditRes.status, 200);
+    assert.strictEqual((await firstEditRes.json()).entry.version, 1);
+
+    const staleRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'Stale clobber attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409, 'a stale-version write must 409 in custom mode exactly as it does in demo mode');
+    assert.strictEqual((await staleRes.json()).conflict, true);
+
+    const currentRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'edit 2', version: 1 });
+    assert.strictEqual(currentRes.status, 200);
+    assert.strictEqual((await currentRes.json()).entry.version, 2, 'a current-version write in custom mode must still bump the version by exactly one');
+    assert.strictEqual(dealTableRow(deal.id, 'customRaidEntries', entry.id).title, 'edit 2');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (Part 3, dual-lane 2): in custom (demoMode:false) mode, a stale-version integration-task update returns 409 and a current-version update advances the version by exactly one — and the row lives in customIntegrationTasks, never integrationTasks', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olcdual2');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+    await enableCustomMode(base, token);
+
+    const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'Custom-lane task fixture', workstreamId: 'ws_imo' });
+    assert.strictEqual(createRes.status, 201);
+    const { task } = await createRes.json();
+    assert.ok(dealTableRow(deal.id, 'customIntegrationTasks', task.id), 'the created task must be stored in customIntegrationTasks when demoMode is false');
+    assert.strictEqual(dealTableRow(deal.id, 'integrationTasks', task.id), undefined, 'the created task must NOT be stored in the demo integrationTasks table');
+
+    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'First real edit' });
+    assert.strictEqual(firstEditRes.status, 200);
+    assert.strictEqual((await firstEditRes.json()).task.version, 1);
+
+    const staleRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'Stale clobber attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409, 'a stale-version write must 409 in custom mode exactly as it does in demo mode');
+    assert.strictEqual((await staleRes.json()).conflict, true);
+
+    const currentRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'edit 2', version: 1 });
+    assert.strictEqual(currentRes.status, 200);
+    assert.strictEqual((await currentRes.json()).task.version, 2, 'a current-version write in custom mode must still bump the version by exactly one');
+    assert.strictEqual(dealTableRow(deal.id, 'customIntegrationTasks', task.id).title, 'edit 2');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (Part 3, dual-lane 3): in custom (demoMode:false) mode, a stale-version synergy-initiative update returns 409 and a current-version update advances the version by exactly one — and the row lives in customSynergyInitiatives, never synergyInitiatives', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olcdual3');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+    await enableCustomMode(base, token);
+
+    const createRes = await postJSON(base, '/api/synergies', token, { title: 'Custom-lane synergy fixture', category: 'revenue', targetM: 4 });
+    assert.strictEqual(createRes.status, 201);
+    const { initiative } = await createRes.json();
+    assert.ok(dealTableRow(deal.id, 'customSynergyInitiatives', initiative.id), 'the created initiative must be stored in customSynergyInitiatives when demoMode is false');
+    assert.strictEqual(dealTableRow(deal.id, 'synergyInitiatives', initiative.id), undefined, 'the created initiative must NOT be stored in the demo synergyInitiatives table');
+
+    const firstEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'First real edit' });
+    assert.strictEqual(firstEditRes.status, 200);
+    assert.strictEqual((await firstEditRes.json()).initiative.version, 1);
+
+    const staleRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'Stale clobber attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409, 'a stale-version write must 409 in custom mode exactly as it does in demo mode');
+    assert.strictEqual((await staleRes.json()).conflict, true);
+
+    const currentRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'edit 2', version: 1 });
+    assert.strictEqual(currentRes.status, 200);
+    assert.strictEqual((await currentRes.json()).initiative.version, 2, 'a current-version write in custom mode must still bump the version by exactly one');
+    assert.strictEqual(dealTableRow(deal.id, 'customSynergyInitiatives', initiative.id).title, 'edit 2');
+  } finally {
+    server.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Part 4 (Plan 07): negative control. Tests (4) and (15) above already
+// prove this — asserted as BEHAVIOR against the running routes' live
+// responses, never by grepping the source for a status code (a grep-only
+// check would pass even if the discrimination were missing): the pre-
+// existing empty-deal steerco-pack 409 (test 4) and the pre-existing
+// unrecognized-synergy-stage 409 (test 15) both return 409 with NO
+// conflict:true marker, so neither can ever open the client's conflict
+// dialog. Grouped here by reference rather than duplicated.
+// ---------------------------------------------------------------------------
