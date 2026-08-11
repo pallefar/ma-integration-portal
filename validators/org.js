@@ -194,6 +194,13 @@ registerSchema('DELETE', '/api/org/flight-risk/:id', EmptyBodySchema);
 const FlightRiskConvertSchema = z.object({
   toTask: z.boolean().optional(),
   toRaid: z.boolean().optional(),
+  // CONC-02 (Phase 9, Plan 05): this route mutates the entry's own
+  // linkedTaskIds/linkedRaidIds, so it carries the same optimistic-lock
+  // precondition as any other entry edit — see validators/dd.js's
+  // identical comment on DdFindingConvertSchema, the route this one
+  // mirrors. Without this explicit field zod v4 strips an incoming
+  // `version` key by default and the precheck silently never fires.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.toTask === true || data.toRaid === true, {
   message: 'At least one of toTask or toRaid must be true.',
   path: ['toTask'],

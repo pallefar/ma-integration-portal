@@ -5152,6 +5152,17 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   const entry = lane.find((r) => r.id === req.params.id);
   if (!entry) return res.status(404).json({ error: 'Flight-risk entry not found.' });
 
+  // CONC-02 (Phase 9, Plan 05, D-02): this route mutates the entry itself
+  // (it writes linkedTaskIds/linkedRaidIds below), so it carries the same
+  // version precondition as any other entry edit — a conversion based on a
+  // stale entry is refused rather than applied. Placed BEFORE `source` is
+  // derived and before the task/RAID lanes are touched, so a stale-version
+  // conflict leaves the entry, the task lane and the RAID lane all
+  // untouched (Pitfall 6) — nothing here has mutated anything yet. No
+  // clearanceFilter, for the same reason given on the sibling routes above:
+  // the whole route is already gated on a single `hr` area grant.
+  if (conflictIfStale(req, res, entry)) return;
+
   const source = 'org-flightrisk:' + entry.id;
   const employee = employeeRosterLane(db).find((e) => e.id === entry.employeeId);
   const employeeName = employee ? employee.name : 'Unknown employee';

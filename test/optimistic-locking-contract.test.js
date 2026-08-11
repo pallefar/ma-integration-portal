@@ -1151,3 +1151,97 @@ test('optimistic-locking-contract (32): POST /api/org/positions/copy-to-target a
     server.close();
   }
 });
+
+test('optimistic-locking-contract (33): a stale-version flight-risk convert returns 409 with the conflict marker, and afterwards no task or RAID entry exists and the entry\'s link arrays are unchanged', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc33');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+    const employee = await createEmployee(base, token, 'Olc33 Employee');
+
+    const createRes = await postJSON(base, '/api/org/flight-risk', token, { employeeId: employee.id, riskLevel: 'high', owner: 'admin' });
+    const { entry } = await createRes.json();
+
+    // Stamp version:1 via an ordinary edit (does not touch linkedTaskIds/linkedRaidIds).
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    assert.strictEqual((await stampRes.json()).entry.version, 1);
+
+    const staleConvertRes = await postJSON(base, `/api/org/flight-risk/${entry.id}/convert`, token, { toTask: true, toRaid: true, version: 0 });
+    assert.strictEqual(staleConvertRes.status, 409);
+    const staleConvertBody = await staleConvertRes.json();
+    assert.strictEqual(staleConvertBody.conflict, true);
+    assert.strictEqual(staleConvertBody.conflictKind, 'version');
+
+    const rereadRes = await getJSON(base, '/api/org/flight-risk', token);
+    const reread = (await rereadRes.json()).find((r) => r.id === entry.id);
+    assert.strictEqual(reread.version, 1, 'the stale convert attempt must not have bumped the version');
+    assert.deepStrictEqual(reread.linkedTaskIds, [], 'the stale convert attempt must not have linked a task');
+    assert.deepStrictEqual(reread.linkedRaidIds, [], 'the stale convert attempt must not have linked a RAID entry');
+
+    const source = 'org-flightrisk:' + entry.id;
+    const tasksRes = await getJSON(base, '/api/integration-tasks', token);
+    const orphanTask = (await tasksRes.json()).find((t) => t.source === source);
+    assert.strictEqual(orphanTask, undefined, 'a stale convert must not have created an orphan task');
+    const raidRes = await getJSON(base, '/api/raid', token);
+    const orphanRaid = (await raidRes.json()).find((r) => r.source === source);
+    assert.strictEqual(orphanRaid, undefined, 'a stale convert must not have created an orphan RAID entry');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (34): a current-version flight-risk convert succeeds, creates the task/RAID entry, and the entry\'s version advances by one', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc34');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+    const employee = await createEmployee(base, token, 'Olc34 Employee');
+
+    const createRes = await postJSON(base, '/api/org/flight-risk', token, { employeeId: employee.id, riskLevel: 'critical', owner: 'admin' });
+    const { entry } = await createRes.json();
+
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    assert.strictEqual((await stampRes.json()).entry.version, 1);
+
+    const convertRes = await postJSON(base, `/api/org/flight-risk/${entry.id}/convert`, token, { toTask: true, toRaid: true, version: 1 });
+    assert.strictEqual(convertRes.status, 200);
+    const convertBody = await convertRes.json();
+    assert.strictEqual(convertBody.entry.version, 2, 'a current-version convert must bump the stored version by exactly one');
+    assert.ok(convertBody.task && convertBody.task.id, 'a current-version convert with toTask must create a task');
+    assert.ok(convertBody.raid && convertBody.raid.id, 'a current-version convert with toRaid must create a RAID entry');
+    assert.deepStrictEqual(convertBody.entry.linkedTaskIds, [convertBody.task.id]);
+    assert.deepStrictEqual(convertBody.entry.linkedRaidIds, [convertBody.raid.id]);
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (35, structural): conflictIfStale() is called before writeDb(db) in POST /api/org/positions, POST /api/org/flight-risk and POST /api/org/flight-risk/:id/convert, and before positionGraphFailure() specifically in the positions route', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const routeMarkers = [
+    "app.post('/api/org/positions',",
+    "app.post('/api/org/flight-risk',",
+    "app.post('/api/org/flight-risk/:id/convert',",
+  ];
+  routeMarkers.forEach((marker) => {
+    const start = src.indexOf(marker);
+    assert.ok(start !== -1, `route marker not found: ${marker}`);
+    const rest = src.slice(start + marker.length);
+    const nextAppIdx = rest.search(/\napp\.(get|post|put|delete|use)\(/);
+    const body = nextAppIdx === -1 ? rest : rest.slice(0, nextAppIdx);
+    const conflictIdx = body.indexOf('conflictIfStale(');
+    const writeDbIdx = body.indexOf('writeDb(db)');
+    assert.ok(conflictIdx !== -1, `${marker} must call conflictIfStale()`);
+    assert.ok(writeDbIdx !== -1, `${marker} must call writeDb(db)`);
+    assert.ok(conflictIdx < writeDbIdx, `${marker} must call conflictIfStale() BEFORE writeDb(db)`);
+    if (marker === "app.post('/api/org/positions',") {
+      const graphFailureIdx = body.indexOf('positionGraphFailure(lane, candidate)');
+      assert.ok(graphFailureIdx !== -1, 'expected positionGraphFailure(lane, candidate) call in the update branch');
+      assert.ok(conflictIdx < graphFailureIdx, 'POST /api/org/positions must call conflictIfStale() BEFORE positionGraphFailure(lane, candidate) — the version precheck must sit alongside the shallow-merge ordering, not after it');
+    }
+  });
+});
