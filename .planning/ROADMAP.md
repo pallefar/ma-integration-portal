@@ -87,7 +87,17 @@ Plans:
   2. On a 409 the user sees a reload-and-reapply path that preserves their in-progress edit instead of discarding it.
   3. Two users editing different records concurrently both save successfully — the lock bites only on the same record, not the whole collection.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Tracer: stale RAID edit rejected with a 409 and recovered end-to-end (storage WHERE clause → 409 middleware → fetch wrapper → compare dialog → reapply)
+- [ ] 09-02-PLAN.md — Integration tasks and synergy initiatives, including all seven synergy sub-routes (D-02 no-exemptions)
+- [ ] 09-03-PLAN.md — Conflict dialog completed against every resolved UI-SPEC consideration, plus the wrapper-behavior harness
+- [ ] 09-04-PLAN.md — DD findings, request items and the finding conversion, with the clearance-filtered conflict body
+- [ ] 09-05-PLAN.md — Org positions, flight-risk register and its conversion; the append-only org-decisions exemption recorded
+- [ ] 09-06-PLAN.md — Stale-delete (D-08) across all seven in-scope DELETE routes, with the destructive dialog variant
+- [ ] 09-07-PLAN.md — Coverage gate, cross-collection concurrency proof, conflict-aware soak, validation sign-off
+
 **UI hint**: yes
 
 ### Phase 10: Runtime Hardening & Deployment Readiness
