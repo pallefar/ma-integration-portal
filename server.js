@@ -432,6 +432,21 @@ function parseExpectedVersion(req) {
 // without mutating/writing anything further), `false` otherwise.
 function conflictIfStale(req, res, record, opts) {
   const options = opts || {};
+  // [security] CR-01 (09-REVIEW): arm the SAME clearance rule on this
+  // request's db context so db/store.js's WHERE-layer conflict throw — the
+  // race-free layer that fires when this precheck passed but another
+  // process committed in between — echoes exactly what this precheck would
+  // have echoed, never the unfiltered stored record. Armed before the
+  // early returns: the WHERE layer can conflict even when the client sent
+  // no version at all.
+  if (options.clearanceFilter) {
+    const dbCtx = currentDbContext();
+    if (dbCtx) {
+      dbCtx.areaClearanceFilter = function (collectionKey, rec) {
+        return options.clearanceFilter(rec);
+      };
+    }
+  }
   const parsed = parseExpectedVersion(req);
   if (parsed.invalid) {
     res.status(400).json({ error: 'expectedVersion must be a non-negative integer.' });
@@ -779,7 +794,7 @@ app.get('/healthz', (req, res) => {
 // reads are sub-millisecond and in-process, so the store is the single source of
 // truth on every call (RESEARCH.md Pitfall 3). db.json is retained on disk only
 // as a frozen, read-only pre-migration archive — no live code path reads/writes it.
-const { initDb, readDb, writeDb, getOrOpenConnection, isConflictError } = require('./db/store');
+const { initDb, readDb, writeDb, getOrOpenConnection, isConflictError, currentDbContext } = require('./db/store');
 const sessions = require('./db/sessions');
 
 // ISO-01 (Phase 3 cutover): open the three live stores through the SAME

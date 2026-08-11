@@ -44,7 +44,7 @@
 const fs = require('fs');
 const path = require('path');
 const { AsyncLocalStorage } = require('node:async_hooks');
-const { ARRAY_COLLECTIONS, SINGLETON_KEYS, VERSIONED_COLLECTIONS } = require('./collections');
+const { ARRAY_COLLECTIONS, SINGLETON_KEYS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS } = require('./collections');
 const { openDbFile } = require('./dbFiles');
 // AUD-01/D-08/D-09/D-11 (Phase 3 Plan 05): the store-layer audit hook.
 // db/auditHook.js has NO require() back to this module (it opens its own
@@ -190,6 +190,20 @@ function makeConflictError(detail) {
   err.isConflict = true;
   err.conflictDetail = detail;
   return err;
+}
+
+// [security] CR-01 (09-REVIEW): the record echoed in a WHERE-layer conflict
+// throw gets the SAME clearance treatment the route-level precheck
+// (server.js conflictIfStale's clearanceFilter) gives it. The route arms
+// `areaClearanceFilter` on the request's runWithDb() context; when no filter
+// is armed for a CLEARANCE_SCOPED_COLLECTIONS member, fail closed and
+// withhold the record entirely — version and attribution stay disclosed
+// (the T-09-17 rule: field VALUES are withheld, never the fact of the
+// conflict itself).
+function conflictVisibleRecord(collectionKey, current, scoped) {
+  const filter = scoped && scoped.areaClearanceFilter;
+  if (typeof filter === 'function') return filter(collectionKey, current);
+  return CLEARANCE_SCOPED_COLLECTIONS.has(collectionKey) ? null : current;
 }
 
 /**
@@ -457,7 +471,8 @@ function writeDb(data) {
                 const current = JSON.parse(row.data);
                 throw makeConflictError({
                   conflictKind: 'version', collection: key, recordId: id,
-                  currentRecord: current, currentVersion: current.version !== undefined ? current.version : null,
+                  currentRecord: conflictVisibleRecord(key, current, scoped),
+                  currentVersion: current.version !== undefined ? current.version : null,
                   changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
                 });
               }
@@ -508,7 +523,8 @@ function writeDb(data) {
                 const current = JSON.parse(row.data);
                 throw makeConflictError({
                   conflictKind: 'version', collection: key, recordId: id,
-                  currentRecord: current, currentVersion: current.version !== undefined ? current.version : null,
+                  currentRecord: conflictVisibleRecord(key, current, scoped),
+                  currentVersion: current.version !== undefined ? current.version : null,
                   changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
                 });
               }

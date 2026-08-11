@@ -1861,3 +1861,100 @@ test('optimistic-locking-contract (Part 3, dual-lane 3): in custom (demoMode:fal
 // conflict:true marker, so neither can ever open the client's conflict
 // dialog. Grouped here by reference rather than duplicated.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-01 (09-REVIEW): the WHERE-layer conflict throw inside db/store.js's
+// writeDb() transaction gets the SAME clearance treatment the route-level
+// precheck gives — and fails CLOSED for clearance-scoped collections when no
+// per-request filter is armed.
+// ---------------------------------------------------------------------------
+
+test('CR-01 (a, store-layer backstop): a WHERE-layer version conflict on ddFindings with NO armed clearance filter withholds currentRecord entirely — version and attribution stay disclosed', () => {
+  const create = store.readDb();
+  create.ddFindings.push({ id: 'ddfind_cr01a', area: 'legal', title: 'MNPI title that must never leak', severity: 'high' });
+  store.writeDb(create);
+
+  const stamp = store.readDb();
+  stamp.ddFindings.find((f) => f.id === 'ddfind_cr01a').title = 'MNPI title v1';
+  store.writeDb(stamp);
+
+  const snapA = store.readDb();
+  const snapB = store.readDb();
+  snapB.ddFindings.find((f) => f.id === 'ddfind_cr01a').title = 'MNPI title v2 (other writer)';
+  store.writeDb(snapB);
+
+  snapA.ddFindings.find((f) => f.id === 'ddfind_cr01a').title = 'stale attempt';
+  let caught = null;
+  try { store.writeDb(snapA); } catch (e) { caught = e; }
+  assert.ok(caught && store.isConflictError(caught), 'the stale write must raise the typed conflict error');
+  assert.strictEqual(caught.conflictDetail.conflictKind, 'version');
+  assert.strictEqual(caught.conflictDetail.currentRecord, null,
+    'CR-01: with no armed filter, a clearance-scoped collection must fail closed — no unfiltered record in the conflict detail');
+  assert.ok(typeof caught.conflictDetail.currentVersion === 'number',
+    'the version is still disclosed — only field VALUES are withheld (T-09-17)');
+});
+
+test('CR-01 (b, store-layer regression): the same WHERE-layer conflict on raidEntries — NOT clearance-scoped — still echoes the full current record', () => {
+  const create = store.readDb();
+  create.raidEntries.push({ id: 'raid_cr01b', type: 'risk', title: 'raid cr01b v0' });
+  store.writeDb(create);
+
+  const stamp = store.readDb();
+  stamp.raidEntries.find((r) => r.id === 'raid_cr01b').title = 'raid cr01b v1';
+  store.writeDb(stamp);
+
+  const snapA = store.readDb();
+  const snapB = store.readDb();
+  snapB.raidEntries.find((r) => r.id === 'raid_cr01b').title = 'raid cr01b v2';
+  store.writeDb(snapB);
+
+  snapA.raidEntries.find((r) => r.id === 'raid_cr01b').title = 'stale attempt';
+  let caught = null;
+  try { store.writeDb(snapA); } catch (e) { caught = e; }
+  assert.ok(caught && store.isConflictError(caught), 'the stale write must raise the typed conflict error');
+  assert.ok(caught.conflictDetail.currentRecord, 'a deal-wide-visible collection still echoes the record');
+  assert.strictEqual(caught.conflictDetail.currentRecord.title, 'raid cr01b v2');
+});
+
+test('CR-01 (c, arming): conflictIfStale() with a clearanceFilter arms areaClearanceFilter on the request db context — even when the client sent no version — and the armed hook applies the identical rule', () => {
+  const ctx = { conn: null, kind: 'deal', dealId: 'deal_cr01c', dbPath: null };
+  const denyAll = () => null;
+  store.runWithDb(ctx, () => {
+    const req = { body: {}, query: {} };
+    const res = { status() { return this; }, json() { return this; } };
+    const handled = app.conflictIfStale(req, res, { id: 'x', version: 3, area: 'legal' }, { clearanceFilter: denyAll });
+    assert.strictEqual(handled, false, 'no client version supplied — precheck passes through');
+  });
+  assert.strictEqual(typeof ctx.areaClearanceFilter, 'function',
+    'the WHERE-layer filter must be armed as a side effect of the precheck, before its early returns');
+  assert.strictEqual(ctx.areaClearanceFilter('ddFindings', { id: 'x', title: 'secret' }), null,
+    'the armed hook applies the SAME rule the precheck would have applied');
+});
+
+test('CR-01 (d, store-layer parity): with an armed granting filter, the WHERE-layer conflict echoes the FILTERED projection, not the raw record', () => {
+  const create = store.readDb();
+  create.ddRequestItems.push({ id: 'ddreq_cr01d', area: 'financial', text: 'request item v0' });
+  store.writeDb(create);
+
+  const stamp = store.readDb();
+  stamp.ddRequestItems.find((r) => r.id === 'ddreq_cr01d').text = 'request item v1';
+  store.writeDb(stamp);
+
+  const snapA = store.readDb();
+  const snapB = store.readDb();
+  snapB.ddRequestItems.find((r) => r.id === 'ddreq_cr01d').text = 'request item v2';
+  store.writeDb(snapB);
+
+  snapA.ddRequestItems.find((r) => r.id === 'ddreq_cr01d').text = 'stale attempt';
+  const ctx = {
+    conn: null, kind: 'demo', dealId: null, dbPath: null,
+    areaClearanceFilter: (collectionKey, rec) => ({ id: rec.id, area: rec.area, projected: true }),
+  };
+  let caught = null;
+  store.runWithDb(ctx, () => {
+    try { store.writeDb(snapA); } catch (e) { caught = e; }
+  });
+  assert.ok(caught && store.isConflictError(caught), 'the stale write must raise the typed conflict error');
+  assert.deepStrictEqual(caught.conflictDetail.currentRecord, { id: 'ddreq_cr01d', area: 'financial', projected: true },
+    'the armed filter output — not the raw record — is what the conflict detail carries');
+});

@@ -154,6 +154,20 @@ for (const key of VERSIONED_COLLECTIONS) {
   }
 }
 
+// [security] CR-01 (09-REVIEW): collections whose records carry PER-RECORD
+// area clearance (db/accessPolicy.js hasAreaGrant) — a conflict 409 for
+// these may only echo the stored record after the caller's clearance filter
+// has passed it. db/store.js fails closed for these: when no per-request
+// filter is armed, the WHERE-layer conflict throw withholds currentRecord
+// entirely rather than echoing an unfiltered record across a clean-room
+// boundary.
+const CLEARANCE_SCOPED_COLLECTIONS = new Set(['ddFindings', 'ddRequestItems']);
+for (const key of CLEARANCE_SCOPED_COLLECTIONS) {
+  if (!VERSIONED_COLLECTIONS.has(key)) {
+    throw new Error(`db/collections.js: CLEARANCE_SCOPED_COLLECTIONS entry '${key}' must be a VERSIONED_COLLECTIONS member`);
+  }
+}
+
 // ISO-01 / D-07: the two credential-bearing settings field PATHS (dotted,
 // for nested lookup) lifted out of the demo `settings` singleton into
 // runtime.db's gitignored `secretSettings` app_state row when the store is
@@ -162,4 +176,4 @@ for (const key of VERSIONED_COLLECTIONS) {
 // already keeps these two fields out of every API response.
 const SECRET_SETTINGS_FIELDS = ['geminiApiKey', 'databaseConfig.connectionDetails'];
 
-module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS, VERSIONED_COLLECTIONS };
+module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS };
