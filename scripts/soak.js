@@ -159,6 +159,35 @@ function createWorkerSessions(count, dealId) {
   return sessions;
 }
 
+/**
+ * CONC-02 (Phase 9, Plan 07): a shared, real RAID entry every worker's
+ * conflict lane (below) races against. The pulses load above only ever
+ * CREATES new rows — a load generator that never mutates an EXISTING record
+ * can never produce a version conflict, so D-06's contract would have
+ * nothing to prove itself against in this harness without a dedicated
+ * conflict-inducing write target. Stamped to version:1 immediately (D-09's
+ * own "first successful write" lazy-adoption convention) so every worker's
+ * conflict lane starts from a KNOWN baseline rather than the ambiguous
+ * "no version field yet" state.
+ */
+async function createSharedConflictRecord(port, cookie) {
+  const createRes = await fetch(`http://127.0.0.1:${port}/api/raid`, {
+    method: 'POST',
+    headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: 'Soak conflict-probe RAID entry', type: 'risk', severity: 'medium' }),
+  });
+  if (createRes.status !== 201) throw new Error(`soak: failed to create the shared conflict-probe RAID entry (status ${createRes.status})`);
+  const { entry } = await createRes.json();
+  const stampRes = await fetch(`http://127.0.0.1:${port}/api/raid`, {
+    method: 'POST',
+    headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: entry.id, notes: 'soak baseline stamp' }),
+  });
+  if (stampRes.status !== 200) throw new Error(`soak: failed to stamp the shared conflict-probe RAID entry's baseline version (status ${stampRes.status})`);
+  const stamped = (await stampRes.json()).entry;
+  return { id: entry.id, initialVersion: stamped.version };
+}
+
 // --- Spawning real server.js processes --------------------------------------
 
 // Namespaced away from common dev ports (3000) and offset by this process's
@@ -235,7 +264,79 @@ function stopChild(child) {
 // knobs) — Claude's Discretion per 08-RESEARCH.md.
 const LANES = 4;
 
-async function runWorkerLoad(workerIndex, port, cookie, durationMs, writeIntervalMs) {
+// CONC-02 (Phase 9, Plan 07): a SECOND, deliberately conflict-inducing load
+// pattern, run alongside the pulses-only lanes above — every worker races
+// every OTHER worker's conflict lane against the SAME shared RAID entry
+// (`sharedRaid.id`), each holding its OWN cached version rather than
+// re-fetching immediately before every attempt, so genuine multi-process
+// 409s occur under real load rather than never firing at all (the pulses
+// lane above only ever CREATES new rows — a load generator that never
+// mutates an existing record can NEVER produce a version conflict). Each
+// lane refreshes its cached version only after its OWN acknowledged write; a
+// 409 leaves the cache stale on purpose, mirroring a real user who has not
+// reloaded yet.
+async function runConflictLane(workerIndex, port, cookie, durationMs, writeIntervalMs, sharedRaid) {
+  const acknowledged = [];
+  const conflicted = [];
+  const refused = [];
+  const unexpected = [];
+  let cachedVersion = sharedRaid.initialVersion;
+  const start = Date.now();
+  let i = 0;
+  while (Date.now() - start < durationMs) {
+    const marker = `soak-conflict-w${workerIndex}-${i}`;
+    let res;
+    try {
+      res = await fetch(`http://127.0.0.1:${port}/api/raid`, {
+        method: 'POST',
+        headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sharedRaid.id, notes: marker, version: cachedVersion }),
+      });
+    } catch (e) {
+      unexpected.push({ correlator: marker, note: `network error: ${e && e.message}` });
+      i++;
+      await sleep(Math.max(5, writeIntervalMs));
+      continue;
+    }
+    if (res.status === 200) {
+      let body;
+      try { body = await res.json(); } catch (e) { body = null; }
+      const version = body && body.entry && body.entry.version;
+      if (typeof version !== 'number') {
+        unexpected.push({ correlator: marker, note: '200 response with no entry.version' });
+      } else {
+        acknowledged.push({ correlator: marker, marker, version });
+        cachedVersion = version; // refresh — matches a real client's post-success version refresh
+      }
+    } else if (res.status === 409) {
+      let body;
+      try { body = await res.json(); } catch (e) { body = null; }
+      if (body && body.conflict === true) {
+        conflicted.push({ correlator: marker, marker });
+        // cachedVersion deliberately NOT refreshed here — a real user has
+        // not reloaded yet either; this is what keeps the lane genuinely
+        // racing rather than converging to a conflict-free steady state.
+      } else {
+        unexpected.push({ correlator: marker, note: `409 with no conflict:true marker` });
+      }
+    } else if (res.status === 503) {
+      const retryAfter = res.headers.get('retry-after');
+      if (retryAfter) {
+        refused.push({ correlator: marker });
+      } else {
+        unexpected.push({ correlator: marker, note: '503 with no Retry-After header' });
+      }
+    } else {
+      unexpected.push({ correlator: marker, note: `unexpected status ${res.status}` });
+    }
+    i++;
+    const jitter = Math.floor(Math.random() * 40) - 20;
+    await sleep(Math.max(5, writeIntervalMs + jitter));
+  }
+  return { workerIndex, acknowledged, conflicted, refused, unexpected };
+}
+
+async function runWorkerLoad(workerIndex, port, cookie, durationMs, writeIntervalMs, sharedRaid) {
   const acknowledged = [];
   const refused = [];
   const unexpected = [];
@@ -308,9 +409,16 @@ async function runWorkerLoad(workerIndex, port, cookie, durationMs, writeInterva
     }
   }
 
-  await Promise.all(Array.from({ length: LANES }, (_, laneIndex) => lane(laneIndex)));
+  // The conflict lane runs CONCURRENTLY with the pulses lanes above (not
+  // sequentially after) — real multi-process contention on the shared RAID
+  // record only occurs if every worker's conflict lane is in flight at the
+  // same wall-clock time as every sibling worker's.
+  const conflictLanePromise = runConflictLane(workerIndex, port, cookie, durationMs, writeIntervalMs, sharedRaid);
 
-  return { workerIndex, acknowledged, refused, unexpected };
+  await Promise.all(Array.from({ length: LANES }, (_, laneIndex) => lane(laneIndex)));
+  const conflict = await conflictLanePromise;
+
+  return { workerIndex, acknowledged, refused, unexpected, conflict };
 }
 
 function hashCode(str) {
@@ -327,7 +435,7 @@ function hashCode(str) {
 // sidecar), then open the finished files through db/dbFiles.js and assert
 // each of D-15's five checks, printing a clear per-check verdict. Bounded
 // 503s are reported, never treated as a failure.
-function verify({ dealId, acknowledged, refused, unexpected }) {
+function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledged, conflictConflicted, conflictRefused, sharedRaidId, initialRaidVersion }) {
   const checks = [];
   let allTouchedFilesOk = true;
 
@@ -471,6 +579,81 @@ function verify({ dealId, acknowledged, refused, unexpected }) {
     detail: `refused=${refused.length}/${totalAttempts} (${(refusalRate * 100).toFixed(1)}%)`,
   });
 
+  // ---------------------------------------------------------------------
+  // Checks 6-9 (Plan 07 / CONC-02): the conflict-lane reconciliation. A 409
+  // is a THIRD outcome class, distinct from both "acknowledged" and
+  // "lost" — these checks prove it is counted as its own class rather than
+  // silently folded into either, per T-09-34.
+  // ---------------------------------------------------------------------
+
+  const raidRow = dealConn.prepare('SELECT data FROM raidEntries WHERE id = ?').get(sharedRaidId);
+  const raidData = raidRow ? JSON.parse(raidRow.data) : null;
+
+  // Check 6: the shared conflict-probe record's version advanced by EXACTLY
+  // one per acknowledged conflict-lane write — no gap, no double-count —
+  // proving a 409 never partially landed even under sustained real
+  // multi-process contention.
+  const expectedFinalVersion = initialRaidVersion + conflictAcknowledged.length;
+  checks.push({
+    name: 'conflict-probe RAID record version reconciles exactly with the number of acknowledged conflict-lane writes (no lost/duplicated commit)',
+    ok: !!raidData && raidData.version === expectedFinalVersion,
+    detail: `initialVersion=${initialRaidVersion} conflictAcknowledged=${conflictAcknowledged.length} expectedFinalVersion=${expectedFinalVersion} actualFinalVersion=${raidData ? raidData.version : 'MISSING ROW'}`,
+  });
+
+  // Check 7: the record's final content belongs to whichever acknowledged
+  // write reported the HIGHEST resulting version — the last writer to
+  // commit, by construction of the version's strict +1 monotonic property
+  // (Phase 8's per-file write lock serializes every commit; nothing can
+  // land out of order).
+  const lastWinner = conflictAcknowledged.reduce((best, w) => (!best || w.version > best.version ? w : best), null);
+  checks.push({
+    name: "conflict-probe RAID record's final content matches the acknowledged write that reported the highest resulting version",
+    ok: !!lastWinner && !!raidData && raidData.notes === lastWinner.marker,
+    detail: lastWinner
+      ? `expectedNotes=${lastWinner.marker} actualNotes=${raidData ? raidData.notes : 'MISSING ROW'}`
+      : 'no acknowledged conflict-lane write recorded',
+  });
+
+  // Check 8: a 409 (this run's conflict outcome class) is neither an
+  // acknowledged write nor a lost one. Verified by SET MEMBERSHIP, not a row
+  // COUNT comparison — this record is also re-touched, content-unchanged,
+  // by every OTHER concurrent writeDb() call in this run: the pulses lane's
+  // writes visit EVERY row of EVERY versioned collection on EVERY call
+  // (db/store.js's whole-object snapshot-diff design, and Plan 01's
+  // "untouched row" fast-path fix, which rewrites seq/data — and therefore
+  // still produces an audit 'update' delta — even when a versioned row's
+  // OWN content did not change). Each such re-touch mints its own audit row
+  // carrying the SAME `notes` value as the last GENUINE commit, so a raw
+  // row-count would over-count relative to conflictAcknowledged.length even
+  // with zero violations. Membership is immune to that: every acknowledged
+  // conflict-lane write's marker must appear at least once in the audit
+  // trail (nothing acknowledged is missing), and no CONFLICTED (409-
+  // rejected) write's marker may EVER appear there (nothing conflicted
+  // secretly committed) — exactly the guarantee T-09-34 exists to prove.
+  const raidUpdateAuditRows = auditConn.prepare(
+    "SELECT after_json FROM audit_log WHERE deal_id = ? AND collection = 'raidEntries' AND row_id = ? AND action = 'update'"
+  ).all(dealId, sharedRaidId);
+  const auditedNotes = new Set();
+  for (const r of raidUpdateAuditRows) {
+    try { auditedNotes.add(JSON.parse(r.after_json).notes); } catch (e) { /* malformed row — never silently skip, let it fail the count below */ }
+  }
+  const missingFromAuditTrail = conflictAcknowledged.filter((w) => !auditedNotes.has(w.marker));
+  const leakedConflictedIntoAudit = conflictConflicted.filter((w) => auditedNotes.has(w.marker));
+  checks.push({
+    name: '409 (conflict) outcome reconciles with the audit trail by membership — nothing acknowledged is missing, nothing conflicted ever committed (T-09-34)',
+    ok: missingFromAuditTrail.length === 0 && leakedConflictedIntoAudit.length === 0,
+    detail: `conflictAcknowledged=${conflictAcknowledged.length} conflict409=${conflictConflicted.length} conflictRefused503=${conflictRefused.length} auditUpdateRows=${raidUpdateAuditRows.length} missingFromAuditTrail=${missingFromAuditTrail.length} leakedConflictedIntoAudit=${leakedConflictedIntoAudit.length}`,
+  });
+
+  // Check 9 (informational, mirrors check 5's own pattern): the 409 count
+  // reported explicitly, alongside the bounded-503 count, so an operator
+  // can see the conflict rate rather than inferring it.
+  checks.push({
+    name: 'conflict (409) outcome count reported alongside the bounded-503 count',
+    ok: true,
+    detail: `conflict409=${conflictConflicted.length} conflictRefused503=${conflictRefused.length} conflictAcknowledged=${conflictAcknowledged.length}`,
+  });
+
   return checks;
 }
 
@@ -485,6 +668,7 @@ async function main() {
   const workerLoads = [];
   let checks = null;
   let allOk = false;
+  let sharedRaid = null;
 
   try {
     for (let i = 0; i < PROCESSES; i++) {
@@ -502,9 +686,12 @@ async function main() {
 
     const sessions = createWorkerSessions(PROCESSES, deal.id);
 
+    sharedRaid = await createSharedConflictRecord(BASE_PORT, sessions[0].cookie);
+    console.log(`soak: created shared conflict-probe RAID entry ${sharedRaid.id} at baseline version ${sharedRaid.initialVersion}`);
+
     console.log(`soak: driving load for ~${Math.round(DURATION_MS / 1000)}s across ${PROCESSES} processes...`);
     const results = await Promise.all(
-      sessions.map((session, i) => runWorkerLoad(i, BASE_PORT + i, session.cookie, DURATION_MS, WRITE_INTERVAL_MS))
+      sessions.map((session, i) => runWorkerLoad(i, BASE_PORT + i, session.cookie, DURATION_MS, WRITE_INTERVAL_MS, sharedRaid))
     );
     workerLoads.push(...results);
   } finally {
@@ -516,12 +703,19 @@ async function main() {
 
   const acknowledged = workerLoads.flatMap((w) => w.acknowledged);
   const refused = workerLoads.flatMap((w) => w.refused);
-  const unexpected = workerLoads.flatMap((w) => w.unexpected);
+  const conflictAcknowledged = workerLoads.flatMap((w) => w.conflict.acknowledged);
+  const conflictConflicted = workerLoads.flatMap((w) => w.conflict.conflicted);
+  const conflictRefused = workerLoads.flatMap((w) => w.conflict.refused);
+  const unexpected = workerLoads.flatMap((w) => w.unexpected).concat(workerLoads.flatMap((w) => w.conflict.unexpected));
   console.log(
-    `soak: load phase complete — acknowledged=${acknowledged.length} refused=${refused.length} unexpected=${unexpected.length}`
+    `soak: load phase complete — acknowledged=${acknowledged.length} refused=${refused.length} unexpected=${unexpected.length} | conflict-lane: acknowledged=${conflictAcknowledged.length} conflict409=${conflictConflicted.length} refused503=${conflictRefused.length}`
   );
 
-  checks = verify({ dealId: deal.id, acknowledged, refused, unexpected });
+  checks = verify({
+    dealId: deal.id, acknowledged, refused, unexpected,
+    conflictAcknowledged, conflictConflicted, conflictRefused,
+    sharedRaidId: sharedRaid.id, initialRaidVersion: sharedRaid.initialVersion,
+  });
   allOk = checks.every((c) => c.ok);
 
   console.log('soak: D-15 verdict —');
