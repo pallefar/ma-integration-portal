@@ -641,3 +641,293 @@ test('optimistic-locking-contract (16, structural): all seven synergy sub-routes
     assert.ok(conflictIdx < writeDbIdx, `${marker} must call conflictIfStale() BEFORE writeDb(db)`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plan 04: the Due Diligence workspace — findings, request items and the
+// finding-to-task/RAID conversion. The clean-room area gate (ddAreaRefused)
+// runs BEFORE conflictIfStale() on all three routes (T-09-19: a caller with
+// no grant for a finding/item's CURRENT area gets the existing 403 and never
+// reaches the conflict-body path at all — the anti-enumeration property
+// these tests' structural case (26) locks in). Because of that ordering, by
+// the time conflictIfStale() runs, the caller has ALREADY proven they hold a
+// grant for the record's current area (hasAreaGrant(deal, user, record.area)
+// is the exact same check both gates perform against the exact same fresh
+// `record`), so the clearanceFilter's "denied" branch (T-09-17/T-09-18) is
+// unreachable through this file's real-HTTP admin-session harness — proving
+// it end-to-end would need a non-admin caller whose grant is revoked (or
+// whose record moves to an area they lack) BETWEEN this same request's own
+// ddAreaRefused check and its conflictIfStale check, which cannot happen
+// within one synchronous handler invocation. Test (25, direct) instead
+// invokes the exported `conflictIfStale()` directly with a stubbed
+// clearanceFilter, proving the withholding LOGIC itself is correct — the
+// same function every route above wires through the same `opts.clearanceFilter`
+// contract.
+// ---------------------------------------------------------------------------
+
+test('optimistic-locking-contract (17): a stale-version DD-finding update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc17');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'legal', title: 'Original finding title', severity: 'medium' });
+    assert.strictEqual(createRes.status, 201);
+    const { finding } = await createRes.json();
+    assert.strictEqual(finding.version, undefined, 'a freshly created finding carries no version field yet');
+
+    const firstEditRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'First real edit' });
+    assert.strictEqual(firstEditRes.status, 200);
+    const firstEditBody = await firstEditRes.json();
+    assert.strictEqual(firstEditBody.finding.version, 1);
+
+    const staleRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'Stale clobber attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409);
+    const staleBody = await staleRes.json();
+    assert.strictEqual(staleBody.conflict, true, 'the 409 body must carry the conflict:true marker');
+    assert.strictEqual(staleBody.conflictKind, 'version');
+    assert.strictEqual(staleBody.currentVersion, 1);
+    assert.ok(staleBody.currentRecord, 'the 409 body must carry the current record when the caller is cleared for its area');
+    assert.strictEqual(staleBody.currentRecord.title, 'First real edit');
+
+    const rereadRes = await getJSON(base, '/api/dd/findings?area=legal', token);
+    const reread = (await rereadRes.json()).find((f) => f.id === finding.id);
+    assert.strictEqual(reread.title, 'First real edit', 'the stale write must not have overwritten the title');
+    assert.strictEqual(reread.version, 1, 'the stale write must not have bumped the version');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (18): a stale-version DD request-item update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc18');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/request-items', token, { area: 'financial', text: 'Original item text' });
+    assert.strictEqual(createRes.status, 201);
+    const { item } = await createRes.json();
+    assert.strictEqual(item.version, undefined, 'a freshly created item carries no version field yet');
+
+    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'First real edit' });
+    assert.strictEqual(firstEditRes.status, 200);
+    const firstEditBody = await firstEditRes.json();
+    assert.strictEqual(firstEditBody.item.version, 1);
+
+    const staleRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'Stale clobber attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409);
+    const staleBody = await staleRes.json();
+    assert.strictEqual(staleBody.conflict, true);
+    assert.strictEqual(staleBody.conflictKind, 'version');
+    assert.strictEqual(staleBody.currentVersion, 1);
+    assert.strictEqual(staleBody.currentRecord.text, 'First real edit');
+
+    const rereadRes = await getJSON(base, '/api/dd/request-items?area=financial', token);
+    const reread = (await rereadRes.json()).find((i) => i.id === item.id);
+    assert.strictEqual(reread.text, 'First real edit', 'the stale write must not have overwritten the text');
+    assert.strictEqual(reread.version, 1, 'the stale write must not have bumped the version');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (19): a current-version DD-finding update returns 200 and the stored version is exactly one higher', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc19');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'it', title: 'v2 finding fixture', severity: 'low' });
+    const { finding } = await createRes.json();
+
+    const firstEditRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'edit 1', version: 0 });
+    assert.strictEqual(firstEditRes.status, 200);
+    assert.strictEqual((await firstEditRes.json()).finding.version, 1);
+
+    const secondEditRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'edit 2', version: 1 });
+    assert.strictEqual(secondEditRes.status, 200);
+    const secondEditBody = await secondEditRes.json();
+    assert.strictEqual(secondEditBody.finding.version, 2, 'a current-version write must bump the stored version by exactly one');
+    assert.strictEqual(secondEditBody.finding.title, 'edit 2');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (20): a current-version DD request-item update returns 200 and the stored version is exactly one higher', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc20');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/request-items', token, { area: 'hr', text: 'v2 item fixture' });
+    const { item } = await createRes.json();
+
+    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'edit 1', version: 0 });
+    assert.strictEqual(firstEditRes.status, 200);
+    assert.strictEqual((await firstEditRes.json()).item.version, 1);
+
+    const secondEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'edit 2', version: 1 });
+    assert.strictEqual(secondEditRes.status, 200);
+    const secondEditBody = await secondEditRes.json();
+    assert.strictEqual(secondEditBody.item.version, 2, 'a current-version write must bump the stored version by exactly one');
+    assert.strictEqual(secondEditBody.item.text, 'edit 2');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (21): the DD request-item 409 body\'s currentRecord carries the same projected shape as the route\'s 200-response item — publicDdItem() applied identically on both paths', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc21');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/request-items', token, { area: 'commercial', text: 'projection fixture' });
+    const { item } = await createRes.json();
+    // publicDdItem() only ADDS `overdue` (Object.assign({}, item, {overdue})) —
+    // it never drops a key — so the 200-response item's key set is the floor
+    // every projected shape (including the conflict body) must match exactly.
+    assert.ok('overdue' in item, 'the 200-response item must already carry the publicDdItem()-added overdue key');
+
+    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped' });
+    const stamped = (await firstEditRes.json()).item;
+
+    const staleRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stale attempt', version: 0 });
+    assert.strictEqual(staleRes.status, 409);
+    const staleBody = await staleRes.json();
+    assert.ok('overdue' in staleBody.currentRecord, 'the conflict body\'s currentRecord must carry the publicDdItem()-added overdue key, same as the success response');
+    assert.deepStrictEqual(
+      Object.keys(staleBody.currentRecord).sort(),
+      Object.keys(stamped).sort(),
+      'the conflict body\'s currentRecord key set must match the route\'s own 200-response item key set exactly'
+    );
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (22, direct): conflictIfStale()\'s clearanceFilter option withholds currentRecord — but never version or attribution — when the caller lacks clearance for the record\'s current area', () => {
+  let statusCode = null;
+  let jsonBody = null;
+  const req = { body: { version: 0 }, query: {} };
+  const res = {
+    status(code) { statusCode = code; return this; },
+    json(body) { jsonBody = body; return this; },
+  };
+  const record = {
+    id: 'ddfind_direct1', version: 1, area: 'financial',
+    title: 'A finding title that must never leak to an uncleared caller',
+    updatedBy: 'admin', updatedAt: '2026-08-11T00:00:00.000Z',
+  };
+  const handled = app.conflictIfStale(req, res, record, {
+    clearanceFilter: () => null, // simulates a caller with no grant for the record's CURRENT area
+  });
+  assert.strictEqual(handled, true, 'conflictIfStale() must report that it has already responded');
+  assert.strictEqual(statusCode, 409);
+  assert.strictEqual(jsonBody.conflict, true);
+  assert.strictEqual(jsonBody.currentRecord, null, 'currentRecord must be withheld when the clearance filter refuses it');
+  assert.strictEqual(jsonBody.currentVersion, 1, 'the version is still disclosed — only field VALUES are withheld, per T-09-17');
+  assert.strictEqual(jsonBody.changedBy, 'admin', 'attribution (changedBy) is still disclosed');
+  assert.strictEqual(jsonBody.changedAt, '2026-08-11T00:00:00.000Z', 'attribution (changedAt) is still disclosed');
+});
+
+test('optimistic-locking-contract (23): a stale-version convert returns 409 with the conflict marker, and afterwards no task or RAID entry exists and the finding\'s link arrays are unchanged', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc23');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'legal', title: 'Convert fixture', severity: 'high', owner: 'Karen' });
+    const { finding } = await createRes.json();
+
+    // Stamp version:1 via an ordinary edit (does not touch linkedTaskIds/linkedRaidIds).
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    assert.strictEqual((await stampRes.json()).finding.version, 1);
+
+    const staleConvertRes = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, token, { toTask: true, toRaid: true, version: 0 });
+    assert.strictEqual(staleConvertRes.status, 409);
+    const staleConvertBody = await staleConvertRes.json();
+    assert.strictEqual(staleConvertBody.conflict, true);
+    assert.strictEqual(staleConvertBody.conflictKind, 'version');
+
+    const rereadRes = await getJSON(base, '/api/dd/findings?area=legal', token);
+    const reread = (await rereadRes.json()).find((f) => f.id === finding.id);
+    assert.strictEqual(reread.version, 1, 'the stale convert attempt must not have bumped the version');
+    assert.deepStrictEqual(reread.linkedTaskIds, [], 'the stale convert attempt must not have linked a task');
+    assert.deepStrictEqual(reread.linkedRaidIds, [], 'the stale convert attempt must not have linked a RAID entry');
+
+    const source = 'dd-finding:' + finding.id;
+    const tasksRes = await getJSON(base, '/api/integration-tasks', token);
+    const orphanTask = (await tasksRes.json()).find((t) => t.source === source);
+    assert.strictEqual(orphanTask, undefined, 'a stale convert must not have created an orphan task');
+    const raidRes = await getJSON(base, '/api/raid', token);
+    const orphanRaid = (await raidRes.json()).find((r) => r.source === source);
+    assert.strictEqual(orphanRaid, undefined, 'a stale convert must not have created an orphan RAID entry');
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (24): a current-version convert succeeds, creates the task/RAID entry, and the finding\'s version advances by one', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const deal = makeDeal('deal_olc24');
+    const token = newSession('admin', 'admin'); bindDeal(token, deal.id);
+
+    const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'operations', title: 'Convert current fixture', severity: 'critical', owner: 'Karen' });
+    const { finding } = await createRes.json();
+
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    assert.strictEqual((await stampRes.json()).finding.version, 1);
+
+    const convertRes = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, token, { toTask: true, toRaid: true, version: 1 });
+    assert.strictEqual(convertRes.status, 200);
+    const convertBody = await convertRes.json();
+    assert.strictEqual(convertBody.finding.version, 2, 'a current-version convert must bump the stored version by exactly one');
+    assert.ok(convertBody.task && convertBody.task.id, 'a current-version convert with toTask must create a task');
+    assert.ok(convertBody.raid && convertBody.raid.id, 'a current-version convert with toRaid must create a RAID entry');
+    assert.deepStrictEqual(convertBody.finding.linkedTaskIds, [convertBody.task.id]);
+    assert.deepStrictEqual(convertBody.finding.linkedRaidIds, [convertBody.raid.id]);
+  } finally {
+    server.close();
+  }
+});
+
+test('optimistic-locking-contract (25, structural): the DD findings, request-items and convert routes all call ddAreaRefused() BEFORE conflictIfStale(), and conflictIfStale() before writeDb(db)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const routeMarkers = [
+    "app.post('/api/dd/findings',",
+    "app.post('/api/dd/request-items',",
+    "app.post('/api/dd/findings/:id/convert',",
+  ];
+  routeMarkers.forEach((marker) => {
+    const start = src.indexOf(marker);
+    assert.ok(start !== -1, `route marker not found: ${marker}`);
+    const rest = src.slice(start + marker.length);
+    const nextAppIdx = rest.search(/\napp\.(get|post|put|delete|use)\(/);
+    const body = nextAppIdx === -1 ? rest : rest.slice(0, nextAppIdx);
+    const areaIdx = body.indexOf('ddAreaRefused(');
+    const conflictIdx = body.indexOf('conflictIfStale(');
+    const writeDbIdx = body.indexOf('writeDb(db)');
+    assert.ok(areaIdx !== -1, `${marker} must call ddAreaRefused()`);
+    assert.ok(conflictIdx !== -1, `${marker} must call conflictIfStale()`);
+    assert.ok(writeDbIdx !== -1, `${marker} must call writeDb(db)`);
+    assert.ok(areaIdx < conflictIdx, `${marker} must call ddAreaRefused() BEFORE conflictIfStale() (T-09-19 anti-enumeration ordering)`);
+    assert.ok(conflictIdx < writeDbIdx, `${marker} must call conflictIfStale() BEFORE writeDb(db)`);
+  });
+});

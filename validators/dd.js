@@ -91,6 +91,12 @@ const DdRequestItemUpsertSchema = z.object({
     }).optional(),
   blocked: z.boolean().optional(),
   notes: z.string().trim().max(NOTES_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 04, Pitfall 2 recurrence): without this explicit
+  // field zod v4 strips an incoming `version` key by default and the
+  // route-level precheck (conflictIfStale()) silently never fires — see
+  // validators/workstream.js's TaskUpsertSchema comment, the same trap on a
+  // third schema.
+  version: z.number().int().nonnegative().optional(),
   // WR-02 (04-REVIEW.md): `source` is deliberately NOT accepted on this
   // public upsert schema — it is server.js's own dedup key for
   // POST /api/dd/request-items/instantiate ('ddtemplate:<templateId>:<itemId>').
@@ -140,6 +146,10 @@ const DdFindingUpsertSchema = z.object({
   status: z.enum(DD_FINDING_STATUSES).optional(),
   owner: z.string().trim().max(OWNER_MAX).optional(),
   notes: z.string().trim().max(NOTES_MAX).optional(),
+  // CONC-02 (Phase 9, Plan 04): see DdRequestItemUpsertSchema's identical
+  // comment above — without this explicit field zod v4 strips an incoming
+  // `version` key by default and the precheck silently never fires.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.id || (data.title && data.title.trim()), {
   message: 'Finding title is required.',
   path: ['title'],
@@ -156,6 +166,12 @@ registerSchema('DELETE', '/api/dd/findings/:id', EmptyBodySchema);
 const DdFindingConvertSchema = z.object({
   toTask: z.boolean().optional(),
   toRaid: z.boolean().optional(),
+  // CONC-02 (Phase 9, Plan 04): this route mutates the finding's own
+  // linkedTaskIds/linkedRaidIds, so it carries the same optimistic-lock
+  // precondition as any other finding edit. Without this explicit field
+  // zod v4 strips an incoming `version` key by default and the precheck
+  // silently never fires.
+  version: z.number().int().nonnegative().optional(),
 }).refine((data) => data.toTask === true || data.toRaid === true, {
   message: 'At least one of toTask or toRaid must be true.',
   path: ['toTask'],
