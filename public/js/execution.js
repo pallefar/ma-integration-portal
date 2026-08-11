@@ -1029,9 +1029,28 @@
         var item = state.raid.find(function (r) { return r.id === id; });
         if (!item) return;
         var next = RAID_STATUS_ORDER[(RAID_STATUS_ORDER.indexOf(item.status) + 1) % RAID_STATUS_ORDER.length];
-        fetch('/api/raid', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, status: next }) })
+        // CONC-02/D-02 (Phase 9): a single-field kanban status flip goes
+        // through the SAME version check as a full edit — no exemptions.
+        // Send the version this page already holds in memory for this
+        // record; send nothing when the held record has no version (the
+        // server treats an absent version as "no precondition supplied",
+        // and the WHERE-clause layer in db/store.js still covers the
+        // cross-process case for it).
+        var body = { id: id, status: next };
+        if (item.version !== undefined) body.version = item.version;
+        fetch('/api/raid', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(function (r) { return r.json(); })
-          .then(function (res) { if (res && res.success) { item.status = next; renderRaid(); } });
+          .then(function (res) {
+            if (res && res.success) {
+              // Refresh BOTH status and version from the server's own
+              // response — without refreshing version, the NEXT click in
+              // this same tab would resubmit the now-stale version and
+              // self-conflict against its own prior write.
+              item.status = res.entry.status;
+              item.version = res.entry.version;
+              renderRaid();
+            }
+          });
       });
       row.querySelector('.ex-del').addEventListener('click', function () {
         if (!window.confirm('Delete this entry?')) return;

@@ -8250,6 +8250,56 @@ body.cms-inline-on [data-i18n-html]:hover {
 .deal-modal-error { margin: 0; font-size: 0.8rem; color: var(--status-danger); }
 .deal-modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.25rem; }
 
+/* ===== Conflict-recovery dialog (CONC-02, Phase 9 — 09-UI-SPEC.md) =====
+   Reuses the .deal-modal shell's visual language (fixed centred overlay,
+   the same scrim/blur, a white card with the same radius/shadow), sized
+   wider to fit the field-diff list. ALL spacing this component introduces
+   sits on the UI-SPEC's 4px scale (4/8/16/24) — never the legacy
+   fractional rem values the surrounding modal chrome uses. */
+.conflict-modal-overlay {
+  position: fixed; inset: 0; z-index: 12500;
+  background: rgba(15, 30, 38, 0.72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 2rem; backdrop-filter: blur(3px);
+}
+.conflict-modal {
+  background: var(--bg-white); border-radius: 14px; width: min(560px, 94vw);
+  max-height: 90vh; display: flex; flex-direction: column;
+  padding: 24px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+}
+.conflict-modal-head { margin-bottom: 16px; }
+.conflict-modal-title {
+  margin: 0 0 4px; font-family: var(--font-family-display); font-size: 18px;
+  font-weight: 700; line-height: 1.2; color: var(--te-dark-teal);
+}
+.conflict-modal-attribution { margin: 0; font-size: 12px; font-weight: 500; line-height: 1.4; color: var(--text-secondary); }
+.conflict-modal-attribution strong { font-weight: 700; }
+.conflict-modal-intro { margin: 0 0 16px; font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-primary); }
+/* Focal point (UI-SPEC checker Dimension 2): the diff list is the dominant
+   region by area, scrolling internally on overflow while the header/footer
+   stay pinned — the dialog never grows past the viewport. */
+.conflict-diff-list { overflow-y: auto; max-height: 40vh; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+.conflict-diff-empty-state { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-secondary); }
+.conflict-diff-row { display: flex; flex-direction: column; gap: 4px; }
+.conflict-diff-label { font-size: 13px; font-weight: 700; line-height: 1.4; color: var(--te-dark-teal); text-transform: capitalize; }
+.conflict-diff-values { display: flex; gap: 8px; }
+.conflict-diff-mine, .conflict-diff-theirs {
+  flex: 1; min-width: 0; padding: 16px; border-radius: 8px;
+  font-size: 14px; font-weight: 500; line-height: 1.5;
+  max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+}
+/* Accent (10%) reserved for exactly two places in this component: the
+   apply button's background (below) and this left border — the "mine"
+   value visually reads as the live edit the user is being asked to
+   confirm. --te-dark-teal is deliberately not used anywhere in this
+   component's own new rules. */
+.conflict-diff-mine { background: var(--bg-white); border: 1px solid var(--border-color); border-left: 3px solid var(--te-orange); }
+.conflict-diff-theirs { background: var(--bg-light); border: 1px solid var(--border-color); }
+.conflict-diff-empty-value { font-style: italic; color: var(--text-secondary); }
+.conflict-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.conflict-btn-apply, .conflict-btn-discard { font-size: 13px; font-weight: 700; }
+.conflict-btn-apply:disabled { opacity: 0.65; cursor: default; }
+
 /* ===== Playbook slide-viewer modal (HR M&A Guidebook) ===== */
 .playbook-modal-overlay {
   position: fixed; inset: 0; z-index: 12000;

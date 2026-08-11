@@ -98,6 +98,255 @@
     }, 5000);
   };
 
+  // CONC-02/D-03/D-04/D-05 (Phase 9): the shared conflict-recovery dialog —
+  // rendered from THIS wrapper (D-05: one shared component, wrapper-
+  // detected — no per-page wiring, mirroring showBusyGiveUpToast() above)
+  // on any same-origin /api write whose 409 body carries `conflict: true`
+  // (server.js's conflictBody()/central 409 middleware). Native DOM
+  // construction, textContent-only — no markup assignment anywhere in this
+  // component, so it stays covered by test/client-xss-sinks.test.js. This
+  // branch NEVER auto-retries (D-05/Pitfall 11): the only re-fire path is
+  // the user clicking the dialog's own apply action below.
+  const CONFLICT_TITLE_EDIT = 'Someone else updated this';
+  const CONFLICT_INTRO_EDIT = 'Your changes are still here. Review what changed below, then decide how to proceed.';
+  const CONFLICT_ATTRIBUTION_FALLBACK = 'This record changed since you loaded it.';
+  const CONFLICT_APPLY_LABEL = 'Apply my changes anyway';
+  const CONFLICT_DISCARD_LABEL = 'Discard mine, keep theirs';
+  const CONFLICT_APPLYING_LABEL = 'Applying…';
+  const CONFLICT_EMPTY_DIFF = "No conflicting fields — the record's version changed without affecting anything you edited. Apply your changes to continue.";
+  // FA-2 (09-01-PLAN.md): a deliberate extension beyond the signed-off
+  // 09-UI-SPEC.md Copywriting Contract — three literals for PD-4's "an
+  // UPDATE arrived for a record someone else already deleted" surface,
+  // which the approved UI-SPEC table does not itself enumerate (it only
+  // covers the edit-conflict and D-08 stale-delete variants). Flagged here
+  // for the developer's eye at UAT, per the plan.
+  const CONFLICT_TITLE_DELETED = 'This record was deleted';
+  const CONFLICT_DELETED_INTRO = 'Someone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.';
+  const CONFLICT_CLOSE_LABEL = 'Close';
+
+  // Single-instance guard in the shape of activeGiveUpToast above — a
+  // second conflict while one dialog is open replaces its contents rather
+  // than stacking a second overlay.
+  let activeConflictDialog = null;
+
+  function closeActiveConflictDialog() {
+    if (activeConflictDialog) {
+      if (activeConflictDialog.overlay.parentNode) {
+        activeConflictDialog.overlay.parentNode.removeChild(activeConflictDialog.overlay);
+      }
+      document.removeEventListener('keydown', activeConflictDialog.onKeydown);
+      activeConflictDialog = null;
+    }
+  }
+
+  // Minute/hour/day granularity relative-time formatter for the attribution
+  // line ("Changed by karen, 2 min ago"). Returns null for an unparseable
+  // timestamp so the caller can fall through to the attribution fallback
+  // copy rather than rendering a bogus "NaN min ago".
+  const relativeTime = (iso) => {
+    const then = new Date(iso).getTime();
+    if (!Number.isFinite(then)) return null;
+    const diffMin = Math.round((Date.now() - then) / 60000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return diffMin + ' min ago';
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return diffHr + (diffHr === 1 ? ' hour ago' : ' hours ago');
+    const diffDay = Math.round(diffHr / 24);
+    return diffDay + (diffDay === 1 ? ' day ago' : ' days ago');
+  };
+
+  // UI-SPEC E4: with both actor and time present render "Changed by {name},
+  // {relative time}"; with either missing render the fallback sentence —
+  // never a blank line, never a line containing the word "undefined".
+  function renderConflictAttribution(el, body) {
+    const name = body && body.changedBy;
+    const time = (body && body.changedAt) ? relativeTime(body.changedAt) : null;
+    if (name && time) {
+      el.textContent = '';
+      el.appendChild(document.createTextNode('Changed by '));
+      const strong = document.createElement('strong');
+      strong.textContent = name;
+      el.appendChild(strong);
+      el.appendChild(document.createTextNode(', ' + time));
+    } else {
+      el.textContent = CONFLICT_ATTRIBUTION_FALLBACK;
+    }
+  }
+
+  // UI-SPEC E1-partial: a changed field whose value (mine or theirs) is
+  // empty/null renders an explicit italic "(empty)" placeholder — never
+  // blank whitespace, which would read as a rendering bug.
+  function setConflictDiffValue(el, val) {
+    if (val === undefined || val === null || val === '') {
+      el.classList.add('conflict-diff-empty-value');
+      el.textContent = '(empty)';
+    } else {
+      el.textContent = String(val);
+    }
+  }
+
+  // D-03: "Apply my changes anyway" is a genuine REAPPLY against fresh
+  // state, not a forced write carrying the stale value — parses init.body,
+  // overwrites `version` with the server's current one, and re-stringifies.
+  // Returns a NEW init object; never mutates the caller's own `init`.
+  function withFreshVersion(input, init, url, method, freshVersion) {
+    const newInit = Object.assign({}, init);
+    try {
+      const parsed = JSON.parse((init && init.body) || '{}');
+      parsed.version = freshVersion;
+      newInit.body = JSON.stringify(parsed);
+    } catch (e) {
+      // Body wasn't JSON (shouldn't happen for a route that emitted a
+      // versioned conflict) — nothing safe to rewrite; leave it untouched.
+    }
+    return newInit;
+  }
+
+  function showConflictDialog(body, input, init, url, method) {
+    closeActiveConflictDialog();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'conflict-modal-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'conflict-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    overlay.appendChild(modal);
+
+    const head = document.createElement('div');
+    head.className = 'conflict-modal-head';
+    const title = document.createElement('h3');
+    title.className = 'conflict-modal-title';
+    const attribution = document.createElement('p');
+    attribution.className = 'conflict-modal-attribution';
+    head.appendChild(title);
+    head.appendChild(attribution);
+    modal.appendChild(head);
+
+    const intro = document.createElement('p');
+    intro.className = 'conflict-modal-intro';
+    modal.appendChild(intro);
+
+    const actions = document.createElement('div');
+    actions.className = 'conflict-modal-actions';
+
+    const isDeleted = body && body.conflictKind === 'deleted';
+
+    if (isDeleted) {
+      title.textContent = CONFLICT_TITLE_DELETED;
+      intro.textContent = CONFLICT_DELETED_INTRO;
+      renderConflictAttribution(attribution, body);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'btn btn-secondary conflict-btn-discard';
+      closeBtn.textContent = CONFLICT_CLOSE_LABEL;
+      closeBtn.addEventListener('click', closeActiveConflictDialog);
+      actions.appendChild(closeBtn);
+    } else {
+      title.textContent = CONFLICT_TITLE_EDIT;
+      intro.textContent = CONFLICT_INTRO_EDIT;
+      renderConflictAttribution(attribution, body);
+
+      const diffList = document.createElement('div');
+      diffList.className = 'conflict-diff-list';
+
+      let payload = {};
+      try { payload = JSON.parse((init && init.body) || '{}'); } catch (e) { payload = {}; }
+      const currentRecord = (body && body.currentRecord) || {};
+      // Pitfall 12: the keys a field-patch payload carries ARE the fields
+      // the user changed — never id/version, and only fields the server's
+      // current record actually has.
+      const fields = Object.keys(payload).filter((k) => k !== 'id' && k !== 'version'
+        && Object.prototype.hasOwnProperty.call(currentRecord, k));
+
+      if (fields.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'conflict-diff-empty-state';
+        empty.textContent = CONFLICT_EMPTY_DIFF;
+        diffList.appendChild(empty);
+      } else {
+        fields.forEach((field) => {
+          const row = document.createElement('div');
+          row.className = 'conflict-diff-row';
+          const label = document.createElement('div');
+          label.className = 'conflict-diff-label';
+          label.textContent = field;
+          row.appendChild(label);
+
+          const values = document.createElement('div');
+          values.className = 'conflict-diff-values';
+
+          const mine = document.createElement('div');
+          mine.className = 'conflict-diff-mine';
+          setConflictDiffValue(mine, payload[field]);
+          values.appendChild(mine);
+
+          const theirs = document.createElement('div');
+          theirs.className = 'conflict-diff-theirs';
+          setConflictDiffValue(theirs, currentRecord[field]);
+          values.appendChild(theirs);
+
+          row.appendChild(values);
+          diffList.appendChild(row);
+        });
+      }
+      modal.appendChild(diffList);
+
+      const discardBtn = document.createElement('button');
+      discardBtn.type = 'button';
+      discardBtn.className = 'btn btn-secondary conflict-btn-discard';
+      discardBtn.textContent = CONFLICT_DISCARD_LABEL;
+      discardBtn.addEventListener('click', closeActiveConflictDialog);
+
+      const applyBtn = document.createElement('button');
+      applyBtn.type = 'button';
+      applyBtn.className = 'btn btn-primary conflict-btn-apply';
+      applyBtn.textContent = CONFLICT_APPLY_LABEL;
+      applyBtn.addEventListener('click', () => {
+        applyBtn.disabled = true;
+        applyBtn.textContent = CONFLICT_APPLYING_LABEL;
+        const freshVersion = body && body.currentVersion;
+        const newInit = withFreshVersion(input, init, url, method, freshVersion);
+        // Goes through window.fetch (not origFetch) — a genuine second
+        // conflict re-enters THIS SAME wrapper's 409 branch below and
+        // re-renders this dialog with fresh server values (the
+        // activeConflictDialog guard replaces contents, not stacks a
+        // second overlay). This is correct behavior, not a loop to
+        // suppress.
+        window.fetch(input, newInit).then((res) => {
+          if (res && res.ok) {
+            closeActiveConflictDialog();
+          } else if (!res || res.status !== 409) {
+            applyBtn.disabled = false;
+            applyBtn.textContent = CONFLICT_APPLY_LABEL;
+          }
+          // A genuine second 409 has already re-rendered this dialog as a
+          // side effect of the 409 branch below — nothing further here.
+        }).catch(() => {
+          applyBtn.disabled = false;
+          applyBtn.textContent = CONFLICT_APPLY_LABEL;
+        });
+      });
+
+      actions.appendChild(discardBtn);
+      actions.appendChild(applyBtn);
+    }
+
+    modal.appendChild(actions);
+
+    // Close on overlay-background click, on Escape, and (edit variant) on
+    // the discard action / (deleted variant) on the close action — every
+    // exit path simply removes the overlay. Nothing on the page is
+    // touched: no field cleared, no form reset, no navigation, no reload.
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeActiveConflictDialog(); });
+    const onKeydown = (e) => { if (e.key === 'Escape') closeActiveConflictDialog(); };
+    document.addEventListener('keydown', onKeydown);
+
+    document.body.appendChild(overlay);
+    activeConflictDialog = { overlay, onKeydown };
+  }
+
   // D-07: bounded, jittered silent retry for transient write contention (503).
   const BUSY_RETRY_MAX_RETRIES = 2; // 2 retries = 3 total attempts
   const BUSY_RETRY_FALLBACK_WAIT_MS = 1000; // used when Retry-After is absent/unparseable
@@ -144,6 +393,22 @@
       // again — nothing is discarded, cleared, or re-navigated (D-08).
       showBusyGiveUpToast();
       return res;
+    }
+    // CONC-02/D-05/Pitfall 1 (Phase 9): a same-origin /api 409 is checked
+    // for the `conflict: true` body marker, never the status code alone —
+    // two unrelated 409s already exist elsewhere in this codebase (the
+    // empty-deal steerco-pack refusal, the unrecognized synergy-stage
+    // refusal). res.clone().json() mirrors the 401 branch's own pattern
+    // below — the ORIGINAL response must still be returned to the caller.
+    // This branch never calls delay() and never re-enters attemptFetch();
+    // the ONLY re-fire path is the dialog's own apply action above.
+    if (res.status === 409 && isApi(url)) {
+      return res.clone().json().then((body) => {
+        if (body && body.conflict === true) {
+          showConflictDialog(body, input, init, url, method);
+        }
+        return res;
+      }).catch(() => res);
     }
     if (res.status !== 401 || !isApi(url)) return res;
     return res.clone().json().then((body) => {
