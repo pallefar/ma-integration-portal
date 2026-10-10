@@ -1,0 +1,99 @@
+# The CURRENT scenario module (authz-phase11.js) run against an archive of commit d927233 (the Phase 11
+# head BEFORE the review fixes). Lanes real + dev + demo-open; scenarios authzRoleMatrix, cleanRoom404,
+# denialAuditBounded, demoShowcaseUnchanged. Every FAIL below is a review finding the fixes close; the
+# same module on the current tree is 0 FAIL (phase11-real.log, phase11-demo.log).
+# Result of that run: 396 PASS rows, 93 FAIL rows. Only the FAIL rows are kept (clipped to 230 characters).
+
+[authzRoleMatrix@real] FAIL - IN-02: the pulse filed with body employeeName "P11 Own Employee" is attributed to the ACCOUNT ("Phase Eleven Employee"), not the free-text name :: {"employeeName":"P11 Own Employee"}
+[authzRoleMatrix@real] FAIL - WR-03: the restricted get-or-create lane ignores a forged role / department / company (server-minted defaults only) :: {"role":"P11 forged role","department":"P11 forged department","company":"P11 For
+[authzRoleMatrix@real] FAIL - IN-04: a trailing-slash spelling of the POST behaves like the canonical path (200/201, same account-derived id), never a 500 diagnostic :: {"status":500}
+[authzRoleMatrix@real] FAIL - IN-05: deal setup refuses day1Date "not-a-date" (400), nothing stored :: 200
+[authzRoleMatrix@real] FAIL - IN-05: deal setup refuses day1Date "2026-13-45" (400), nothing stored :: 200
+[authzRoleMatrix@real] FAIL - CR-01: employee GET /api/deals (200) holds the deal as exactly {id,name,status} :: {"status":200,"keys":["createdAt","createdBy","currency","day1Date","dealSettings","dealSizeM","dealType","expectedCl
+[authzRoleMatrix@real] FAIL - CR-01: employee GET /api/deals body has none of dealSizeM / synergyTargetM / memberGrants / members / setup (nor dealSettings, createdBy, currency, day1Date) :: ["dealSizeM","synergyTargetM","memberGr
+[authzRoleMatrix@real] FAIL - CR-01: employee GET /api/deals does not name the target company (pre-announcement MNPI) :: {"named":true}
+[authzRoleMatrix@real] FAIL - CR-01: employee GET /api/deals does not carry the seeded figures (850 / 2026-11-01 / 2027-01-15) :: null
+[authzRoleMatrix@real] FAIL - CR-01: employee POST /api/deals/select echoes the same projected record (200) :: {"status":200,"keys":["createdAt","createdBy","currency","day1Date","dealSettings","dealSizeM","dealType","expectedClos
+[authzRoleMatrix@real] FAIL - CR-01: pmo GET /api/deals (200) holds the deal as exactly {id,name,targetCompany,status} :: {"status":200,"keys":["createdAt","createdBy","currency","day1Date","dealSettings","dealSizeM","dealType","e
+[authzRoleMatrix@real] FAIL - CR-01: pmo GET /api/deals body has none of dealSizeM / synergyTargetM / memberGrants / members / setup (nor dealSettings, createdBy, currency, day1Date) :: ["dealSizeM","synergyTargetM","memberGrants"
+[authzRoleMatrix@real] FAIL - CR-01: pmo GET /api/deals does not carry the seeded figures (850 / 2026-11-01 / 2027-01-15) :: null
+[authzRoleMatrix@real] FAIL - CR-01: pmo POST /api/deals/select echoes the same projected record (200) :: {"status":200,"keys":["createdAt","createdBy","currency","day1Date","dealSettings","dealSizeM","dealType","expectedClose","i
+[authzRoleMatrix@real] FAIL - employee /employee.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - employee /employee.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - pmo /pmo.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - pmo /pmo.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - pmo /execution.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - pmo /execution.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - hrbp /dashboard.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - hrbp /dashboard.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - hrbp /admin.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - hrbp /admin.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - admin /admin.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - admin /admin.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":true}
+[authzRoleMatrix@real] FAIL - employee opens /admin.html: the server-verified role is sent home (/) :: /admin.html
+[authzRoleMatrix@real] FAIL - employee opens /admin.html: 0 refused (401/403) responses :: ["GET /api/assessments 403","GET /api/hrbps 403","GET /api/employees 403","GET /api/communications 403","GET /api/projects 403","GET /api/p
+[authzRoleMatrix@real] FAIL - employee opens /pmo.html: the server-verified role is sent home (/) :: /pmo.html
+[authzRoleMatrix@real] FAIL - employee opens /pmo.html: 0 refused (401/403) responses :: ["GET /api/communications 403"]
+[authzRoleMatrix@real] FAIL - employee opens /due-diligence.html: the server-verified role is sent home (/) :: /due-diligence.html
+[authzRoleMatrix@real] FAIL - employee opens /due-diligence.html: 0 refused (401/403) responses :: ["GET /api/dd/areas 403","GET /api/dd/vdr-links 403","GET /api/dd/summary 403"]
+[authzRoleMatrix@real] FAIL - employee opens /org.html: the server-verified role is sent home (/) :: /org.html
+[authzRoleMatrix@real] FAIL - employee opens /org.html: 0 refused (401/403) responses :: ["GET /api/employees 403","GET /api/org/positions 403","GET /api/org/capabilities 403"]
+[authzRoleMatrix@real] FAIL - employee opens /dashboard.html: the server-verified role is sent home (/) :: /dashboard.html
+[authzRoleMatrix@real] FAIL - employee opens /supporting.html: the server-verified role is sent home (/) :: /supporting.html
+[authzRoleMatrix@real] FAIL - employee opens /execution.html: the server-verified role is sent home (/) :: /execution.html
+[authzRoleMatrix@real] FAIL - employee opens /execution.html: 0 refused (401/403) responses :: ["GET /api/integration-tasks 403","GET /api/checklist-templates 403","GET /api/synergies 403","GET /api/raid 403","GET /api/synergies/r
+[authzRoleMatrix@real] FAIL - pmo opens /admin.html: the server-verified role is sent home (/) :: /admin.html
+[authzRoleMatrix@real] FAIL - pmo opens /admin.html: 0 refused (401/403) responses :: ["GET /api/hrbps 403"]
+[authzRoleMatrix@real] FAIL - hrbp opens /employee.html: the server-verified role is sent home (/) :: /employee.html
+[authzRoleMatrix@real] FAIL - hrbp opens /pmo.html: the server-verified role is sent home (/) :: /pmo.html
+[authzRoleMatrix@real] FAIL - hrbp opens /supporting.html: the server-verified role is sent home (/) :: /supporting.html
+[authzRoleMatrix@real] FAIL - employee opens /signage.html: 0 refused (401/403) responses :: ["GET /api/employees 403"]
+[authzRoleMatrix@real] FAIL - IN-C03: hrbp admin console — the configuration / content rail tabs are hidden (never flashed) :: {"total":0,"visible":0}
+[authzRoleMatrix@real] FAIL - IN-C03: admin admin console — the configuration / content rail tabs are revealed :: {"total":0,"visible":0}
+[authzRoleMatrix@real] FAIL - WR-C07: the PMO desk composer carries the honest sender-side note exactly once in a real deal :: {"notes":[],"dealBound":false}
+[authzRoleMatrix@real] FAIL - WR-C07: the admin dispatcher composer carries the honest sender-side note exactly once in a real deal :: {"notes":[],"dealBound":false}
+[authzRoleMatrix@real] FAIL - WR-C03: hrbp /assessments.html fires no /api/assessment-instances request :: [403,403,403]
+[authzRoleMatrix@real] FAIL - WR-C03: hrbp /assessments.html raises no 401/403 and no page error :: {"refused":["GET /api/assessment-instances 403","GET /api/assessment-instances 403","GET /api/assessment-instances 403"],"pageErro
+[authzRoleMatrix@real] FAIL - WR-C03: pmo /assessments.html fires no /api/assessment-instances request :: [403,403,403]
+[authzRoleMatrix@real] FAIL - WR-C03: pmo /assessments.html raises no 401/403 and no page error :: {"refused":["GET /api/assessment-instances 403","GET /api/assessment-instances 403","GET /api/assessment-instances 403"],"pageError
+[authzRoleMatrix@real] FAIL - WR-C02: the employee page does not offer the helpdesk card (hidden by the access map) :: {"present":true,"visible":true}
+[authzRoleMatrix@real] FAIL - WR-C02: a forced ticket is refused by the server (403) and the success message is NOT shown :: {"formFound":true,"status":403,"successMessageShown":true}
+[cleanRoom404@real] FAIL - WR-02: uncleared pmo POST task with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: uncleared pmo POST task (upper-case prefix) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: uncleared pmo POST task (template:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: uncleared pmo POST task (remediation:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: uncleared pmo POST RAID entry with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: uncleared pmo POST RAID entry (dd-finding:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: uncleared pmo creating 6 task / RAID records with a reserved `source` is refused 400 on every one :: [201,201,201,201,201,201]
+[cleanRoom404@real] FAIL - WR-02: hrbp POST task with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: hrbp POST task (upper-case prefix) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: hrbp POST task (template:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: hrbp POST task (remediation:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: hrbp POST RAID entry with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: hrbp POST RAID entry (dd-finding:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: hrbp creating 6 task / RAID records with a reserved `source` is refused 400 on every one :: [201,201,201,201,201,201]
+[cleanRoom404@real] FAIL - WR-02: admin POST task with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: admin POST task (upper-case prefix) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: admin POST task (template:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: admin POST task (remediation:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: admin POST RAID entry with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: admin POST RAID entry (dd-finding:) with a reserved source -> 400 :: {"status":201}
+[cleanRoom404@real] FAIL - WR-02: admin creating 6 task / RAID records with a reserved `source` is refused 400 on every one :: [201,201,201,201,201,201]
+[cleanRoom404@real] FAIL - IN-01: the uncleared pmo reads the initiative list without the restricted task id :: {"status":200}
+[cleanRoom404@real] FAIL - WR-02: no planted record exists for the Integration Leader (task and RAID lists) :: {"tasks":200,"raid":200}
+[cleanRoom404@real] FAIL - WR-02: converting the second finding mints its GENUINE task and RAID entry (derived from the finding, never a planted record) :: {"status":200,"taskTitle":"P11-PLANTED task"}
+[cleanRoom404@real] FAIL - WR-02: the cleared member sees the genuine converted task and no planted record :: 200
+[denialAuditBounded@real] FAIL - WR-01: 25 probes of GET /api/dd/findings/:id (random ids) wrote exactly ONE dd-access-denied row inside the window (was 25 before the fix) :: {"rowsBefore":0,"rowsAfter":25}
+[denialAuditBounded@real] FAIL - WR-01: 25 probes of GET /api/org/decisions?positionId=<random> wrote exactly ONE org-decisions-access-denied row inside the window (was 25 before the fix) :: {"rowsBefore":0,"rowsAfter":25}
+[denialAuditBounded@real] FAIL - WR-01: 25 probes of GET /api/org/flight-risk wrote exactly ONE org-flightrisk-access-denied row inside the window (was 25 before the fix) :: {"rowsBefore":0,"rowsAfter":25}
+[denialAuditBounded@real] FAIL - WR-01: after the window GET /api/dd/findings/:id (random ids) holds one first row + one folded row and the counts add up to 25 :: {"rows":25,"total":25,"folded":[]}
+[denialAuditBounded@real] FAIL - WR-01: after the window GET /api/org/decisions?positionId=<random> holds one first row + one folded row and the counts add up to 25 :: {"rows":25,"total":25,"folded":[]}
+[denialAuditBounded@real] FAIL - WR-01: after the window GET /api/org/flight-risk holds one first row + one folded row and the counts add up to 25 :: {"rows":25,"total":25,"folded":[]}
+[demoShowcaseUnchanged@dev] FAIL - admin: /api/auth/me access map on the demo store: configWrite true, timeTravel true, every read key true (the showcase reads stay open) :: {"status":200,"configWrite":true}
+[demoShowcaseUnchanged@dev] FAIL - karen: /api/auth/me access map on the demo store: configWrite false, timeTravel true, every read key true (the showcase reads stay open) :: {"status":200,"configWrite":false}
+[demoShowcaseUnchanged@dev] FAIL - dev karen /employee.html @1440: the verified role is not allowed on this page and is sent home (/) (WR-C01, intended) :: /employee.html
+[demoShowcaseUnchanged@dev] FAIL - dev karen /pmo.html @1440: the verified role is not allowed on this page and is sent home (/) (WR-C01, intended) :: /pmo.html
+[demoShowcaseUnchanged@dev] FAIL - pmo: /api/auth/me access map on the demo store: configWrite false, timeTravel true, every read key true (the showcase reads stay open) :: {"status":200,"configWrite":false}
+[demoShowcaseUnchanged@dev] FAIL - dev pmo /admin.html @1440: the verified role is not allowed on this page and is sent home (/) (WR-C01, intended) :: /admin.html
+[demoShowcaseUnchanged@demo-open] FAIL - demo-open anon /admin.html @1440: cookie-less admin console lands on /login.html (Phase 10 contract, unchanged) :: /admin.html
+[demoShowcaseUnchanged@demo-open] FAIL - scenario threw :: page.reload: net::ERR_ABORTED; maybe frame was detached? | Call log: | [2m  - waiting for navigation until "load"[22m | 

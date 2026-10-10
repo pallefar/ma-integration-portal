@@ -1,31 +1,48 @@
-NOTE (plan 11-08, 2026-10-10). `npm run soak` at its DEFAULT load (3 processes, 120 s, 100 ms write interval)
-was attempted first on this host and crashed with `SqliteError: database or disk is full`: at that rate the
-scratch audit.db grew to 5.5 GB (6.78 M rows) in about 90 s because every write audits EVERY row of each
-collection it touches (O(N) audit rows per write, O(N^2) overall - measured identical on the pre-Phase-11 tree
-13a6da0, so it is a pre-existing amplification, not a Phase 11 regression; see 11-08-SUMMARY.md finding F-5).
-The host had ~5 GB free and other jobs running. The verdict below is the SAME script at a lighter write rate:
-SOAK_PROCESSES=3 SOAK_DURATION_MS=120000 SOAK_WRITE_INTERVAL_MS=250 npm run soak   (D-14: same script, env knobs)
-A shorter 60 s / 250 ms smoke run before it also passed (acknowledged=2044, lost=0, audit 1:1, refused=1).
+NOTE (plan 11-08 refresh, 2026-10-10, on the tree after the Phase 11 review fixes).
+Command: SOAK_DURATION_MS=60000 SOAK_WRITE_INTERVAL_MS=250 npm run soak   (3 server processes by default; D-14 env knobs)
+The DEFAULT soak (3 processes, 120 s, 100 ms write interval) is NOT used on this host: every write audits EVERY row
+of each collection it touches (O(N) audit rows per write), so it filled the disk with a 5.5 GB audit.db and died with
+SQLITE_FULL (11-08-SUMMARY.md finding F-5, identical on the pre-Phase-11 tree; Phase 12 scope). The verdict below is
+the same script at a lighter rate and a 60 s window.
+A first run on this tree reported "every acknowledged write present and exact: mismatched=1842" with missing=0. That
+was the HARNESS, not the server: since review fix IN-02 a real deal stamps a pulse's employeeName from the signed-in
+account and ignores the body value (test/personal-data-reads.test.js), and scripts/soak.js carried its per-write
+correlator in employeeName, so (a) the "exact" comparison could not match and (b) the "a 503 left nothing committed"
+lookup, which also keyed on employeeName, would have passed vacuously. scripts/soak.js now carries the correlator in
+`comment` (stored verbatim) and compares rating / comment / type; nothing else in the script changed. This run is the
+re-run with that harness fix.
 ------------------------------------------------------------------------------------------------------------
 
 > te-ma-integration-portal@1.0.0 soak
 > node scripts/soak.js
 
-soak: resolved config — processes=3 durationMs=120000 writeIntervalMs=250
-soak: created deal deal_mv2l3qem766bffea in scratch dir /var/folders/ck/g7df436962d1m5rbxhlj2r2m0000gn/T/gsd-soak-KXkb8v
+soak: resolved config — processes=3 durationMs=60000 writeIntervalMs=250
+soak: created deal deal_mv2ocf0m942ee7a5 in scratch dir /var/folders/ck/g7df436962d1m5rbxhlj2r2m0000gn/T/gsd-soak-LTkhYZ
+[server 2:4116] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
+[server 0:4114] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
+[server 1:4115] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
+[server 2:4116] TE Connectivity M&A Portal server running on port 4116 (http://localhost:4116)
+[server 1:4115] TE Connectivity M&A Portal server running on port 4115 (http://localhost:4115)
+[server 0:4114] TE Connectivity M&A Portal server running on port 4114 (http://localhost:4114)
 soak: all 3 server processes ready
-soak: created shared conflict-probe RAID entry raid_mv2l3r9ncfdfe1b3 at baseline version 1
-soak: driving load for ~120s across 3 processes...
-soak: load phase complete — acknowledged=2901 refused=17 unexpected=0 | conflict-lane: acknowledged=278 conflict409=583 refused503=0
+soak: created shared conflict-probe RAID entry raid_mv2ocfhbb15228ad at baseline version 1
+soak: driving load for ~60s across 3 processes...
+[server 2:4116] SIGTERM received — shutting down gracefully...
+[server 0:4114] SIGTERM received — shutting down gracefully...
+[server 1:4115] SIGTERM received — shutting down gracefully...
+[server 1:4115] HTTP server closed.
+[server 2:4116] HTTP server closed.
+[server 0:4114] HTTP server closed.
+soak: load phase complete — acknowledged=2226 refused=1 unexpected=0 | conflict-lane: acknowledged=199 conflict409=413 refused503=0
 soak: D-15 verdict —
   [PASS] no unexpected outcomes (not a 2xx, not a clean 503): none
-  [PASS] every acknowledged write present in the final database and exact: acknowledged=2901 missing=0 mismatched=0
-  [PASS] no cleanly-refused write left anything committed (CR-01 fix: committed-but-unaudited is now a genuine violation, not an accepted trade-off): refused=17 committedButUnaudited(genuine violation post-CR-01)=0 committedAndAudited(genuine violation)=0
+  [PASS] every acknowledged write present in the final database and exact: acknowledged=2226 missing=0 mismatched=0
+  [PASS] no cleanly-refused write left anything committed (CR-01 fix: committed-but-unaudited is now a genuine violation, not an accepted trade-off): refused=1 committedButUnaudited(genuine violation post-CR-01)=0 committedAndAudited(genuine violation)=0
   [PASS] PRAGMA integrity_check ok on every touched file: deal=ok, control=ok, audit=ok
-  [PASS] audit trail matches acknowledged writes one-to-one (both directions): acknowledged=2901 auditRows=2901 missingFromAudit=0 duplicateInAudit=0 extraInAudit=0
-  [PASS] cleanly-refused count reported (bounded 503s are a pass, not a failure): refused=17/2918 (0.6%)
-  [PASS] conflict-probe RAID record version reconciles exactly with the number of acknowledged conflict-lane writes (no lost/duplicated commit): initialVersion=1 conflictAcknowledged=278 expectedFinalVersion=279 actualFinalVersion=279
-  [PASS] conflict-probe RAID record's final content matches the acknowledged write that reported the highest resulting version: expectedNotes=soak-conflict-w0-277 actualNotes=soak-conflict-w0-277
-  [PASS] 409 (conflict) outcome reconciles with the audit trail by membership — nothing acknowledged is missing, nothing conflicted ever committed (T-09-34): conflictAcknowledged=278 conflict409=583 conflictRefused503=0 auditUpdateRows=2926 missingFromAuditTrail=0 leakedConflictedIntoAudit=0
-  [PASS] conflict (409) outcome count reported alongside the bounded-503 count: conflict409=583 conflictRefused503=0 conflictAcknowledged=278
+  [PASS] audit trail matches acknowledged writes one-to-one (both directions): acknowledged=2226 auditRows=2226 missingFromAudit=0 duplicateInAudit=0 extraInAudit=0
+  [PASS] cleanly-refused count reported (bounded 503s are a pass, not a failure): refused=1/2227 (0.0%)
+  [PASS] conflict-probe RAID record version reconciles exactly with the number of acknowledged conflict-lane writes (no lost/duplicated commit): initialVersion=1 conflictAcknowledged=199 expectedFinalVersion=200 actualFinalVersion=200
+  [PASS] conflict-probe RAID record's final content matches the acknowledged write that reported the highest resulting version: expectedNotes=soak-conflict-w0-198 actualNotes=soak-conflict-w0-198
+  [PASS] 409 (conflict) outcome reconciles with the audit trail by membership — nothing acknowledged is missing, nothing conflicted ever committed (T-09-34): conflictAcknowledged=199 conflict409=413 conflictRefused503=0 auditUpdateRows=2295 missingFromAuditTrail=0 leakedConflictedIntoAudit=0
+  [PASS] conflict (409) outcome count reported alongside the bounded-503 count: conflict409=413 conflictRefused503=0 conflictAcknowledged=199
 soak: PASS — acknowledged-write invariant held under sustained real load.

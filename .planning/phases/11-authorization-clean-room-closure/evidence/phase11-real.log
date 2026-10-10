@@ -16,10 +16,14 @@
 [authzRoleMatrix@real] PASS - acceptance 1: employee GET /api/pulses -> 200 and holds only its own pulse :: {"status":200,"rows":1}
 [authzRoleMatrix@real] PASS - acceptance 1/D-11-06: pmo sees no named rating or comment of another author :: 200
 [authzRoleMatrix@real] PASS - D-11-06: the Integration Leader sees the named pulses :: 200
+[authzRoleMatrix@real] PASS - IN-02: the pulse filed with body employeeName "P11 Own Employee" is attributed to the ACCOUNT ("Phase Eleven Employee"), not the free-text name :: {"employeeName":"Phase Eleven Employee"}
 [authzRoleMatrix@real] PASS - acceptance 4/5: employee POST /api/employees/get-or-create resolves ONLY its own account-derived record :: {"status":201,"idPrefix":"emp_acct_"}
+[authzRoleMatrix@real] PASS - WR-03: the restricted get-or-create lane ignores a forged role / department / company (server-minted defaults only) :: {"role":"Specialist","department":"Operations","company":"Synthetic Evidence Target Co"}
+[authzRoleMatrix@real] PASS - IN-04: a trailing-slash spelling of the POST behaves like the canonical path (200/201, same account-derived id), never a 500 diagnostic :: {"status":200}
+[authzRoleMatrix@real] PASS - IN-04: a non-canonical POST spelling is answered by the router (404) or the gate (403), never a 500 :: 403
 [authzRoleMatrix@real] PASS - acceptance 4: the GET form of get-or-create no longer answers 200 for an employee :: 403
 [authzRoleMatrix@real] PASS - acceptance 4: the GET form is gone for admin too (never 200, no write) :: 404
-[authzRoleMatrix@real] PASS - 11-07: /api/auth/me carries an access map for the employee: roster/synergies/tasks false, configWrite false :: {"synergies":false,"raid":false,"tasks":false,"roster":false,"communications":false,"org":false,"dd":false,"reports":false,"hrbps":false,"projects":false,"processes":false,"assessmentsList":false,"ai":false,"rag":false,"configWrite":false}
+[authzRoleMatrix@real] PASS - 11-07: /api/auth/me carries an access map for the employee: roster/synergies/tasks false, configWrite false :: {"synergies":false,"raid":false,"tasks":false,"roster":false,"communications":false,"org":false,"dd":false,"reports":false,"hrbps":false,"projects":false,"processes":false,"assessmentsList":false,"assessmentInstances":false,"ai":false,"rag":false,"configWrite":false,"helpdesk":false,"timeTravel":false}
 [authzRoleMatrix@real] PASS -   (settings detail: employee) status 200, no key outside the allowlist, no secret-ish key :: {"status":200,"outside":[],"secretish":[]}
 [authzRoleMatrix@real] PASS - GET /api/settings for the employee holds only allowlisted keys and no secret-ish field
 [authzRoleMatrix@real] PASS - acceptance 2: pmo POST /api/settings -> 403 :: 403
@@ -40,9 +44,24 @@
 [authzRoleMatrix@real] PASS - acceptance 2: hrbp GET /api/settings keys are a subset of the public allowlist, no secret-ish key :: {"status":200,"outside":[],"secretish":[]}
 [authzRoleMatrix@real] PASS - acceptance 2: a workstream lead (pmo) cannot edit deal-level values :: 403
 [authzRoleMatrix@real] PASS - acceptance 2: the Integration Leader (hrbp) edits deal-level values via the deal setup route -> 200 :: 200
+[authzRoleMatrix@real] PASS - IN-05: deal setup refuses day1Date "not-a-date" (400), nothing stored :: 400
+[authzRoleMatrix@real] PASS - IN-05: deal setup refuses day1Date "2026-13-45" (400), nothing stored :: 400
 [authzRoleMatrix@real] PASS - acceptance 2: the deal-level synergy target is what the rollup reports (25) :: 25
 [authzRoleMatrix@real] PASS - acceptance 2: admin still reads the full settings object (200) :: 200
 [authzRoleMatrix@real] PASS - control: hrbp cannot read the audit log (403) :: 403
+[authzRoleMatrix@real] PASS - CR-01 fixture: the IL records deal size / signing / close dates through the wizard basics step (200) :: 200
+[authzRoleMatrix@real] PASS - CR-01 control: the Integration Leader (hrbp) still reads the FULL record (deal size, synergy target, members, grants, setup) :: {"status":200,"keys":["createdAt","createdBy","currency","day1Date","dealSettings","dealSizeM","dealType","expectedClose","id","memberGrants","members","name","setup","signingDate","status","targetCompany"]}
+[authzRoleMatrix@real] PASS - CR-01: employee GET /api/deals (200) holds the deal as exactly {id,name,status} :: {"status":200,"keys":["id","name","status"]}
+[authzRoleMatrix@real] PASS - CR-01: employee GET /api/deals body has none of dealSizeM / synergyTargetM / memberGrants / members / setup (nor dealSettings, createdBy, currency, day1Date) :: []
+[authzRoleMatrix@real] PASS - CR-01: employee GET /api/deals does not name the target company (pre-announcement MNPI) :: {"named":false}
+[authzRoleMatrix@real] PASS - CR-01: employee GET /api/deals does not carry the seeded figures (850 / 2026-11-01 / 2027-01-15) :: null
+[authzRoleMatrix@real] PASS - CR-01: employee POST /api/deals/select echoes the same projected record (200) :: {"status":200,"keys":["id","name","status"],"leaked":[]}
+[authzRoleMatrix@real] PASS - CR-01: pmo GET /api/deals (200) holds the deal as exactly {id,name,targetCompany,status} :: {"status":200,"keys":["id","name","status","targetCompany"]}
+[authzRoleMatrix@real] PASS - CR-01: pmo GET /api/deals body has none of dealSizeM / synergyTargetM / memberGrants / members / setup (nor dealSettings, createdBy, currency, day1Date) :: []
+[authzRoleMatrix@real] PASS - CR-01: pmo GET /api/deals names the target company (the switcher renders it) :: {"named":true}
+[authzRoleMatrix@real] PASS - CR-01: pmo GET /api/deals does not carry the seeded figures (850 / 2026-11-01 / 2027-01-15) :: null
+[authzRoleMatrix@real] PASS - CR-01: pmo POST /api/deals/select echoes the same projected record (200) :: {"status":200,"keys":["id","name","status","targetCompany"],"leaked":[]}
+[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): employee GET /api/settings carries targetCompany (public allowlist key; deferred to Phase 17) :: {"status":200,"hasTargetCompany":true}
 [authzRoleMatrix@real] PASS - acceptance 5: employee GET /api/Synergies is never 200 :: 403
 [authzRoleMatrix@real] PASS - acceptance 5: employee GET /api//raid is never 200 :: 403
 [authzRoleMatrix@real] PASS - acceptance 5: employee GET /api/%73ynergies is never 200 :: 403
@@ -65,57 +84,148 @@
 [authzRoleMatrix@real] PASS - employee /employee.html @1440: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - employee /employee.html @1440: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - employee /employee.html @1440: no page error :: []
+[authzRoleMatrix@real] PASS - employee /employee.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - employee /employee.html @1440: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - employee /employee.html @390: stays on the page (no bounce to login / change-password) :: /employee.html
 [authzRoleMatrix@real] PASS - employee /employee.html @390: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - employee /employee.html @390: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - employee /employee.html @390: no page error :: []
+[authzRoleMatrix@real] PASS - employee /employee.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - employee /employee.html @390: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - pmo /pmo.html @1440: stays on the page (no bounce to login / change-password) :: /pmo.html
 [authzRoleMatrix@real] PASS - pmo /pmo.html @1440: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - pmo /pmo.html @1440: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - pmo /pmo.html @1440: no page error :: []
+[authzRoleMatrix@real] PASS - pmo /pmo.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - pmo /pmo.html @1440: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - pmo /pmo.html @390: stays on the page (no bounce to login / change-password) :: /pmo.html
 [authzRoleMatrix@real] PASS - pmo /pmo.html @390: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - pmo /pmo.html @390: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - pmo /pmo.html @390: no page error :: []
+[authzRoleMatrix@real] PASS - pmo /pmo.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - pmo /pmo.html @390: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - pmo /execution.html @1440: stays on the page (no bounce to login / change-password) :: /execution.html
 [authzRoleMatrix@real] PASS - pmo /execution.html @1440: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - pmo /execution.html @1440: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - pmo /execution.html @1440: no page error :: []
+[authzRoleMatrix@real] PASS - pmo /execution.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - pmo /execution.html @1440: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - pmo /execution.html @390: stays on the page (no bounce to login / change-password) :: /execution.html
 [authzRoleMatrix@real] PASS - pmo /execution.html @390: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - pmo /execution.html @390: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - pmo /execution.html @390: no page error :: []
+[authzRoleMatrix@real] PASS - pmo /execution.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - pmo /execution.html @390: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @1440: stays on the page (no bounce to login / change-password) :: /dashboard.html
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @1440: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @1440: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @1440: no page error :: []
+[authzRoleMatrix@real] PASS - hrbp /dashboard.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - hrbp /dashboard.html @1440: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @390: stays on the page (no bounce to login / change-password) :: /dashboard.html
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @390: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @390: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /dashboard.html @390: no page error :: []
+[authzRoleMatrix@real] PASS - hrbp /dashboard.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - hrbp /dashboard.html @390: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - hrbp /admin.html @1440: stays on the page (no bounce to login / change-password) :: /admin.html
 [authzRoleMatrix@real] PASS - hrbp /admin.html @1440: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /admin.html @1440: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /admin.html @1440: no page error :: []
+[authzRoleMatrix@real] PASS - hrbp /admin.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - hrbp /admin.html @1440: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - hrbp /admin.html @390: stays on the page (no bounce to login / change-password) :: /admin.html
 [authzRoleMatrix@real] PASS - hrbp /admin.html @390: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /admin.html @390: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - hrbp /admin.html @390: no page error :: []
+[authzRoleMatrix@real] PASS - hrbp /admin.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - hrbp /admin.html @390: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - admin /admin.html @1440: stays on the page (no bounce to login / change-password) :: /admin.html
 [authzRoleMatrix@real] PASS - admin /admin.html @1440: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - admin /admin.html @1440: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - admin /admin.html @1440: no page error :: []
+[authzRoleMatrix@real] PASS - admin /admin.html @1440: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - admin /admin.html @1440: no POST /api/settings/time-travel was fired by the page load :: null
 [authzRoleMatrix@real] PASS - admin /admin.html @390: stays on the page (no bounce to login / change-password) :: /admin.html
 [authzRoleMatrix@real] PASS - admin /admin.html @390: no 401/403 raised by the page load :: []
 [authzRoleMatrix@real] PASS - admin /admin.html @390: no 5xx during the page load :: []
 [authzRoleMatrix@real] PASS - admin /admin.html @390: no page error :: []
-[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): employee opens /admin.html :: {"landed":"/admin.html","refusedResponses":6,"refused":["GET /api/assessments 403","GET /api/employees 403","GET /api/hrbps 403","GET /api/communications 403","GET /api/projects 403","GET /api/processes 403"]}
-[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): employee opens /due-diligence.html :: {"landed":"/due-diligence.html","refusedResponses":3,"refused":["GET /api/dd/areas 403","GET /api/dd/vdr-links 403","GET /api/dd/summary 403"]}
-[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): employee opens /org.html :: {"landed":"/org.html","refusedResponses":3,"refused":["GET /api/org/positions 403","GET /api/employees 403","GET /api/org/capabilities 403"]}
-[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): pmo opens /admin.html :: {"landed":"/admin.html","refusedResponses":1,"refused":["GET /api/hrbps 403"]}
-[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): pmo opens /due-diligence.html :: {"landed":"/due-diligence.html","refusedResponses":0,"refused":[]}
-[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): pmo opens /org.html :: {"landed":"/org.html","refusedResponses":0,"refused":[]}
-[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): employee helpdesk form (POST /api/communications/send) :: {"formFound":true,"status":403,"successMessageShown":true}
+[authzRoleMatrix@real] PASS - admin /admin.html @390: the Day pill (time machine) is not offered in a real deal (IN-C01) :: {"pillVisible":false}
+[authzRoleMatrix@real] PASS - admin /admin.html @390: no POST /api/settings/time-travel was fired by the page load :: null
+[authzRoleMatrix@real] PASS - employee opens /admin.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - employee opens /admin.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /admin.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - employee opens /pmo.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - employee opens /pmo.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /pmo.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - employee opens /due-diligence.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - employee opens /due-diligence.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /due-diligence.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - employee opens /org.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - employee opens /org.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /org.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - employee opens /dashboard.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - employee opens /dashboard.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /dashboard.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - employee opens /supporting.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - employee opens /supporting.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /supporting.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - employee opens /execution.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - employee opens /execution.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /execution.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - pmo opens /admin.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - pmo opens /admin.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - pmo opens /admin.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - pmo opens /pmo.html: the server-verified role is allowed to stay :: /pmo.html
+[authzRoleMatrix@real] PASS - pmo opens /pmo.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - pmo opens /pmo.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - pmo opens /execution.html: the server-verified role is allowed to stay :: /execution.html
+[authzRoleMatrix@real] PASS - pmo opens /execution.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - pmo opens /execution.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - pmo opens /due-diligence.html: the server-verified role is allowed to stay :: /due-diligence.html
+[authzRoleMatrix@real] PASS - pmo opens /due-diligence.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - pmo opens /due-diligence.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - pmo opens /org.html: the server-verified role is allowed to stay :: /org.html
+[authzRoleMatrix@real] PASS - pmo opens /org.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - pmo opens /org.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - hrbp opens /employee.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - hrbp opens /employee.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - hrbp opens /employee.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - hrbp opens /pmo.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - hrbp opens /pmo.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - hrbp opens /pmo.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - hrbp opens /supporting.html: the server-verified role is sent home (/) :: /
+[authzRoleMatrix@real] PASS - hrbp opens /supporting.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - hrbp opens /supporting.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - hrbp opens /dashboard.html: the server-verified role is allowed to stay :: /dashboard.html
+[authzRoleMatrix@real] PASS - hrbp opens /dashboard.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - hrbp opens /dashboard.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - hrbp opens /admin.html: the server-verified role is allowed to stay :: /admin.html
+[authzRoleMatrix@real] PASS - hrbp opens /admin.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - hrbp opens /admin.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - hrbp opens /due-diligence.html: the server-verified role is allowed to stay :: /due-diligence.html
+[authzRoleMatrix@real] PASS - hrbp opens /due-diligence.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - hrbp opens /due-diligence.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - hrbp opens /org.html: the server-verified role is allowed to stay :: /org.html
+[authzRoleMatrix@real] PASS - hrbp opens /org.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - hrbp opens /org.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - employee opens /signage.html: the server-verified role is allowed to stay :: /signage.html
+[authzRoleMatrix@real] PASS - employee opens /signage.html: 0 refused (401/403) responses :: []
+[authzRoleMatrix@real] PASS - employee opens /signage.html: no 5xx and no page error :: {"errored":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - IN-C03: hrbp admin console — the configuration / content rail tabs are hidden (never flashed) :: {"total":8,"visible":0}
+[authzRoleMatrix@real] PASS - IN-C03: admin admin console — the configuration / content rail tabs are revealed :: {"total":8,"visible":8}
+[authzRoleMatrix@real] PASS - WR-C07: the PMO desk composer carries the honest sender-side note exactly once in a real deal :: {"notes":["Employees can't read in-app messages yet."],"dealBound":true}
+[authzRoleMatrix@real] PASS - WR-C07: the admin dispatcher composer carries the honest sender-side note exactly once in a real deal :: {"notes":["Employees can't read in-app messages yet."],"dealBound":true}
+[authzRoleMatrix@real] PASS - OBSERVATION (not an assertion): IL dashboard.html in a real deal shows the deal home and no legacy Communications Desk, so the WR-C07 note call site in dashboard.js is not reached (F-R1) :: {"notes":0,"dealHomeShown":true,"legacyDeskVisible":false}
+[authzRoleMatrix@real] PASS - WR-C03: hrbp /assessments.html stays on the page :: /assessments.html
+[authzRoleMatrix@real] PASS - WR-C03: hrbp /assessments.html fires no /api/assessment-instances request :: []
+[authzRoleMatrix@real] PASS - WR-C03: hrbp /assessments.html raises no 401/403 and no page error :: {"refused":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - WR-C03: pmo /assessments.html stays on the page :: /assessments.html
+[authzRoleMatrix@real] PASS - WR-C03: pmo /assessments.html fires no /api/assessment-instances request :: []
+[authzRoleMatrix@real] PASS - WR-C03: pmo /assessments.html raises no 401/403 and no page error :: {"refused":[],"pageErrors":[]}
+[authzRoleMatrix@real] PASS - WR-C02: the employee page does not offer the helpdesk card (hidden by the access map) :: {"present":true,"visible":false}
+[authzRoleMatrix@real] PASS - WR-C02: the employee page load issues no /api/communications request at all :: []
+[authzRoleMatrix@real] PASS - WR-C02: a forced ticket is refused by the server (403) and the success message is NOT shown :: {"formFound":true,"status":403,"successMessageShown":false}
 [cleanRoom404@real] PASS - hrbp files an hr-area DD finding (201) :: 201
 [cleanRoom404@real] PASS - hrbp converts the finding to a task and a RAID entry (200) :: 200
 [cleanRoom404@real] PASS - conversion is idempotent: the same task and RAID ids come back :: 200
@@ -143,12 +253,32 @@
 [cleanRoom404@real] PASS - execution board (uncleared member): converted RAID entry is not shown :: {"hasRaid":false}
 [cleanRoom404@real] PASS - execution board (uncleared member): no 401/403 raised by the page load :: []
 [cleanRoom404@real] PASS - execution board (uncleared member): no page error :: []
+[cleanRoom404@real] PASS - WR-02 fixture: hrbp files a second hr-area DD finding (201), not yet converted :: 201
+[cleanRoom404@real] PASS - WR-02: uncleared pmo creating 6 task / RAID records with a reserved `source` is refused 400 on every one :: [400,400,400,400,400,400]
+[cleanRoom404@real] PASS - WR-02: hrbp creating 6 task / RAID records with a reserved `source` is refused 400 on every one :: [400,400,400,400,400,400]
+[cleanRoom404@real] PASS - WR-02: admin creating 6 task / RAID records with a reserved `source` is refused 400 on every one :: [400,400,400,400,400,400]
+[cleanRoom404@real] PASS - WR-02 control: a free-text source ("manual") is still accepted (201), so the 400s are the reserved prefixes only :: 201
+[cleanRoom404@real] PASS - IN-01 fixture: hrbp links the restricted converted task to an initiative (201/200) :: 201
+[cleanRoom404@real] PASS - IN-01: the Integration Leader and the cleared member read the link (task id present) :: {"hrbp":200,"cleared":200}
+[cleanRoom404@real] PASS - IN-01: the uncleared pmo reads the initiative list without the restricted task id :: {"status":200}
+[cleanRoom404@real] PASS - WR-02: no planted record exists for the Integration Leader (task and RAID lists) :: {"tasks":200,"raid":200}
+[cleanRoom404@real] PASS - WR-02: converting the second finding mints its GENUINE task and RAID entry (derived from the finding, never a planted record) :: {"status":200,"taskTitle":"P11-CLEANROOM-QX7 second restricted HR finding (conversion-a"}
+[cleanRoom404@real] PASS - WR-02: the cleared member sees the genuine converted task and no planted record :: 200
 [denialAuditBounded@real] PASS - acceptance 6: 20 repeated refused reads all answer 403 with one identical body :: {"refusedCount":20,"distinctBodies":1}
-[denialAuditBounded@real] PASS - acceptance 6: 20 denials of one actor+route+reason wrote exactly ONE audit row in the window :: [{"id":158,"count":1,"reason":"role-read"}]
+[denialAuditBounded@real] PASS - acceptance 6: 20 denials of one actor+route+reason wrote exactly ONE audit row in the window :: [{"id":281,"count":1,"reason":"role-read"}]
 [denialAuditBounded@real] PASS - the row names the actor, the route template and the method (no body, no password) :: {"actor":"p11.probe","method":"GET"}
+[denialAuditBounded@real] PASS - WR-01: 25 uncleared-pmo probes of GET /api/dd/findings/:id (random ids) are all refused (one status, one body) :: {"statuses":[403],"distinctBodies":1}
+[denialAuditBounded@real] PASS - WR-01: 25 probes of GET /api/dd/findings/:id (random ids) wrote exactly ONE dd-access-denied row inside the window (was 25 before the fix) :: {"rowsBefore":0,"rowsAfter":1}
+[denialAuditBounded@real] PASS - WR-01: 25 uncleared-pmo probes of GET /api/org/decisions?positionId=<random> are all refused (one status, one body) :: {"statuses":[403],"distinctBodies":1}
+[denialAuditBounded@real] PASS - WR-01: 25 probes of GET /api/org/decisions?positionId=<random> wrote exactly ONE org-decisions-access-denied row inside the window (was 25 before the fix) :: {"rowsBefore":0,"rowsAfter":1}
+[denialAuditBounded@real] PASS - WR-01: 25 uncleared-pmo probes of GET /api/org/flight-risk are all refused (one status, one body) :: {"statuses":[403],"distinctBodies":1}
+[denialAuditBounded@real] PASS - WR-01: 25 probes of GET /api/org/flight-risk wrote exactly ONE org-flightrisk-access-denied row inside the window (was 25 before the fix) :: {"rowsBefore":0,"rowsAfter":1}
 [denialAuditBounded@real] PASS - a later denial (different route) is still refused 403 :: 403
-[denialAuditBounded@real] PASS - acceptance 6: after the window the folded denials are written as at most one more row (<= 1 row per 60 s) :: [{"id":158,"count":1,"folded":false},{"id":163,"count":19,"folded":true}]
+[denialAuditBounded@real] PASS - acceptance 6: after the window the folded denials are written as at most one more row (<= 1 row per 60 s) :: [{"id":281,"count":1,"folded":false},{"id":289,"count":19,"folded":true}]
 [denialAuditBounded@real] PASS - acceptance 6: the rows account for every probe (total count == 20) :: {"total":20}
-[denialAuditBounded@real] PASS - the two rows are at least one window (60 s, with clock tolerance) apart :: {"gapMs":62047}
+[denialAuditBounded@real] PASS - the two rows are at least one window (60 s, with clock tolerance) apart :: {"gapMs":62588}
+[denialAuditBounded@real] PASS - WR-01: after the window GET /api/dd/findings/:id (random ids) holds one first row + one folded row and the counts add up to 25 :: {"rows":2,"total":25,"folded":[{"count":24,"reason":"dd-clearance"}]}
+[denialAuditBounded@real] PASS - WR-01: after the window GET /api/org/decisions?positionId=<random> holds one first row + one folded row and the counts add up to 25 :: {"rows":2,"total":25,"folded":[{"count":24,"reason":"org-clearance"}]}
+[denialAuditBounded@real] PASS - WR-01: after the window GET /api/org/flight-risk holds one first row + one folded row and the counts add up to 25 :: {"rows":2,"total":25,"folded":[{"count":24,"reason":"org-clearance"}]}
 [data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
 [data-integrity] PASS - `git status --porcelain -- data` unchanged :: clean
