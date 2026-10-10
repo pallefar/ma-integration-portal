@@ -1695,8 +1695,45 @@ app.post('/api/deals/:id/setup', (req, res) => {
   const dealId = req.params.id;
   const existing = controlStore.getDeal(dealId);
   if (!existing) return res.status(404).json({ error: 'Deal not found.' });
-  const { step, data, complete } = req.body;
+  // [security] T-11-13 (D-11-02, Phase 11): the '/api/deals' write policy only
+  // proves the caller is admin or hrbp — it says nothing about WHICH deal.
+  // An hrbp who is not a member of this deal must not edit its configuration,
+  // and must not learn it exists: the refusal is byte-identical to the
+  // missing-deal 404 above (the same anti-enumeration rule POST
+  // /api/deals/select applies). Admin is always a member (isDealMember).
+  if (!controlStore.isDealMember(dealId, req.portalUser)) {
+    return res.status(404).json({ error: 'Deal not found.' });
+  }
+  const { step, data, complete, dealSettings } = req.body;
   const beforeSteps = (existing.setup && existing.setup.steps) || {};
+
+  // D-11-02: deal-level values the Integration Lead edits on HER deal now that
+  // the instance settings singleton is admin-only (currency, Day-1 date,
+  // synergy target / staleness threshold / phasing horizon). Stored on the
+  // deal's control.db registry record — this route is control-plane, no deal
+  // database is bound. Applied FIRST, independently of any step/complete
+  // below, so a dealSettings-only post never stamps a wizard step.
+  let current = existing;
+  if (dealSettings !== undefined) {
+    const project = (d) => ({
+      currency: d.currency === undefined ? null : d.currency,
+      day1Date: d.day1Date === undefined ? null : d.day1Date,
+      synergyTargetM: d.dealSettings && d.dealSettings.synergyTargetM !== undefined ? d.dealSettings.synergyTargetM : null,
+      synergyStaleDays: d.dealSettings && d.dealSettings.synergyStaleDays !== undefined ? d.dealSettings.synergyStaleDays : null,
+      synergyHorizonYears: d.dealSettings && d.dealSettings.synergyHorizonYears !== undefined ? d.dealSettings.synergyHorizonYears : null,
+    });
+    const beforeSettings = project(existing);
+    current = controlStore.updateDealSettings(dealId, dealSettings);
+    // D-08: a configuration change on a deal is a control-plane security
+    // event, recorded with before/after (T-11-15).
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'deal-settings-update', dealId, subject: 'dealSettings',
+      before: beforeSettings, after: project(current), request: requestMeta(req),
+    });
+    // Neither a step nor a completion request: settings only, nothing else
+    // about the wizard changes.
+    if (step === undefined && complete !== true) return res.json({ success: true, deal: current });
+  }
 
   // G-04-10: a completion-only post (no `step` — validators/wizard.js's
   // refine is what guarantees `complete === true` and no `data` reach this
@@ -4105,8 +4142,16 @@ function generatePhasingRows(runRateM, startMonth, curveShape, horizonYears) {
 // bound shipped (or written through any future non-validated path) must not
 // let generatePhasingRows() allocate an unbounded number of monthly rows on
 // the single-threaded request thread.
-function synergyHorizonYears(db) {
-  const configured = db.settings && db.settings.synergyHorizonYears;
+// D-11-02 (Phase 11): the optional second argument is the caller's deal-level
+// values (dealSettingsFor(req) — null on the demo store). Precedence: a usable
+// deal value > the db.settings singleton > the default, with the SAME clamp
+// applied to whichever source wins. Unit tests that call this with one
+// argument keep exactly the pre-existing behaviour.
+function synergyHorizonYears(db, dealSettings) {
+  const fromDeal = dealSettings && dealSettings.synergyHorizonYears;
+  const configured = (typeof fromDeal === 'number' && isFinite(fromDeal))
+    ? fromDeal
+    : (db.settings && db.settings.synergyHorizonYears);
   const n = typeof configured === 'number' && isFinite(configured) ? configured : 3;
   return Math.min(Math.max(n, 1), 15);
 }
@@ -4242,10 +4287,30 @@ function synergyCostFields(item) {
 // belt-and-braces layer (mirrors synergyHorizonYears()'s CR-01 fix), since a
 // value already stored before the schema bound shipped must not be able to
 // suppress the staleness signal permanently.
-function synergyStaleDays(db) {
-  const configured = db.settings && db.settings.synergyStaleDays;
+// D-11-02 (Phase 11): the optional second argument is the caller's deal-level
+// values (dealSettingsFor(req) — null on the demo store). Precedence: a usable
+// (finite, positive) deal value > db.settings > the 30-day default, then the
+// 365-day ceiling — an unusable deal value falls through rather than
+// poisoning the verdict (T-05-27 / T-11-14).
+function synergyStaleDays(db, dealSettings) {
+  const fromDeal = dealSettings && dealSettings.synergyStaleDays;
+  const configured = (typeof fromDeal === 'number' && isFinite(fromDeal) && fromDeal > 0)
+    ? fromDeal
+    : (db.settings && db.settings.synergyStaleDays);
   const n = typeof configured === 'number' && isFinite(configured) && configured > 0 ? configured : 30;
   return Math.min(n, 365);
+}
+
+// D-11-02 (Phase 11): the deal-level values (validators/wizard.js
+// DealSettingsSchema) of the deal THIS request is bound to, or null. The demo
+// store has no deal record — it keeps reading db.settings, so the showcase is
+// unchanged — and a request with no deal context has none either. Read from
+// the control.db registry record (the same source every other deal-record
+// reader in this file uses), never from the request.
+function dealSettingsFor(req) {
+  if (!req || req.isDemo === true || !req.dealContext || !req.dealContext.dealId) return null;
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  return (deal && deal.dealSettings) || null;
 }
 
 // SYN-05/D-16/D-17: an initiative's own confirmation clock, judged against a
@@ -4371,7 +4436,7 @@ app.get('/api/synergies', (req, res) => {
   const lane = synergyLane(db);
   // SYN-05: ctx built ONCE per request — every item in this response is
   // judged against the identical clock and threshold.
-  const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
+  const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
   res.json(lane.map((item) => {
     const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
     // SYN-02: newest-date-first, a STABLE sort (Array.prototype.sort() is
@@ -4452,7 +4517,10 @@ app.get('/api/synergies/rollup', (req, res) => {
   const lane = synergyLane(db);
   // SYN-05: the SAME single-clock ctx pattern as GET /api/synergies above —
   // one captured instant, reused for every item this rollup sums.
-  const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
+  // D-11-02: the deal-level values (staleness threshold, synergy target)
+  // come from the bound deal's own record; null on the demo store.
+  const dealSettings = dealSettingsFor(req);
+  const ctx = { staleDays: synergyStaleDays(db, dealSettings), nowMs: Date.now() };
   const enriched = lane.map((item) => enrichSynergy(item, ctx));
 
   const split = computeSynergyRollupSplit(enriched);
@@ -4475,6 +4543,12 @@ app.get('/api/synergies/rollup', (req, res) => {
     costIncurredM,
     netBenefitM,
     dealTargetM,
+    // D-11-02: the Integration Lead's own deal-level synergy target (set on
+    // POST /api/deals/:id/setup) — null when none was set, and always null on
+    // the demo store. `dealTargetM` above stays the sum of initiative targets.
+    dealSynergyTargetM: dealSettings && typeof dealSettings.synergyTargetM === 'number' ? dealSettings.synergyTargetM : null,
+    // The threshold (days) this response's stale verdicts were judged against.
+    staleThresholdDays: ctx.staleDays,
     unconfirmedRealizedM,
     staleCount,
     mine: { staleCount: mineStaleCount },
@@ -4728,7 +4802,7 @@ app.post('/api/synergies/:id/generate-phasing', (req, res) => {
   item.runRateM = roundSynergyMoney(b.runRateM);
   item.startMonth = b.startMonth;
   item.curveShape = b.curveShape;
-  item.phasing = generatePhasingRows(item.runRateM, item.startMonth, item.curveShape, synergyHorizonYears(db));
+  item.phasing = generatePhasingRows(item.runRateM, item.startMonth, item.curveShape, synergyHorizonYears(db, dealSettingsFor(req)));
 
   // D-14: version 1 ("the deal case") is stamped the FIRST time this
   // initiative gets a phased target — never regenerated, renumbered or
@@ -6876,7 +6950,7 @@ app.get('/api/reports/export', (req, res) => {
       // synergies — D-08/T-07-28 (07-06): reportSynergyRows() is now the
       // SINGLE enriched-synergies read GET /api/reports/pack calls too, so
       // the JSON export can never diverge from the pack's shape either.
-      const ctx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
+      const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
       rows = reportSynergyRows(db, ctx);
       columns = [
         { key: 'id', header: 'ID' },
@@ -7021,7 +7095,7 @@ app.get('/api/reports/pack', async (req, res, next) => {
     const raid = reportRaidRows(db, deal, req.portalUser);
     const workstreams = computeWorkstreamRollup(db, deal, req.portalUser);
     const tasks = reportTaskRows(db, deal, req.portalUser);
-    const synergyCtx = { staleDays: synergyStaleDays(db), nowMs: Date.now() };
+    const synergyCtx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
     // RPT-03 (D-04 Section 4, amended 2026-08-09): each synergy row also
     // carries `stageAtBaseline`, resolved server-side from the SAME
     // baselines[] history POST /api/synergies/:id/rebaseline writes — never
@@ -7065,7 +7139,7 @@ app.get('/api/reports/pack', async (req, res, next) => {
       tasks,
       raid,
       synergies,
-      staleThresholdDays: synergyStaleDays(db),
+      staleThresholdDays: synergyStaleDays(db, dealSettingsFor(req)),
     };
 
     const pdfBuffer = await packLib.buildPack(model);

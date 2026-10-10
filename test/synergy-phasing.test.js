@@ -165,30 +165,35 @@ test('synergy-phasing (unit h): CR-01 — synergyHorizonYears(db) clamps an alre
   assert.strictEqual(app.synergyHorizonYears({ settings: { synergyHorizonYears: 7 } }), 7, 'an in-range value must pass through unchanged');
 });
 
-test('synergy-phasing (http l): CR-01 — POST /api/settings with an out-of-range synergyHorizonYears (e.g. 2000) is refused with 400 by the schema, before any value can reach the settings singleton', async () => {
+test('synergy-phasing (http l): CR-01 — an out-of-range synergyHorizonYears (e.g. 2000) is refused with 400 by the schema on BOTH write paths (deal setup route and admin POST /api/settings), before any value can reach storage', async () => {
   const deal = freshDeal('deal_synhorz');
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
-  // D-11-02 (Phase 11): POST /api/settings is admin-only — the schema bound
-  // under test is unchanged, only the identity that reaches it differs.
+  // D-11-02 (Phase 11): the Integration Lead (karen, hrbp member) edits the
+  // horizon on the deal's setup route; the instance settings route is
+  // admin-only. The 1-15 year bound under test is the same on both.
+  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
-
-    const res = await fetch(`${base}/api/settings`, {
-      method: 'POST', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ synergyHorizonYears: 2000 }),
+    const post = (urlPath, token, body) => fetch(`${base}${urlPath}`, {
+      method: 'POST', headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
+
+    const setupBad = await post(`/api/deals/${deal.id}/setup`, karenToken, { dealSettings: { synergyHorizonYears: 2000 } });
+    assert.strictEqual(setupBad.status, 400, 'an out-of-range synergyHorizonYears must be refused by the deal setup schema');
+    const res = await post('/api/settings', adminToken, { synergyHorizonYears: 2000 });
     assert.strictEqual(res.status, 400, 'an out-of-range synergyHorizonYears must be refused by the schema, not silently accepted');
 
-    const validRes = await fetch(`${base}/api/settings`, {
-      method: 'POST', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ synergyHorizonYears: 5 }),
-    });
+    const setupOk = await post(`/api/deals/${deal.id}/setup`, karenToken, { dealSettings: { synergyHorizonYears: 5 } });
+    assert.strictEqual(setupOk.status, 200, 'an in-range synergyHorizonYears must still be accepted on the setup route');
+    const validRes = await post('/api/settings', adminToken, { synergyHorizonYears: 5 });
     assert.strictEqual(validRes.status, 200, 'an in-range synergyHorizonYears must still be accepted');
   } finally {
+    sessionsDb.deleteSession(runtimeConn, karenToken);
     sessionsDb.deleteSession(runtimeConn, adminToken);
     server.close();
   }
