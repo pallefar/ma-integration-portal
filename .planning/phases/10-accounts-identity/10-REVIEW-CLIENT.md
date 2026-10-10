@@ -27,15 +27,24 @@ findings:
   warning: 2
   info: 4
   total: 6
-status: issues_found
+resolution:
+  fixed: 4
+  resolved_by_rationale: 2
+  open: 0
+fixed_at: 2026-10-10
+status: clean
 ---
+
+> **Resolution (2026-10-10, gsd-code-fixer):** all 6 findings closed — 4 fixed with a
+> proving test, 2 resolved by rationale (WR-C02 deferred to REL-02 by design, IN-C04
+> pre-existing / out of Phase-10 scope → backlog). Per-finding `status:` lines below.
 
 # Phase 10: Code Review Report — part 2 (client, launchers, docs)
 
 **Reviewed:** 2026-10-10
 **Depth:** deep — full current files + `git diff 943fe2f HEAD` per path; every doc claim checked against code
 **Files Reviewed:** 17 (the Users tab lives in `public/js/admin-users.js` + `admin-users.css`, not in `admin.js`; both were read in full)
-**Status:** issues_found (0 critical / 2 warning / 4 info)
+**Status:** clean (was issues_found 0 critical / 2 warning / 4 info; all resolved 2026-10-10)
 
 This report complements `10-REVIEW.md` (CR-01 case-variant admin prefix, WR-01 Retry-After, WR-02 rehash) and does not repeat those. Finding IDs use the `C` prefix.
 
@@ -75,11 +84,33 @@ var shell = openModal(headline, ..., trigger, { sticky: true, onClose: function 
 ```
 and pass the Add/Reset button as `trigger` from `openAddUser` / `openResetPassword` so focus returns to the row. Keep Done as the single explicit close. Add a browser check to `scripts/uat/phase10-scenarios/users-tab.js`: Escape and scrim click leave the temp modal open.
 
+**status: fixed** — `1d92eb8`. `openModal()` gains `opts.sticky` (Escape + overlay click
+ignored) and `opts.fallbackFocus`; the temp-password modal is sticky and closes only via the
+explicit **"I have saved it"** button (id `au-temp-done` kept); initial focus on Copy; focus
+returns to the Add/Reset trigger or, when the list re-rendered under it, to the user's row
+(else Add user). Tests: `test/admin-users-ui.test.js` WR-C01 drives the shipped file in a
+node:vm fake DOM (Escape and scrim click leave it open with the value intact; acknowledgement
+closes, blanks the value, restores focus) + opt-in assertion; the UAT users-tab scenario gains
+the browser check (not executed here — needs the Playwright walk). `admin-users.js?v=` bumped.
+
 ### WR-C02: Locked decision D-10-10 (`compression ≥ 1.8.2`) is not delivered; the tree still ships 1.8.1
 
 **File:** `node_modules/compression/package.json` (`version: 1.8.1`), `DEPLOYMENT.md` (Known limitations: "ships `compression@1.8.1`; the fixed `1.8.2` is pending the dependency-legitimacy age gate"), `10-CONTEXT.md` D-10-10 ("compression ≥1.8.2 (re-commit node_modules)" — LOCKED)
 **Issue:** The PRD locks the bump as part of this phase; the code does not contain it and the phase is being closed with the advisory (GHSA-vc2v-76pw-4v95, memory growth on premature close) still open on the first host that will be shared and multi-user. DEPLOYMENT.md is honest about it, so this is a scope/decision gap rather than a doc contradiction — but ROADMAP/PRD still read as if the phase delivers it. SUSPECTED: nothing in the phase SUMMARY files explicitly re-scopes D-10-10 to Phase 21/REL-02.
 **Fix:** Either commit `compression@1.8.2` (re-commit `node_modules/compression` only; the fix is a few lines in `index.js` and verifiable by diff) in this phase, or record the deferral where the decision lives (PRD D-10-10 amendment + ROADMAP Phase 10 success criteria + REQUIREMENTS) so the verifier and the milestone audit do not count it as delivered. Do not leave the only record in a "Known limitations" paragraph.
+
+**status: resolved-by-rationale (DEFERRED-REL-02)** — deliberately NOT bumped in this phase.
+`compression@1.8.2` has not yet cleared the project's dependency-legitimacy supply-chain age
+gate; the gate clears **2026-10-11T11:17Z**. Re-committing `node_modules/compression` before
+then would bypass the very control that protects a zero-install tree with committed
+`node_modules`. The bump is carried by the **REL-02** vehicle — `.planning/REQUIREMENTS.md:124`
+already records it ("the `compression` ≥ 1.8.2 bump is gated by the supply-chain age check
+until 2026-10-11T11:17Z and lands no later than Phase 21 — Phase 10 plan 10-08 records
+DEFERRED-REL-02 if the gate has not cleared"; traceability REL-02 → Phase 21, Pending). So the
+deferral is recorded where the requirement lives, not only in DEPLOYMENT.md's
+Known-limitations paragraph (which stays truthful until the bump; the 1.8.1 advisory
+GHSA-vc2v-76pw-4v95 is a memory-growth DoS, not a confidentiality issue). D-10-10 must not be
+counted as delivered by Phase 10 at verification or milestone audit.
 
 ## Info
 
@@ -89,11 +120,21 @@ and pass the Add/Reset button as `trigger` from `openAddUser` / `openResetPasswo
 **Issue:** Both launchers correctly never *set* `DEMO_OPEN`, but neither clears one inherited from the shell/profile (`export DEMO_OPEN=1` in a `.zshrc`, or a `setx` on Windows after a demo session). `db/dbFiles.js:75` then throws at boot — fail-closed, good — but the 3-second browser-open timer in both launchers still fires, so the operator sees a dead tab and (on macOS) an error only in the Terminal pane behind it.
 **Fix:** `unset DEMO_OPEN` / `set "DEMO_OPEN="` immediately after the `MA_MODE=real` line, with the existing `[security]` comment extended to say the launcher *clears* it; optionally delay the browser-open until `/healthz` answers.
 
+**status: fixed** — `162266e`. Both launchers clear `DEMO_OPEN` right after `MA_MODE=real`
+with a `[security]` comment; DEPLOYMENT.md says so. Tests: `test/launcher-mode.test.js` —
+ordering for both launchers, and the `.command` snippet executed under `/bin/sh` with an
+inherited `DEMO_OPEN=1` ends `UNSET`. The optional `/healthz`-gated browser open was not
+added: with `DEMO_OPEN` cleared the finding's trigger is gone, and an untestable-here
+PowerShell poll in the `.bat` is a worse trade than the existing 3-second timer.
+
 ### IN-C02: DEPLOYMENT.md "Self-service" overstates the dev/demo gating
 
 **File:** `DEPLOYMENT.md` ("Both are disabled with an explanatory note on the dev/demo committed database"), `public/js/account-menu.js:216,249-254,310-313`
 **Issue:** Only **Change password** is disabled; **My sessions** stays active in dev/demo and lists the caller's sessions (IP, user agent, times) read-only, with the End-session buttons omitted. The code behaviour is the intended one (header comment lines 10-14); the doc is wrong.
 **Fix:** "Change password is disabled with an explanatory note; My sessions still lists sessions but offers no End session."
+
+**status: fixed** — `a86a7f9`. DEPLOYMENT.md Self-service corrected; `test/launcher-mode.test.js`
+IN-C02 pins the sentence to the `account-menu.js` code it describes.
 
 ### IN-C03: Users list can go stale with no in-page refresh path
 
@@ -101,11 +142,23 @@ and pass the Add/Reset button as `trigger` from `openAddUser` / `openResetPasswo
 **Issue:** `loadUsers()` silently drops a call while a previous load is in flight, and the tab button only loads once per page life. After a create/edit/reset that lands while the initial load is still pending (slow host, 503 retry in the Phase 8 wrapper), the new state is never fetched and there is no refresh control — only a full page reload. Narrow race, but the operator has no way to notice it.
 **Fix:** Queue instead of drop (`state.pending = true` → re-run after the in-flight load resolves), and let a second click on the Users tab call `loadUsers()` again.
 
+**status: fixed** — `070bd55`. A load requested while one is in flight sets `state.pending`;
+one trailing reload runs after the in-flight load settles; every later Users-tab click
+re-fetches. Test: `test/admin-users-ui.test.js` IN-C03 (node:vm, deferred fetch: 3 calls →
+1 in flight → exactly 1 trailing reload). `admin-users.js?v=` bumped.
+
 ### IN-C04: Real-deal lane still renders demo chrome (evidence observation)
 
 **File:** `.planning/phases/10-accounts-identity/evidence/users-tab-390.jpg` (header shows "DEMO ACTIVE", "DEMO · Demo showcase" switcher, "Role: IMO Admin Console" selector) — SUSPECTED pre-existing, outside Phase 10 files
 **Issue:** On a `MA_MODE=real` host the shared header still shows the demo-mode badge, the demo project switcher and the client-side role selector. None of it grants access (server-verified role wins), but on an MNPI host it is misleading and the role dropdown invites users to "switch" to something the server will refuse. Not introduced by this phase; recording it so the mode-aware chrome work (Phase 20 config module / Phase 19 i18n) can pick it up.
 **Fix:** Hide `.demo-*` chrome and the role selector when `/api/auth/mode` says `mode:'real'`; track as a backlog item rather than a Phase 10 defect.
+
+**status: resolved-by-rationale (backlog)** — not changed in Phase 10, per the finding's own
+recommendation: the chrome is pre-existing, lives outside Phase-10 files (shared header,
+demo switcher, role selector) and grants no access (server-verified role wins — re-proven by
+CR-01's tests). Hiding it is a cross-page UI change that belongs with the mode-aware chrome
+work (Phase 20 config module / Phase 19 i18n), where it gets its own visual walk. Orchestrator
+to file it as a backlog item (this fixer does not edit ROADMAP/STATE).
 
 ---
 
