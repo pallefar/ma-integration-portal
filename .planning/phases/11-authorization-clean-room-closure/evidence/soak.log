@@ -1,0 +1,31 @@
+NOTE (plan 11-08, 2026-10-10). `npm run soak` at its DEFAULT load (3 processes, 120 s, 100 ms write interval)
+was attempted first on this host and crashed with `SqliteError: database or disk is full`: at that rate the
+scratch audit.db grew to 5.5 GB (6.78 M rows) in about 90 s because every write audits EVERY row of each
+collection it touches (O(N) audit rows per write, O(N^2) overall - measured identical on the pre-Phase-11 tree
+13a6da0, so it is a pre-existing amplification, not a Phase 11 regression; see 11-08-SUMMARY.md finding F-5).
+The host had ~5 GB free and other jobs running. The verdict below is the SAME script at a lighter write rate:
+SOAK_PROCESSES=3 SOAK_DURATION_MS=120000 SOAK_WRITE_INTERVAL_MS=250 npm run soak   (D-14: same script, env knobs)
+A shorter 60 s / 250 ms smoke run before it also passed (acknowledged=2044, lost=0, audit 1:1, refused=1).
+------------------------------------------------------------------------------------------------------------
+
+> te-ma-integration-portal@1.0.0 soak
+> node scripts/soak.js
+
+soak: resolved config — processes=3 durationMs=120000 writeIntervalMs=250
+soak: created deal deal_mv2l3qem766bffea in scratch dir /var/folders/ck/g7df436962d1m5rbxhlj2r2m0000gn/T/gsd-soak-KXkb8v
+soak: all 3 server processes ready
+soak: created shared conflict-probe RAID entry raid_mv2l3r9ncfdfe1b3 at baseline version 1
+soak: driving load for ~120s across 3 processes...
+soak: load phase complete — acknowledged=2901 refused=17 unexpected=0 | conflict-lane: acknowledged=278 conflict409=583 refused503=0
+soak: D-15 verdict —
+  [PASS] no unexpected outcomes (not a 2xx, not a clean 503): none
+  [PASS] every acknowledged write present in the final database and exact: acknowledged=2901 missing=0 mismatched=0
+  [PASS] no cleanly-refused write left anything committed (CR-01 fix: committed-but-unaudited is now a genuine violation, not an accepted trade-off): refused=17 committedButUnaudited(genuine violation post-CR-01)=0 committedAndAudited(genuine violation)=0
+  [PASS] PRAGMA integrity_check ok on every touched file: deal=ok, control=ok, audit=ok
+  [PASS] audit trail matches acknowledged writes one-to-one (both directions): acknowledged=2901 auditRows=2901 missingFromAudit=0 duplicateInAudit=0 extraInAudit=0
+  [PASS] cleanly-refused count reported (bounded 503s are a pass, not a failure): refused=17/2918 (0.6%)
+  [PASS] conflict-probe RAID record version reconciles exactly with the number of acknowledged conflict-lane writes (no lost/duplicated commit): initialVersion=1 conflictAcknowledged=278 expectedFinalVersion=279 actualFinalVersion=279
+  [PASS] conflict-probe RAID record's final content matches the acknowledged write that reported the highest resulting version: expectedNotes=soak-conflict-w0-277 actualNotes=soak-conflict-w0-277
+  [PASS] 409 (conflict) outcome reconciles with the audit trail by membership — nothing acknowledged is missing, nothing conflicted ever committed (T-09-34): conflictAcknowledged=278 conflict409=583 conflictRefused503=0 auditUpdateRows=2926 missingFromAuditTrail=0 leakedConflictedIntoAudit=0
+  [PASS] conflict (409) outcome count reported alongside the bounded-503 count: conflict409=583 conflictRefused503=0 conflictAcknowledged=278
+soak: PASS — acknowledged-write invariant held under sustained real load.
