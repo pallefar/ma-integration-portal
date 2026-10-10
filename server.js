@@ -338,11 +338,38 @@ app.get('/', (req, res) => {
 // through sendHtml() so the stamps are the content hash of what is served.
 // Mounted AFTER the credential-lockdown gate (T-12-22) and immediately BEFORE
 // express.static, which keeps serving everything else.
+//
+// [security] WR-B01 (12-REVIEW-B): TERMINAL for every request whose path is, or
+// normalises to, an `.html` path. express.static (`send`) normalises dot
+// segments and duplicate slashes itself, so a raw `/x/../index.html` or
+// `/vendor/../execution.html` that this middleware merely passed on was served
+// from disk with the stale hand stamps. Now: a NON-CANONICAL spelling (dot
+// segments, duplicate slashes, percent-encoded `.`/`/`/`\`, NUL/backslash, an
+// undecodable escape) is answered 404 here and never reaches express.static; a
+// canonical one is either stamped by sendHtml() or — only when it names no
+// file (or a vendored /vendor/ file, which is never rewritten) — passed on with
+// a path express.static resolves identically.
+function htmlRequestVerdict(rawPath) {
+  const raw = String(rawPath || '');
+  let decoded = null;
+  try { decoded = decodeURIComponent(raw); } catch (e) { decoded = null; }
+  const htmlish = (s) => typeof s === 'string' && /\.html$/i.test(s);
+  const normalised = decoded === null ? null : path.posix.normalize(decoded);
+  if (!htmlish(raw) && !htmlish(decoded) && !htmlish(normalised)) return { html: false };
+  if (decoded === null || decoded.indexOf('\0') !== -1 || decoded.indexOf('\\') !== -1) return { html: true, canonical: false };
+  if (/%(?:2e|2f|5c)/i.test(raw)) return { html: true, canonical: false };
+  if (normalised !== decoded || decoded.split('/').some((s) => s === '.' || s === '..')) return { html: true, canonical: false };
+  return { html: true, canonical: true, path: decoded };
+}
+
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-  if (!/\.html$/i.test(req.path) || /^\/vendor\//i.test(req.path)) return next();
-  const abs = publicFileForRequest(req.path);
-  if (!abs) return next();
+  const v = htmlRequestVerdict(req.path);
+  if (!v.html) return next();
+  if (!v.canonical) return res.status(404).type('text/plain').send('Not found');
+  if (/^\/vendor\//i.test(v.path)) return next(); // vendored code: served as-is, never rewritten
+  const abs = publicFileForRequest(v.path);
+  if (!abs) return res.status(404).type('text/plain').send('Not found');
   let st;
   try { st = fs.statSync(abs); } catch (e) { return next(); }
   if (!st.isFile()) return next();

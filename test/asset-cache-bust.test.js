@@ -134,6 +134,49 @@ test('"/" and an extension-less SPA path (catch-all index.html) carry content-ha
   assert.ok(stampedRefs(root).length > 0 || allAttrRefs(root).length === 0, '"/" must be stamped when it references js/css');
 });
 
+// WR-B01 (12-REVIEW-B): a RAW request path (no client-side normalisation, as a
+// script or a pass-through proxy would send it) must never reach express.static
+// for an HTML page — it was served with the stale hand stamps before the fix.
+function rawGet(rawPath) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(base);
+    const req = http.request({ host: u.hostname, port: u.port, method: 'GET', path: rawPath }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+test('WR-B01: non-canonical HTML spellings are refused (404), never served by express.static with hand stamps', async () => {
+  const handStamp = /transitions\.js\?v=\d{10}\b/;
+  assert.ok(handStamp.test(read('index.html')), 'precondition: the source carries a 10-digit hand stamp (the negative control)');
+  const variants = [
+    '/x/../index.html',
+    '/vendor/../execution.html',
+    '//index.html',
+    '/./index.html',
+    '/js/../index.html',
+    '/x/..%2findex.html',
+    '/%2e%2e/index.html',
+    '/x/%2e%2e/index.html',
+    '/index%2ehtml',
+  ];
+  for (const p of variants) {
+    const r = await rawGet(p);
+    assert.strictEqual(r.status, 404, `${p} -> ${r.status}`);
+    assert.ok(!handStamp.test(r.body), `${p}: no hand-stamped page body`);
+  }
+  // The canonical spelling is still served, stamped with the content hash.
+  const ok = await rawGet('/index.html');
+  assert.strictEqual(ok.status, 200);
+  assert.strictEqual(ok.headers['cache-control'], 'no-cache');
+  assert.ok(!handStamp.test(ok.body), 'canonical page carries content-hash stamps only');
+  assert.match(ok.body, /transitions\.js\?v=[0-9a-f]{16}/);
+});
+
 test('JS-internal references are rewritten (transitive) and assets stay on the 30-day cache header', async () => {
   const tr = await fetch(base + '/js/transitions.js');
   assert.strictEqual(tr.status, 200);
