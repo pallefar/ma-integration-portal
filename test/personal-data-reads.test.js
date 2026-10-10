@@ -256,3 +256,83 @@ test('demo store: every role gets today\'s exact, unprojected pulse response (sh
     }
   });
 });
+
+// --- notifications honour the read matrix ---------------------------------------
+
+async function getNotificationItems(base, cookie) {
+  const res = await fetch(`${base}/api/notifications`, { headers: { cookie } });
+  assert.strictEqual(res.status, 200);
+  const body = await res.json();
+  return body.items;
+}
+
+async function postJson(base, cookie, p, body) {
+  return fetch(`${base}${p}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify(body),
+  });
+}
+
+test('notifications: real-deal employee gets no task/RAID nudges; staff keep them with the same counts', async () => {
+  const fx = realDeal('deal_pdnotify');
+  await withServer(async (base) => {
+    const adminCookie = fx.cookie('pd-admin');
+    // overdue (due in the past on the wall clock) + blocked task, and a high open RAID entry
+    let r = await postJson(base, adminCookie, '/api/integration-tasks', { title: 'Overdue one', status: 'todo', due: '2020-01-01', workstream: 'ws_imo' });
+    assert.strictEqual(r.status, 201);
+    r = await postJson(base, adminCookie, '/api/integration-tasks', { title: 'Blocked one', status: 'blocked', workstream: 'ws_imo' });
+    assert.strictEqual(r.status, 201);
+    r = await postJson(base, adminCookie, '/api/raid', { title: 'High risk', type: 'risk', severity: 'high' });
+    assert.strictEqual(r.status, 201);
+
+    const TYPES = ['tasks_overdue', 'tasks_blocked', 'raid_high'];
+    const staffCounts = {};
+    for (const u of ['pd-admin', 'pd-hrbp', 'pd-pmo']) {
+      const items = await getNotificationItems(base, fx.cookie(u));
+      for (const t of TYPES) {
+        const it = items.find((i) => i.type === t);
+        assert.ok(it && it.count >= 1, `${u} keeps the ${t} nudge`);
+        staffCounts[u + t] = it.count;
+      }
+    }
+    for (const t of TYPES) {
+      assert.strictEqual(staffCounts['pd-hrbp' + t], staffCounts['pd-admin' + t], `${t} count identical for hrbp and admin`);
+      assert.strictEqual(staffCounts['pd-pmo' + t], staffCounts['pd-admin' + t], `${t} count identical for pmo and admin`);
+    }
+
+    const empItems = await getNotificationItems(base, fx.cookie('pd-empa'));
+    for (const t of TYPES) {
+      assert.ok(!empItems.some((i) => i.type === t), `employee must not receive ${t}`);
+    }
+  });
+});
+
+test('notifications: assessment nudges are unchanged for every role (real deal)', async () => {
+  const fx = realDeal('deal_pdnotifyass');
+  await withServer(async (base) => {
+    const ASSESS = ['assessment_pending', 'reassess_il'];
+    const byRole = {};
+    for (const u of ['pd-admin', 'pd-hrbp', 'pd-pmo', 'pd-empa']) {
+      const items = await getNotificationItems(base, fx.cookie(u));
+      byRole[u] = items.filter((i) => ASSESS.includes(i.type)).map((i) => i.id).sort();
+    }
+    for (const u of ['pd-hrbp', 'pd-pmo', 'pd-empa']) {
+      assert.deepStrictEqual(byRole[u], byRole['pd-admin'], `${u} assessment nudges match admin`);
+    }
+  });
+});
+
+test('notifications: demo store response is identical for every role', async () => {
+  const cookies = {};
+  for (const role of ['admin', 'hrbp', 'pmo', 'employee']) {
+    cookies[role] = demoSession({ controlConn, runtimeConn, username: 'pd-ndemo-' + role, role });
+  }
+  await withServer(async (base) => {
+    const baseline = JSON.stringify(await getNotificationItems(base, cookies.admin));
+    for (const role of ['hrbp', 'pmo', 'employee']) {
+      assert.strictEqual(JSON.stringify(await getNotificationItems(base, cookies[role])), baseline,
+        `demo ${role} notifications identical to admin (no read-matrix filtering on the showcase)`);
+    }
+  });
+});

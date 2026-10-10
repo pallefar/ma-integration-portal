@@ -6859,13 +6859,29 @@ app.get('/api/notifications', (req, res) => {
   // an uncleared viewer learns only a count, never which task or entry it
   // is. Do not "fix" this to reportTaskRows() without also revisiting the
   // raidHigh precedent it mirrors.
-  const tasks = taskLane(db);
-  const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
-  if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
-  const blocked = tasks.filter(t => t.status === 'blocked');
-  if (blocked.length) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blocked.length, href: '/execution.html', severity: 'medium' });
-  const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && (r.severity === 'high' || r.severity === 'critical'));
-  if (raidHigh.length) items.push({ id: 'raid_high', type: 'raid_high', count: raidHigh.length, href: '/execution.html', severity: 'high' });
+  //
+  // [security] D-11-01 / T-11-43 (Phase 11 plan 05) extends the residual: the
+  // counts stay unfiltered by CLEARANCE for roles that may read the lanes, but
+  // are withheld ENTIRELY from a role the read matrix refuses the lane — an
+  // employee must not learn task/RAID figures the lane routes would 403. One
+  // source of truth: lib/readPolicy.js (no second role list here). The demo
+  // store (req.isDemo === true) and an unauthenticated demo-open request are
+  // not "strict" and keep today's response for every role.
+  const readPolicy = require('./lib/readPolicy');
+  const strict = req.isDemo !== true && req.portalUser;
+  const mayReadTasks = !strict || readPolicy.roleAllowedForRead(req.portalUser.role, '/api/integration-tasks');
+  const mayReadRaid = !strict || readPolicy.roleAllowedForRead(req.portalUser.role, '/api/raid');
+  if (mayReadTasks) {
+    const tasks = taskLane(db);
+    const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
+    if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
+    const blocked = tasks.filter(t => t.status === 'blocked');
+    if (blocked.length) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blocked.length, href: '/execution.html', severity: 'medium' });
+  }
+  if (mayReadRaid) {
+    const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && (r.severity === 'high' || r.severity === 'critical'));
+    if (raidHigh.length) items.push({ id: 'raid_high', type: 'raid_high', count: raidHigh.length, href: '/execution.html', severity: 'high' });
+  }
   res.json({ success: true, items });
 });
 
