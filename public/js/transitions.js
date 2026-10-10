@@ -10,7 +10,8 @@
 (function () {
   window.maVersionOf = function (rec) {
     var v = rec && rec.version;
-    return (typeof v === 'number' && Number.isInteger(v) && v >= 0) ? v : 0;
+    // WR-04: the same rule as db/collections.js comparableVersion().
+    return (Number.isSafeInteger(v) && v >= 0) ? v : 0;
   };
 })();
 
@@ -142,6 +143,9 @@
   const CONFLICT_ERROR_REASON_CONFLICT = 'the record changed again';
   const CONFLICT_ERROR_REASON_NETWORK = 'a network error occurred';
   const CONFLICT_ERROR_REASON_SERVER = 'the server reported an error';
+  // IN-05 (09-REVIEW round 2) / UI-SPEC A11: a reapply whose Phase-8 busy
+  // retries ran out (503) — said in the dialog banner instead of the toast.
+  const CONFLICT_ERROR_REASON_BUSY = 'the server is busy';
   const conflictErrorMessage = (reason) => CONFLICT_ERROR_PREFIX + reason + CONFLICT_ERROR_SUFFIX;
   // FA-2 (09-01-PLAN.md): a deliberate extension beyond the signed-off
   // 09-UI-SPEC.md Copywriting Contract — three literals for PD-4's "an
@@ -236,11 +240,19 @@
       }
       document.removeEventListener('keydown', session.onKeydown);
       activeConflictSession = null;
+      // IN-04 / A10: hand keyboard focus back to whatever had it before the
+      // dialog opened (best-effort — the element may have been re-rendered).
+      if (session.returnFocus && session.returnFocus !== session.modal) focusConflictElement(session.returnFocus);
     }
     if (failure && session.reject) session.reject(failure.error);
     else session.resolve(response);
     // The shown session just ended: bring up the next queued conflict (a
     // function declaration below — hoisted — so ordering in this IIFE is free).
+    // IN-02 (09-REVIEW round 2): this runs synchronously, BEFORE the settled
+    // page's own `.then` handlers (microtasks) — so a page's post-conflict
+    // re-read may render underneath the NEXT queued dialog. The contract is
+    // "after ITS OWN dialog closed", not "while no dialog is open"; the queued
+    // session renders only from its own request/409 bodies, so it is unaffected.
     openNextQueuedConflict();
   }
 
@@ -424,8 +436,12 @@
   // detected structurally from the request URL, not from the HTTP method,
   // so this works for any verb a future route uses (Plan 06's RAID DELETE
   // is the first such route). Returns a NEW { input, init } pair; never
-  // mutates the caller's own `init`, and never rewrites both — a
-  // query-parameter route's body (if any) is left byte-identical.
+  // mutates the caller's own `init`. A query-parameter route's body is left
+  // byte-identical UNLESS it also carries its own `version` key — IN-03
+  // (09-REVIEW round 2): then both channels are rewritten to the same fresh
+  // value, because server.js parseExpectedVersion() refuses a request whose
+  // two channels disagree (it used to let the body silently win, which would
+  // have looped this reapply on "the record changed again" forever).
   function withFreshVersion(input, init, url, method, freshVersion) {
     const newInit = Object.assign({}, init);
     try {
@@ -434,6 +450,15 @@
         u.searchParams.set('expectedVersion', freshVersion);
         const rewrittenUrl = u.pathname + u.search + u.hash;
         const newInput = (typeof input === 'string') ? rewrittenUrl : input;
+        try {
+          const parsedBody = (init && typeof init.body === 'string') ? JSON.parse(init.body) : null;
+          if (parsedBody && typeof parsedBody === 'object' && Object.prototype.hasOwnProperty.call(parsedBody, 'version')) {
+            parsedBody.version = freshVersion;
+            newInit.body = JSON.stringify(parsedBody);
+          }
+        } catch (e) {
+          // Not a JSON body — nothing version-bearing to keep in step.
+        }
         return { input: newInput, init: newInit };
       }
     } catch (e) {
@@ -477,11 +502,21 @@
   //   (each a banner; the session stays pending so the user can try again or
   //   leave.)
   // inFlight is the double-click guard (HP8): a second click sends nothing.
-  function runConflictReapply(session, btn, inFlightLabel) {
+  // WR-03 (09-REVIEW round 2) / UI-SPEC A9: inFlight is ALSO the exit lock.
+  // The reapply is irrevocable once sent, so while it is on the wire the
+  // session's exit control (`exitBtn` — Discard / Cancel) is disabled and
+  // Escape / overlay clicks are ignored (activateConflictSession). Before
+  // this, an exit mid-flight settled the page with the stale 409; the page
+  // re-read at once and could render "theirs" BEFORE the reapply committed
+  // "mine" — page and server silently diverged. Now the page always learns
+  // how the reapply ended: a 2xx settles with that Response; any failure
+  // re-renders the dialog with every control enabled again (rerender).
+  function runConflictReapply(session, btn, inFlightLabel, exitBtn) {
     if (session.settled || session.inFlight) return;
     session.inFlight = true;
     btn.disabled = true;
     btn.textContent = inFlightLabel;
+    if (exitBtn) exitBtn.disabled = true;
     const fresh = withFreshVersion(session.input, session.init, session.url, session.method,
       session.body && session.body.currentVersion);
     const freshUrl = (typeof fresh.input === 'string') ? fresh.input : session.url;
@@ -514,6 +549,12 @@
       }
       if (res && res.status === 404 && session.method === 'DELETE') {
         rerender(CONFLICT_ERROR_REASON_ALREADY_DELETED);
+        return undefined;
+      }
+      if (res && res.status === 503) {
+        // IN-05 / A11: busy retries exhausted — the dialog's banner is the
+        // ONE surface (attemptFetch skipped the give-up toast for a reapply).
+        rerender(CONFLICT_ERROR_REASON_BUSY);
         return undefined;
       }
       if (res && res.status >= 500) {
@@ -679,10 +720,15 @@
       cancelBtn.textContent = CONFLICT_CANCEL_LABEL;
       // Cancel: the record is kept, nothing is sent — the held promise
       // settles with the original 409 (the page then re-reads, GD-5).
-      cancelBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
+      // WR-03 / A9: ignored while "Delete anyway" is on the wire.
+      cancelBtn.addEventListener('click', () => {
+        if (session.inFlight) return;
+        settleConflictSession(session, session.originalRes);
+      });
 
-      // E3-loading: "Delete anyway" enters a disabled "Deleting…" state
-      // during the resubmit; "Cancel" stays enabled throughout. This dialog
+      // E3-loading (amended A9): "Delete anyway" enters a disabled "Deleting…"
+      // state during the resubmit and "Cancel" is disabled with it — the
+      // resubmit is irrevocable, so the page must learn its outcome. This dialog
       // itself IS the destructive confirmation — no window.confirm() is ever
       // stacked on top of it (D-08, asserted by the grep gate in the test).
       // E3-error (404 / network / 5xx) and a third-writer 409 are all handled
@@ -691,7 +737,7 @@
       deleteBtn.type = 'button';
       deleteBtn.className = 'btn btn-danger conflict-btn-delete';
       deleteBtn.textContent = CONFLICT_DELETE_LABEL;
-      deleteBtn.addEventListener('click', () => runConflictReapply(session, deleteBtn, CONFLICT_DELETING_LABEL));
+      deleteBtn.addEventListener('click', () => runConflictReapply(session, deleteBtn, CONFLICT_DELETING_LABEL, cancelBtn));
 
       actions.appendChild(cancelBtn);
       actions.appendChild(deleteBtn);
@@ -776,18 +822,24 @@
       discardBtn.textContent = CONFLICT_DISCARD_LABEL;
       // Discard: nothing is sent — the held promise settles with the original
       // 409 and the page keeps/re-reads the server's ("theirs") state.
-      discardBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
+      // WR-03 / A9: ignored while the reapply is on the wire.
+      discardBtn.addEventListener('click', () => {
+        if (session.inFlight) return;
+        settleConflictSession(session, session.originalRes);
+      });
 
-      // E2-loading: clicking APPLY disables only this button and swaps its
-      // label; DISCARD (above) stays enabled the whole time so the user can
-      // change their mind mid-flight. The reapply (and every failure/third-
+      // E2-loading (amended A9 — WR-03): clicking APPLY disables it, swaps its
+      // label, and disables DISCARD alongside it for the duration of the
+      // request. An exit mid-flight used to settle the page with the stale 409
+      // while the irrevocable reapply was still committing. Both controls are
+      // re-enabled by the re-render after any failure. The reapply (and every failure/third-
       // writer outcome, E2-error) lives in runConflictReapply — the "mine"
       // column is provably untouched, only the banner + button state change.
       const applyBtn = document.createElement('button');
       applyBtn.type = 'button';
       applyBtn.className = 'btn btn-primary conflict-btn-apply';
       applyBtn.textContent = CONFLICT_APPLY_LABEL;
-      applyBtn.addEventListener('click', () => runConflictReapply(session, applyBtn, CONFLICT_APPLYING_LABEL));
+      applyBtn.addEventListener('click', () => runConflictReapply(session, applyBtn, CONFLICT_APPLYING_LABEL, discardBtn));
 
       actions.appendChild(discardBtn);
       actions.appendChild(applyBtn);
@@ -803,6 +855,44 @@
     }
 
     modal.appendChild(actions);
+    // IN-04 (09-REVIEW round 2) / UI-SPEC A10: the focus trap cycles through
+    // exactly these controls. A re-render (failed reapply, third writer)
+    // rebuilt them, so focus moves to the new safe control when shown.
+    session.actionButtons = Array.prototype.slice.call(actions.children);
+    if (session.overlay && session.overlay.parentNode) focusConflictSession(session);
+  }
+
+  // IN-04 (09-REVIEW round 2) / UI-SPEC A10: keyboard focus belongs to the
+  // dialog while it is shown. `aria-modal` alone does not trap focus, so Tab
+  // could reach a page control behind the overlay (a second delete button,
+  // whose maConfirmDelete then refused silently). Focus moves to the FIRST
+  // enabled action — always the safe one (Discard / Cancel / Close) — or to
+  // the modal itself when every action is disabled mid-flight.
+  function focusConflictElement(el) {
+    if (el && typeof el.focus === 'function') {
+      try { el.focus(); } catch (e) { /* focus is best-effort, never fatal */ }
+    }
+  }
+  function enabledConflictButtons(session) {
+    return (session.actionButtons || []).filter((b) => b && !b.disabled);
+  }
+  function focusConflictSession(session) {
+    const btns = enabledConflictButtons(session);
+    focusConflictElement(btns.length ? btns[0] : session.modal);
+  }
+  // Tab / Shift+Tab wrap inside the dialog's enabled actions; focus that is
+  // anywhere else (the page behind, the modal shell) is pulled back in.
+  function trapConflictTab(session, e) {
+    const btns = enabledConflictButtons(session);
+    const prevent = () => { if (typeof e.preventDefault === 'function') e.preventDefault(); };
+    if (!btns.length) { prevent(); focusConflictElement(session.modal); return; }
+    const idx = btns.indexOf(document.activeElement);
+    if (e.shiftKey) {
+      if (idx <= 0) { prevent(); focusConflictElement(btns[btns.length - 1]); }
+    } else if (idx === -1 || idx === btns.length - 1) {
+      prevent();
+      focusConflictElement(btns[0]);
+    }
   }
 
   // Builds a session's overlay and shows it. Close on overlay-background
@@ -823,9 +913,17 @@
     // 09-14: while the in-app confirm's first DELETE is on the wire it cannot
     // be cancelled (the request is already sent; the page must learn the
     // outcome) — Escape and an overlay click are ignored until it answers.
-    const exitLocked = () => session.confirmState && session.inFlight;
+    // WR-03 (09-REVIEW round 2) / UI-SPEC A9: the same rule now holds for
+    // EVERY variant — an Apply / Delete anyway reapply is just as irrevocable,
+    // so any in-flight request of the session locks every exit.
+    const exitLocked = () => session.inFlight;
+    // IN-04 / A10: the modal itself is focusable (programmatically only) so
+    // focus has somewhere to rest while every action is disabled mid-flight.
+    modal.tabIndex = -1;
+    session.returnFocus = (typeof document !== 'undefined') ? document.activeElement : null;
     session.onKeydown = (e) => {
       if (e.key === 'Escape' && !exitLocked()) settleConflictSession(session, session.originalRes);
+      else if (e.key === 'Tab') trapConflictTab(session, e);
     };
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay && !exitLocked()) settleConflictSession(session, session.originalRes);
@@ -835,6 +933,7 @@
       renderConflictSession(session, undefined);
       document.addEventListener('keydown', session.onKeydown);
       document.body.appendChild(overlay);
+      focusConflictSession(session);
     } catch (e) {
       // A page's write promise must never hang forever on a rendering
       // failure: fall back to exactly what the wrapper did before sessions
@@ -926,7 +1025,13 @@
       // Retries exhausted (or the body can't be safely re-sent): tell the user
       // plainly and leave the page/form exactly as it is so they can just save
       // again — nothing is discarded, cleared, or re-navigated (D-08).
-      showBusyGiveUpToast();
+      // IN-05 (09-REVIEW round 2) / UI-SPEC A11: a conflict dialog's own
+      // reapply ("Apply my changes anyway" / "Delete anyway") gets NO toast —
+      // the dialog stays open and says so in its own banner ("the server is
+      // busy", runConflictReapply), so the user sees one message pointing at
+      // one control. The in-app delete confirm's first DELETE (ctx carries
+      // confirmSession) closes the dialog on a 503, so it keeps the toast.
+      if (!(ctx && ctx.reapply && !ctx.confirmSession)) showBusyGiveUpToast();
       return res;
     }
     // CONC-02/D-05/Pitfall 1 (Phase 9): a same-origin /api 409 is checked

@@ -176,4 +176,18 @@ for (const key of CLEARANCE_SCOPED_COLLECTIONS) {
 // already keeps these two fields out of every API response.
 const SECRET_SETTINGS_FIELDS = ['geminiApiKey', 'databaseConfig.connectionDetails'];
 
-module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS };
+// WR-04 (09-REVIEW round 2): the ONE coercion rule for a stored record
+// version, shared by every layer that compares versions — server.js
+// conflictIfStale() (route precheck), db/store.js writeDb() (the race-free
+// WHERE layer, whose SQL mirrors this rule exactly) and the client's
+// window.maVersionOf() (public/js/transitions.js). A stored value that is
+// not a non-negative safe integer ("v2", 1.5, true, -1, 1e300) compares as
+// version 0, and 0 is what a conflict body reports as currentVersion — so
+// the dialog's reapply can never carry a value the zod validators refuse.
+// Before this the precheck coerced to 0 while the WHERE layer bound NULL
+// (a silent never-match), leaving such a record permanently un-reapplyable.
+function comparableVersion(v) {
+  return (Number.isSafeInteger(v) && v >= 0) ? v : 0;
+}
+
+module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS, comparableVersion };

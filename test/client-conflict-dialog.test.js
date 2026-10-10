@@ -121,7 +121,14 @@ function makeDocument() {
   const docListeners = {};
   const document = {
     body,
-    createElement,
+    // IN-04: elements are focusable (a disabled one is not, as in a browser);
+    // focus is tracked on document.activeElement.
+    activeElement: null,
+    createElement(tag) {
+      const el = createElement(tag);
+      el.focus = () => { if (!el.disabled) document.activeElement = el; };
+      return el;
+    },
     createTextNode,
     addEventListener(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); },
     removeEventListener(type, fn) {
@@ -1300,4 +1307,216 @@ test('CF11: the native window.confirm is never called by any CF case', () => {
   CF_SPIES.forEach((s) => assert.strictEqual(s.calls, 0));
   const noComments = WRAPPER_SRC.replace(/\/\/.*$/gm, '');
   assert.ok(!/window\.confirm|[^.\w]confirm\(/.test(noComments), 'no native confirm call in the wrapper region');
+});
+
+// ---- IN-03 (09-REVIEW round 2): a request carrying BOTH version channels
+// gets both rewritten to the fresh value (the server refuses disagreeing
+// channels); a query-only route's body stays byte-identical (test above). ----
+
+test('IN03: apply on a route with ?expectedVersion= AND a body version rewrites BOTH to the fresh version', async () => {
+  const fake = makeFakeFetch([
+    makeResponse({ status: 409, body: conflictOf({ currentVersion: 8 }) }),
+    makeResponse({ status: 200, body: { ok: true } }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/widgets/rec1?expectedVersion=3', { method: 'POST', body: JSON.stringify({ title: 'My title', version: 3 }) });
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+  await p;
+
+  assert.strictEqual(fake.calls[1].input, '/api/widgets/rec1?expectedVersion=8');
+  assert.deepStrictEqual(JSON.parse(fake.calls[1].init.body), { title: 'My title', version: 8 },
+    'the body version must move in step with the query, never stay stale');
+});
+
+// ---- IN-05 (09-REVIEW round 2) / UI-SPEC A11: a reapply whose 503 retries
+// run out says so ONCE, in the dialog banner — no give-up toast on top. ----
+
+const BUSY_TOAST_TEXT = 'Server is busy — your change was not saved. Please try again.';
+const toastCount = (document) => document.body.children.filter((c) => c.textContent === BUSY_TOAST_TEXT).length;
+// Retries fire at once; the toast's 5s self-removal timer is NOT run, so a
+// toast that was ever shown is still countable at the end of the test.
+const fastRetries = (sandbox) => { sandbox.setTimeout = (fn, ms) => (ms >= 5000 ? 0 : setTimeout(fn, 0)); };
+
+test('IN05a: Apply exhausting its 503 retries -> banner "the server is busy", no toast, promise still pending', async () => {
+  const busy = () => makeResponse({ status: 503, headers: new Headers({ 'Retry-After': '0' }) });
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : busy()));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  fastRetries(sandbox);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  // The retries ride real (0 ms) timers — give them wall-clock time, then drain.
+  for (let i = 0; i < 4; i++) { await new Promise((r) => setTimeout(r, 15)); await flushAll(); }
+
+  assert.strictEqual(fake.calls.length, 4, 'the original write + the reapply and its 2 busy retries');
+  const banner = document.querySelectorAll('.conflict-modal-error')[0];
+  assert.ok(banner, 'the dialog banner is shown');
+  assert.strictEqual(banner.textContent,
+    "That didn't go through — the server is busy. Your edits are still here; review the fresh values below and try again.");
+  assert.strictEqual(toastCount(document), 0, 'no give-up toast on top of the dialog banner');
+  assert.strictEqual(outcome.settled, false);
+});
+
+test('IN05b: an ordinary write exhausting its 503 retries still shows the give-up toast (Phase 8 D-08 unchanged)', async () => {
+  const fake = makeRoutedFetch(() => makeResponse({ status: 503, headers: new Headers({ 'Retry-After': '0' }) }));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  fastRetries(sandbox);
+  const res = await sandbox.window.fetch('/api/pulses', { method: 'POST', body: '{}' });
+  assert.strictEqual(res.status, 503);
+  assert.strictEqual(toastCount(document), 1);
+});
+
+// ---- IN-04 (09-REVIEW round 2) / UI-SPEC A10: keyboard focus is trapped in
+// the dialog, so Tab + Enter can no longer reach a page control behind the
+// overlay (whose maConfirmDelete would then refuse silently). ----
+
+const tabKey = (document, shiftKey) => {
+  const evt = { type: 'keydown', key: 'Tab', shiftKey: !!shiftKey, prevented: false, preventDefault() { evt.prevented = true; } };
+  document.dispatchEvent(evt);
+  return evt;
+};
+
+test('IN04a: opening a dialog moves focus to its safe action; Tab and Shift+Tab wrap inside the dialog', async () => {
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictOf() })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+  const pageBtn = document.createElement('button');
+  document.body.appendChild(pageBtn);
+  pageBtn.focus();
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  const discard = document.querySelectorAll('.conflict-btn-discard')[0];
+  const apply = document.querySelectorAll('.conflict-btn-apply')[0];
+  assert.strictEqual(document.activeElement, discard, 'focus starts on the safe action (Discard), never on Apply');
+
+  document.activeElement = apply; // the browser's own Tab from Discard
+  const wrapFwd = tabKey(document, false);
+  assert.ok(wrapFwd.prevented, 'Tab on the last action is intercepted');
+  assert.strictEqual(document.activeElement, discard, 'and wraps to the first');
+  const wrapBack = tabKey(document, true);
+  assert.ok(wrapBack.prevented);
+  assert.strictEqual(document.activeElement, apply, 'Shift+Tab on the first wraps to the last');
+
+  document.activeElement = pageBtn; // focus somehow escaped to the page
+  tabKey(document, false);
+  assert.strictEqual(document.activeElement, discard, 'focus outside the dialog is pulled back in');
+
+  discard.click();
+  await p;
+  assert.strictEqual(document.activeElement, pageBtn, 'closing hands focus back to the element that had it');
+});
+
+test('IN04b: with every action disabled mid-flight, Tab parks focus on the modal itself', async () => {
+  const pending = new Promise(() => {});
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : pending));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+  const evt = tabKey(document, false);
+  assert.ok(evt.prevented);
+  assert.strictEqual(document.activeElement, document.querySelectorAll('.conflict-modal')[0]);
+});
+
+test('IN04c: the in-app delete confirm focuses Cancel, never the destructive Delete', async () => {
+  const fake = makeRoutedFetch(() => makeResponse({ status: 200, body: { success: true } }));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete this entry?', '/api/raid/rec1?expectedVersion=1');
+  await flushAll();
+  assert.strictEqual(document.activeElement, document.querySelectorAll('.conflict-btn-discard')[0]);
+  document.activeElement.click();
+  assert.strictEqual(await p, null);
+  assert.strictEqual(fake.calls.length, 0);
+});
+
+// ---- WR-03 (09-REVIEW round 2) / UI-SPEC A9: every exit is locked while a
+// reapply is on the wire. An exit mid-flight used to settle the page with the
+// stale 409 while the irrevocable reapply was still committing, so the page's
+// re-read could render "theirs" while the server ended up holding "mine". ----
+
+// A deferred fake Response: the test decides when (and how) it lands.
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+test('WR03a: Apply in flight -> Escape, overlay click and Discard all send nothing and settle nothing; the reapply 200 then resolves the held promise', async () => {
+  const reapply = deferred();
+  const ok = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : reapply.promise));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+
+  const discard = document.querySelectorAll('.conflict-btn-discard')[0];
+  assert.strictEqual(discard.disabled, true, 'Discard must be disabled while the reapply is on the wire');
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-apply')[0].disabled, true);
+  document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  const overlay = document.querySelectorAll('.conflict-modal-overlay')[0];
+  overlay.dispatchEvent({ type: 'click', target: overlay });
+  discard.click(); // the stub dispatches even on a disabled button — the handler guard must hold
+  await flushAll();
+
+  assert.strictEqual(outcome.settled, false, 'no exit may settle the session while the reapply is in flight');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'the dialog stays open');
+  assert.strictEqual(fake.calls.length, 2, 'nothing further is sent');
+
+  reapply.resolve(ok);
+  assert.strictEqual(await p, ok, 'the page learns the reapply outcome (the 200), never the stale 409');
+  assert.strictEqual(outcome.count, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('WR03b: a failed reapply re-enables both controls and the exits — Escape then settles with the original 409', async () => {
+  const first = makeResponse({ status: 409, body: conflictOf() });
+  const fake = makeRoutedFetch((i) => (i === 0 ? first : makeResponse({ status: 500, body: {} })));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-discard')[0].disabled, false, 'Discard re-enabled after the failure');
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-apply')[0].disabled, false, 'Apply re-enabled after the failure');
+  document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  assert.strictEqual(await p, first);
+});
+
+test('WR03c: Delete anyway in flight -> Cancel is disabled and every exit is ignored; the DELETE 200 resolves the held promise', async () => {
+  const resend = deferred();
+  const okDel = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf({ conflictKind: 'version' }) }) : resend.promise));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  await flushAll();
+
+  const cancel = document.querySelectorAll('.conflict-btn-discard')[0];
+  assert.strictEqual(cancel.disabled, true, 'Cancel must be disabled while Delete anyway is on the wire');
+  cancel.click();
+  document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  const overlay = document.querySelectorAll('.conflict-modal-overlay')[0];
+  overlay.dispatchEvent({ type: 'click', target: overlay });
+  await flushAll();
+  assert.strictEqual(outcome.settled, false);
+
+  resend.resolve(okDel);
+  assert.strictEqual(await p, okDel);
+  assert.strictEqual(fake.calls.length, 2);
 });

@@ -36,8 +36,13 @@
   // record that was withheld/deleted underneath them). Re-reading the server
   // state is what makes "keep theirs" true on screen — otherwise the page
   // keeps presenting the stale copy the user just declined to overwrite. The
-  // held promise (09-11) guarantees this runs only AFTER the dialog is gone,
-  // so it can never re-render underneath an open dialog. The re-read goes
+  // held promise (09-11) guarantees this runs only AFTER ITS OWN dialog is
+  // gone. (IN-02, 09-REVIEW round 2: it is NOT a guarantee that no dialog is
+  // open — when a second conflict is queued, the wrapper shows that one
+  // synchronously as this one settles, so this re-read can re-render the
+  // page underneath the NEXT dialog. That is harmless: the queued session
+  // holds its own request body and 409 body, so its content is unaffected.)
+  // The re-read goes
   // through the normal clearance-filtered GET routes (T-09-38): a record the
   // caller is no longer cleared for simply disappears. Returns true when it
   // handled a conflict (callers then skip their own failure alert, WR-01).

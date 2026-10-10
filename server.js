@@ -409,10 +409,22 @@ const VERSION_REQUIRED_MESSAGE = 'This save did not include the version of the r
 // NEVER coerced — no `parseInt` fallthrough to `NaN`, no silent truncation
 // of a decimal or a leading/trailing-junk string like "3abc". `conflictIfStale`
 // turns `invalid: true` into a 400 before any record is mutated.
+//
+// IN-03 (09-REVIEW round 2): a request that carries BOTH channels with
+// values that disagree is refused (`mismatch: true` -> 400) rather than
+// silently letting the body win — otherwise a DELETE sent with a stale JSON
+// body `version` would override a fresh `?expectedVersion=`, and the
+// dialog's reapply (which rewrites the version it finds) could loop on
+// "the record changed again" forever. Both channels agreeing is accepted.
 function parseExpectedVersion(req) {
   const b = req.body || {};
-  if (b.version !== undefined) return { version: b.version, invalid: false };
   const q = req.query && req.query.expectedVersion;
+  if (b.version !== undefined) {
+    if (q !== undefined && !(typeof q === 'string' && /^\d+$/.test(q) && Number(q) === b.version)) {
+      return { version: undefined, invalid: false, mismatch: true };
+    }
+    return { version: b.version, invalid: false };
+  }
   if (q === undefined) return { version: undefined, invalid: false };
   if (typeof q !== 'string' || !/^\d+$/.test(q)) return { version: undefined, invalid: true };
   const n = Number(q);
@@ -487,6 +499,11 @@ function conflictIfStale(req, res, record, opts) {
     res.status(400).json({ error: 'expectedVersion must be a non-negative integer.' });
     return true;
   }
+  if (parsed.mismatch) {
+    // IN-03: a fixed one-key literal — echoes nothing about the record.
+    res.status(400).json({ error: 'The version in the request body and the expectedVersion query parameter disagree.' });
+    return true;
+  }
   if (parsed.version === undefined) {
     if (record && req.isDemo !== true) {
       res.status(400).json({ error: VERSION_REQUIRED_MESSAGE, versionRequired: true });
@@ -494,7 +511,8 @@ function conflictIfStale(req, res, record, opts) {
     }
     return false;
   }
-  const currentVersion = (record && typeof record.version === 'number') ? record.version : 0;
+  // WR-04: one coercion rule with db/store.js's WHERE layer (comparableVersion).
+  const currentVersion = comparableVersion(record && record.version);
   if (parsed.version === currentVersion) return false;
   const filtered = options.clearanceFilter ? options.clearanceFilter(record) : record;
   res.status(409).json(conflictBody({
@@ -836,6 +854,7 @@ app.get('/healthz', (req, res) => {
 // truth on every call (RESEARCH.md Pitfall 3). db.json is retained on disk only
 // as a frozen, read-only pre-migration archive — no live code path reads/writes it.
 const { initDb, readDb, writeDb, getOrOpenConnection, isConflictError, currentDbContext } = require('./db/store');
+const { comparableVersion } = require('./db/collections');
 const sessions = require('./db/sessions');
 
 // ISO-01 (Phase 3 cutover): open the three live stores through the SAME

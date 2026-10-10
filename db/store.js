@@ -44,7 +44,7 @@
 const fs = require('fs');
 const path = require('path');
 const { AsyncLocalStorage } = require('node:async_hooks');
-const { ARRAY_COLLECTIONS, SINGLETON_KEYS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS } = require('./collections');
+const { ARRAY_COLLECTIONS, SINGLETON_KEYS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS, comparableVersion } = require('./collections');
 const { openDbFile } = require('./dbFiles');
 // AUD-01/D-08/D-09/D-11 (Phase 3 Plan 05): the store-layer audit hook.
 // db/auditHook.js has NO require() back to this module (it opens its own
@@ -383,14 +383,23 @@ function writeDb(data) {
       // so a non-versioned collection's writeDb() call pays zero extra
       // parse/plan cost.
       const versioned = VERSIONED_COLLECTIONS.has(key);
+      // WR-04 (09-REVIEW round 2): the stored version is compared through the
+      // SAME rule as db/collections.js comparableVersion() — a value that is
+      // not a non-negative safe integer (JSON type text/real/true, a negative
+      // or out-of-range integer) compares as 0. json_type (not the value
+      // extractor, which maps JSON true to 1) decides "integer". A missing
+      // (or JSON null) version still matches any expectation — the D-09
+      // lazy-adoption arm, unchanged. Kept on ONE line: the structural test
+      // requires every line naming the extractor to carry the bound `?`.
+      const versionMatchSql = "(json_extract(data,'$.version') IS NULL OR (CASE WHEN json_type(data,'$.version') = 'integer' AND json_extract(data,'$.version') BETWEEN 0 AND 9007199254740991 THEN json_extract(data,'$.version') ELSE 0 END) = ?)";
       const versionedUpdate = versioned
         ? conn.prepare(
-          `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ? AND (json_extract(data,'$.version') IS NULL OR json_extract(data,'$.version') = ?)`
+          `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ? AND ${versionMatchSql}`
         )
         : null;
       const versionedDelete = versioned
         ? conn.prepare(
-          `DELETE FROM ${key} WHERE id = ? AND (json_extract(data,'$.version') IS NULL OR json_extract(data,'$.version') = ?)`
+          `DELETE FROM ${key} WHERE id = ? AND ${versionMatchSql}`
         )
         : null;
       // Pitfall 5: changes===0 from either statement above cannot by itself
@@ -418,7 +427,7 @@ function writeDb(data) {
           // check, no exemptions — a single-field kanban status flip goes
           // through the identical path as a full edit).
           const priorObj = JSON.parse(priorRaw);
-          const expectedVersion = (priorObj && typeof priorObj.version === 'number') ? priorObj.version : null;
+          const expectedVersion = comparableVersion(priorObj && priorObj.version);
           const candidate = JSON.stringify(item);
           if (candidate === priorRaw) {
             // CR-01 (Phase 1) + CONC-02 correctness: untouched-by-THIS-
@@ -453,8 +462,7 @@ function writeDb(data) {
             // is left untouched when it is not (server startup, migration
             // scripts, tests) — Pitfall 10: never sourced from audit.db,
             // which structurally excludes demo-mode writes.
-            const baseline = expectedVersion === null ? 0 : expectedVersion;
-            item.version = baseline + 1;
+            item.version = expectedVersion + 1;
             item.updatedAt = new Date().toISOString();
             if (scoped && scoped.actor && scoped.actor.username) {
               item.updatedBy = scoped.actor.username;
@@ -472,7 +480,7 @@ function writeDb(data) {
                 throw makeConflictError({
                   conflictKind: 'version', collection: key, recordId: id,
                   currentRecord: conflictVisibleRecord(key, current, scoped),
-                  currentVersion: current.version !== undefined ? current.version : null,
+                  currentVersion: comparableVersion(current.version),
                   changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
                 });
               }
@@ -515,7 +523,7 @@ function writeDb(data) {
             // cross-process window the update branch above closes.
             const priorRaw = beforeMap.get(id);
             const priorObj = JSON.parse(priorRaw);
-            const expectedVersion = (priorObj && typeof priorObj.version === 'number') ? priorObj.version : null;
+            const expectedVersion = comparableVersion(priorObj && priorObj.version);
             const result = versionedDelete.run(id, expectedVersion);
             if (result.changes === 0) {
               const row = conflictSelect.get(id);
@@ -524,7 +532,7 @@ function writeDb(data) {
                 throw makeConflictError({
                   conflictKind: 'version', collection: key, recordId: id,
                   currentRecord: conflictVisibleRecord(key, current, scoped),
-                  currentVersion: current.version !== undefined ? current.version : null,
+                  currentVersion: comparableVersion(current.version),
                   changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
                 });
               }
