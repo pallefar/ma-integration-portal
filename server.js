@@ -1937,6 +1937,25 @@ function publicSettings(s) {
   return out;
 }
 
+// [security] D-11-02 / AUTHZ-02 / T-11-11 (Phase 11): the settings response a
+// given caller is allowed to see. Admin keeps publicSettings() exactly as it
+// was (the admin console edits these fields). EVERY other caller — pmo, hrbp,
+// employee and the anonymous DEMO_OPEN showcase (req.portalUser === null) — gets
+// the publicSettings() result picked DOWN to validators/settings.js's
+// PUBLIC_SETTINGS_KEYS. An allowlist pick, never a delete-list: a settings key
+// added tomorrow (a webhook URL, a token) is withheld until someone consciously
+// lists it. Resolved lazily here so no new require lands in the file header.
+function settingsResponseFor(req, s) {
+  const full = publicSettings(s);
+  if (isAdminRequest(req)) return full;
+  const allowed = require('./validators/settings').PUBLIC_SETTINGS_KEYS;
+  const out = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(full, key)) out[key] = full[key];
+  }
+  return out;
+}
+
 // REST API Endpoints
 
 // GET Portable Application Package Download (Dynamic ZIP creation)
@@ -2229,9 +2248,9 @@ app.get('/api/settings', (req, res) => {
     // shared fields (targetCompany, roleVisibility, ...) instead of a sparse object.
     const custom = { ...(db.settings || {}), ...(db.customSettings || {}), demoMode: false, geminiApiKey: secretGeminiApiKey };
     custom.timeTravelDay = custom.timeTravelDay !== undefined ? custom.timeTravelDay : (db.settings.timeTravelDay || 30);
-    res.json(publicSettings(custom));
+    res.json(settingsResponseFor(req, custom));
   } else {
-    res.json(publicSettings({ ...(db.settings || {}), geminiApiKey: secretGeminiApiKey }));
+    res.json(settingsResponseFor(req, { ...(db.settings || {}), geminiApiKey: secretGeminiApiKey }));
   }
 });
 
