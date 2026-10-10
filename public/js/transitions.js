@@ -237,6 +237,9 @@
       }
       document.removeEventListener('keydown', session.onKeydown);
       activeConflictSession = null;
+      // IN-04 / A10: hand keyboard focus back to whatever had it before the
+      // dialog opened (best-effort — the element may have been re-rendered).
+      if (session.returnFocus && session.returnFocus !== session.modal) focusConflictElement(session.returnFocus);
     }
     if (failure && session.reject) session.reject(failure.error);
     else session.resolve(response);
@@ -843,6 +846,44 @@
     }
 
     modal.appendChild(actions);
+    // IN-04 (09-REVIEW round 2) / UI-SPEC A10: the focus trap cycles through
+    // exactly these controls. A re-render (failed reapply, third writer)
+    // rebuilt them, so focus moves to the new safe control when shown.
+    session.actionButtons = Array.prototype.slice.call(actions.children);
+    if (session.overlay && session.overlay.parentNode) focusConflictSession(session);
+  }
+
+  // IN-04 (09-REVIEW round 2) / UI-SPEC A10: keyboard focus belongs to the
+  // dialog while it is shown. `aria-modal` alone does not trap focus, so Tab
+  // could reach a page control behind the overlay (a second delete button,
+  // whose maConfirmDelete then refused silently). Focus moves to the FIRST
+  // enabled action — always the safe one (Discard / Cancel / Close) — or to
+  // the modal itself when every action is disabled mid-flight.
+  function focusConflictElement(el) {
+    if (el && typeof el.focus === 'function') {
+      try { el.focus(); } catch (e) { /* focus is best-effort, never fatal */ }
+    }
+  }
+  function enabledConflictButtons(session) {
+    return (session.actionButtons || []).filter((b) => b && !b.disabled);
+  }
+  function focusConflictSession(session) {
+    const btns = enabledConflictButtons(session);
+    focusConflictElement(btns.length ? btns[0] : session.modal);
+  }
+  // Tab / Shift+Tab wrap inside the dialog's enabled actions; focus that is
+  // anywhere else (the page behind, the modal shell) is pulled back in.
+  function trapConflictTab(session, e) {
+    const btns = enabledConflictButtons(session);
+    const prevent = () => { if (typeof e.preventDefault === 'function') e.preventDefault(); };
+    if (!btns.length) { prevent(); focusConflictElement(session.modal); return; }
+    const idx = btns.indexOf(document.activeElement);
+    if (e.shiftKey) {
+      if (idx <= 0) { prevent(); focusConflictElement(btns[btns.length - 1]); }
+    } else if (idx === -1 || idx === btns.length - 1) {
+      prevent();
+      focusConflictElement(btns[0]);
+    }
   }
 
   // Builds a session's overlay and shows it. Close on overlay-background
@@ -867,8 +908,13 @@
     // EVERY variant — an Apply / Delete anyway reapply is just as irrevocable,
     // so any in-flight request of the session locks every exit.
     const exitLocked = () => session.inFlight;
+    // IN-04 / A10: the modal itself is focusable (programmatically only) so
+    // focus has somewhere to rest while every action is disabled mid-flight.
+    modal.tabIndex = -1;
+    session.returnFocus = (typeof document !== 'undefined') ? document.activeElement : null;
     session.onKeydown = (e) => {
       if (e.key === 'Escape' && !exitLocked()) settleConflictSession(session, session.originalRes);
+      else if (e.key === 'Tab') trapConflictTab(session, e);
     };
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay && !exitLocked()) settleConflictSession(session, session.originalRes);
@@ -878,6 +924,7 @@
       renderConflictSession(session, undefined);
       document.addEventListener('keydown', session.onKeydown);
       document.body.appendChild(overlay);
+      focusConflictSession(session);
     } catch (e) {
       // A page's write promise must never hang forever on a rendering
       // failure: fall back to exactly what the wrapper did before sessions

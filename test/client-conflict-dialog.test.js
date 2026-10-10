@@ -121,7 +121,14 @@ function makeDocument() {
   const docListeners = {};
   const document = {
     body,
-    createElement,
+    // IN-04: elements are focusable (a disabled one is not, as in a browser);
+    // focus is tracked on document.activeElement.
+    activeElement: null,
+    createElement(tag) {
+      const el = createElement(tag);
+      el.focus = () => { if (!el.disabled) document.activeElement = el; };
+      return el;
+    },
     createTextNode,
     addEventListener(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); },
     removeEventListener(type, fn) {
@@ -1322,6 +1329,70 @@ test('IN03: apply on a route with ?expectedVersion= AND a body version rewrites 
   assert.strictEqual(fake.calls[1].input, '/api/widgets/rec1?expectedVersion=8');
   assert.deepStrictEqual(JSON.parse(fake.calls[1].init.body), { title: 'My title', version: 8 },
     'the body version must move in step with the query, never stay stale');
+});
+
+// ---- IN-04 (09-REVIEW round 2) / UI-SPEC A10: keyboard focus is trapped in
+// the dialog, so Tab + Enter can no longer reach a page control behind the
+// overlay (whose maConfirmDelete would then refuse silently). ----
+
+const tabKey = (document, shiftKey) => {
+  const evt = { type: 'keydown', key: 'Tab', shiftKey: !!shiftKey, prevented: false, preventDefault() { evt.prevented = true; } };
+  document.dispatchEvent(evt);
+  return evt;
+};
+
+test('IN04a: opening a dialog moves focus to its safe action; Tab and Shift+Tab wrap inside the dialog', async () => {
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictOf() })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+  const pageBtn = document.createElement('button');
+  document.body.appendChild(pageBtn);
+  pageBtn.focus();
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  const discard = document.querySelectorAll('.conflict-btn-discard')[0];
+  const apply = document.querySelectorAll('.conflict-btn-apply')[0];
+  assert.strictEqual(document.activeElement, discard, 'focus starts on the safe action (Discard), never on Apply');
+
+  document.activeElement = apply; // the browser's own Tab from Discard
+  const wrapFwd = tabKey(document, false);
+  assert.ok(wrapFwd.prevented, 'Tab on the last action is intercepted');
+  assert.strictEqual(document.activeElement, discard, 'and wraps to the first');
+  const wrapBack = tabKey(document, true);
+  assert.ok(wrapBack.prevented);
+  assert.strictEqual(document.activeElement, apply, 'Shift+Tab on the first wraps to the last');
+
+  document.activeElement = pageBtn; // focus somehow escaped to the page
+  tabKey(document, false);
+  assert.strictEqual(document.activeElement, discard, 'focus outside the dialog is pulled back in');
+
+  discard.click();
+  await p;
+  assert.strictEqual(document.activeElement, pageBtn, 'closing hands focus back to the element that had it');
+});
+
+test('IN04b: with every action disabled mid-flight, Tab parks focus on the modal itself', async () => {
+  const pending = new Promise(() => {});
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : pending));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+  const evt = tabKey(document, false);
+  assert.ok(evt.prevented);
+  assert.strictEqual(document.activeElement, document.querySelectorAll('.conflict-modal')[0]);
+});
+
+test('IN04c: the in-app delete confirm focuses Cancel, never the destructive Delete', async () => {
+  const fake = makeRoutedFetch(() => makeResponse({ status: 200, body: { success: true } }));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete this entry?', '/api/raid/rec1?expectedVersion=1');
+  await flushAll();
+  assert.strictEqual(document.activeElement, document.querySelectorAll('.conflict-btn-discard')[0]);
+  document.activeElement.click();
+  assert.strictEqual(await p, null);
+  assert.strictEqual(fake.calls.length, 0);
 });
 
 // ---- WR-03 (09-REVIEW round 2) / UI-SPEC A9: every exit is locked while a
