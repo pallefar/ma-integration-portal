@@ -268,9 +268,80 @@ app.use((err, req, res, next) => {
 // slide deck embedded as an app page). The role-based showcase stays at /index.html,
 // one click away via the overview's "Enter the Portal" CTA. Registered BEFORE the
 // static middleware so it wins for exactly "/" (static's default would serve index.html).
-app.get('/', (req, res) => {
+//
+// QUAL-01 / D-12-07 (Phase 12, plan 12-03): content-hash cache-bust stamps.
+// Every HTML response is rewritten at serve time so each local /js|/css
+// reference carries `?v=<first 16 hex of sha256(the bytes served at that URL)>`
+// (transitive through JS that itself references stamped assets). The hand
+// stamps in the source files are overwritten, never trusted. lib/assetStamp.js
+// has the contract; the mtime+size cache keeps the per-request cost to stats.
+// The stamper hangs off `app` (not module.exports — the export tail is a shared
+// merge surface) and every call below goes through `app.assetStamper` at
+// request time, so the cache-bust test can swap in an identity stamper to build
+// its negative control (the invariant must FAIL when the rewrite is removed).
+const { createAssetStamper } = require('./lib/assetStamp');
+const ASSET_STAMP_PUBLIC_DIR = path.join(__dirname, 'public');
+app.assetStamper = createAssetStamper({ publicDir: ASSET_STAMP_PUBLIC_DIR });
+
+/** Send an HTML file with its js/css references content-hash stamped. HTML is always revalidated. */
+function sendHtml(res, filePath) {
+  const html = app.assetStamper.rewriteHtml(fs.readFileSync(filePath, 'utf8'));
+  res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Cache-Control', 'no-cache');
-  res.sendFile(path.join(__dirname, 'public', 'overview.html'));
+  res.send(html);
+}
+
+/** Decode + validate a request path into an absolute file strictly inside public/, or null. */
+function publicFileForRequest(reqPath) {
+  let decoded;
+  try { decoded = decodeURIComponent(reqPath); } catch (e) { return null; }
+  if (decoded.indexOf('\0') !== -1 || decoded.indexOf('\\') !== -1) return null;
+  const segs = decoded.split('/');
+  // Dotfiles/dot-directories and traversal segments stay with express.static's own policy.
+  if (segs.some((s) => s === '..' || (s.length > 0 && s[0] === '.'))) return null;
+  const abs = path.resolve(ASSET_STAMP_PUBLIC_DIR, '.' + decoded);
+  if (abs !== ASSET_STAMP_PUBLIC_DIR && !abs.startsWith(ASSET_STAMP_PUBLIC_DIR + path.sep)) return null;
+  return abs;
+}
+
+app.get('/', (req, res) => {
+  sendHtml(res, path.join(ASSET_STAMP_PUBLIC_DIR, 'overview.html'));
+});
+
+// HTML entry points (every public/**/*.html except vendored code): served
+// through sendHtml() so the stamps are the content hash of what is served.
+// Mounted AFTER the credential-lockdown gate (T-12-22) and immediately BEFORE
+// express.static, which keeps serving everything else.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (!/\.html$/i.test(req.path) || /^\/vendor\//i.test(req.path)) return next();
+  const abs = publicFileForRequest(req.path);
+  if (!abs) return next();
+  let st;
+  try { st = fs.statSync(abs); } catch (e) { return next(); }
+  if (!st.isFile()) return next();
+  return sendHtml(res, abs);
+});
+
+// JS/CSS that themselves reference stamped assets (transitions.js -> account-
+// menu.js, inline-edit.js, banners.js, deal-switcher.js; account-menu.js ->
+// account.css) are served with those references rewritten, so a changed
+// dependency changes the dependant's own stamp (transitive). Only a file whose
+// bytes actually change is answered here; every other asset falls through to
+// express.static unchanged.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (!/^\/(?:js|css)\//.test(req.path) || !/\.(?:js|css)$/.test(req.path)) return next();
+  let decoded;
+  try { decoded = decodeURIComponent(req.path); } catch (e) { return next(); }
+  const out = app.assetStamper.rewriteAsset(decoded);
+  if (!out || out.rewritten !== true) return next();
+  const mime = express.static.mime;
+  const type = mime.lookup(decoded);
+  const charset = mime.charsets.lookup(type);
+  res.set('Content-Type', charset ? type + '; charset=' + charset : type);
+  res.set('Cache-Control', 'public, max-age=2592000');
+  return res.send(out.body);
 });
 
 // Long-cache versioned static assets (JS/CSS/images already carry ?v= busting);
@@ -8394,7 +8465,7 @@ app.get('*', (req, res, next) => {
   if (fileExt) {
     return next();
   }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  sendHtml(res, path.join(ASSET_STAMP_PUBLIC_DIR, 'index.html'));
 });
 
 // [security] D-11-03 / R1-02 / T-11-22 (Phase 11): the central 404 for a task/
