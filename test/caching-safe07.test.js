@@ -339,3 +339,77 @@ test('static: the no-store middleware sits before the body parsers in server.js'
   const json = src.indexOf("app.use(express.json({ limit: '50mb' }));");
   assert.ok(mw !== -1 && json !== -1 && mw < json, 'the no-store middleware must be registered before express.json');
 });
+
+// ============================================================ Task 2 rows
+
+test('legacy clean-up: deletes only legacy cache names and /sw.js registrations, never the model cache, and only once (flag)', async () => {
+  const local = memStorage();
+  const env = loadClientStorage({
+    local, session: memStorage(),
+    cacheNames: ['transformers-cache', 'old-app-v1', 'unrelated-cache'],
+    regs: ['http://localhost/sw.js', 'http://localhost/other-worker.js'],
+  });
+  await env.api.runLegacyCleanupOnce(); // settle the load-time run: the shipped list is empty
+  assert.deepStrictEqual(env.deleted, [], 'the shipped LEGACY_CACHE_NAMES is empty — nothing is deleted at load');
+  assert.strictEqual(local.getItem('ma.legacyCleanup.v1'), '1', 'the once-per-browser flag is set');
+  assert.strictEqual(env.registrations[0].unregistered, true, 'the /sw.js registration is unregistered');
+  assert.strictEqual(env.registrations[1].unregistered, false, 'a registration for another script is left alone');
+
+  // Re-arm the flag and pass a legacy list that (wrongly) also names the model cache.
+  local.removeItem('ma.legacyCleanup.v1');
+  await env.api.runLegacyCleanupOnce({ legacyCacheNames: ['old-app-v1', 'transformers-cache'] });
+  assert.deepStrictEqual(env.deleted, ['old-app-v1'], 'only the legacy name goes; the model cache is protected even if listed');
+  assert.deepStrictEqual(Array.from(env.names).sort(), ['transformers-cache', 'unrelated-cache']);
+
+  // Second run: flag set -> does nothing.
+  env.names.add('old-app-v1');
+  await env.api.runLegacyCleanupOnce({ legacyCacheNames: ['old-app-v1'] });
+  assert.deepStrictEqual(env.deleted, ['old-app-v1'], 'a second run is a no-op because of the flag');
+  assert.ok(env.names.has('old-app-v1'));
+});
+
+test('static: transitions.js makes no Cache Storage delete/enumerate call and no per-load worker unregister', () => {
+  const src = readRoot('public', 'js', 'transitions.js');
+  assert.strictEqual((src.match(/caches\.delete\(/g) || []).length, 0);
+  assert.strictEqual((src.match(/caches\.keys\(/g) || []).length, 0);
+  assert.ok(!/getRegistrations\(/.test(src), 'no per-load service-worker unregister loop');
+  assert.ok(/MAClientStorage\.runLegacyCleanupOnce\(\)/.test(src), 'the guarded one-time clean-up replaces it');
+});
+
+test('static: no other page script wipes Cache Storage', () => {
+  const dir = path.join(ROOT, 'public', 'js');
+  const offenders = fs.readdirSync(dir).filter((f) => f.endsWith('.js') && f !== 'client-storage.js')
+    .filter((f) => /caches\.(delete|keys)\(/.test(fs.readFileSync(path.join(dir, f), 'utf8')));
+  assert.deepStrictEqual(offenders, []);
+});
+
+test('static: public/sw.js is a self-unregistering stub — no fetch listener, no blanket cache delete', () => {
+  const src = readRoot('public', 'sw.js');
+  assert.ok(!/addEventListener\(\s*['"]fetch['"]/.test(src), 'sw.js must not intercept requests');
+  assert.ok(/addEventListener\(\s*['"]install['"]/.test(src) && /skipWaiting\(\)/.test(src));
+  assert.ok(/self\.registration\.unregister\(\)/.test(src));
+  assert.ok(/LEGACY_CACHE_NAMES\.indexOf\(key\)/.test(src), 'only legacy cache names are deleted');
+  assert.ok(!/transformers-cache/.test(src.replace(/\/\/.*$/gm, '')), 'the model cache is never named in executable code');
+});
+
+test('static: sw.js and client-storage.js carry the same LEGACY_CACHE_NAMES', () => {
+  const sw = /const LEGACY_CACHE_NAMES = (\[[^\]]*\]);/.exec(readRoot('public', 'sw.js'));
+  const cs = /var LEGACY_CACHE_NAMES = Object\.freeze\((\[[^\]]*\])\);/.exec(CLIENT_SRC);
+  assert.ok(sw && cs, 'both declarations must be found');
+  assert.deepStrictEqual(JSON.parse(sw[1].replace(/'/g, '"')), JSON.parse(cs[1].replace(/'/g, '"')));
+});
+
+test('static: public/manifest.json is gone and nothing under public/ references it', () => {
+  assert.ok(!fs.existsSync(path.join(ROOT, 'public', 'manifest.json')));
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'vendor' || e.name === 'node_modules') continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (/\.(html|js|css|json)$/.test(e.name) && /rel=["']manifest["']|manifest\.json/.test(fs.readFileSync(full, 'utf8'))) offenders.push(path.relative(ROOT, full));
+    }
+  };
+  walk(path.join(ROOT, 'public'));
+  assert.deepStrictEqual(offenders, []);
+});

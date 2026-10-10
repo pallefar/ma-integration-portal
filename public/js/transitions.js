@@ -1876,23 +1876,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Inject Role Guidance & Action Timeline Banner Card
   injectRoleGuidanceBanner();
-  // Register Service Worker for PWA
-  // Unregister Service Worker and clear caches to prevent layout update lag during development
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (let registration of registrations) {
-        registration.unregister().then(() => {
-          console.log('Active Service Worker unregistered.');
-        });
-      }
-    });
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        for (let name of names) {
-          caches.delete(name);
-        }
-      });
-    }
+  // [security] SAFE-07 / D-13-06 (c) / T-13-32 (R5-15): this page-init block
+  // used to unregister every service worker and DELETE EVERY Cache Storage
+  // entry on every page load — which also threw away the downloaded
+  // Transformers model each navigation. That unconditional wipe is gone. The
+  // only clean-up left is MAClientStorage.runLegacyCleanupOnce(): once per
+  // browser, /sw.js registrations and previously shipped legacy cache names
+  // only, never the model cache. client-storage.js also runs it on load, so the
+  // order of the two scripts never matters.
+  if (window.MAClientStorage && typeof window.MAClientStorage.runLegacyCleanupOnce === 'function') {
+    window.MAClientStorage.runLegacyCleanupOnce();
   }
 
   // Apply edit mode body class immediately on load if enabled
