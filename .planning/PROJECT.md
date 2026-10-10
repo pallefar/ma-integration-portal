@@ -8,18 +8,37 @@ A TE Connectivity M&A integration portal that today demonstrates post-merger int
 
 An Integration Lead can run one real TE acquisition end-to-end in this app — from due diligence through 100 days — without keeping a parallel spreadsheet.
 
-## Current Milestone: v2.2.0 Shared-Host Multi-User
+## Current Milestone: v3.0 Production-Ready
 
-**Goal:** Move the portal from laptop-local to a shared internal host where the Integration Lead and workstream leads collaborate on one live deal concurrently — conflict-safe, operationally hardened, and deployable across a self-managed host, a container/platform, or app-only — plus collaborative enhancements to the deal-setup wizard.
+**Goal:** Make the portal genuinely production-ready on a shared internal host holding MNPI — with an
+**admin who can switch parts of the app off** and the **Integration Leader as the key persona** —
+after a seven-lane review of the whole app (2026-10-10, `.planning/reviews/v3.0/`).
 
 **Target features:**
-- Concurrency safety: optimistic locking on co-edited records (version + 409 + reload UX); the multi-writer architecture (single-writer broker vs cross-process lock vs Postgres migration) chosen by a research-first pass, since multi-process clustering breaks the Phase-1 in-process snapshot merge.
-- Deployment for all three shapes: self-managed internal Linux host tooling/docs (service manager, reverse proxy + TLS, backups, secrets, graceful restart), a container image + config contract for TE-IT-run infra, and app-layer multi-user safety as the shared base.
-- Operational hardening: sessions at scale, rate limiting, real secret management (retire the ADMIN_TOKEN stopgap), health/readiness endpoints, backup/restore, graceful shutdown.
-- Workstream-lead collaboration: invite/onboard workstream leads with per-area clearance grants set at setup, plus presence/status.
-- Deal-setup wizard enhancements: a workstream-lead onboarding step, per-step ownership handoff, and multi-user-aware resume/collaboration state.
+- Accounts & identity: real user provisioning, explicit real-deal mode on its own gitignored data
+  directory, no published credentials, sessions that see role changes (Phase 10).
+- Authorization: an explicit read/write policy, admin-only configuration, the clean-room closed on
+  tasks and RAID, denials audited (Phase 11).
+- Data layer that scales with the deal: writes/audit proportional to change, paged reads, versioned
+  schemas, tamper-evident audit partitions, CPU isolation, a trustworthy test suite + browser smoke
+  harness (Phase 12).
+- Content and file safety: allowlist sanitizer, CSP without inline script, sandboxed slides, egress
+  off by default (Phase 13); authenticated deal-scoped file store, per-route limits, demo-era hazards
+  removed (Phase 14).
+- **Module control:** admin switchboard — server-enforced (API + pages), audited, reversible, with a
+  coverage gate and break-glass CLI (Phase 15); every surface honours it, per-deal override,
+  real-deal default (Phase 16).
+- **Integration Leader focus:** cockpit + real-deal shell, correct attention signals, timeline,
+  currency (Phase 17); task planning, decision log, retention terms, DD ergonomics, pack v2, changes
+  digest (Phase 18); four-language, accessible, phone-fit screens (Phase 19).
+- Operations: validated config, readiness, graceful stop, structured logs, limits (Phase 20);
+  self-managed + container deployment shapes and a reproducible release (Phase 21).
+- Collaboration and collaborative setup (Phase 22); independent production certification (Phase 23).
 
-**Key context:** the concurrency architecture is the pivotal unknown; research weighs it against the zero-install committed-DB turnkey-zip model and the surviving demo showcase. A Postgres decision may reshape scope and bump the version to v3.0.
+**Key context:** v2.2.0 "Shared-Host Multi-User" was never released; v3.0 absorbs it in place — Phases
+8–9 (concurrency, optimistic locking) carry over, the v2.2.0 operational/collaboration scope is
+re-shaped by the review. Phase 9 is reopened for a gap closure (R7 found the lock does not bite on a
+record's first co-edit). Architecture is unchanged (SQLite, host-local WAL, `replicas: 1`).
 
 ## Requirements
 
@@ -54,19 +73,26 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - ✓ Org design & talent retention: org-position registry, append-only decision log, clearance-scoped flight-risk register, two-tier deal-home rollup — Phase 6
 - ✓ IMO reporting & exports: CSV/JSON exports of workstreams/tasks/RAID/synergies + TE-branded tri-language PDF steerco pack, all clearance-scoped and audited — Phase 7
 
-**Shared-Host Multi-User — v2.2.0 (in progress)**
+**v3.0 Production-Ready — carried-over foundation (Phases 8–9, built under the v2.2.0 label)**
 
 - ✓ CONC-01: Concurrent writers (overlapping in-process requests or separate processes on one host) serialize safely with zero lost updates — `BEGIN IMMEDIATE` + busy-retry → 503 Retry-After, audit append atomic with the deal commit, client silent retry + honest give-up toast, proven by a real multi-process soak (`npm run soak`) — Phase 8 (2026-08-11)
+- ◆ CONC-02: Optimistic locking (version in the record blob, 409 body, conflict dialog, stale-delete) built and verifier-passed in Phase 9 — **reopened 2026-10-10**: a browser walk (R7) showed the lock does not bite on a record's first co-edit and pages go stale after Apply; closing in Phase 9 gap-closure plans
 
 ### Active
 
-<!-- v2.2.0 Shared-Host Multi-User — 15 requirements across Phases 8–13; full text in .planning/REQUIREMENTS.md -->
+<!-- v3.0 Production-Ready — 86 requirements across Phases 8–23; full text + traceability in .planning/REQUIREMENTS.md -->
 
-- [ ] CONC-02: Optimistic locking — stale co-edited writes rejected 409 with a reload-and-reapply path (Phase 9)
-- [ ] DEPLOY-03 + OPS-01/02/03: App-layer runtime hardening — health/readiness, graceful shutdown, backup/restore, operational logging (Phase 10)
-- [ ] DEPLOY-01/02: Deployment shapes — self-managed Linux host service + container image with documented config contract, `replicas: 1` (Phase 11)
-- [ ] COLLAB-01..04: Workstream-lead collaboration — invite/clearance model, session revocation on role change, audit coverage on new routes (Phase 12)
-- [ ] WIZ-02/03/04: Collaborative deal-setup wizard enhancements — lead onboarding, ownership handoff, multi-user resume (Phase 13)
+- [ ] CONC-02: first-co-edit protection + page sync after reapply (Phase 9 gap closure)
+- [ ] ACCT + COLLAB-02 + OPS-08: real accounts, explicit real-deal mode, no published credentials (Phase 10)
+- [ ] AUTHZ: read/write policy, admin-only config, clean-room on tasks/RAID (Phase 11)
+- [ ] DATA/QUAL: dirty-row writes + audit, paged reads, schema versions, audit partitions, CPU isolation, deterministic tests, smoke harness (Phase 12)
+- [ ] SAFE: sanitizer/CSP/slides/egress (Phase 13); deal files, limits, legacy hazards (Phase 14)
+- [ ] MOD: admin module switchboard — core (Phase 15), surfaces/per-deal/defaults (Phase 16)
+- [ ] IL: cockpit + real-deal shell (Phase 17), execution tooling + reporting (Phase 18)
+- [ ] UX: four-language, accessible, phone-fit IL screens (Phase 19)
+- [ ] OPS: runtime hardening (Phase 20); DEPLOY/REL: deployment shapes + release engineering (Phase 21)
+- [ ] COLLAB/WIZ: workstream-lead collaboration + collaborative setup (Phase 22)
+- [ ] CERT: independent production certification (Phase 23)
 
 ### Out of Scope
 
@@ -81,11 +107,12 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 - Document storage / VDR in the DD workspace — TE already licenses a virtual data room; the DD workspace tracks request lists, findings and clean-room *access* and links out to the VDR rather than storing or exchanging documents (resolved at requirements gate 2026-07-23)
 - PPTX steerco-pack generation — export is CSV/JSON + formatted PDF only; PowerPoint generation is disproportionate for a laptop tool (resolved at requirements gate)
 - SQLCipher / application-level at-rest encryption — MNPI at-rest protection relies on OS full-disk encryption (FileVault/BitLocker) as a documented deployment requirement; SQLCipher noted as later hardening if the app moves to shared hosting (resolved at requirements gate)
+- Destructive module removal — v3.0's module switch is reversible and never deletes data; deletion would be a separate, previewed, audited action
 - Network-filesystem SQLite (NFS/SMB data dirs) — multi-process hardening on ONE host shipped in Phase 8 (v2.2.0); network filesystems remain out of scope (WAL locking is unreliable on them; deployment docs require a local volume)
 
 ## Context
 
-**Current state.** The app is at **v2.1.0 (Real-Deal Milestone), shipped 2026-08-10** — released on GitHub with three turnkey zips (any-OS / macOS / Windows). Test suite 687/687. The v2.0.1 demo-showcase heritage is preserved as a cleanly-isolated mode. A codebase map exists at `.planning/codebase/` (7 documents) as the authoritative technical reference; note the SQLite/auth/isolation facts below now supersede the pre-Phase-1 `db.json` description in older docs.
+**Current state.** The app is at **v2.1.0 (Real-Deal Milestone), shipped 2026-08-10**, plus unreleased local work: Phase 8 (concurrency) and Phase 9 (optimistic locking, gap closure pending) — suite 779/779. The 2026-10-10 review (`.planning/reviews/v3.0/SUMMARY.md`) concluded the app is **not yet production-ready for MNPI on a shared host** (no user provisioning and published demo credentials; write/audit amplification; coarse authorization; the IL lands on the demo deck) and set the v3.0 scope. The v2.0.1 demo-showcase heritage is preserved as a cleanly-isolated mode. A codebase map exists at `.planning/codebase/` (older, pre-SQLite in places — trust the code).
 
 **Stack.** Express 4 backend (`server.js`, ~6,800 lines) serving a vanilla-JS multi-page frontend. Persistence is **SQLite (better-sqlite3, WAL) via `db/store.js`**, file-per-deal (`data/control.db` + `data/demo.db` committed; `data/runtime.db`, `data/audit.db`, `data/deals/*.db` gitignored). Real server-verified auth is **fail-closed by default** (sessions table; `DEMO_OPEN=1` is the explicit demo-open flag used only by the demo launchers). Writes are zod-validated and audited to an append-only `audit.db`. No build step, no framework, no bundler. `node_modules` is committed and Transformers.js is vendored locally so the bundles are self-contained. Real-deal deployments use the fail-closed `start-real-deal.*` launchers (see `DEPLOYMENT.md`).
 
@@ -125,6 +152,15 @@ An Integration Lead can run one real TE acquisition end-to-end in this app — f
 | Make auth mandatory by promoting `PORTAL_AUTH`, not by rebuilding | Server-verified login with roles already exists and is tested; the work is enforcement and role granularity, not new authentication | — Pending |
 | Native SQLite WAL multi-process serialization (Option B), not a broker or Postgres | Stays zero-install, keeps the committed-DB turnkey bundle intact, and `BEGIN IMMEDIATE` + busy_timeout does the cross-process waiting inside SQLite itself | ✓ Shipped Phase 8 — soak-proven (thousands of writes, zero lost, audit 1:1) |
 | Audit append atomic with the deal commit (inside one transaction) | A 503 must truthfully mean "nothing persisted" — the post-commit audit ordering let a busy audit 503 an already-committed write, which the client's silent retry would have turned into duplicate MNPI rows (review CR-01) | ✓ Shipped Phase 8 — committedButUnaudited is now a hard soak violation, measured 0 |
+| Re-scope the unreleased v2.2.0 into v3.0 in place (no archive) | All of it is local/unreleased and v2.2.0's remaining scope *is* the production-readiness work; archiving Phases 8–9 under a never-shipped label would be bookkeeping for nothing; REQUIREMENTS.md already anticipated the v3.0 bump | — Pending (2026-10-10) |
+| Module switch = instance ceiling + per-deal additive override, admin-only, non-destructive | An IMO needs per-deal control (org off until HR clearance, employee portal off pre-close); static pages have no deal context so they are guarded at instance level, per-deal enforced at the API where the data is; disable never deletes | — Pending (Phases 15–16) |
+| Foundation-first ordering retained for v3.0 (trust → data → content safety → module switch → IL → ops → deployment → collaboration → certification) | MNPI is non-negotiable; every IL feature stands on authorization, a sane audit/write path and safe content | — Pending |
+| IL membership management stays in the collaboration phase; admin does it meanwhile | Keeps Phase 10 bounded now that admin user CRUD exists | — Pending (Phase 22) |
+| Translate the real-deal IL screens (EN/DE/ZH/CS) rather than hide the language selector | DE/CZ/CN workstream leads join in v3.0 and the user's i18n investment is the product's differentiator | — Pending (Phase 19) |
+| Human-verify gates are judged by Fable against the written contracts (user directive 2026-08-08); push/release remain user-confirmed | Keeps the autonomous run unblocked without weakening review; authorization ≠ review | ✓ In effect |
+| Real-deal mode is explicit (`MA_MODE=real`) on its own gitignored data directory; committed `control.db`/`demo.db` are never written in real-deal mode | `start-real-deal.*` was indistinguishable from `node server.js`; the deal registry (target names = MNPI) lived in a committed file in a public repo; boot refusal on demo credentials would otherwise break the suite and dev loop | — Pending (Phase 10) |
+| Audit becomes per-deal, hash-chained, sealed-then-exported, purge only after sealed export + retention; this **supersedes v2.1.0 AUD-02 "trail survives deal deletion"** | The single append-only audit.db grows unboundedly, holds MNPI snapshots of deleted deals forever with no purge path, and has no tamper evidence (ASVS 16.4.2); retention is a legal call — default is never auto-purge | — Pending (Phase 12) |
+| An activity/changes feed for deal members is allowed (clearance-scoped, projected from the audit): **supersedes v2.1.0 D-20 "deliberately no activity feed"** | R4/R6: "what changed since I last looked" is an IL table-stake; the projection never exposes the admin audit | — Pending (Phases 18, 22) |
 
 ## Evolution
 
@@ -143,5 +179,6 @@ This document evolves at phase transitions and milestone boundaries.
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
+
 ---
-*Last updated: 2026-08-11 after Phase 8 (Concurrency & Storage Foundation) — CONC-01 validated, suite 704/704.*
+*Last updated: 2026-10-10 after the v3.0 production-readiness review — milestone re-scoped v2.2.0 → v3.0 in place; CONC-02 reopened.*
