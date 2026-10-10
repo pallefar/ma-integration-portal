@@ -105,6 +105,21 @@ test('isolatedTask: a second tryAcquire while one is held is refused (never queu
   } finally { task.close(); }
 });
 
+test('isolatedTask: WR-B03 — a second run() on a lease whose job is in flight is refused without touching the first job', async () => {
+  const task = fixtureTask({ timeoutMs: 5000 });
+  try {
+    const lease = task.tryAcquire();
+    assert.ok(lease);
+    const first = lease.run({ op: 'sleep', ms: 200 });
+    await assert.rejects(lease.run({ op: 'echo', value: 2 }), (e) => e instanceof BusyTaskError && e.code === 'TASK_BUSY');
+    assert.deepStrictEqual(await first, { slept: 200 }, 'the first job still settles with its own result');
+    assert.strictEqual(task.spawnCount(), 1, 'the worker was never terminated');
+    // Once the first job settled, the same lease may run again.
+    assert.deepStrictEqual(await lease.run({ op: 'echo', value: 3 }), { echo: 3 });
+    lease.release();
+  } finally { task.close(); }
+});
+
 test('isolatedTask: a handler error rejects that job only — the worker survives', async () => {
   const task = fixtureTask();
   try {
