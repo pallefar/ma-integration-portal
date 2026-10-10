@@ -4594,9 +4594,11 @@ function enrichSynergy(item, ctx) {
 // a caller's synergy rows (D-08). Synergies carry no per-item clearance
 // concept today (every deal member sees every initiative), so this is an
 // enrichment pass, not a filter.
-function reportSynergyRows(db, ctx) {
+function reportSynergyRows(db, ctx, visibleLinks) {
   const lane = synergyLane(db);
-  return lane.map((item) => {
+  const project = typeof visibleLinks === 'function' ? visibleLinks : (item) => item;
+  return lane.map((raw) => {
+    const item = project(raw);
     const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
     const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     return Object.assign({}, enrichSynergy(item, ctx), { costEntries: sortedCostEntries });
@@ -4620,13 +4622,32 @@ function stageAtLastBaseline(item) {
   return last.stage || null;
 }
 
+// [security] IN-01 (Phase 11 review): an initiative's stored `taskIds` keep
+// links to tasks the reader may not see (resolveSynergyTaskIds() preserves a
+// hidden link on an uncleared edit — correct for the WRITE). On the READ the
+// ids of existing tasks outside the caller's clearance are dropped, so the
+// list is no longer a count/existence oracle for restricted tasks (the same
+// recordVisibleTo() rule the task routes 404 on). Ids that resolve to no task
+// at all carry no information and are left as stored.
+function synergyLinksVisibleTo(req, db) {
+  const deal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+  const hidden = new Set();
+  taskLane(db).forEach((t) => { if (!recordVisibleTo(req, db, deal, t)) hidden.add(t.id); });
+  return (item) => {
+    if (!hidden.size || !Array.isArray(item.taskIds) || !item.taskIds.some((id) => hidden.has(id))) return item;
+    return Object.assign({}, item, { taskIds: item.taskIds.filter((id) => !hidden.has(id)) });
+  };
+}
+
 app.get('/api/synergies', (req, res) => {
   const db = readDb();
   const lane = synergyLane(db);
   // SYN-05: ctx built ONCE per request — every item in this response is
   // judged against the identical clock and threshold.
   const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
-  res.json(lane.map((item) => {
+  const visibleLinks = synergyLinksVisibleTo(req, db); // IN-01
+  res.json(lane.map((raw) => {
+    const item = visibleLinks(raw);
     const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
     // SYN-02: newest-date-first, a STABLE sort (Array.prototype.sort() is
     // spec-guaranteed stable) run against a COPY of the stored array — two
@@ -7272,7 +7293,7 @@ app.get('/api/reports/export', (req, res) => {
       // SINGLE enriched-synergies read GET /api/reports/pack calls too, so
       // the JSON export can never diverge from the pack's shape either.
       const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
-      rows = reportSynergyRows(db, ctx);
+      rows = reportSynergyRows(db, ctx, synergyLinksVisibleTo(req, db)); // IN-01
       columns = [
         { key: 'id', header: 'ID' },
         { key: 'title', header: 'Title' },
@@ -7421,7 +7442,7 @@ app.get('/api/reports/pack', async (req, res, next) => {
     // carries `stageAtBaseline`, resolved server-side from the SAME
     // baselines[] history POST /api/synergies/:id/rebaseline writes — never
     // re-derived inside lib/reportPack.js, which performs no database logic.
-    const synergies = reportSynergyRows(db, synergyCtx).map((item) =>
+    const synergies = reportSynergyRows(db, synergyCtx, synergyLinksVisibleTo(req, db)).map((item) => // IN-01
       Object.assign({}, item, { stageAtBaseline: stageAtLastBaseline(item) })
     );
 

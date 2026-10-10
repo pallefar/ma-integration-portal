@@ -491,6 +491,38 @@ test('clearance-write-paths (Task 2, structural): every by-id task/RAID write ro
   assert.ok(!src.includes("'Task not found.'") && !src.includes("'Entry not found.'"), "the retired 'Task not found.' / 'Entry not found.' bodies must be gone");
 });
 
+test('clearance-write-paths (IN-01): GET /api/synergies and the synergies export drop restricted task ids for an uncleared reader; cleared readers see them; the stored hidden link survives an uncleared edit', async () => {
+  const server = await listenLocal(app);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const fx = await seedFixture(base, 'deal_cwpin01');
+    const hrId = fx.hrTask.id;
+    const created = await postJSON(base, '/api/synergies', fx.tokens.karenToken, { title: 'Linked initiative', taskIds: [hrId, fx.manualTask.id] });
+    assert.strictEqual(created.status, 201);
+    const syn = (await created.json()).initiative;
+    const synOf = async (token) => (await listAs(base, token, '/api/synergies')).find((s) => s.id === syn.id);
+
+    const uncleared = await synOf(fx.tokens.noneToken);
+    assert.deepStrictEqual(uncleared.taskIds, [fx.manualTask.id], 'the uncleared reader sees only the visible link');
+    const rawText = await (await getJSON(base, '/api/synergies', fx.tokens.noneToken)).text();
+    assert.ok(!rawText.includes(hrId), 'the restricted id appears nowhere in the uncleared body');
+    const exp = await getJSON(base, '/api/reports/export?dataset=synergies&format=json', fx.tokens.noneToken);
+    assert.strictEqual(exp.status, 200);
+    assert.ok(!(await exp.text()).includes(hrId), 'nor in the synergies export');
+
+    assert.deepStrictEqual((await synOf(fx.tokens.hrToken)).taskIds.slice().sort(), [hrId, fx.manualTask.id].sort(), 'a cleared reader sees both');
+
+    // An uncleared edit still preserves the hidden link in storage (write path unchanged).
+    const edit = await postJSON(base, '/api/synergies', fx.tokens.noneToken, { id: syn.id, version: vOf(uncleared), title: 'renamed', taskIds: [fx.manualTask.id] });
+    assert.strictEqual(edit.status, 200);
+    await edit.text();
+    assert.deepStrictEqual((await synOf(fx.tokens.adminToken)).taskIds.slice().sort(), [hrId, fx.manualTask.id].sort(), 'the hidden link is preserved');
+  } finally {
+    server.close();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Phase 11 review WR-02: server-minted provenance cannot be planted.
 // ---------------------------------------------------------------------------
