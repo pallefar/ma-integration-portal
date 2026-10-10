@@ -44,7 +44,7 @@
 const fs = require('fs');
 const path = require('path');
 const { AsyncLocalStorage } = require('node:async_hooks');
-const { ARRAY_COLLECTIONS, SINGLETON_KEYS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS, comparableVersion } = require('./collections');
+const { ARRAY_COLLECTIONS, SINGLETON_KEYS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS, PROVENANCE_SCOPED_COLLECTIONS, hasRestrictedProvenance, comparableVersion } = require('./collections');
 const { openDbFile } = require('./dbFiles');
 // AUD-01/D-08/D-09/D-11 (Phase 3 Plan 05): the store-layer audit hook.
 // db/auditHook.js has NO require() back to this module (it opens its own
@@ -200,9 +200,21 @@ function makeConflictError(detail) {
 // withhold the record entirely — version and attribution stay disclosed
 // (the T-09-17 rule: field VALUES are withheld, never the fact of the
 // conflict itself).
+//
+// [security] D-11-03 / 09-SECURITY UF-2 (Phase 11): the task/RAID lanes are
+// clearance-scoped by PROVENANCE, not by a stored area, so their unarmed
+// fallback is provenance-aware — a record with restricted provenance
+// (clearanceArea stamp, or a dd-finding:/org-flightrisk: source) is withheld,
+// an ordinary manual task/RAID entry is still echoed (the Phase 9 compare
+// dialog is unchanged for it). Fail closed for a restricted record even if
+// some future caller on these lanes forgets to arm a filter. An ARMED filter
+// still decides for every collection, unchanged.
 function conflictVisibleRecord(collectionKey, current, scoped) {
   const filter = scoped && scoped.areaClearanceFilter;
   if (typeof filter === 'function') return filter(collectionKey, current);
+  if (PROVENANCE_SCOPED_COLLECTIONS.has(collectionKey)) {
+    return hasRestrictedProvenance(current) ? null : current;
+  }
   return CLEARANCE_SCOPED_COLLECTIONS.has(collectionKey) ? null : current;
 }
 

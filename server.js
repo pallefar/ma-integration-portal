@@ -3925,12 +3925,18 @@ app.post('/api/integration-tasks', (req, res) => {
   const lane = taskLane(db);
   if (b.id) {
     const task = lane.find(t => t.id === b.id);
-    if (!task) return res.status(404).json({ error: 'Task not found.' });
+    // [security] D-11-03 / R1-02: missing AND out-of-clearance both answer
+    // the central 404 `{ error: 'Not found' }` — placed BEFORE
+    // conflictIfStale() (its 409 body would echo the record) and before any
+    // field assignment below.
+    const deal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+    assertRecordVisibleOr404(req, db, deal, task);
     // CONC-02 (Phase 9): the route-level precheck fast path — placed BEFORE
     // any field mutation below, including the status-flip branch (a kanban
     // quick action goes through the identical check as a full edit, D-02 —
-    // no exemptions for a single-field payload).
-    if (conflictIfStale(req, res, task)) return;
+    // no exemptions for a single-field payload). The clearanceFilter arms
+    // the same rule on the WHERE-layer conflict throw (CR-01 / UF-2).
+    if (conflictIfStale(req, res, task, { clearanceFilter: recordClearanceFilter(req, db, deal) })) return;
     // Validate EVERYTHING before touching the object — readDb() hands back the
     // shared cache, so a mutation followed by a 400 would silently stick.
     // VAL-01: status/phase enum membership is now owned exclusively by
@@ -3976,14 +3982,20 @@ app.delete('/api/integration-tasks/:id', (req, res) => {
   const db = readDb();
   const lane = taskLane(db);
   const task = lane.find(t => t.id === req.params.id);
-  if (!task) return res.status(404).json({ error: 'Task not found.' });
+  // [security] D-11-03 / R1-02: missing AND out-of-clearance both answer the
+  // central 404 `{ error: 'Not found' }` (the retired `Task not found.` body
+  // is gone — one body for every task/RAID not-found). BEFORE
+  // conflictIfStale(): its 409 body would echo the record, and an unguarded
+  // delete would let an uncleared member destroy a restricted record by id.
+  const deal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+  assertRecordVisibleOr404(req, db, deal, task);
   // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection — this route
   // carries no JSON body (EmptyBodySchema), so the precondition travels via
   // ?expectedVersion=, resolved through the same parseExpectedVersion()
   // dual-channel contract conflictIfStale() already delegates to (Plan 02).
   // Deleting something already gone is not a conflict (the 404 above already
   // covers it) — this only fires when the record is present but stale.
-  if (conflictIfStale(req, res, task)) return;
+  if (conflictIfStale(req, res, task, { clearanceFilter: recordClearanceFilter(req, db, deal) })) return;
   const filtered = lane.filter(t => t.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customIntegrationTasks = filtered;
   else db.integrationTasks = filtered;
@@ -4388,16 +4400,37 @@ const SYNERGY_STAMPING_FIELDS = ['runRateM', 'curveShape', 'startMonth', 'costPl
 // nonexistent id is simply not found in this lane, so the whole request is
 // refused with no partial write. Deduplicates while preserving first-seen
 // order. Does not touch taskLane() itself or any task-side field (D-22).
-function resolveSynergyTaskIds(taskIds, db) {
+//
+// [security] D-11-03 / T-11-25 (Phase 11): "found in this lane" now also
+// means VISIBLE to the caller. A task outside the caller's clearance (an
+// hr-area converted task for an uncleared member) is reported EXACTLY like
+// an unknown id — the same `Unknown task id: <id>` message, which only
+// echoes the id the caller itself supplied — so the link route cannot be
+// used as an existence/content oracle for restricted tasks.
+//
+// `existing` (update only) is the initiative's currently stored taskIds. A
+// restricted link the caller cannot see is PRESERVED (returned in
+// `preserved`, appended by the route) rather than silently dropped by an
+// edit from an uncleared member who never saw it — the caller can neither
+// add nor remove a link it is not cleared for.
+function resolveSynergyTaskIds(taskIds, db, req, deal, existing) {
   const lane = taskLane(db);
-  const known = new Set(lane.map((t) => t.id));
+  const known = new Set();
+  const hidden = new Set();
+  lane.forEach((t) => {
+    if (recordVisibleTo(req, db, deal, t)) known.add(t.id);
+    else hidden.add(t.id);
+  });
   const seen = new Set();
   const ids = [];
   for (const id of taskIds) {
     if (!known.has(id)) return { ok: false, error: `Unknown task id: ${id}` };
     if (!seen.has(id)) { seen.add(id); ids.push(id); }
   }
-  return { ok: true, ids };
+  const preserved = Array.isArray(existing)
+    ? existing.filter((id) => hidden.has(id) && !seen.has(id))
+    : [];
+  return { ok: true, ids, preserved };
 }
 
 // SYN-05/D-18/D-19/RPT-04: the item merged with every derived field this
@@ -4623,9 +4656,10 @@ app.post('/api/synergies', (req, res) => {
     // explicitly empty array resolves to [] and clears it.
     let resolvedTaskIds;
     if (b.taskIds !== undefined) {
-      const resolution = resolveSynergyTaskIds(b.taskIds, db);
+      const taskDeal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+      const resolution = resolveSynergyTaskIds(b.taskIds, db, req, taskDeal, item.taskIds);
       if (!resolution.ok) return res.status(400).json({ error: resolution.error });
-      resolvedTaskIds = resolution.ids;
+      resolvedTaskIds = resolution.ids.concat(resolution.preserved);
     }
     ['title', 'owner', 'workstreamId', 'notes'].forEach(k => { if (b[k] !== undefined) item[k] = String(b[k] || '').slice(0, 300); });
     if (b.category !== undefined) item.category = b.category === 'cost' ? 'cost' : 'revenue';
@@ -4678,7 +4712,8 @@ app.post('/api/synergies', (req, res) => {
   // must refuse the whole create with no row added.
   let createdTaskIds = [];
   if (b.taskIds !== undefined) {
-    const resolution = resolveSynergyTaskIds(b.taskIds, db);
+    const taskDeal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+    const resolution = resolveSynergyTaskIds(b.taskIds, db, req, taskDeal);
     if (!resolution.ok) return res.status(400).json({ error: resolution.error });
     createdTaskIds = resolution.ids;
   }
@@ -5179,6 +5214,72 @@ function reportRaidRows(db, deal, portalUser) {
   });
 }
 
+// [security] D-11-03 / R1-02 / T-11-20..22 (Phase 11): the by-id WRITE-path
+// twin of the read filters above. Reading a task/RAID list was always
+// clearance-filtered; an update, status flip, delete, synergy link or
+// conversion lookup that addresses a record BY ID was not, so an uncleared
+// deal member holding an id (ids leak via URLs/CSVs/screens — authorization
+// must not rest on id secrecy) could read the record back through the
+// optimistic-locking 409 echo, overwrite it, or delete it (R1-02,
+// 09-SECURITY UF-2).
+//
+// `RecordNotFoundError` carries `reason` ('missing' | 'clearance') so the
+// central 404 handler (error-middleware block, below) answers BOTH with the
+// byte-identical `{ error: 'Not found' }` body — never a 403, never a 409,
+// never any field of the record — while the reason stays available for the
+// rate-bounded denial audit Plan 11-04 hangs on that same branch.
+class RecordNotFoundError extends Error {
+  constructor(reason) {
+    super('Not found');
+    this.name = 'RecordNotFoundError';
+    this.status = 404;
+    this.reason = reason === 'clearance' ? 'clearance' : 'missing';
+  }
+}
+
+// True when the caller may know `record` exists. The area rule is the SHARED
+// task/RAID rule: stamped `clearanceArea` first, then `dd-finding:<id>` →
+// the finding's area, then `org-flightrisk:` → 'hr', else null =
+// unrestricted. resolveTaskClearanceArea() and
+// resolveRaidEntryClearanceArea() above are line-for-line the same rule
+// (their own comments say so), so one resolver serves both lanes here —
+// keep it that way: if the two ever diverge this helper must resolve per
+// lane instead.
+function recordVisibleTo(req, db, deal, record) {
+  if (!record) return false;
+  ddFindingsLane(db);
+  const area = resolveTaskClearanceArea(record, db);
+  return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
+}
+
+// Throws RecordNotFoundError for a missing OR invisible record. MUST be
+// called BEFORE conflictIfStale() (a 409 body is the R1-02 oracle) and
+// before any field of the request body is applied. 404, not 403, so
+// existence of an out-of-clearance record is never confirmed.
+function assertRecordVisibleOr404(req, db, deal, record) {
+  if (!record) throw new RecordNotFoundError('missing');
+  if (!recordVisibleTo(req, db, deal, record)) throw new RecordNotFoundError('clearance');
+}
+
+// The clearanceFilter conflictIfStale() arms on the request's db context so
+// the store's WHERE-layer conflict can never echo an invisible record either
+// (CR-01 arming order — the filter is armed before any return).
+function recordClearanceFilter(req, db, deal) {
+  return (rec) => (recordVisibleTo(req, db, deal, rec) ? rec : null);
+}
+
+// [security] D-11-03 (Phase 11): the org-design lanes (orgPositions /
+// orgFlightRisks) are writable only by callers holding the `hr` area grant —
+// every handler checks it at the top, before any record is resolved. This
+// filter restates that single fact for the conflict body and arms the
+// WHERE-layer hook, so those lanes can sit in CLEARANCE_SCOPED_COLLECTIONS
+// (db/collections.js: fail closed when no filter is armed) without changing
+// anything for a cleared caller, and a future route that forgets the
+// whole-route gate can never echo an org record across the boundary.
+function hrClearanceFilter(req, deal) {
+  return (rec) => (rec && accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr') ? rec : null);
+}
+
 app.get('/api/raid', (req, res) => {
   const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
@@ -5192,10 +5293,18 @@ app.post('/api/raid', (req, res) => {
   const lane = raidLane(db);
   if (b.id) {
     const item = lane.find(r => r.id === b.id);
-    if (!item) return res.status(404).json({ error: 'Entry not found.' });
-    // CONC-02 (Phase 9, tracer): the route-level precheck fast path — RAID
-    // entries carry no area-clearance gate, so no clearanceFilter is passed.
-    if (conflictIfStale(req, res, item)) return;
+    // [security] D-11-03 / R1-02: a RAID entry converted from an hr-area DD
+    // finding or a flight-risk row IS clearance-scoped (provenance resolves
+    // its area — resolveRaidEntryClearanceArea()). Missing AND invisible both
+    // answer the central 404 `{ error: 'Not found' }` — BEFORE
+    // conflictIfStale() (its 409 echoes the record) and before any field
+    // assignment below.
+    const deal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+    assertRecordVisibleOr404(req, db, deal, item);
+    // CONC-02 (Phase 9, tracer): the route-level precheck fast path; the
+    // clearanceFilter arms the same rule on the WHERE-layer conflict throw
+    // (CR-01 / UF-2).
+    if (conflictIfStale(req, res, item, { clearanceFilter: recordClearanceFilter(req, db, deal) })) return;
     // Validate before mutating the shared readDb() cache (see task update).
     // VAL-01: status enum membership is now owned exclusively by
     // validators/workstream.js's RaidUpsertSchema (z.enum); the
@@ -5369,11 +5478,12 @@ app.post('/api/org/positions', (req, res) => {
     // the stored row before either refusal, per that comment's own rule. A
     // request that is BOTH stale AND structurally invalid gets the
     // conflict, not the 400 — the conflict is the actionable one for the
-    // user. No clearanceFilter: the whole route is gated on a single `hr`
-    // area grant checked at the top, so a caller reaching this path is
-    // already cleared for every record the route can resolve — a
-    // per-record filter would be a second, parallel check of the same fact.
-    if (conflictIfStale(req, res, item)) return;
+    // user. The whole route is gated on a single `hr` area grant checked at
+    // the top, so a caller reaching this path is already cleared for every
+    // record the route can resolve; `hrClearanceFilter` restates that one
+    // fact on the 409 body and arms the WHERE layer (D-11-03: orgPositions
+    // is a CLEARANCE_SCOPED_COLLECTIONS member, fail closed when unarmed).
+    if (conflictIfStale(req, res, item, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
     // Evaluate a shallow merge of the existing row and the incoming keys
     // BEFORE any field of the stored row is mutated — readDb() hands back a
     // shared cache, so a mutation followed by a refusal would stick.
@@ -5499,7 +5609,7 @@ app.delete('/api/org/positions/:id', (req, res) => {
   // a delete that is both stale AND blocked by direct reports returns 409,
   // not 400, so the caller learns their view is stale (the more fundamental
   // problem) before the business-rule refusal.
-  if (conflictIfStale(req, res, target)) return;
+  if (conflictIfStale(req, res, target, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
   const directReports = lane.filter((p) => p.reportsToId === target.id);
   if (directReports.length) {
     return res.status(400).json({ error: `This position has ${directReports.length} direct report(s) — reassign them before deleting.` });
@@ -5905,9 +6015,9 @@ app.post('/api/org/flight-risk', (req, res) => {
     }
     // CONC-02 (Phase 9, Plan 05): same placement as POST /api/org/positions
     // above — after the not-found guard and the employee-existence check,
-    // before the first field of the stored row is mutated. No
-    // clearanceFilter, for the same reason given there.
-    if (conflictIfStale(req, res, item)) return;
+    // before the first field of the stored row is mutated. The same
+    // `hrClearanceFilter` is armed, for the reason given there.
+    if (conflictIfStale(req, res, item, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
     if (b.employeeId !== undefined) item.employeeId = b.employeeId;
     if (b.riskLevel !== undefined) item.riskLevel = b.riskLevel;
     // WR-02 (06-REVIEW.md): a blank/whitespace-only owner defaults to the
@@ -5971,7 +6081,7 @@ app.delete('/api/org/flight-risk/:id', (req, res) => {
   const item = lane.find((r) => r.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Flight-risk entry not found.' });
   // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
   db.orgFlightRisks = lane.filter((r) => r.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
@@ -6008,9 +6118,10 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   // derived and before the task/RAID lanes are touched, so a stale-version
   // conflict leaves the entry, the task lane and the RAID lane all
   // untouched (Pitfall 6) — nothing here has mutated anything yet. No
-  // clearanceFilter, for the same reason given on the sibling routes above:
-  // the whole route is already gated on a single `hr` area grant.
-  if (conflictIfStale(req, res, entry)) return;
+  // clearanceFilter beyond the `hr` restatement: the whole route is already
+  // gated on a single `hr` area grant, so `hrClearanceFilter` (D-11-03) only
+  // arms the WHERE layer the same way the sibling routes above do.
+  if (conflictIfStale(req, res, entry, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
 
   const source = 'org-flightrisk:' + entry.id;
   const employee = employeeRosterLane(db).find((e) => e.id === entry.employeeId);
@@ -6019,9 +6130,21 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   let task = null;
   let raidEntry = null;
 
+  // [security] D-11-03 / R1-02 (Phase 11): BOTH source-matched existing
+  // records are looked up and clearance-checked BEFORE either lane is
+  // mutated (readDb() hands back the shared cache — a task pushed and then a
+  // 404 thrown for the RAID half would leave the pushed task in the cache).
+  // An existing record outside the converter's clearance answers the central
+  // 404 — never returned as `task`/`raid` in the 200 body (a leak) and never
+  // silently duplicated.
+  const existingTask = b.toTask ? (taskLane(db).find((t) => t.source === source) || null) : null;
+  const existingRaid = b.toRaid ? (raidLane(db).find((r) => r.source === source) || null) : null;
+  if (existingTask) assertRecordVisibleOr404(req, db, deal, existingTask);
+  if (existingRaid) assertRecordVisibleOr404(req, db, deal, existingRaid);
+
   if (b.toTask) {
     const tLane = taskLane(db);
-    task = tLane.find((t) => t.source === source) || null;
+    task = existingTask;
     if (!task) {
       task = {
         id: newId('task'),
@@ -6049,7 +6172,7 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
 
   if (b.toRaid) {
     const rLane = raidLane(db);
-    raidEntry = rLane.find((r) => r.source === source) || null;
+    raidEntry = existingRaid;
     if (!raidEntry) {
       raidEntry = {
         id: newId('raid'),
@@ -6662,9 +6785,23 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
   let task = null;
   let raidEntry = null;
 
+  // [security] D-11-03 / R1-02 (Phase 11): BOTH source-matched existing
+  // records are looked up and clearance-checked BEFORE either lane is
+  // mutated (readDb() hands back the shared cache — a task pushed and then a
+  // 404 thrown for the RAID half would leave the pushed task in the cache).
+  // The finding's own area gate above does NOT cover this: a record stamped
+  // with a DIFFERENT area (the finding was re-pointed to another area after
+  // its first conversion — clearanceArea is deliberately sticky) must never
+  // be handed back in the 200 body to a caller not cleared for the STAMPED
+  // area. It answers the central 404 — never a leak, never a duplicate.
+  const existingTask = b.toTask ? (taskLane(db).find((t) => t.source === source) || null) : null;
+  const existingRaid = b.toRaid ? (raidLane(db).find((r) => r.source === source) || null) : null;
+  if (existingTask) assertRecordVisibleOr404(req, db, deal, existingTask);
+  if (existingRaid) assertRecordVisibleOr404(req, db, deal, existingRaid);
+
   if (b.toTask) {
     const tLane = taskLane(db);
-    task = tLane.find((t) => t.source === source) || null;
+    task = existingTask;
     if (!task) {
       task = {
         id: newId('task'),
@@ -6692,7 +6829,7 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
 
   if (b.toRaid) {
     const rLane = raidLane(db);
-    raidEntry = rLane.find((r) => r.source === source) || null;
+    raidEntry = existingRaid;
     if (!raidEntry) {
       raidEntry = {
         id: newId('raid'),
@@ -6873,12 +7010,17 @@ app.delete('/api/raid/:id', (req, res) => {
   const db = readDb();
   const lane = raidLane(db);
   const entry = lane.find(r => r.id === req.params.id);
-  if (!entry) return res.status(404).json({ error: 'Entry not found.' });
+  // [security] D-11-03 / R1-02: missing AND out-of-clearance both answer the
+  // central 404 `{ error: 'Not found' }` BEFORE conflictIfStale() (its 409
+  // echoes the record) — an uncleared member cannot delete a restricted
+  // RAID entry by id, nor learn it exists.
+  const deal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+  assertRecordVisibleOr404(req, db, deal, entry);
   // CONC-02 (Phase 9, Plan 06 / D-08): the representative route — stale-delete
   // rejection via the query-channel version precondition. A delete that
   // carries NO expectedVersion cannot be judged stale, so it is refused in a
   // real deal (plan 09-08, GD-1a, D-02 no exemptions); demo stays lenient.
-  if (conflictIfStale(req, res, entry)) return;
+  if (conflictIfStale(req, res, entry, { clearanceFilter: recordClearanceFilter(req, db, deal) })) return;
   const filtered = lane.filter(r => r.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customRaidEntries = filtered;
   else db.raidEntries = filtered;
@@ -8000,6 +8142,22 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// [security] D-11-03 / R1-02 / T-11-22 (Phase 11): the central 404 for a task/
+// RAID record that is missing OR outside the caller's clearance
+// (assertRecordVisibleOr404 throws RecordNotFoundError). One fixed body for
+// both reasons, so the response can never distinguish "no such id" from "an
+// id you may not know exists" and never carries a record field. Plan 11-04
+// attaches the rate-bounded `err.reason === 'clearance'` denial audit at this
+// exact branch. The FIRST typed mapping an error meets (above the 503/409
+// handlers that follow).
+app.use((err, req, res, next) => {
+  if (err instanceof RecordNotFoundError) {
+    if (res.headersSent) return next(err);
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next(err);
+});
+
 // [security] D-06/CONC-01 (Phase 8): ONE central error middleware mapping
 // SQLite write-lock contention (SQLITE_BUSY / SQLITE_BUSY_SNAPSHOT, via
 // isBusyError() above) to a bounded 503 + Retry-After — covering every write
@@ -8193,6 +8351,11 @@ module.exports.resolveRaidEntryClearanceArea = resolveRaidEntryClearanceArea;
 // against a hand-built task, without a live convert-then-DELETE sequence.
 module.exports.resolveTaskClearanceArea = resolveTaskClearanceArea;
 module.exports.reportTaskRows = reportTaskRows;
+// D-11-03 (Phase 11): exposed so a test can unit-check the by-id clearance
+// guard and its typed error without a full HTTP round trip.
+module.exports.assertRecordVisibleOr404 = assertRecordVisibleOr404;
+module.exports.recordVisibleTo = recordVisibleTo;
+module.exports.RecordNotFoundError = RecordNotFoundError;
 // D-19/D-21 (06-07): exposed so Plan 08's seed verification and any
 // Phase-7 consumer can call the SAME rollup implementation this route uses,
 // without booting the HTTP server for every pure-tally case.

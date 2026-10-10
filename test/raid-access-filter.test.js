@@ -398,3 +398,43 @@ test('raid-access-filter (k): public/due-diligence.html\'s due-diligence.js cach
   assert.ok(match, 'expected a cache-stamped due-diligence.js script tag');
   assert.notStrictEqual(match[1], '1784800003', 'the cache stamp must differ from the pre-Task-2 value recorded in this plan\'s own read-first notes');
 });
+
+// Phase 11 / 11-03 (AUTHZ-03, D-11-03, R1-02): the WRITE-path twin of (c)/(d).
+// A member cleared only for hr can read their own hr entry, but a by-id
+// update or delete of the legal- or financial-provenance entry answers the
+// same 404 `{ error: 'Not found' }` as an id that does not exist — never a 409
+// echo, never a 200 — and the entry is untouched. Full matrix:
+// test/clearance-write-paths.test.js.
+test('raid-access-filter (l): a member cleared only for hr gets 404 {error:"Not found"} on update and delete of an out-of-clearance RAID entry, byte-identical to a missing id, and the entry is unchanged', async () => {
+  const server = await listenLocal(app);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const fx = await seedFixture(base, 'deal_rafl');
+    const hr = fx.tokens.pmoHrToken;
+    const missing = await postJSON(base, '/api/raid', hr, { id: 'raid_does_not_exist', status: 'closed', version: 0 });
+    const missingText = await missing.text();
+    assert.strictEqual(missing.status, 404);
+    assert.strictEqual(missingText, '{"error":"Not found"}');
+    for (const e of [fx.entries.legalRaid, fx.entries.financialRaid]) {
+      const upd = await postJSON(base, '/api/raid', hr, { id: e.id, status: 'closed', title: 'overwritten' });
+      assert.strictEqual(upd.status, 404);
+      assert.strictEqual(await upd.text(), missingText, 'invisible must answer byte-identically to missing');
+      const del = await delReq(base, `/api/raid/${e.id}`, hr);
+      assert.strictEqual(del.status, 404);
+      assert.strictEqual(await del.text(), missingText);
+    }
+    const adminList = await (await getJSON(base, '/api/raid', fx.tokens.adminToken)).json();
+    for (const e of [fx.entries.legalRaid, fx.entries.financialRaid]) {
+      const now = adminList.find((r) => r.id === e.id);
+      assert.ok(now, 'the restricted entry still exists');
+      assert.strictEqual(now.title, e.title, 'and is unchanged');
+      assert.strictEqual(now.status, e.status);
+    }
+    // ...while the hr member's OWN hr-provenance entry stays editable.
+    const own = await postJSON(base, '/api/raid', hr, { id: fx.entries.hrRaid.id, status: 'closed' });
+    assert.strictEqual(own.status, 200, 'a cleared member still edits the entry in their own area');
+  } finally {
+    server.close();
+  }
+});
