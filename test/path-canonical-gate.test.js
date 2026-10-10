@@ -300,3 +300,68 @@ test('CR-01 live: ROLE_WRITE_POLICY x variants — a refused role is refused und
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('CR-01 live: ROLE_READ_POLICY x variants — a refused role is refused under every spelling, an allowed role is never refused by the gate', async () => {
+  const store = require('../db/store.js');
+  const dbFiles = require('../db/dbFiles.js');
+  const { ROLE_READ_POLICY, readRuleFor } = require('../lib/readPolicy');
+  const { listApiRoutes, concretePath } = require('./helpers/route-inventory');
+  const { createDealFixture } = require('./helpers/deal-fixture');
+  const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+  const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+  const fx = createDealFixture({
+    controlConn, runtimeConn, dealId: 'deal_rpvariants',
+    members: ROLES.map((role) => ({ username: 'rpv-' + role, role })),
+  });
+  const GATE_REFUSALS = ['Your role cannot view this information.', 'Your role cannot perform this action.'];
+  const gets = listApiRoutes(app).filter((r) => r.method === 'GET').map((r) => concretePath(r.path));
+
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    let probes = 0;
+    for (const rule of ROLE_READ_POLICY) {
+      // one concrete sample: the first registered GET route this rule governs
+      const sample = gets.find((p) => readRuleFor(p) === rule) || rule.prefix;
+      assert.strictEqual(readRuleFor(sample), rule, `sample ${sample} must resolve to its own rule`);
+      for (const role of ROLES) {
+        const cookie = fx.cookie('rpv-' + role);
+        const allowed = rule.roles.includes(role);
+        for (const v of [sample, ...variants(sample)]) {
+          const res = await fetch(base + v, { headers: { cookie } });
+          const text = await res.text();
+          probes++;
+          if (!allowed) {
+            assert.ok([401, 403, 404].includes(res.status), `${role} GET ${v} -> ${res.status} (rule ${rule.prefix} refuses ${role})`);
+            continue;
+          }
+          // [security] Only the spellings the router actually dispatches to the
+          // handler (trailing slash / `//` — they collapse to the canonical form)
+          // must keep working for an allowed role. A case / %-encoded spelling
+          // is NOT routable (case sensitive routing, no path decoding at match
+          // time), so refusing it 403 instead of 404 is the safe direction of
+          // the most-restrictive verdict (e.g. `/api/employees/Get-or-create`
+          // matches the broader STAFF `/api/employees` rule) and costs nothing.
+          const routable = v.replace(/\/{2,}/g, '/').replace(/\/+$/, '') === sample;
+          if (!routable) continue;
+          let refusedByGate = false;
+          if (res.status === 403) {
+            try { refusedByGate = GATE_REFUSALS.includes(JSON.parse(text).error); } catch (e) { /* not JSON */ }
+          }
+          assert.strictEqual(refusedByGate, false, `${role} GET ${v} must not be refused by the read gate (rule ${rule.prefix} allows ${role})`);
+        }
+        if (!allowed) {
+          // HEAD / OPTIONS are judged as GET (T-11-06)
+          for (const method of ['HEAD', 'OPTIONS']) {
+            const res = await fetch(base + sample, { method, headers: { cookie } });
+            await res.text();
+            assert.ok([401, 403, 404].includes(res.status), `${role} ${method} ${sample} -> ${res.status}`);
+          }
+        }
+      }
+    }
+    assert.ok(probes > 500, `expected a broad sweep, got ${probes}`);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

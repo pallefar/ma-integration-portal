@@ -17,6 +17,7 @@ const passwords = require('./lib/passwords');
 const { createThrottle } = require('./lib/loginThrottle');
 const { createLockdown, lockdownMiddleware } = require('./lib/credentialLockdown');
 const { pathForms } = require('./lib/requestPath');
+const readPolicy = require('./lib/readPolicy');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -707,6 +708,13 @@ const gatePolicy = {
   mustChangeAllows(forms) {
     return forms.length > 0 && forms.every((f) => MUST_CHANGE_ALLOWED_PATHS.has(f));
   },
+  /**
+   * D-11-01 read policy (lib/readPolicy.js): canonical-anchored, refused if the
+   * canonical path has no allowing rule OR any other ruled spelling refuses.
+   */
+  readAllows(role, forms, canonical) {
+    return forms.length > 0 && readPolicy.readAllowsForms(role, forms, canonical);
+  },
 };
 
 // ONE consolidated /api gate (replaces the two overlapping middlewares this
@@ -753,6 +761,7 @@ app.use('/api', (req, res, next) => {
   const shape = pathForms(req.baseUrl + req.path);
   if (!shape.ok) return res.status(404).json({ error: 'Not found' });
   req.gatePathForms = shape.forms;
+  req.gatePathCanonical = shape.canonical;
 
   const suppliedToken = req.get('X-Admin-Token') || '';
   if (ADMIN_TOKEN && suppliedToken && timingSafeEqualStr(suppliedToken, ADMIN_TOKEN)) {
@@ -834,6 +843,20 @@ app.use('/api', (req, res, next) => {
     const requiresRoleCheck = isWrite || gatePolicy.isAdminPath(forms);
     if (requiresRoleCheck && !gatePolicy.roleAllows(req.portalUser.role, forms, req.method)) {
       return res.status(403).json({ error: 'Your role cannot perform this action.' });
+    }
+    // [security] D-11-01 / AUTHZ-01 / R1-05 (Phase 11): reads are role-gated by
+    // the explicit ROLE_READ_POLICY (lib/readPolicy.js) — before this, any
+    // authenticated session (a real-deal `employee` included) could read the
+    // synergy financials, RAID, roster, org and DD data. GET, HEAD and OPTIONS
+    // are judged as GET by the same check (T-11-06). FAIL-CLOSED: the check is
+    // skipped ONLY when the request resolved to the demo store
+    // (`req.isDemo === true`); a deal-bound or control-plane resolution is
+    // strict, and an unlisted path has no rule and is refused. The demo store
+    // stays lenient on purpose — the showcase must be unchanged (D-11-01,
+    // mirrors conflictIfStale's GD-1b predicate). A fixed error string, no data.
+    if (!isWrite && req.isDemo !== true
+      && !gatePolicy.readAllows(req.portalUser.role, forms, req.gatePathCanonical)) {
+      return res.status(403).json({ error: 'Your role cannot view this information.' });
     }
     // VAL-01/VAL-02: shape-validate, strip unknown keys, and sanitize
     // HTML-tagged fields — LAST in this gate, after identity resolution, the
