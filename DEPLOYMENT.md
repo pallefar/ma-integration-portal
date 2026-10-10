@@ -208,6 +208,16 @@ request bodies, passwords or record content.
 - **Busy audit database.** If the audit database cannot be written because of
   write-lock contention, the refused request is answered `503` with `Retry-After`
   (never turned into a success) and the client retries.
+- **Clean-room clearance refusals use the same bound.** The due-diligence and
+  organisation clearance refusals keep their own audit action names
+  (`dd-access-denied`, `org-positions-target-access-denied`,
+  `org-decisions-access-denied`, `org-flightrisk-access-denied`) and the same row
+  shape as before, but are rate-bounded exactly as above: the first refusal of a
+  window is written at once, later identical refusals are counted and written once
+  as the next row (`after.folded: true`, `after.count: n`). For `dd-access-denied`
+  the subject (the item's area, or empty for an unknown id) is part of the key, so
+  "unknown id" and "uncleared area" remain separate rows. Every rate key also
+  includes the deal, so a refusal in one deal is never counted under another.
 
 ## ADMIN_TOKEN (optional break-glass, discouraged)
 
@@ -232,6 +242,16 @@ warning at boot.
 
 ## Known limitations
 
+- **Deal-settings change audited after the control-plane write (accepted).**
+  `POST /api/deals/:id/setup` (and the older `/api/deals/:id/members` route)
+  commits the change to the deal registry first and appends its
+  `deal-settings-update` audit event second. If the audit database is busy at that
+  instant the request answers `503` and the client silently retries; because the
+  update is a plain overwrite of the same values (idempotent), the retry leaves the
+  same end state and writes the audit event, so the only effect is that the first,
+  unaudited attempt is not separately recorded. Moving the audit append inside the
+  registry transaction (as deal-data writes already do) is planned with the
+  runtime-hardening work (Phase 20).
 - **`compression` dependency (GHSA-vc2v-76pw-4v95).** The committed tree ships
   `compression@1.8.1`; the fixed `1.8.2` is pending the dependency-legitimacy age
   gate and is tracked under REL-02 (Phase 21) or an earlier quick task. The
