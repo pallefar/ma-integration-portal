@@ -26,6 +26,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const LEADERS_JS_PATH = path.join(ROOT, 'public', 'js', 'leaders.js');
 const SANITIZE_HTML_PATH = path.join(ROOT, 'lib', 'sanitizeHtml.js');
+const { inertViolations } = require('./helpers/html-inert.js');
+const { parseDocument } = require('htmlparser2');
 const PAGE_LAYOUT_PATH = path.join(ROOT, 'public', 'js', 'page-layout.js');
 const TRANSITIONS_PATH = path.join(ROOT, 'public', 'js', 'transitions.js');
 const DB_JSON_PATH = path.join(ROOT, 'db.json');
@@ -120,9 +122,12 @@ const BYPASS_VARIANTS = [
 ];
 
 test('xss-chain (b1): lib/sanitizeHtml.js neutralizes all six slash-separated handler bypass variants', () => {
+  // 13-01 (SAFE-01): re-pointed from a regex-on-output assertion to the
+  // structural checker (parse + walk against lib/htmlPolicy.js) — the output
+  // must contain no on* attribute and no non-allowlisted element/URL.
   for (const { label, payload } of BYPASS_VARIANTS) {
     const result = sanitizeHtml(payload);
-    assert.ok(!/on\w+\s*=/i.test(result), `bypass NOT neutralized (${label}): input=${JSON.stringify(payload)} output=${JSON.stringify(result)}`);
+    assert.deepStrictEqual(inertViolations(result), [], `bypass NOT neutralized (${label}): input=${JSON.stringify(payload)} output=${JSON.stringify(result)}`);
   }
 });
 
@@ -134,24 +139,40 @@ test('xss-chain (b1-whitespace): the pre-existing whitespace-separated shapes st
   ];
   for (const payload of whitespaceVariants) {
     const result = sanitizeHtml(payload);
-    assert.ok(!/on\w+\s*=/i.test(result), `pre-existing whitespace-separated bypass regressed: input=${JSON.stringify(payload)} output=${JSON.stringify(result)}`);
+    assert.deepStrictEqual(inertViolations(result), [], `pre-existing whitespace-separated bypass regressed: input=${JSON.stringify(payload)} output=${JSON.stringify(result)}`);
   }
 });
 
 // (b2) Benign survival — an over-aggressive regex that eats a legitimate
 // attribute would be its own bug, so this half of the proof is not optional.
+// 13-01 (SAFE-01): the parser policy (lib/htmlPolicy.js) is allowlist-only, so
+// two shapes the regex era let through are no longer "ordinary markup":
+//  - `<input type="checkbox" id=…>` — `input` is on the PRD never-allowed list
+//    (and `id` is never allowed, DOM clobbering); asserted below as REMOVED;
+//  - `<a href="/rooted/path">` is kept but now carries the forced
+//    rel="noopener noreferrer" — asserted structurally, not byte-identical.
 const BENIGN_STRINGS = [
   { label: 'paragraph with a class attribute', value: '<p class="foo">Hello</p>' },
-  { label: 'anchor with a rooted path href', value: '<a href="/playbook/hr-ma-guidebook.pdf">Guide</a>' },
-  { label: 'checkbox input with an id', value: '<input type="checkbox" id="chk-1">' },
   { label: 'real shipped i18n string containing a strong tag (en/intexc.buddy_li1)', value: '<strong>Mentor Selection Criteria:</strong> High performers with at least 3 years at TE.' },
+  { label: 'list with inline formatting', value: '<ul><li><b>One</b></li><li><em>Two</em></li></ul>' },
+  { label: 'table with a header cell', value: '<table><tbody><tr><th scope="col">A</th><td colspan="2">B</td></tr></tbody></table>' },
 ];
 
-test('xss-chain (b2): ordinary markup round-trips byte-identical through the widened sanitizer', () => {
+test('xss-chain (b2): ordinary markup round-trips byte-identical through the parser sanitizer', () => {
   for (const { label, value } of BENIGN_STRINGS) {
     const result = sanitizeHtml(value);
     assert.strictEqual(result, value, `benign markup was altered (${label}): input=${JSON.stringify(value)} output=${JSON.stringify(result)}`);
   }
+});
+
+test('xss-chain (b2-policy): a rooted-path anchor keeps its href with the forced rel; a checkbox input (never-allowed) is removed', () => {
+  const a = parseDocument(sanitizeHtml('<a href="/playbook/hr-ma-guidebook.pdf">Guide</a>')).children[0];
+  assert.strictEqual(a.name, 'a');
+  assert.strictEqual(a.attribs.href, '/playbook/hr-ma-guidebook.pdf');
+  assert.strictEqual(a.attribs.rel, 'noopener noreferrer');
+  const out = sanitizeHtml('<input type="checkbox" id="chk-1">');
+  assert.deepStrictEqual(inertViolations(out), []);
+  assert.strictEqual(parseDocument(out).children.filter((n) => n.name === 'input').length, 0, 'input must be removed');
 });
 
 // (b3) Corpus differential — every string value shipped in db.json (i18n
@@ -160,17 +181,35 @@ test('xss-chain (b2): ordinary markup round-trips byte-identical through the wid
 // FROZEN_PRE_FIX_SANITIZE function below is the exact pre-fix regex chain
 // (whitespace-only separator), inlined so this comparison never drifts if
 // lib/sanitizeHtml.js changes again later.
-function frozenPreFixSanitize(value) {
-  const s = typeof value === 'string' ? value : '';
-  return s
-    .replace(/<\/?(?:script|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '')
-    .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
-    .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
-    .replace(/(=\s*["']?\s*)(?:javascript|vbscript)\s*:/gi, '$1');
+//
+// 13-01 (SAFE-01): the regex-era sanitizer is retired, so the differential is
+// re-pointed at BEHAVIOUR: a divergence is a shipped value whose parsed
+// structure (element tree, attributes, text) differs before vs after
+// sanitizeHtml(). Serialization-only differences (`&` -> `&amp;`,
+// `<br>` -> `<br />`) are not divergences — the DOM is identical. The 24
+// shipped playbook checklist strings that embed `<input type="checkbox">`
+// are the one documented, ASSERTED exception: `input` is on the PRD
+// never-allowed list, so the parser removes it (the dictionary is not
+// server-tagged, PD-5 — the removal happens at render via MASafeHtml, 13-09).
+function canonicalDom(html, dropInputs) {
+  const walk = (nodes) => nodes.map((n) => {
+    if (n.type === 'text') return { t: n.data };
+    if (n.name) return { e: n.name, a: Object.entries(n.attribs || {}).sort(), c: walk(n.children || []) };
+    return { o: n.type };
+  }).filter((n) => !(dropInputs && n.e === 'input'));
+  const merge = (arr) => {
+    const out = [];
+    for (const x of arr) {
+      if (x.c) x.c = merge(x.c);
+      if (x.t !== undefined && out.length && out[out.length - 1].t !== undefined) out[out.length - 1].t += x.t;
+      else out.push(x);
+    }
+    return out;
+  };
+  return JSON.stringify(merge(walk(parseDocument(String(html)).children)));
 }
 
-test('xss-chain (b3): db.json corpus differential — zero divergences between the widened and pre-fix sanitizer across every shipped content value', () => {
+test('xss-chain (b3): db.json corpus differential — zero structural divergences between shipped content and its sanitized form (documented checkbox exception asserted exactly)', () => {
   const db = JSON.parse(fs.readFileSync(DB_JSON_PATH, 'utf8'));
   const corpus = [];
 
@@ -193,13 +232,21 @@ test('xss-chain (b3): db.json corpus differential — zero divergences between t
   assert.ok(corpus.length >= 3000, `corpus walk found only ${corpus.length} string values — expected at least 3,000; the walk may be silently empty`);
 
   const divergences = [];
+  const explainedCheckboxOnly = [];
   for (const { source, value } of corpus) {
-    const before = frozenPreFixSanitize(value);
     const after = sanitizeHtml(value);
-    if (before !== after) divergences.push({ source, before, after });
+    if (canonicalDom(after, false) === canonicalDom(value, false)) continue;
+    if (canonicalDom(after, false) === canonicalDom(value, true)) { explainedCheckboxOnly.push(source); continue; }
+    divergences.push({ source, before: value, after });
   }
 
-  assert.strictEqual(divergences.length, 0, `${divergences.length} shipped content value(s) diverged after widening the separator class (first: ${JSON.stringify(divergences[0])}) — this is a genuine content regression to inspect, not test noise`);
+  assert.strictEqual(divergences.length, 0, `${divergences.length} shipped content value(s) diverged structurally under the parser sanitizer (first: ${JSON.stringify(divergences[0])}) — this is a genuine content regression to inspect, not test noise`);
+  // The documented exception, pinned exactly so a new checkbox string (or a new
+  // divergence class hiding behind this exception) fails loudly.
+  assert.strictEqual(explainedCheckboxOnly.length, 24, `expected exactly 24 shipped checkbox-bearing playbook strings, found ${explainedCheckboxOnly.length}`);
+  for (const source of explainedCheckboxOnly) {
+    assert.ok(/^i18n\.[a-z]{2}\.playbook\.(culture_milestone|talent_checklist)_\d+$/.test(source), `unexpected checkbox-bearing source: ${source}`);
+  }
 });
 
 // (b4) Anti-drift — mirrors test/dd-findings.test.js's RAID_LEVELS three-copy
@@ -212,13 +259,19 @@ function extractHandlerStripLines(sourceText) {
     .map((line) => line.trim());
 }
 
-test('xss-chain (b4): all three sanitizer copies carry byte-identical handler-strip rules (anti-drift)', () => {
+// 13-01 (SAFE-01): lib/sanitizeHtml.js no longer carries a regex copy (it is
+// the vendored parser driven by lib/htmlPolicy.js), so this guard loses that
+// leg and keeps ONLY the page-layout.js <-> transitions.js client-copy parity.
+// Plans 13-06 and 13-09 retire those two client copies (MASafeHtml replaces
+// them); this test is then removed with them.
+test('xss-chain (b4): the two remaining client sanitizer copies carry byte-identical handler-strip rules (anti-drift) and lib/sanitizeHtml.js carries none', () => {
   const fromSanitizeHtml = extractHandlerStripLines(fs.readFileSync(SANITIZE_HTML_PATH, 'utf8'));
+  assert.strictEqual(fromSanitizeHtml.length, 0, 'lib/sanitizeHtml.js must not carry a regex handler-strip rule — it is the parser sanitizer');
+
   const fromPageLayout = extractHandlerStripLines(pageLayoutJs);
   const fromTransitions = extractHandlerStripLines(transitionsJs);
 
   const namedSequences = {
-    'lib/sanitizeHtml.js': fromSanitizeHtml,
     'public/js/page-layout.js': fromPageLayout,
     'public/js/transitions.js': fromTransitions,
   };
@@ -230,13 +283,8 @@ test('xss-chain (b4): all three sanitizer copies carry byte-identical handler-st
   }
 
   assert.deepStrictEqual(
-    fromPageLayout,
-    fromSanitizeHtml,
-    'public/js/page-layout.js and lib/sanitizeHtml.js are independent hand-maintained copies of the same handler-strip rule that must be kept in sync by hand — they have drifted apart',
-  );
-  assert.deepStrictEqual(
     fromTransitions,
-    fromSanitizeHtml,
-    'public/js/transitions.js and lib/sanitizeHtml.js are independent hand-maintained copies of the same handler-strip rule that must be kept in sync by hand — they have drifted apart',
+    fromPageLayout,
+    'public/js/transitions.js and public/js/page-layout.js are independent hand-maintained copies of the same handler-strip rule that must be kept in sync by hand — they have drifted apart',
   );
 });
