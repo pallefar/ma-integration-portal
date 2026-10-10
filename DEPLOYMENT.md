@@ -328,10 +328,35 @@ The portal asks the server what the signed-in role may do (`access` on
 | use AI insight / playbook search | the AI-Insight card (the chatbot keeps answering without playbook snippets) |
 | read synergies, diligence or org | the matching panels and nudges on the deal home |
 | write configuration (everyone except admin) | the admin console's course, slide, page, translation, menu, banner and media tabs; the settings, role-visibility, custom-M&A and database cards; the demo/edit-mode switches; inline "Edit Content"; the PMO demo-mode switch and custom-setup wizard; the AI-model download prompt |
+| file a communication (Employee) | the HR helpdesk card on the employee portal; a ticket that is refused anyway shows an error, never "Inquiry Received" |
+| read the assessment instance trends (everyone except admin) | the per-template instance requests on the assessments page (the scorecard falls back to the status roll-up) |
+| use the demo time machine (every role in a real deal) | the Day pill |
 
-Hiding is presentation only. Pages with no page-level role gate (the admin console,
-due-diligence and org pages) can still be *opened* by any signed-in role; the data
-calls that role may not make answer `403` and no record content is shown.
+Hiding is presentation only; the server is the control and answers `403` to every
+call a hidden control would have made. On top of it the portal sends a signed-in
+session **home** (`/`) when its server-verified role is not on a page's access list:
+`admin.html` is for admin and Integration Leader, `pmo.html` for admin and workstream
+lead, `employee.html` for admin, workstream lead and employee, and `dashboard.html`,
+`execution.html`, `assessments.html` and `survey.html` for admin, workstream lead and
+Integration Leader; `due-diligence.html` / `org.html` are open to any role that may
+read `/api/dd` / `/api/org` (an employee may not). The check uses the role the server
+verified, never one inferred from the path. The open demonstration (no sign-in) has no
+role and keeps its path-derived personas.
+
+### Deal records are projected per role
+
+The deal registry record carries the deal size, signing and close dates, the
+Integration Leader's synergy target and who is cleared for which clean-room area.
+Membership decides *which* deals a caller sees; the role decides *what* of each deal:
+
+| Role | `GET /api/deals`, the select echo and every setup/members/grants response hold |
+|---|---|
+| admin, Integration Leader | the full record |
+| workstream lead | `id`, `name`, `targetCompany`, `status` |
+| employee (and any unknown role) | `id`, `name`, `status` |
+
+The allowlist lives in `lib/dealProjection.js`; a field added to the registry record
+later is withheld from the two lower roles until it is listed there.
 
 ### Refused requests are audited
 
