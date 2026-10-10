@@ -40,7 +40,8 @@ permanent pack 503 (DATA-05); R3 F-4 reserve `/api/app-modules` (Phase 13); R7 i
 exist; COLLAB-01); R6 G12 vs R3 §4.3 new-module default (decide: "on in demo, off in real-deal mode for modules added
 by an upgrade"); R2-07 `DEMO_OPEN=1` refuses to start with real deals present (OPS-05); R2-11 HSTS without
 `includeSubDomains` (OPS-03); R2-15 glibc ≥ 2.38 floor + arm64/musl pack=503 (DEPLOY-02 docs); R6 §7.1 #2
-baseline/critical path, dis-synergy signals, R6 §7.4 Q4 "IL requests a switch", R4 §6 "DD read-only post-close" → Future.
+baseline/critical path and dis-synergy signals, R6 §7.4 Q4 "IL requests a switch", R4 §6 "DD read-only post-close"
+→ Future.
 
 ## B. User-goal fit
 
@@ -184,14 +185,13 @@ data directory (`data/real/`), seeded on first boot from the committed `control.
 never opens the committed files for writing". ACCT-02's bootstrap then creates the first admin there.
 
 **PR-24 · AMEND · SAFE-02 is feasible and smaller than feared — say exactly what it is.** Measured: 8 plain inline
-`<script>` blocks (dashboard 2, index, insights, login, overview, playbook, signage), 3 inline `on*=` in HTML (admin 2,
-dashboard 1), 2 generated in `transitions.js`, 3 `javascript:void(0)` hrefs (`transitions.js:760,1491,1502,2104`);
-Transformers.js loads by `import('/vendor/transformers/…')` (`transitions.js:2666`) from `'self'` and needs only
-`'wasm-unsafe-eval'` + `worker-src blob:` — both already in `server.js:124,131`. Reword SAFE-02: "`script-src 'self'
-'wasm-unsafe-eval'` only — no `unsafe-inline`, no `unsafe-eval`, no nonces (inline blocks externalised; HTML is
-static); applies in both modes; rolled out as `Content-Security-Policy-Report-Only` through the demo and IL walks
-before enforcing (CERT-03)". Extend SAFE-06: "in real-deal mode the CSP carries no third-party origin — YouTube,
-Google Fonts, Hugging Face — fonts are vendored (no-CDN policy)".
+`<script>` blocks (dashboard 2, index, insights, login, overview, playbook, signage), 3 inline `on*=` in HTML, 2
+generated in `transitions.js`, 3 `javascript:void(0)` hrefs (`transitions.js:760,1491,1502,2104`); Transformers.js
+loads by `import('/vendor/transformers/…')` (`transitions.js:2666`) from `'self'` and needs only `'wasm-unsafe-eval'`
++ `worker-src blob:` — both already in `server.js:124,131`. Reword SAFE-02: "`script-src 'self' 'wasm-unsafe-eval'`
+only — no `unsafe-inline`/`unsafe-eval`, no nonces (inline blocks externalised; HTML is static); both modes; rolled
+out as `Content-Security-Policy-Report-Only` through the demo and IL walks before enforcing (CERT-03)". Extend
+SAFE-06: "in real-deal mode the CSP carries no third-party origin (YouTube, Google Fonts, Hugging Face); fonts vendored".
 
 **PR-25 · AMEND · SAFE-05 limits must be measured, not guessed.** Only `media`, `slides/upload`, `rag/upload` carry
 `LARGE_BLOB_MAX` (`validators/cms.js:19,232`, `validators/settings.js:15,143`) — consistent — but `/api/i18n`
@@ -205,11 +205,10 @@ the committed demo email `public/sent_emails/comm_1783454326531.html` (gitignore
 Reword: "legacy static paths are not mounted in real-deal mode (`MA_MODE=real`, PR-23); demo mode keeps them". Add to
 SAFE-04: "deal files are removed by DATA-04's purge path".
 
-**PR-27 · NOTE · Other constraint checks passed.** Vanilla JS/no build: every amendment stays file-based. Zero-install:
-REL-01's `export-ignore` must not touch `node_modules`. No TE IT dependency: CI (PR-12) uses the existing private
-GitHub repo. UX-01 translating the conflict/busy dialogs contradicts 09-UI-SPEC's "hardcoded EN via `textContent`"
-rule — the Phase 16 UI-SPEC must explicitly supersede the Phase 8/9 precedent. UX-02's contrast fix changes the
-showcase header look (`#a2acb9` pills) — multi-width screenshots before reporting done; the user judges visually.
+**PR-27 · NOTE · Other constraint checks passed** (vanilla JS/no build, `node_modules` untouched by REL-01's
+`export-ignore`, CI on the existing private repo). Two precedents to supersede explicitly: UX-01 translating the
+conflict/busy dialogs contradicts 09-UI-SPEC's "hardcoded EN" rule (Phase 16 UI-SPEC must say so); UX-02's contrast
+fix changes the showcase header look (`#a2acb9` pills) — multi-width screenshots before reporting done.
 
 ## F. Under-weighted risks (ranked) with mitigations
 
@@ -217,16 +216,15 @@ showcase header look (`#a2acb9` pills) — multi-width screenshots before report
 2. `writeDb()` rewrite destabilises CONC-01/02 (PR-21) → soak + Phase 9 contract suite as Phase 11 SCs.
 3. Audit retention/purge is a legal decision made by engineers (PR-09) → user/TE legal fixes the retention period
    before Phase 11 planning; default "never auto-purge"; seal → export → purge, each a control-plane event.
-4. The IL sees nothing new until Phase 14 and the key-focus persona drifts → PR-18 quick wins now; CERT-04's walk kept
-   as a living checklist from Phase 14; PR-01's two gaps added so the walk can pass.
+4. The IL sees nothing new until Phase 14; the key-focus persona drifts → PR-18 quick wins now; CERT-04's walk kept as
+   a living checklist from Phase 14; PR-01's gaps added so it can pass.
 5. Phase 13 ships a 403 landing page (PR-04) → `/` fallback in 13a.
-6. CSP enforcement breaks the showcase silently (PR-24) → report-only rollout with a violation endpoint through both
-   walks; one CSP per mode.
-7. Dependency drift over a long milestone (Express 4 maintenance-only, `compression` HIGH open) → `npm audit` at every
+6. CSP enforcement breaks the showcase silently (PR-24) → report-only rollout with a violation endpoint; CSP per mode.
+7. Dependency drift over a long milestone (Express 4 maintenance-only, `compression` HIGH) → `npm audit` at every
    phase close, not only REL-02; bump `compression` in Phase 10.
-8. Laptop real-deal installs die on first fault once OPS-04 exits non-zero (PR-12) → launcher restart loop.
-9. Stale client state after a module or deal switch → `/api/auth/me` carries effective modules; the fetch wrapper
-   handles `moduleDisabled` with one toast; payload refetch on `POST /api/deals/select` (R3 §4.2(c)).
+8. Laptop real-deal installs die on the first fault once OPS-04 exits non-zero (PR-12) → launcher restart loop.
+9. Stale client state after a module/deal switch → `/api/auth/me` carries effective modules; one `moduleDisabled`
+   toast; payload refetch on `POST /api/deals/select` (R3 §4.2(c)).
 10. "Budget fixed in the plan" invites budgets tuned to pass (PR-13) → numbers in the SCs now.
 
 ---
