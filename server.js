@@ -2330,7 +2330,7 @@ app.get('/api/admin/download-zip', (req, res) => {
     // [security] D-10-01 (Phase 10): the real-deal-mode data directory
     // (MA_MODE=real default, gitignored) holds MNPI — accounts, deal
     // databases, sessions, the audit trail — and is likewise excluded.
-    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" "db.json.bak" "data/*.db" "data/*.db-wal" "data/*.db-shm" "data/*.db.bak" "data/runtime.db*" "data/audit.db*" "data/deals/*" "data/real/*" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
+    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" "db.json.bak" "data/*.db" "data/*.db-wal" "data/*.db-shm" "data/*.db.bak" "data/runtime.db*" "data/audit.db*" "data/audit/*" "data/deals/*" "data/real/*" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
 
     res.download(zipPath, 'te-ma-integration-portal.zip', (err) => {
       if (err) console.error('Error sending zip file to browser:', err);
@@ -8955,6 +8955,21 @@ app.use((err, req, res, next) => {
       error: 'The server is not ready: a database failed its migration or integrity check. An administrator must restore it from backup.',
       retryable: false,
     });
+  }
+  next(err);
+});
+
+// [security] D-12-04 / PD-7 (Phase 12): a deal whose audit partition is SEALED
+// (last row `partition-seal`, db/auditChain.js) refuses every further audited
+// write. appendChained() throws from INSIDE the deal's transaction, so the deal
+// write has already rolled back — a 409 here truthfully means "nothing
+// persisted". FIXED body (never err.message / the deal id), and deliberately NO
+// `conflict` marker: the Phase 9 compare dialog keys on that marker and must
+// never open for a closed deal. Same guard order as its siblings.
+app.use((err, req, res, next) => {
+  if (err instanceof auditHook.AuditPartitionSealedError) {
+    if (res.headersSent) return next(err);
+    return res.status(409).json({ error: 'This deal is closed: its audit trail is sealed.' });
   }
   next(err);
 });

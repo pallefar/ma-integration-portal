@@ -36,6 +36,10 @@ data/.*.migrating-*
 data/runtime.db*
 data/audit.db*
 data/deals/
+# [security] D-12-04 (Phase 12): per-deal audit partitions (data/audit/<dealId>.db,
+# legacy.db, sealed exports). Each holds full before/after snapshots of MNPI
+# rows and a partition file name IS a deal id — never committed, never shipped.
+data/audit/
 
 # Uploaded media (runtime-generated)
 public/uploads/

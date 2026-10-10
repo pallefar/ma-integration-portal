@@ -44,7 +44,9 @@ const versions = new Map();
 const failures = new Map();
 
 function exposedFile(family, file) {
-  if (family === 'deal') return 'deal';
+  // A deal file AND a per-deal audit partition are named after the deal id
+  // (an MNPI target pre-announcement) — never expose the basename (T-12-52).
+  if (family === 'deal' || family === 'audit-partition') return family === 'deal' ? 'deal' : 'audit-partition';
   return file ? path.basename(String(file)) : null;
 }
 

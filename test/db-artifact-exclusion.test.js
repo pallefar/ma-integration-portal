@@ -77,3 +77,23 @@ test('db-artifact-exclusion: data/real/ is gitignored and excluded from the down
     'download-zip -x list must exclude "data/real/*" — the real-deal data directory must never ship in an export'
   );
 });
+
+// D-12-04 (Phase 12): per-deal audit partitions (data/audit/<dealId>.db) hold full
+// MNPI before/after snapshots and their file names ARE deal ids — they must reach
+// neither git nor the admin download-zip export.
+test('db-artifact-exclusion: data/audit/ is gitignored and excluded from the download-zip export', () => {
+  const gitignore = fs.readFileSync(GITIGNORE_PATH, 'utf8')
+    .split('\n').map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith('#'));
+  assert.ok(
+    gitignore.includes('data/audit/'),
+    '.gitignore must have "data/audit/" on its own non-comment line — audit partitions (MNPI) must never be committed'
+  );
+
+  const contents = fs.readFileSync(SERVER_PATH, 'utf8');
+  const zipCommandMatch = contents.match(/execSync\(`zip -r[^`]*`/);
+  assert.ok(zipCommandMatch, 'server.js must contain the download-zip execSync zip command');
+  assert.ok(
+    zipCommandMatch[0].includes('"data/audit/*"'),
+    'download-zip -x list must exclude "data/audit/*" — audit partitions must never ship in an export'
+  );
+});
