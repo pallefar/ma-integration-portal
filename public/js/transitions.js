@@ -52,6 +52,7 @@
     return Object.assign({}, init, { headers: h });
   };
   const onLoginPage = () => window.location.pathname.includes('login.html');
+  const onChangePasswordPage = () => window.location.pathname.includes('change-password.html');
   const maybePromptForToken = (res, input, init, method) => {
     if (method === 'GET' || typeof input !== 'string') return res;
     const entered = window.prompt('Admin token required to save changes:');
@@ -1053,6 +1054,20 @@
         return res;
       }).catch(() => res);
     }
+    // D-10-05 (Phase 10, client half): a 403 whose body carries
+    // `mustChangePassword: true` is the server's forced-rotation gate (plan
+    // 10-05) — the account must set a new password before any other API call
+    // works. Keyed on the BODY MARKER, never the status alone (a role-denied
+    // 403 is a different thing). The redirect is a UX convenience; the server
+    // gate is the control. The ORIGINAL response is always returned.
+    if (res.status === 403 && isApi(url)) {
+      return res.clone().json().then((body) => {
+        if (body && body.mustChangePassword === true && !onLoginPage() && !onChangePasswordPage()) {
+          window.location.href = '/change-password.html';
+        }
+        return res;
+      }).catch(() => res);
+    }
     if (res.status !== 401 || !isApi(url)) return res;
     return res.clone().json().then((body) => {
       if (body && body.authRequired) {
@@ -1258,6 +1273,22 @@
     if (!me.user) { window.location.href = '/login.html'; return; }
     window.__portalUser = me.user;
     if (me.user.role) localStorage.setItem('active_demo_role', me.user.role);
+    // D-10-05 (client half): an account that must rotate its password cannot
+    // use any other page — send it to the standalone change screen and stop
+    // (no header menu, no logout link here). UX only; the server gate is the
+    // control.
+    if (me.user.mustChangePassword === true && !window.location.pathname.includes('change-password.html')) {
+      window.location.href = '/change-password.html';
+      return;
+    }
+    // D-10-07: header-menu "Change password" / "My sessions" (any role). Loaded
+    // once, the same id-guarded way deal-switcher.js is.
+    if (!document.getElementById('account-menu-js')) {
+      const amScript = document.createElement('script');
+      amScript.id = 'account-menu-js';
+      amScript.src = '/js/account-menu.js?v=1791700102';
+      document.body.appendChild(amScript);
+    }
     let tries = 0;
     const addLogout = () => {
       const foot = document.querySelector('.sidebar-footer');
@@ -2326,7 +2357,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('deal-switcher-js')) {
       const dsScript = document.createElement('script');
       dsScript.id = 'deal-switcher-js';
-      dsScript.src = '/js/deal-switcher.js?v=1784700001';
+      dsScript.src = '/js/deal-switcher.js?v=1791700101';
       document.body.appendChild(dsScript);
     }
 

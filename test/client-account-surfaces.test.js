@@ -67,3 +67,181 @@ test('login.js has no auto-redirect on a missing session (WINDOWS #4) and builds
   assert.ok(!/authEnabled/.test(src), 'login.js must not branch on authEnabled (the old loop trigger)');
   assert.ok(!/\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML|document\.write/.test(src), 'login.js must not assign HTML strings');
 });
+
+// ============================================== change-password.js (Task 2)
+test('maChangePasswordPolicy.accountWritesAllowed truth table (D-10-01)', () => {
+  const p = loadPolicyWindow('js', 'change-password.js').maChangePasswordPolicy;
+  assert.ok(p, 'change-password.js must expose window.maChangePasswordPolicy');
+  assert.strictEqual(p.accountWritesAllowed({ accountsWritable: true }), true);
+  assert.strictEqual(p.accountWritesAllowed({ accountsWritable: false }), false);
+  assert.strictEqual(p.accountWritesAllowed({}), false);
+  assert.strictEqual(p.accountWritesAllowed(null), false, 'a failed mode probe counts as not writable');
+  assert.strictEqual(p.accountWritesAllowed(undefined), false);
+  assert.strictEqual(p.accountWritesAllowed({ accountsWritable: 'true' }), false, 'only boolean true counts');
+});
+
+test('maChangePasswordPolicy.minLength: 12 in real mode, 8 otherwise', () => {
+  const p = loadPolicyWindow('js', 'change-password.js').maChangePasswordPolicy;
+  assert.strictEqual(p.minLength({ mode: 'real' }), 12);
+  assert.strictEqual(p.minLength({ mode: 'dev' }), 8);
+  assert.strictEqual(p.minLength(null), 8);
+});
+
+test('change-password.html: standalone, one style.css stamp, no transitions.js, versioned script', () => {
+  const html = readPublic('change-password.html');
+  assert.ok(html.includes('href="/css/style.css?v=1791625638"'), 'must link the single existing style.css stamp');
+  assert.ok(!/transitions\.js/.test(html), 'a forced user must not get the app chrome from this page');
+  assert.ok(/<script src="\/js\/change-password\.js\?v=\d+"><\/script>/.test(html));
+  const inline = html.match(/<script(?![^>]*\bsrc=)[^>]*>/gi) || [];
+  assert.deepStrictEqual(inline, [], 'no inline script');
+});
+
+// ================================== transitions.js: fetch wrapper 403 marker
+function extractWrapperRegion() {
+  const src = readPublic('js', 'transitions.js');
+  const beginIdx = src.indexOf('ma-fetch-wrapper:begin');
+  const endIdx = src.indexOf('ma-fetch-wrapper:end');
+  assert.ok(beginIdx >= 0 && endIdx > beginIdx, 'expected the ma-fetch-wrapper sentinels in transitions.js');
+  return src.slice(src.indexOf('\n', beginIdx) + 1, src.lastIndexOf('\n', endIdx));
+}
+
+function jsonResponse(status, body) {
+  const res = {
+    status,
+    headers: new Headers(),
+    clone() { return res; },
+    json() { return Promise.resolve(body); },
+  };
+  return res;
+}
+
+function buildWrapperSandbox(responses, pathname) {
+  const calls = [];
+  const fetchImpl = (input) => {
+    calls.push(input);
+    return Promise.resolve(responses[Math.min(calls.length - 1, responses.length - 1)]);
+  };
+  const location = { href: 'https://example.test' + pathname, origin: 'https://example.test', pathname };
+  const window = { fetch: fetchImpl, location };
+  const document = { body: { appendChild() {}, removeChild() {} }, createElement() { return { style: {} }; } };
+  const localStorage = { getItem() { return null; }, setItem() {} };
+  const sandbox = { window, location, document, localStorage, URL, Headers, setTimeout, console };
+  vm.createContext(sandbox);
+  vm.runInContext(extractWrapperRegion(), sandbox);
+  return { window, location, calls };
+}
+
+test('fetch wrapper: 403 {mustChangePassword:true} navigates to /change-password.html and returns the original Response', async () => {
+  const original = jsonResponse(403, { error: 'Password change required.', mustChangePassword: true });
+  const { window, location } = buildWrapperSandbox([original], '/dashboard.html');
+  const res = await window.fetch('/api/pulses', { method: 'GET' });
+  assert.strictEqual(res, original, 'the original Response must come back untouched');
+  assert.strictEqual(location.href, '/change-password.html');
+});
+
+test('fetch wrapper: a 403 without the marker is returned untouched, no navigation', async () => {
+  const original = jsonResponse(403, { error: 'Forbidden.' });
+  const { window, location } = buildWrapperSandbox([original], '/dashboard.html');
+  const res = await window.fetch('/api/pulses', { method: 'POST', body: '{}' });
+  assert.strictEqual(res, original);
+  assert.strictEqual(location.href, 'https://example.test/dashboard.html', 'no navigation without the marker');
+});
+
+test('fetch wrapper: the marker does not navigate when already on change-password.html or login.html', async () => {
+  for (const pathname of ['/change-password.html', '/login.html']) {
+    const original = jsonResponse(403, { mustChangePassword: true });
+    const { window, location } = buildWrapperSandbox([original], pathname);
+    await window.fetch('/api/auth/me', { method: 'GET' });
+    assert.strictEqual(location.href, 'https://example.test' + pathname, 'must not navigate away from ' + pathname);
+  }
+});
+
+test('fetch wrapper: a non-JSON 403 body is returned untouched (parse failure swallowed)', async () => {
+  const res403 = { status: 403, headers: new Headers(), clone() { return res403; }, json() { return Promise.reject(new Error('not json')); } };
+  const { window, location } = buildWrapperSandbox([res403], '/dashboard.html');
+  const res = await window.fetch('/api/pulses', { method: 'GET' });
+  assert.strictEqual(res, res403);
+  assert.strictEqual(location.href, 'https://example.test/dashboard.html');
+});
+
+// =========================================== transitions.js: the handshake
+function extractHandshake() {
+  const src = readPublic('js', 'transitions.js');
+  const begin = src.indexOf('// Real-login handshake');
+  const end = src.indexOf('/**\n * TE Connectivity M&A Integration Portal - Transitions Manager');
+  assert.ok(begin >= 0 && end > begin, 'expected the real-login handshake block in transitions.js');
+  return src.slice(begin, end);
+}
+
+async function runHandshake(meBody, pathname) {
+  const appended = [];
+  const location = { pathname, href: 'https://example.test' + pathname };
+  const window = { location };
+  const document = {
+    getElementById(id) { return appended.find((e) => e.id === id) || null; },
+    createElement(tag) { return { tagName: tag, style: {} }; },
+    body: { appendChild(el) { appended.push(el); } },
+    querySelector() { return null; },
+  };
+  const fetchImpl = () => Promise.resolve({ ok: true, json: () => Promise.resolve(meBody) });
+  const store = {};
+  const localStorage = { setItem(k, v) { store[k] = v; } };
+  const sandbox = { window, location, document, fetch: fetchImpl, localStorage, setTimeout: () => 0, console };
+  vm.createContext(sandbox);
+  vm.runInContext(extractHandshake(), sandbox);
+  await new Promise((r) => setImmediate(r));
+  return { window, location, appended };
+}
+
+test('handshake: a must-change user is sent to /change-password.html and no account menu is loaded', async () => {
+  const { location, appended } = await runHandshake({ authEnabled: true, user: { username: 'u', role: 'pmo', mustChangePassword: true } }, '/dashboard.html');
+  assert.strictEqual(location.href, '/change-password.html');
+  assert.strictEqual(appended.length, 0);
+});
+
+test('handshake: a normal user gets the account-menu script injected exactly once, with a stamp', async () => {
+  const { location, appended } = await runHandshake({ authEnabled: true, user: { username: 'u', role: 'pmo', mustChangePassword: false } }, '/dashboard.html');
+  assert.strictEqual(location.href, 'https://example.test/dashboard.html', 'no navigation');
+  const scripts = appended.filter((e) => e.id === 'account-menu-js');
+  assert.strictEqual(scripts.length, 1);
+  assert.ok(/^\/js\/account-menu\.js\?v=\d+$/.test(scripts[0].src), scripts[0].src);
+});
+
+test('handshake: no session leaves the page alone in demo-open (authEnabled false) and goes to login otherwise', async () => {
+  const open = await runHandshake({ authEnabled: false, user: null }, '/execution.html');
+  assert.strictEqual(open.location.href, 'https://example.test/execution.html');
+  assert.strictEqual(open.appended.length, 0);
+  const closed = await runHandshake({ authEnabled: true, user: null }, '/execution.html');
+  assert.strictEqual(closed.location.href, '/login.html');
+});
+
+// =================================================== deal-switcher.js loop
+async function runDealSwitcher(meBody) {
+  const requested = [];
+  const document = {
+    getElementById() { return null; },
+    querySelector() { return null; },
+    createElement() { return { style: {}, appendChild() {}, addEventListener() {} }; },
+  };
+  const fetchImpl = (url) => {
+    requested.push(url);
+    if (url === '/api/auth/me') return Promise.resolve({ ok: true, json: () => Promise.resolve(meBody) });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  };
+  const window = {};
+  const sandbox = { window, document, fetch: fetchImpl, setTimeout, console };
+  vm.createContext(sandbox);
+  vm.runInContext(readPublic('js', 'deal-switcher.js'), sandbox);
+  for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+  return requested;
+}
+
+test('deal-switcher: with no session /api/deals is never requested (WINDOWS #4)', async () => {
+  const requested = await runDealSwitcher({ authEnabled: false, user: null });
+  assert.deepStrictEqual(requested, ['/api/auth/me']);
+});
+
+test('deal-switcher: with a session /api/deals is still requested', async () => {
+  const requested = await runDealSwitcher({ authEnabled: true, dealId: null, user: { username: 'karen', role: 'hrbp' } });
+  assert.deepStrictEqual(requested, ['/api/auth/me', '/api/deals']);
+});
