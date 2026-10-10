@@ -359,8 +359,12 @@ function purgeDecision({ status, sealedEvent, exportEvents, retention, now }) {
  */
 function purgePartitionFile(partitionId) {
   const file = dbFiles.auditPartitionPath(partitionId);
-  try { fs.chmodSync(file, 0o600); } catch (e) { /* ENOENT or best effort — the unlink below decides */ }
   for (const suffix of ['', '-wal', '-shm']) {
+    // The -wal/-shm sidecars of a sealed file inherit its 0400 mode (SQLite
+    // creates them with the main file's permission bits), so each one is made
+    // deletable too — POSIX unlink only needs the directory, win32 needs the
+    // read-only attribute cleared.
+    try { fs.chmodSync(file + suffix, 0o600); } catch (e) { /* ENOENT or best effort — the unlink below decides */ }
     try {
       fs.unlinkSync(file + suffix);
     } catch (e) {
