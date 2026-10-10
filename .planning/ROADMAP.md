@@ -169,7 +169,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
   3. A deal member outside a record's clearance area gets "not found" — never a body, a 409 echo or a silent overwrite — on read, update, status-flip and delete of tasks and RAID; no GET route changes state.
   4. Every 401/403 and clearance-404 appears as a rate-bounded security event with actor, route and reason.
 
-**Plans**: 4/8 plans executed
+**Plans**: 5/8 plans executed
 
 Plans:
 **Wave 1**
@@ -182,7 +182,7 @@ Plans:
 
 - [ ] 11-04-PLAN.md — Rate-bounded denial audit for gate/resolver 401/403 and clearance-404 (W2)
 - [x] 11-05-PLAN.md — Personal-data reads: pulses projection + policy-aware notifications (W2)
-- [ ] 11-06-PLAN.md — No GET mutates: get-or-create → POST + instrumented every-GET test (W2)
+- [x] 11-06-PLAN.md — No GET mutates: get-or-create → POST + instrumented every-GET test (W2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -392,7 +392,7 @@ Plans:
 | 8. Concurrency & Storage Foundation | v3.0 | 5/5 | Complete    | 2026-08-11 |
 | 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | Complete    | 2026-10-10 |
 | 10. Accounts & Identity | v3.0 | 9/9 | Complete    | 2026-10-10 |
-| 11. Authorization & Clean-Room Closure | v3.0 | 4/8 | In Progress|  |
+| 11. Authorization & Clean-Room Closure | v3.0 | 5/8 | In Progress|  |
 | 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |
 | 13. Content Safety | v3.0 | 0/TBD | Not started | - |
 | 14. Deal Files, Limits & Legacy Hazards | v3.0 | 0/TBD | Not started | - |
