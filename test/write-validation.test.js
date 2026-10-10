@@ -54,6 +54,9 @@ runSplit({ sourcePath: SOURCE_DB_PATH, outDir: TMP_DIR });
 const store = require('../db/store.js');
 const dbFiles = require('../db/dbFiles.js');
 const sessionsDb = require('../db/sessions.js');
+// D-10-04 / COLLAB-02: the gate re-reads the account per request, so a directly-created
+// session needs a matching control.db account with the same role.
+const { ensureUser } = require('./helpers/seed-identity.js');
 
 const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
 const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
@@ -70,6 +73,7 @@ const validators = require('../validators/index.js');
 
 function cookieHeader(token) { return `ma_session=${token}`; }
 function newSession(username, role) {
+  ensureUser(controlConn, { username, role });
   return sessionsDb.createSession(runtimeConn, { username, role, ttlMs: 12 * 60 * 60 * 1000 });
 }
 

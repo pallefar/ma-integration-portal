@@ -235,6 +235,10 @@ const store = require('../db/store.js');
 const dbFiles = require('../db/dbFiles.js');
 const sessionsDb = require('../db/sessions.js');
 const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+// D-10-04 / COLLAB-02: the gate re-reads the account per request, so a
+// directly-created session needs a matching control.db account.
+const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+const { ensureUser } = require('./helpers/seed-identity.js');
 
 const app = require('../server.js');
 
@@ -324,6 +328,7 @@ test('busy-503-contract (live contention): three routes — one plain sync write
     // write lock on. 'hrbp' covers the write policy for all three routes
     // below (DEFAULT_WRITE_ROLES for /api/questions and /api/media; the
     // explicit /api/assessment entry also allows it).
+    ensureUser(controlConn, { username: 'busy-503-contract-test', role: 'hrbp' });
     token = sessionsDb.createSession(runtimeConn, { username: 'busy-503-contract-test', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
     server = await listenLocal(app);
     const { port } = server.address();
@@ -395,6 +400,7 @@ test('busy-503-contract (live contention): three routes — one plain sync write
 test('busy-503-contract (negative control): a validation failure still returns 400, and a non-contention server error still returns the existing generic 500 — the gate cannot pass by turning everything into a 503', async () => {
   // No lock held anywhere in this test — every response below must come
   // from ordinary (non-contended) request handling.
+  ensureUser(controlConn, { username: 'busy-503-contract-negctl', role: 'hrbp' });
   const token = sessionsDb.createSession(runtimeConn, { username: 'busy-503-contract-negctl', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   const server = await listenLocal(app);
   try {
