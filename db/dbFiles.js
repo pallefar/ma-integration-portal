@@ -439,6 +439,17 @@ function familyForSchema(schemaPath) {
 // failed migration/quick_check is sticky per path until the process restarts.
 const notReadyPaths = new Map();
 
+// [security] WR-02 (12-REVIEW): every file openDbFile() CREATED in this process
+// (it did not exist when the open began). The boot opens control.db before
+// audit.db, so audit migration #1 uses this to tell "the deal registry was
+// absent when this instance started" from "a registry that lists no deals".
+const createdPaths = new Set();
+
+/** True when openDbFile() created `p` (it was absent) during this process. */
+function createdThisProcess(p) {
+  return typeof p === 'string' && p !== '' && createdPaths.has(path.resolve(p));
+}
+
 function safeSize(p) {
   try { return fs.statSync(p).size; } catch (e) { return 0; }
 }
@@ -519,6 +530,7 @@ function openDbFile(dbFilePath, schemaPath) {
     // failure here is always fatal.
     fs.closeSync(fs.openSync(dbFilePath, 'a', 0o600));
     chmodPrivateFile(dbFilePath);
+    createdPaths.add(path.resolve(dbFilePath));
   }
   const preExistingSidecars = new Set(SIDECAR_SUFFIXES.filter((s) => fs.existsSync(dbFilePath + s)));
   tightenSidecars(dbFilePath, preExistingSidecars);
@@ -624,6 +636,7 @@ module.exports = {
   assertTestIsolation,
   openDbFile,
   openDbFileReadOnly,
+  createdThisProcess,
   // D-12-03: test-only reset of the sticky not-ready cache.
   _clearNotReadyForTests: () => notReadyPaths.clear(),
 };

@@ -23,6 +23,9 @@ const REASONS = Object.freeze({
   INTEGRITY_FAILED: 'integrity-check-failed',
   INSUFFICIENT_DISK: 'insufficient-disk-for-migration',
   COMMITTED_NEEDS_REGEN: 'committed-file-needs-regeneration',
+  // 12-REVIEW WR-02: audit migration #1 needs the deal registry to classify
+  // rows and could not read it — fail closed, nothing moved or sealed.
+  DEAL_REGISTRY_UNREADABLE: 'deal-registry-unreadable',
 });
 
 class DbNotReadyError extends Error {

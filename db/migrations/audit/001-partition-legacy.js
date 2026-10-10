@@ -56,6 +56,7 @@ const fs = require('fs');
 const dbFiles = require('../../dbFiles');
 const auditChain = require('../../auditChain');
 const auditLifecycle = require('../../auditLifecycle');
+const readiness = require('../../readiness');
 
 const ACTOR = Object.freeze({ username: 'system:migration', role: 'system' });
 const BATCH_ROWS = 2000;
@@ -111,25 +112,62 @@ function hasColumn(conn, table, column) {
   return conn.prepare(`PRAGMA table_info('${table}')`).all().some((c) => c.name === column);
 }
 
-/** Ids of every deal registered in control.db, read-only; a missing/unreadable control.db => none. */
+/**
+ * [security] WR-02 (12-REVIEW): ids of every deal registered in control.db,
+ * read-only — or `null` when the registry CANNOT be read: the file is missing,
+ * it was absent when this instance started (the boot opens — and so creates —
+ * control.db before audit.db; a mis-set MA_CONTROL_DB_PATH looks exactly like
+ * that), it cannot be opened, or its `deals` table cannot be queried. A
+ * readable `deals` table is the ONLY authority for "this deal still exists";
+ * anything else would silently classify every live deal as deleted and seal its
+ * history into legacy.db for ever.
+ */
 function loadExistingDealIds() {
   const file = dbFiles.CONTROL_DB_PATH;
-  const ids = new Set();
-  if (!fs.existsSync(file)) return ids;
+  if (!fs.existsSync(file) || dbFiles.createdThisProcess(file)) return null;
   let ro;
   try {
     ro = dbFiles.openDbFileReadOnly(file);
   } catch (e) {
-    return ids;
+    return null;
   }
+  const ids = new Set();
   try {
     for (const row of ro.prepare('SELECT id FROM deals').iterate()) ids.add(row.id);
   } catch (e) {
-    if (!/no such table/i.test(String(e && e.message))) throw e;
+    return null;
   } finally {
     try { ro.close(); } catch (e) { /* ignore */ }
   }
   return ids;
+}
+
+function movableRowCount(conn) {
+  return conn.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE db_kind = 'deal' AND deal_id IS NOT NULL").get().n;
+}
+
+/**
+ * FAIL CLOSED: when audit.db holds movable rows and the deal registry cannot be
+ * read, the migration refuses with the fixed reason `deal-registry-unreadable`
+ * (instance not-ready) — nothing imported, nothing sealed, audit.db untouched.
+ * Returns the registry ids (an empty set when nothing needs classifying).
+ */
+function registryOrRefuse(conn, ctx) {
+  if (hasColumn(conn, 'audit_log', 'row_hash')) return new Set();
+  const existing = loadExistingDealIds();
+  if (existing === null && movableRowCount(conn) > 0) {
+    throw readiness.markNotReady({
+      family: (ctx && ctx.family) || 'audit',
+      file: ctx && ctx.file,
+      migration: ctx && ctx.name,
+      reason: readiness.REASONS.DEAL_REGISTRY_UNREADABLE,
+    });
+  }
+  return existing || new Set();
+}
+
+function precheck(conn, ctx) {
+  registryOrRefuse(conn, ctx);
 }
 
 function toEntry(row) {
@@ -205,12 +243,13 @@ function importPartition(partitionId, makeIterator, expected) {
   return { imported, watermark };
 }
 
-function up(conn) {
+function up(conn, ctx) {
   // Defensive: a file that already carries the hash columns is already v1-shaped.
   if (hasColumn(conn, 'audit_log', 'row_hash')) return;
 
   const failAt = process.env.MA_MODE === 'real' ? '' : (process.env.MA_TEST_AUDIT_MIGRATION_FAIL_AT || '');
-  const existing = loadExistingDealIds();
+  // Re-checked under the runner's write lock (the precheck ran before the backup).
+  const existing = registryOrRefuse(conn, ctx);
   const now = new Date().toISOString();
 
   // --- classify ----------------------------------------------------------
@@ -348,5 +387,6 @@ module.exports = {
   slug: 'partition-legacy',
   backup: true,
   requiredTables: ['audit_log'],
+  precheck,
   up,
 };
