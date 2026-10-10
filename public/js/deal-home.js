@@ -427,6 +427,20 @@
    * (best-effort: a single failed fetch renders that panel's own empty
    * state, or — for a rollup — simply omits its nudge, rather than
    * blanking the whole page). */
+  // [security] D-11-01 (Phase 11, plan 11-07): which of the three deal-data
+  // panels this caller may read, from the server-computed `access` map on
+  // /api/auth/me (window.maCan — no role table here). All true when the page has
+  // no map (demo-open, demo store) so the showcase renders exactly as before; a
+  // role the read policy refuses a lane gets neither the panel nor its request.
+  function panelAccess() {
+    if (typeof window.maCanReady !== 'function') {
+      return Promise.resolve({ dd: true, org: true, synergies: true });
+    }
+    return window.maAccessReady.then(function () {
+      return { dd: window.maCan('dd'), org: window.maCan('org'), synergies: window.maCan('synergies') };
+    });
+  }
+
   function renderDealHome(dealId) {
     var container = document.getElementById('deal-home');
     if (!container) return;
@@ -434,13 +448,17 @@
     var wrap = el('div', { className: 'deal-home-wrap' });
     container.appendChild(wrap);
 
-    Promise.all([
-      fetch('/api/deals').then(function (r) { return r.json(); }).catch(function () { return []; }),
-      fetch('/api/assessment-status').then(function (r) { return r.json(); }).catch(function () { return null; }),
-      fetch('/api/dd/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
-      fetch('/api/synergies/rollup').then(function (r) { return r.json(); }).catch(function () { return null; }),
-      fetch('/api/org/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
-    ]).then(function (results) {
+    panelAccess().then(function (can) {
+      return Promise.all([
+        fetch('/api/deals').then(function (r) { return r.json(); }).catch(function () { return []; }),
+        fetch('/api/assessment-status').then(function (r) { return r.json(); }).catch(function () { return null; }),
+        can.dd ? fetch('/api/dd/summary').then(function (r) { return r.json(); }).catch(function () { return null; }) : null,
+        can.synergies ? fetch('/api/synergies/rollup').then(function (r) { return r.json(); }).catch(function () { return null; }) : null,
+        can.org ? fetch('/api/org/summary').then(function (r) { return r.json(); }).catch(function () { return null; }) : null,
+      ]).then(function (results) { return { can: can, results: results }; });
+    }).then(function (packed) {
+      var can = packed.can;
+      var results = packed.results;
       var deals = Array.isArray(results[0]) ? results[0] : [];
       var statusData = results[1];
       var summary = results[2];
@@ -451,10 +469,12 @@
       wrap.textContent = '';
       renderSetupChecklist(wrap, deal);
       renderReadiness(wrap, statusData);
-      renderDiligence(wrap, summary);
-      renderOrgPanel(wrap, orgSummary);
-      renderFlightRiskNudge(wrap, orgSummary);
-      renderStaleSynergyNudge(wrap, rollup);
+      if (can.dd) renderDiligence(wrap, summary);
+      if (can.org) {
+        renderOrgPanel(wrap, orgSummary);
+        renderFlightRiskNudge(wrap, orgSummary);
+      }
+      if (can.synergies) renderStaleSynergyNudge(wrap, rollup);
 
       // Plan 08 Task 2 walk finding F2: the org panel's five decision-type
       // labels (renderOrgPanel above) carry data-i18n, but this whole panel

@@ -1272,11 +1272,20 @@
     if (bnp) bnp.addEventListener('click', newProjectWizard);
     loadDepartments();
     loadProcesses();
-    loadSlides();
-    render();
-    renderPages();
-    loadMenus();
-    loadBanners();
+    // [security] D-11-02 (Phase 11, plan 11-07): slides, courses, pages, menus and
+    // banners are the instance content surface — admin-only writes server-side.
+    // admin.js hides those tabs for a role without `configWrite` (the server-
+    // computed capability on /api/auth/me, window.maCan); their editors are not
+    // even built for it. With no access map (demo-open) they load exactly as before.
+    const cfgReady = typeof window.maCanReady === 'function' ? window.maCanReady('configWrite') : Promise.resolve(true);
+    cfgReady.then((ok) => {
+      if (!ok) return;
+      loadSlides();
+      render();
+      renderPages();
+      loadMenus();
+      loadBanners();
+    });
   });
   window.reloadProjectsCms = loadProjects;
   window.reloadDepartmentsCms = loadDepartments;

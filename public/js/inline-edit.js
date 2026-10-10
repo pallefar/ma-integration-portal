@@ -14,9 +14,14 @@
 
   const LANG_KEY = 'employeeLanguage';
   const getLang = () => localStorage.getItem(LANG_KEY) || 'en';
-  // Open-access demo: the operator/presenter is always the admin regardless of which
-  // persona view is on screen, so editing is gated purely on the edit-mode flag.
-  const isAdmin = () => true;
+  // [security] D-11-02 (Phase 11, plan 11-07): click-to-edit saves through POST
+  // /api/i18n and POST /api/pages, both admin-only (ROLE_WRITE_POLICY). The
+  // capability comes from the server-computed access map on /api/auth/me
+  // (window.maCan, transitions.js) — no role table here. It is true when the page
+  // has no map (demo-open: the presenter is always the operator, so the showcase
+  // edits exactly as before) and false only when the server said this role may
+  // not write configuration/content. Evaluated lazily at every use.
+  const isAdmin = () => (typeof window.maCan === 'function' ? window.maCan('configWrite') : true);
   const editOn = () => localStorage.getItem('adminEditMode') === 'true';
 
   function toast(msg, err) {
@@ -170,7 +175,13 @@
   // Editing is per-language; if the operator switches language mid-edit, drop the edit.
   document.addEventListener('portalLanguageChanged', () => { if (editing) endPage(false); renderBar(); });
 
-  function init() { pageCtx(); refresh(); }
+  function init() {
+    pageCtx(); refresh();
+    // The access map may settle after this first pass: re-evaluate so a stale
+    // adminEditMode flag left in localStorage by an earlier admin session never
+    // leaves editing switched on for a role without configWrite.
+    if (window.maAccessReady && typeof window.maAccessReady.then === 'function') window.maAccessReady.then(refresh);
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

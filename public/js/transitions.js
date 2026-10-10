@@ -1267,11 +1267,34 @@
 // gets { authEnabled:false } and nothing changes). The server-verified role
 // overrides the client-side demo role, and a logout link joins the sidebar.
 (function () {
-  if (window.location.pathname.includes('login.html')) return;
-  fetch('/api/auth/me').then(r => r.json()).then(me => {
+  // [security] D-11-01/D-11-02 (Phase 11, plan 11-07): the client half of the
+  // read/write policy. The server computes an `access` map (booleans only) on
+  // GET /api/auth/me from lib/readPolicy.js and ROLE_WRITE_POLICY — this file
+  // carries NO copy of the role table. `window.maCan(key)` is false ONLY when
+  // the map says `false` for that key, so an absent map (demo-open, the demo
+  // store, a failed probe, a page that never ran the handshake) shows every
+  // control exactly as the showcase always has. `window.maAccessReady` settles
+  // once the probe has been processed (also on failure and when auth is off), so
+  // a page waits on it before deciding to hide a control or skip a request that
+  // would only 403. Hiding is advisory UX; the server gate remains the control.
+  window.__portalAccess = null;
+  window.maCan = function (key) {
+    var a = window.__portalAccess;
+    return !a || a[key] !== false;
+  };
+  // Convenience for call sites: resolves to maCan(key) once the probe settled.
+  window.maCanReady = function (key) {
+    return window.maAccessReady.then(function () { return window.maCan(key); });
+  };
+  if (window.location.pathname.includes('login.html')) {
+    window.maAccessReady = Promise.resolve();
+    return;
+  }
+  window.maAccessReady = fetch('/api/auth/me').then(r => r.json()).then(me => {
     if (!me || !me.authEnabled) return;
     if (!me.user) { window.location.href = '/login.html'; return; }
     window.__portalUser = me.user;
+    window.__portalAccess = (me.access && typeof me.access === 'object') ? me.access : null;
     if (me.user.role) localStorage.setItem('active_demo_role', me.user.role);
     // D-10-05 (client half): an account that must rotate its password cannot
     // use any other page — send it to the standalone change screen and stop
@@ -2326,6 +2349,17 @@ document.addEventListener('DOMContentLoaded', () => {
       document.addEventListener('editModeChanged', syncToggle);
       editWrap.appendChild(editToggle);
       headerToolsContainer.appendChild(editWrap);
+      // [security] D-11-02 (plan 11-07): inline editing saves through POST
+      // /api/i18n and POST /api/pages (admin-only). The toggle is not offered to
+      // a role the server's access map says cannot write configuration/content.
+      window.maCanReady('configWrite').then(function (ok) {
+        if (ok) return;
+        editWrap.style.display = 'none';
+        if (localStorage.getItem('adminEditMode') === 'true') {
+          localStorage.setItem('adminEditMode', 'false');
+          document.body.classList.remove('admin-edit-active');
+        }
+      });
     }
 
     // Time machine (Day pill) leads the tools cluster
@@ -2335,7 +2369,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('inline-edit-js')) {
       const ieScript = document.createElement('script');
       ieScript.id = 'inline-edit-js';
-      ieScript.src = '/js/inline-edit.js?v=1783577700';
+      ieScript.src = '/js/inline-edit.js?v=1791800001';
       document.body.appendChild(ieScript);
     }
 
@@ -2946,9 +2980,14 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => console.error("Error fetching settings in profile:", err));
 
-      fetch('/api/hrbps')
-        .then(res => res.json())
+      // [security] D-11-01/D-11-06 (plan 11-07): the Integration Leader directory
+      // is readable by admin + hrbp only in a real deal — a role refused it is not
+      // sent the request at all (it would only 403, and this lookup acts solely
+      // for the hrbp profile anyway).
+      window.maCanReady('hrbps').then(ok => ok ? fetch('/api/hrbps') : null)
+        .then(res => (res ? res.json() : null))
         .then(hrbps => {
+          if (!hrbps) return;
           const activeRole = localStorage.getItem('active_demo_role') || 'admin';
           if (activeRole !== 'hrbp') return;
           if (!hrbps || hrbps.length === 0) return;
@@ -3041,9 +3080,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      fetch('/api/settings')
-        .then(res => res.json())
+      // [security] D-11-02 (plan 11-07): activating the browser model POSTs
+      // `{browserModel}` to /api/settings, which is admin-only. A role that cannot
+      // write configuration is never prompted for a setup it could only fail.
+      window.maCanReady('configWrite').then(ok => (ok ? fetch('/api/settings') : null))
+        .then(res => (res ? res.json() : null))
         .then(settings => {
+          if (!settings) return;
           // If a model is already configured, we consider it active/downloaded
           if (settings.browserModel && settings.browserModel !== 'none') {
             localStorage.setItem('ai-insight_downloaded', 'true');
@@ -3245,6 +3288,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function saveSettingsAndComplete(model, overlay) {
+      // [security] D-11-02 (plan 11-07): belt and braces — the modal is not shown
+      // to a role without configWrite, and the POST below is never sent for one.
+      if (!window.maCan('configWrite')) {
+        localStorage.setItem('ai-insight_downloaded', 'true');
+        fadeOutModal(overlay);
+        return;
+      }
       // POST to backend settings
       fetch('/api/settings', {
         method: 'POST',
@@ -3598,6 +3648,12 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           searchPlaybook: async (query) => {
             try {
+              // [security] D-11-01 (plan 11-07): GET /api/rag/search is staff-only
+              // in a real deal. For a role refused it the chat still answers — it
+              // just has no uploaded-document snippets to quote, and no request is sent.
+              if (!(await window.maCanReady('rag'))) {
+                return 'RAG search check: playbook snippet search is not available for your role.';
+              }
               const res = await fetch(`/api/rag/search?q=${encodeURIComponent(query)}`);
               const data = await res.json();
               if (data.success && data.results && data.results.length > 0) {
@@ -3619,6 +3675,12 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           getAcquisitionProgress: async () => {
             try {
+              // [security] D-11-01 (plan 11-07): the named roster is staff-only in a
+              // real deal. A role refused it gets a neutral line — never "Roster is
+              // empty", which would be false — and no request is sent.
+              if (!(await window.maCanReady('roster'))) {
+                return 'Acquisition Analytics: workforce analytics are not available for your role.';
+              }
               const res = await fetch('/api/employees');
               const employees = await res.json();
               if (employees && employees.length > 0) {
@@ -3774,6 +3836,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!portal) return; // Only run on PMO and Integration Leader
 
+    // [security] D-11-01 (plan 11-07): the card is fed by GET /api/ai/insight, a
+    // staff-only read in a real deal that also sends portal data to the AI
+    // provider. A role the read policy refuses (an employee landing on '/') gets
+    // no card and no request — it would only render "Failed to connect".
+    window.maCanReady('ai').then(function (ok) { if (ok) renderAiInsightCard(portal); });
+  }
+
+  function renderAiInsightCard(portal) {
     // index.html's landing uses <main class="demo-showcase-container">, not .main-content —
     // fall back to <main> so the AI-insight card injects there too (matches the role-guidance banner).
     const mainContainer = document.querySelector('.main-content') || document.querySelector('main');

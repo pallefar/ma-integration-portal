@@ -43,7 +43,7 @@ test('admin-users-ui: admin-users.js is referenced exactly once, stamped, after 
   const refs = html.match(/\/js\/admin-users\.js\?v=\d+/g) || [];
   assert.strictEqual(refs.length, 1);
   assert.strictEqual((html.match(/<script[^>]*admin-users\.js/g) || []).length, 1, 'exactly one script tag for admin-users.js');
-  assert.ok(html.indexOf(refs[0]) > html.indexOf('/js/admin.js?v=1791700202'),
+  assert.ok(html.indexOf(refs[0]) > html.search(/\/js\/admin\.js\?v=\d+/),
     'admin-users.js must load after admin.js (which carries the bumped stamp)');
   assert.strictEqual((html.match(/\/css\/admin-users\.css\?v=1791700201/g) || []).length, 1);
 });

@@ -1170,10 +1170,27 @@ app.get('/api/auth/me', (req, res) => {
   // caller's own GET /api/deals response, which is already membership-
   // filtered) — this endpoint stays resolver-free (PUBLIC_API_PATHS) by
   // design, so it must not itself look up a deal by id.
+  // [security] D-11-01/D-11-02 (Phase 11, plan 11-07): `access` is the SERVER-
+  // computed capability map the client uses to HIDE controls that would answer
+  // 403 — one source of truth (lib/readPolicy.js for reads, roleAllowedForWrite
+  // for configuration writes), so the browser never carries its own copy of the
+  // role table. It is advisory UX only: every route stays refused server-side by
+  // the consolidated gate whatever the client shows or hides, and the map is
+  // booleans only (no data). Only the AUTHENTICATED response carries it — the
+  // demo-open and no-session responses above are unchanged, so an absent map
+  // means "show everything exactly as the showcase always did". `dealBound`
+  // mirrors the gate's own leniency predicate: a session with no deal binding
+  // resolves to the demo store (req.isDemo === true), where reads stay open.
+  const role = user && user.role;
   res.json({
     authEnabled: true,
     dealId: sess.dealId || null,
     user: controlStore.publicAccount(user),
+    access: Object.assign(
+      {},
+      readPolicy.accessSummaryFor(role, !!sess.dealId),
+      { configWrite: roleAllowedForWrite(role, '/api/settings', 'POST') }
+    ),
   });
 });
 

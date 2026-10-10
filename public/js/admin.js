@@ -188,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Save Settings
   settingsForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (typeof window.maCan === 'function' && !window.maCan('configWrite')) return; // D-11-02 (plan 11-07)
     btnSaveSettings.disabled = true;
     btnSaveSettings.textContent = "Saving Configuration...";
 
@@ -1862,6 +1863,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const switcherContainer = document.getElementById('demo-mode-switcher-container');
   if (switcherContainer) {
     switcherContainer.addEventListener('click', () => {
+      if (typeof window.maCan === 'function' && !window.maCan('configWrite')) return; // D-11-02 (plan 11-07)
       fetch('/api/settings')
         .then(res => res.json())
         .then(settings => {
@@ -1931,6 +1933,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (roleVisibilityForm) {
     roleVisibilityForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (typeof window.maCan === 'function' && !window.maCan('configWrite')) return; // D-11-02 (plan 11-07)
       const payload = {
         roleVisibility: {
           pmo: document.getElementById('rv-pmo').checked,
@@ -1965,6 +1968,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnResetCustomMa = document.getElementById('btn-reset-custom-ma');
   if (btnResetCustomMa) {
     btnResetCustomMa.addEventListener('click', () => {
+      if (typeof window.maCan === 'function' && !window.maCan('configWrite')) return; // D-11-02 (plan 11-07)
       if (!confirm("Are you sure you want to completely clear and reset your Custom M&A workspace? This will delete all custom employees, roadmaps, and registered Integration Leaders.")) return;
       
       fetch('/api/settings/new-ma', {
@@ -2047,6 +2051,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (dbMigrationForm) {
     dbMigrationForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (typeof window.maCan === 'function' && !window.maCan('configWrite')) return; // D-11-02 (plan 11-07)
 
       const provider = migProviderSelect.value;
       const connectionDetails = {};
@@ -2869,6 +2874,56 @@ document.addEventListener('DOMContentLoaded', () => {
       loadAuditLog();
     }
   })();
+
+  // --- Configuration surface gate (D-11-02 / AUTHZ-02, plan 11-07) ---
+  // [security] The instance configuration and content surface (settings, AI key,
+  // database config, menus, pages, banners, slides + upload, media, courses,
+  // i18n) is admin-only on the server: ROLE_WRITE_POLICY refuses every write
+  // from hrbp/pmo. admin.html is still reachable by hrbp (the Deals/grants
+  // tabs), so the console hides what that role could only 403 on. Driven by the
+  // server-computed `configWrite` capability on /api/auth/me (window.maCan) —
+  // no role table is copied here — and by DOM presence only (hidden, never a
+  // disabled control that still sends the request). With no access map
+  // (demo-open) it never runs, so the showcase console is exactly as before.
+  // The deal management tabs, survey blueprint and the content a deal lead may
+  // edit (departments, processes, modules, employees, Integration Leaders,
+  // communications) keep their own role logic.
+  function applyConfigWriteGate() {
+    const CONFIG_TAB_KEYS = ['courses', 'slides', 'pages', 'translations', 'menus', 'banners', 'media'];
+    const hideEl = (el) => { if (el) { el.hidden = true; el.style.display = 'none'; } };
+    CONFIG_TAB_KEYS.forEach((key) => {
+      document.querySelectorAll('.admin-tab-btn[data-tab="' + key + '"]').forEach(hideEl);
+      hideEl(document.getElementById('tab-' + key));
+    });
+    // A rail group whose every tab button was hidden is hidden with them.
+    document.querySelectorAll('.admin-rail-group').forEach((group) => {
+      const btns = Array.prototype.slice.call(group.querySelectorAll('.admin-tab-btn'));
+      if (btns.length && btns.every((b) => b.hidden === true)) hideEl(group);
+    });
+    // Inside the Settings & Survey tab: the configuration cards go, the survey
+    // blueprint (question writes stay lead-writable) and diagnostics stay.
+    const settingsForm_ = document.getElementById('settings-form');
+    hideEl(settingsForm_ && settingsForm_.closest ? settingsForm_.closest('.card') : settingsForm_);
+    ['admin-role-visibility-card', 'admin-custom-ma-card', 'admin-db-migration-card'].forEach((id) => {
+      hideEl(document.getElementById(id));
+    });
+    const zipLink = document.querySelector('a[href="/api/admin/download-zip"]');
+    hideEl(zipLink && zipLink.closest ? zipLink.closest('.card') : zipLink);
+    // Header pills that write configuration / switch inline editing.
+    hideEl(document.getElementById('demo-mode-switcher-container'));
+    hideEl(document.getElementById('edit-mode-switcher-container'));
+    if (localStorage.getItem('adminEditMode') === 'true') {
+      localStorage.setItem('adminEditMode', 'false');
+      document.body.classList.remove('admin-edit-active');
+    }
+    // If the console was restored onto one of the hidden panels, fall back to Projects.
+    const projectsBtn = document.querySelector('.admin-tab-btn[data-tab="projects"]');
+    const stillActive = document.querySelector('.admin-tab-btn.active');
+    if (projectsBtn && (!stillActive || stillActive.hidden === true)) projectsBtn.click();
+  }
+  if (typeof window.maCanReady === 'function') {
+    window.maCanReady('configWrite').then((ok) => { if (!ok) applyConfigWriteGate(); });
+  }
 
   // --- Initial runs ---
   loadSettings();

@@ -6,6 +6,30 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   
+  // [security] D-11-01/D-11-02 (Phase 11, plan 11-07): capability check against
+  // the server-computed `access` map (window.maCan / window.maCanReady in
+  // transitions.js — no role table is copied here). True when the page has no
+  // map (demo-open, demo store) so the showcase renders exactly as before; false
+  // only when the server said this role is refused the route. Hiding a control
+  // is UX only — the consolidated gate stays the control.
+  function canReady(key) {
+    return typeof window.maCanReady === 'function' ? window.maCanReady(key) : Promise.resolve(true);
+  }
+  function canNow(key) {
+    return typeof window.maCan !== 'function' || window.maCan(key);
+  }
+  // Hide an element the caller may not use (never merely disabled).
+  function hideSection(el) {
+    if (!el) return;
+    el.hidden = true;
+    el.style.display = 'none';
+  }
+  // Hide the card that holds a section the caller may not use (or the element itself).
+  function hideCardOf(el) {
+    if (!el) return;
+    hideSection((el.closest && el.closest('.card')) || el);
+  }
+
   // 1. Initial State Definition
   const tracks = {
     hr: { title: "HR & Talent", icon: "👤", color: "#3B82F6", weight: 1.0 },
@@ -130,9 +154,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const switcherIndicator = document.getElementById('demo-switcher-indicator');
   const switcherText = document.getElementById('demo-switcher-text');
 
+  // D-11-02 (plan 11-07): the demo-mode switcher POSTs demoMode to /api/settings,
+  // which is admin-only. Hidden (not merely inert) for a role without configWrite.
+  canReady('configWrite').then(ok => { if (!ok) hideSection(switcherContainer); });
+
   // Header switcher click event
   if (switcherContainer) {
     switcherContainer.addEventListener('click', () => {
+      if (!canNow('configWrite')) return;
       fetch('/api/settings')
         .then(res => res.json())
         .then(settings => {
@@ -153,7 +182,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load configuration and routes Wizard vs Dashboard
   function loadPageSettings() {
-    fetch('/api/settings')
+    // D-11-02 (plan 11-07): wait for the access map so the wizard-vs-dashboard
+    // decision below knows whether this role can complete the custom setup.
+    canReady('configWrite').then(canConfig => fetch('/api/settings')
       .then(res => res.json())
       .then(settings => {
         const isDemo = settings.demoMode !== false;
@@ -197,7 +228,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const wizardContainer = document.getElementById('pmo-onboarding-wizard');
         const dashboardContent = document.getElementById('pmo-dashboard-content');
 
-        if (!isDemo && (!settings.targetCompany || !settings.pmoCustomSetupComplete)) {
+        // The custom-setup wizard saves through POST /api/settings (admin-only); a
+        // role without configWrite is routed straight to the dashboard instead of
+        // a wizard whose first step could only 403.
+        if (canConfig && !isDemo && (!settings.targetCompany || !settings.pmoCustomSetupComplete)) {
           if (wizardContainer) wizardContainer.style.display = 'block';
           if (dashboardContent) dashboardContent.style.display = 'none';
           initOnboardingWizard();
@@ -227,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAll();
         loadActiveHrbps();
         loadPmoCommunications();
-      });
+      }));
   }
 
   // 3. Overall Calculations
@@ -611,10 +645,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load and Render Active Integration Leaders
   function loadActiveHrbps() {
     if (!hrbpsListContainer) return;
-    
-    fetch('/api/hrbps')
-      .then(res => res.json())
+
+    // D-11-01/D-11-06 (plan 11-07): the Integration Leader directory is readable
+    // by admin + hrbp only in a real deal. For a role refused it the whole
+    // provisioning desk (list, add form, delete buttons) is hidden and none of
+    // GET/POST/DELETE /api/hrbps is ever sent.
+    canReady('hrbps')
+      .then(ok => {
+        if (!ok) {
+          hideCardOf(hrbpsListContainer);
+          return null;
+        }
+        return fetch('/api/hrbps').then(res => res.json());
+      })
       .then(hrbps => {
+        if (!hrbps) return;
         hrbpsListContainer.innerHTML = '';
         const list = hrbps || [];
         // Filter out global PMO Leads, only show provisioned Integration Leaders here
@@ -663,6 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Delete Integration Leader
   function deleteHrbp(id) {
+    if (!canNow('hrbps')) return;
     if (!confirm("Are you sure you want to revoke access for this Integration Leader?")) return;
     fetch(`/api/hrbps/${id}`, { method: 'DELETE' })
       .then(res => res.json())
@@ -679,7 +725,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (provisionForm) {
     provisionForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      
+      if (!canNow('hrbps')) return;
+
       const payload = {
         name: hrbpNameInput.value.trim(),
         email: hrbpEmailInput.value.trim(),
@@ -731,9 +778,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!pmoRecipientSelect) return;
     pmoRecipientSelect.innerHTML = '<option value="">Loading recipients...</option>';
 
+    // D-11-01 (plan 11-07): each directory is requested only when the map allows
+    // it (roster / Integration Leader directory); a refused one is an empty group.
     Promise.all([
-      fetch('/api/employees').then(res => res.json()).catch(() => []),
-      fetch('/api/hrbps').then(res => res.json()).catch(() => [])
+      canReady('roster').then(ok => (ok ? fetch('/api/employees').then(res => res.json()).catch(() => []) : [])),
+      canReady('hrbps').then(ok => (ok ? fetch('/api/hrbps').then(res => res.json()).catch(() => []) : []))
     ]).then(([employees, hrbps]) => {
       pmoRecipientSelect.innerHTML = '';
       if (employees.length === 0 && hrbps.length === 0) {
@@ -986,12 +1035,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const countBadge = document.getElementById('wiz-hrbp-count');
     if (!listContainer) return;
 
-    fetch('/api/hrbps')
-      .then(res => res.json())
+    canReady('hrbps')
+      .then(ok => (ok ? fetch('/api/hrbps').then(res => res.json()) : null))
       .then(hrbps => {
+        if (!hrbps) return;
         const list = hrbps || [];
         const activeList = list.filter(h => h.role !== 'pmo');
-        
+
         if (countBadge) countBadge.textContent = activeList.length;
         
         if (activeList.length === 0) {
@@ -1137,6 +1187,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (specsForm) {
     specsForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (!canNow('configWrite')) return; // D-11-02 (plan 11-07): POST /api/settings is admin-only
       const payload = {
         targetCompany: document.getElementById('wiz-target-company').value.trim(),
         sector: document.getElementById('wiz-sector').value.trim(),
@@ -1232,7 +1283,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (wizHrbpForm) {
     wizHrbpForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      
+      if (!canNow('hrbps')) return;
+
       const name = document.getElementById('wiz-hrbp-name').value.trim();
       const region = document.getElementById('wiz-hrbp-region').value;
       const email = document.getElementById('wiz-hrbp-email').value.trim();
@@ -1332,12 +1384,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const finalizeBtn = document.getElementById('btn-wiz-finalize');
   if (finalizeBtn) {
     finalizeBtn.addEventListener('click', async () => {
+      // D-11-02 (plan 11-07): finalizing saves pmoCustomSetupComplete through
+      // POST /api/settings (admin-only) — inert without configWrite.
+      if (!canNow('configWrite')) return;
       finalizeBtn.disabled = true;
       finalizeBtn.textContent = "Finalizing Custom Workspace...";
 
       try {
         // 1. If we parsed employee roster, upload them
-        if (parsedRoster && parsedRoster.length > 0) {
+        // (the roster upload follows the roster rule — D-11-01)
+        if (parsedRoster && parsedRoster.length > 0 && canNow('roster')) {
           for (const emp of parsedRoster) {
             await fetch('/api/employees', {
               method: 'POST',
