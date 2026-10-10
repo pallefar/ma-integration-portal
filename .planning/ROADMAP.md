@@ -113,7 +113,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 - [x] 09-13-PLAN.md
 - [x] 09-14-PLAN.md
 - [x] 09-15-PLAN.md
-- [ ] 09-16-PLAN.md
+- [x] 09-16-PLAN.md
 
 **UI hint**: yes
 
@@ -344,7 +344,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Concurrency & Storage Foundation | v3.0 | 5/5 | Complete    | 2026-08-11 |
-| 9. Optimistic Locking & Conflict Recovery | v3.0 | 15/16 | In Progress|  |
+| 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | In Progress|  |
 | 10. Accounts & Identity | v3.0 | 0/TBD | Not started | - |
 | 11. Authorization & Clean-Room Closure | v3.0 | 0/TBD | Not started | - |
 | 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |
