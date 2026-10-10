@@ -65,6 +65,13 @@
   // blocker — DD-09/D-09 keep every other workflow usable regardless of
   // wizard completeness, mirrored here by never disabling anything).
   function renderSetupChecklist(wrap, deal) {
+    // [security] CR-01 (Phase 11 review): GET /api/deals projects the deal
+    // record per role (lib/dealProjection.js) — only admin/hrbp, who run the
+    // setup wizard, receive `setup`. A projected record (pmo/employee) has no
+    // setup progress to show, so the checklist (and its "resume setup" link
+    // into a wizard those roles cannot use) is omitted rather than rendered
+    // as six misleading "Outstanding" rows.
+    if (deal && !Object.prototype.hasOwnProperty.call(deal, 'setup')) return;
     var section = el('div', { className: 'card deal-home-section' });
     section.appendChild(el('h2', { className: 'deal-home-section-title', text: 'Setup checklist' }));
 

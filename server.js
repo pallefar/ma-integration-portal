@@ -19,6 +19,7 @@ const { createLockdown, lockdownMiddleware } = require('./lib/credentialLockdown
 const { pathForms } = require('./lib/requestPath');
 const readPolicy = require('./lib/readPolicy');
 const { createDenialAuditor } = require('./lib/denialAudit');
+const { projectDealForRole, projectDealsForRole } = require('./lib/dealProjection');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -1639,6 +1640,16 @@ function denyAt(req, res, status, reason, body) {
 // database with its own membership/lifecycle.
 // =====================================================================
 
+// [security] CR-01 (Phase 11 review): EVERY response below that hands a deal
+// registry record to the client goes through this one projection
+// (lib/dealProjection.js) — admin/hrbp get the full record, pmo/employee only
+// what the deal switcher renders. Membership filtering decides WHICH deals a
+// caller sees; this decides WHAT of each (deal size, dates, synergy target,
+// members, clearance grants are MNPI and never reach pmo/employee).
+function dealForCaller(req, deal) {
+  return projectDealForRole(deal, req.portalUser && req.portalUser.role);
+}
+
 // D-07/WIZ-01: validate-only — the wizard's first step gets ONE server-side
 // rule set (WizardBasicsSchema, validators/wizard.js, kept in exact sync
 // with CreateDealSchema's own basics fields below) rather than a duplicated
@@ -1694,7 +1705,7 @@ app.post('/api/deals', (req, res) => {
     dealType, signingDate, expectedClose, day1Date, dealSizeM, currency,
   });
   if (resumed) {
-    return res.json({ success: true, deal: dealResult, resumed: true });
+    return res.json({ success: true, deal: dealForCaller(req, dealResult), resumed: true });
   }
   // D-05/WIZ-01: the wizard's optional basics fields (dealType/signingDate/
   // expectedClose/day1Date/dealSizeM/currency) ride the SAME create call as
@@ -1735,7 +1746,7 @@ app.post('/api/deals', (req, res) => {
     actor: req.portalUser, action: 'deal-create', dealId: deal.id, subject: deal.id,
     before: null, after: deal, request: requestMeta(req),
   });
-  res.json({ success: true, deal });
+  res.json({ success: true, deal: dealForCaller(req, deal) });
 });
 
 // D-01: any authenticated role may select a deal it is a member of (not just
@@ -1763,13 +1774,14 @@ app.post('/api/deals/select', (req, res) => {
     return res.status(403).json({ error: 'You are not a member of that deal.' });
   }
   sessions.bindSessionDeal(getRuntimeConnection(), rawToken, dealId);
-  res.json({ success: true, deal });
+  res.json({ success: true, deal: dealForCaller(req, deal) });
 });
 
 // D-03: never the full registry for a non-admin — listDealsForUser() itself
 // filters to deals the caller is a member of (admin sees every active deal).
+// [security] CR-01: ...and every record is projected for the caller's role.
 app.get('/api/deals', (req, res) => {
-  res.json(controlStore.listDealsForUser(req.portalUser));
+  res.json(projectDealsForRole(controlStore.listDealsForUser(req.portalUser), req.portalUser && req.portalUser.role));
 });
 
 // D-03: membership edits are admin-only. ROLE_WRITE_POLICY's flat prefix
@@ -1797,7 +1809,7 @@ app.post('/api/deals/:id/members', (req, res) => {
     actor: req.portalUser, action: 'deal-members-update', dealId, subject: dealId,
     before: Array.from(before), after: Array.from(after), request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 // D-05/WIZ-01: records progress through the wizard's remaining setup steps
@@ -1851,7 +1863,7 @@ app.post('/api/deals/:id/setup', (req, res) => {
     });
     // Neither a step nor a completion request: settings only, nothing else
     // about the wizard changes.
-    if (step === undefined && complete !== true) return res.json({ success: true, deal: current });
+    if (step === undefined && complete !== true) return res.json({ success: true, deal: dealForCaller(req, current) });
   }
 
   // G-04-10: a completion-only post (no `step` — validators/wizard.js's
@@ -1874,7 +1886,7 @@ app.post('/api/deals/:id/setup', (req, res) => {
       actor: req.portalUser, action: 'deal-setup-update', dealId, subject: 'complete',
       before: beforeComplete, after: newComplete, request: requestMeta(req),
     });
-    return res.json({ success: true, deal: updated });
+    return res.json({ success: true, deal: dealForCaller(req, updated) });
   }
 
   const beforeStepValue = beforeSteps[step] != null ? beforeSteps[step] : null;
@@ -1890,7 +1902,7 @@ app.post('/api/deals/:id/setup', (req, res) => {
     actor: req.portalUser, action: 'deal-setup-update', dealId, subject: step,
     before: beforeStepValue, after: stampedValue, request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 // DD-04/D-02: per-area clean-room clearance. Deliberately inherits the
@@ -1955,7 +1967,7 @@ app.post('/api/deals/:id/grants', (req, res) => {
   // UNCHANGED deal — mirrors the interface contract's own stated rule.
   const setsEqual = beforeArr.length === afterArr.length && beforeArr.every((id, i) => id === afterArr[i]);
   if (setsEqual) {
-    return res.json({ success: true, deal });
+    return res.json({ success: true, deal: dealForCaller(req, deal) });
   }
 
   const updated = controlStore.setDealMemberGrants(dealId, username, ddAreas);
@@ -1972,7 +1984,7 @@ app.post('/api/deals/:id/grants', (req, res) => {
     actor: req.portalUser, action, dealId, subject: username,
     before: beforeArr, after: afterArr, request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 // DD-05/D-18: a data-room ACCESS-GRANT record — who was given access to
@@ -2033,7 +2045,7 @@ app.post('/api/admin/deals/:id/archive', (req, res) => {
     actor: req.portalUser, action: 'deal-archive', dealId, subject: dealId,
     before: deal, after: updated, request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 app.delete('/api/admin/deals/:id', (req, res) => {

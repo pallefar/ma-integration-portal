@@ -443,7 +443,7 @@ test('org-summary (source): the deal-home script\'s cache stamp was bumped', () 
   // assertion tracks the CURRENT stamp, not a frozen historical one, so it
   // stays meaningful as a "was this file re-cached after being edited"
   // check rather than pinning a single Plan-07-only value forever.
-  assert.ok(dashboardHtml.includes('/js/deal-home.js?v=1791800001'), 'the deal-home.js cache stamp must be bumped past its Plan-07 value (re-bumped by Phase 11 plan 11-07, which changed the file)');
+  assert.ok(dashboardHtml.includes('/js/deal-home.js?v=1791800002'), 'the deal-home.js cache stamp must be bumped past its Plan-07 value (re-bumped by Phase 11 plan 11-07, and again by the Phase 11 review fix CR-01, which changed the file)');
 });
 
 // =============================================================== Task 3 ===
