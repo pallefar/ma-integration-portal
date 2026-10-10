@@ -12,6 +12,7 @@
 'use strict';
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -106,7 +107,7 @@ test.after(() => {
 });
 
 test('reports-filename (f): a deal codename embedding a CRLF pair followed by a header-looking string does not 500 the export, the Content-Disposition header parses as a single value, and the response carries no second header named by the injected string', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -125,7 +126,7 @@ test('reports-filename (f): a deal codename embedding a CRLF pair followed by a 
 });
 
 test('reports-filename (g): a non-ASCII codename produces BOTH a quoted ASCII fallback parameter and an RFC 5987 extended parameter in the same Content-Disposition header value', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

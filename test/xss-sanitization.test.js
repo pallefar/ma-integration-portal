@@ -20,6 +20,7 @@
 // demo trio, the same pattern every write-validation test in this repo uses.
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -77,7 +78,7 @@ test.after(() => {
 
 test('xss-sanitization (a): a page body round-trips with script/handler/js-href removed and benign markup intact', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const dangerous = '<p>Welcome</p><script>alert(1)</script><img src=x onerror="alert(2)"><a href="javascript:alert(3)">click</a><b>bold text</b>';
@@ -106,7 +107,7 @@ test('xss-sanitization (a): a page body round-trips with script/handler/js-href 
 
 test('xss-sanitization (b): a plain-text (untagged) field round-trips byte-identical — mangling it would itself be a bug', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     // `title` is deliberately NOT htmlField()-tagged (rendered as plain text
@@ -133,7 +134,7 @@ test('xss-sanitization (b): a plain-text (untagged) field round-trips byte-ident
 
 test('xss-sanitization (c): null, absent and non-string values in a tagged field all store as an empty string', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
 
@@ -163,7 +164,7 @@ test('xss-sanitization (c): null, absent and non-string values in a tagged field
 
 test('xss-sanitization (d): a mixed-case script tag and a whitespace-split event-handler attribute are both neutralized', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     // Mixed-case tag name.
@@ -198,7 +199,7 @@ test('xss-sanitization (d): a mixed-case script tag and a whitespace-split event
 
 test('xss-sanitization (e): an entity-encoded variant is stored inert as text, never decoded into an executable construct', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const encoded = '&lt;script&gt;alert(1)&lt;/script&gt;';

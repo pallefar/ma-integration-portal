@@ -19,6 +19,7 @@
 // directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -89,7 +90,7 @@ test('dd-grants (a): an hrbp IL grants a pmo member "legal"; that member\'s very
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -124,7 +125,7 @@ test('dd-grants (b): revoking (posting an empty ddAreas array) takes effect on t
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -158,7 +159,7 @@ test('dd-grants (c): granting the same area twice leaves exactly one stored entr
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -192,7 +193,7 @@ test('dd-grants (d): a ddAreas array containing an unknown area id 400s with no 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -217,7 +218,7 @@ test('dd-grants (e): a username not on the deal\'s members list 400s', async () 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -242,7 +243,7 @@ test('dd-grants (f): a pmo session is refused both GET and POST /api/deals/:id/g
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -270,7 +271,7 @@ test('dd-grants (g): the audit rows for a grant and a revoke carry the correct a
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -319,7 +320,7 @@ test('dd-grants (h): a member with no prior grants gains a memberGrants entry on
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -352,7 +353,7 @@ test('dd-grants (n): GET /api/deals/:id/grants succeeds for the deal\'s hrbp IL 
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -440,7 +441,7 @@ test('dd-grants (k): a bind through POST /api/deals/select succeeds for a listed
 
   const karenToken = newSession('karen', 'hrbp');
   const pmoToken = newSession('pmo', 'pmo');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -478,7 +479,7 @@ test('dd-grants (l): removing a member via POST /api/deals/:id/members releases 
 
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -518,7 +519,7 @@ test('dd-grants (m): GET /api/deals returns deals whose members elements are all
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

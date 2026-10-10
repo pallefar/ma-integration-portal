@@ -12,6 +12,7 @@
 // version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -114,7 +115,7 @@ test('org-flight-risk-convert (a): converting with toTask:true creates one task,
   const deal = makeFourIdentityDeal('deal_ofrca');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -145,7 +146,7 @@ test('org-flight-risk-convert (b): converting with toRaid:true creates one RAID 
   const deal = makeFourIdentityDeal('deal_ofrcb');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -173,7 +174,7 @@ test('org-flight-risk-convert (c): converting a critical-level entry to RAID pre
   const deal = makeFourIdentityDeal('deal_ofrcc');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -194,7 +195,7 @@ test('org-flight-risk-convert (d): converting with both targets creates one task
   const deal = makeFourIdentityDeal('deal_ofrcd');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -217,7 +218,7 @@ test('org-flight-risk-convert (e): calling the route twice creates nothing new t
   const deal = makeFourIdentityDeal('deal_ofrce');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -252,7 +253,7 @@ test('org-flight-risk-convert (f): a body naming neither target returns 400 and 
   const deal = makeFourIdentityDeal('deal_ofrcf');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -278,7 +279,7 @@ test('org-flight-risk-convert (f): a body naming neither target returns 400 and 
 test('org-flight-risk-convert (g): an unknown entry id returns 404', async () => {
   const deal = makeFourIdentityDeal('deal_ofrcg');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -295,7 +296,7 @@ test('org-flight-risk-convert (h): a non-admin/IL caller receives 403 and create
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -333,7 +334,7 @@ test('org-flight-risk-convert (i): an admin/IL caller without the hr grant recei
   const deal = makeFourIdentityDeal('deal_ofrci');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

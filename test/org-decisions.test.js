@@ -14,6 +14,7 @@
 // (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -98,7 +99,7 @@ test('org-decisions (a): POST /api/org/decisions from an hrbp session with a val
   const deal = makeFourIdentityDeal('deal_oda');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -121,7 +122,7 @@ test('org-decisions (a): POST /api/org/decisions from an hrbp session with a val
 test('org-decisions (b): the same request from an admin session also returns 201', async () => {
   const deal = makeFourIdentityDeal('deal_odb');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -145,7 +146,7 @@ test('org-decisions (c/d): the D-04 tier-2 four-identity matrix — the SAME pay
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -179,7 +180,7 @@ test('org-decisions (c/d): the D-04 tier-2 four-identity matrix — the SAME pay
 test('org-decisions (e): the request presented with the break-glass admin token and no session returns 403, matching the re-baseline route\'s own exclusion', async () => {
   const deal = makeFourIdentityDeal('deal_ode');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -202,7 +203,7 @@ test('org-decisions (e): the request presented with the break-glass admin token 
 test('org-decisions (f): a body whose type is outside the five values returns 400 from the schema', async () => {
   const deal = makeFourIdentityDeal('deal_odf');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -223,7 +224,7 @@ test('org-decisions (f): a body whose type is outside the five values returns 40
 test('org-decisions (g): a body with an empty or whitespace-only rationale returns 400 and creates no entry', async () => {
   const deal = makeFourIdentityDeal('deal_odg');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -248,7 +249,7 @@ test('org-decisions (g): a body with an empty or whitespace-only rationale retur
 test('org-decisions (h): a body supplying decidedBy or decidedAt has both values ignored — the stored entry is stamped server-side', async () => {
   const deal = makeFourIdentityDeal('deal_odh');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -275,7 +276,7 @@ test('org-decisions (h): a body supplying decidedBy or decidedAt has both values
 test('org-decisions (i): a body whose positionId names no position in the lane returns 404', async () => {
   const deal = makeFourIdentityDeal('deal_odi');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -293,7 +294,7 @@ test('org-decisions (i): a body whose positionId names no position in the lane r
 test('org-decisions (j): recording a second decision for the same position appends a second entry; the first entry\'s id/type/rationale are unchanged, and the lane length is two', async () => {
   const deal = makeFourIdentityDeal('deal_odj');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -334,7 +335,7 @@ test('org-decisions (l): GET /api/org/decisions returns 403 for a caller without
   const deal = makeFourIdentityDeal('deal_odl');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -377,7 +378,7 @@ test('org-decisions: grep-level guard — isAdminOrIlRequest is called inside th
 test('org-decisions: no decision field is stored on a position — a created position carries no decision-typed key', async () => {
   const deal = makeFourIdentityDeal('deal_odnodecfield');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -424,7 +425,7 @@ test('org-decisions-drift: server.js, validators/org.js and public/js/org.js all
 test('org-decisions-append-only: three decisions recorded for one position leave the log at exactly three entries; the first two are byte-identical to their creation response; no update/delete path exists', async () => {
   const deal = makeFourIdentityDeal('deal_odao');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -463,7 +464,7 @@ test('org-decisions-append-only: three decisions recorded for one position leave
 test('org-decisions-derived-current: the derived current decision is the latest by decidedAt after three entries; null for a position with none; unchanged log length after the position is deleted', async () => {
   const deal = makeFourIdentityDeal('deal_oddc');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -506,7 +507,7 @@ test('org-decisions-derived-current: the derived current decision is the latest 
 test('org-decisions-privacy: a redundant decision recorded against a linked employee never reaches that employee\'s own roster record', async () => {
   const deal = makeFourIdentityDeal('deal_odpriv');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -597,7 +598,7 @@ test('org-decisions-ui: GET /api/org/capabilities — the governance capability 
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

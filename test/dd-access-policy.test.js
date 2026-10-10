@@ -18,6 +18,7 @@
 // test/dd-access-policy.test.js` (or `npm test`).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -82,7 +83,7 @@ test('dd-access-policy (a): a by-id probe of an uncleared item writes exactly on
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -116,7 +117,7 @@ test('dd-access-policy (b): an unknown-id probe writes a dd-access-denied row wi
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -140,7 +141,7 @@ test('dd-access-policy (c): a create attempt into an uncleared area is refused, 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -179,7 +180,7 @@ test('dd-access-policy (d): a cleared member listing their own areas adds zero d
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -215,7 +216,7 @@ test('dd-access-policy (e): an admin session\'s own DD write still produces an o
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

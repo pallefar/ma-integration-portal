@@ -13,6 +13,7 @@
 // --test test/` (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -120,7 +121,7 @@ async function createFinding(base, adminToken, area, title) {
 test('org-dd-read-audit (a): a cleared (hr-granted) real-deal GET /api/org/decisions writes exactly one org-decisions-read row', async () => {
   const deal = makeFourIdentityDeal('deal_odraa');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -136,7 +137,7 @@ test('org-dd-read-audit (a): a cleared (hr-granted) real-deal GET /api/org/decis
 test('org-dd-read-audit (b): an uncleared real-deal GET /api/org/decisions returns 403 and writes exactly one org-decisions-access-denied row', async () => {
   const deal = makeFourIdentityDeal('deal_odrab');
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -154,7 +155,7 @@ test('org-dd-read-audit (b): an uncleared real-deal GET /api/org/decisions retur
 test('org-dd-read-audit (c): a cleared real-deal GET /api/org/positions?state=target writes one org-positions-target-read row', async () => {
   const deal = makeFourIdentityDeal('deal_odrac');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -170,7 +171,7 @@ test('org-dd-read-audit (c): a cleared real-deal GET /api/org/positions?state=ta
 test('org-dd-read-audit (d): an uncleared real-deal GET /api/org/positions?state=target returns 403 and writes one org-positions-target-access-denied row', async () => {
   const deal = makeFourIdentityDeal('deal_odrad');
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -187,7 +188,7 @@ test('org-dd-read-audit (e): GET /api/org/positions (current, open tier) writes 
   const deal = makeFourIdentityDeal('deal_odrae');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -206,7 +207,7 @@ test('org-dd-read-audit (e): GET /api/org/positions (current, open tier) writes 
 test('org-dd-read-audit (f): a real-deal GET /api/dd/findings writes exactly one dd-findings-read row', async () => {
   const deal = makeFourIdentityDeal('deal_odraf');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -224,7 +225,7 @@ test('org-dd-read-audit (f): a real-deal GET /api/dd/findings writes exactly one
 test('org-dd-read-audit (g): a cleared real-deal GET /api/dd/findings/:id writes exactly one dd-finding-read row', async () => {
   const deal = makeFourIdentityDeal('deal_odrag');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -247,7 +248,7 @@ test('org-dd-read-audit (h): a DEMO request to each of the four routes writes ZE
   // (findings live per-deal, not in demo.db) — the actual probe requests
   // below use the UNBOUND demo sessions.
   const seedAdminToken = newSession('seed_admin', 'admin'); bindDeal(seedAdminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

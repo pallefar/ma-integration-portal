@@ -17,6 +17,7 @@
 // test/` (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -163,7 +164,7 @@ async function seedFixture(base, id) {
 }
 
 test('raid-access-filter (a): admin receives every entry, including the manually created source-less one — the over-filtering regression a field-name-compatible-looking filter reuse would cause', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -180,7 +181,7 @@ test('raid-access-filter (a): admin receives every entry, including the manually
 });
 
 test('raid-access-filter (b): the IL (hrbp) identity receives every entry, exactly like admin', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -197,7 +198,7 @@ test('raid-access-filter (b): the IL (hrbp) identity receives every entry, exact
 });
 
 test('raid-access-filter (c): a member cleared only for legal receives the manual entry and the legal-provenance entry, and EXCLUDES the financial- and hr-provenance entries', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -214,7 +215,7 @@ test('raid-access-filter (c): a member cleared only for legal receives the manua
 });
 
 test('raid-access-filter (d): a member cleared only for hr receives the manual entry and the flight-risk-provenance entry, and EXCLUDES the legal- and financial-provenance entries', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -231,7 +232,7 @@ test('raid-access-filter (d): a member cleared only for hr receives the manual e
 });
 
 test('raid-access-filter (e): a deal whose RAID log contains only manually created entries returns the identical array to every identity, unchanged from before this filter existed', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -253,7 +254,7 @@ test('raid-access-filter (e): a deal whose RAID log contains only manually creat
 });
 
 test('raid-access-filter (f): WR-03 (06-REVIEW.md) — an entry whose originating finding has been DELETED is still returned to admin, and STAYS INVISIBLE to a member who was never cleared for the finding\'s area — deletion must never retroactively declassify a converted entry', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -289,7 +290,7 @@ test('raid-access-filter (f): WR-03 (06-REVIEW.md) — an entry whose originatin
 });
 
 test('raid-access-filter (f2): WR-03 — a LEGACY entry with no clearanceArea stamp (created before this field existed) still resolves via the source-parsing fallback, and still degrades to unfiltered once its source is orphaned — proves the fallback path is retained for pre-existing data', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

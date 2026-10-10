@@ -16,6 +16,7 @@
 // `node --test` (bare — this repo's default test discovery), or `npm test`.
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -100,7 +101,7 @@ test.after(() => {
 
 test('deal-resolver (a): a session with a null deal binding reads demo.db rows and none from a deal file', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/employees`, { headers: { Cookie: cookieHeader(token) } });
@@ -116,7 +117,7 @@ test('deal-resolver (a): a session with a null deal binding reads demo.db rows a
 test('deal-resolver (b): the same user rebound to a deal they are a member of reads only that deal\'s rows', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   sessionsDb.bindSessionDeal(runtimeConn, token, 'deal_alpha1');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/employees`, { headers: { Cookie: cookieHeader(token) } });
@@ -134,7 +135,7 @@ test('deal-resolver (c): a session bound to a deal the user is NOT a member of g
   sessionsDb.bindSessionDeal(runtimeConn, token, 'deal_beta1'); // karen is NOT a member of deal_beta1
   const betaPath = dbFiles.dealDbPath('deal_beta1');
   assert.ok(!fs.existsSync(betaPath), 'precondition: deal_beta1 has no on-disk file yet');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/employees`, { headers: { Cookie: cookieHeader(token) } });
@@ -157,7 +158,7 @@ test('deal-resolver (d) WR-02: a session bound to a nonexistent or archived deal
   sessionsDb.bindSessionDeal(runtimeConn, tokenMissing, 'deal_ghost999'); // never registered
   const tokenArchived = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   sessionsDb.bindSessionDeal(runtimeConn, tokenArchived, 'deal_archived1'); // registered but archived
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const resMissing = await fetch(`http://127.0.0.1:${port}/api/employees`, { headers: { Cookie: cookieHeader(tokenMissing) } });
@@ -191,7 +192,7 @@ test('deal-resolver (e) adjacency: two resolutions of the SAME deal share one ca
 test('deal-resolver (f) ordering: the resolver runs before ROLE_WRITE_POLICY — a demo-only, role-allowed write is refused for the resolved database, not the role', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
   sessionsDb.bindSessionDeal(runtimeConn, token, 'deal_alpha1'); // admin is always a member (D-03)
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     // POST /api/settings/time-travel is demo-only (DEMO_ONLY_PREFIXES) AND
@@ -257,7 +258,7 @@ test('deal-resolver WR-03: isControlPlanePath() covers revoke-sessions and downl
 test('deal-resolver WR-03 (integration): an admin session bound to an archived deal can still reach revoke-sessions instead of 403ing on the stale binding', async () => {
   const adminToken = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
   sessionsDb.bindSessionDeal(runtimeConn, adminToken, 'deal_archived1'); // archived — would 403 for any non-control-plane route (WR-02)
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody-real/revoke-sessions`, {

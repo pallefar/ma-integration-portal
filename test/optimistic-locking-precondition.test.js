@@ -19,6 +19,7 @@
 'use strict';
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -84,9 +85,8 @@ function makeDeal(id) {
 }
 
 async function withServer(fn) {
-  const server = app.listen(0, '127.0.0.1');
+  const server = await listenLocal(app);
   try {
-    await new Promise((resolve) => server.once('listening', resolve));
     const { port } = server.address();
     return await fn(`http://127.0.0.1:${port}`);
   } finally {

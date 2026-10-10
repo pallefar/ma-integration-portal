@@ -18,6 +18,7 @@
 // `node --test` (bare — this repo's default test discovery), or `npm test`.
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -84,7 +85,7 @@ test.after(() => {
 
 test('deal-registry (a): hrbp creates a deal via POST /api/deals; a template-only deal database file is provisioned', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/deals`, {
@@ -117,7 +118,7 @@ test('deal-registry (a): hrbp creates a deal via POST /api/deals; a template-onl
 
 test('deal-registry (b): selecting a created deal makes the very next write land in that deal\'s own file, not demo.db', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const createRes = await fetch(`http://127.0.0.1:${port}/api/deals`, {
@@ -173,7 +174,7 @@ test('deal-registry (b): selecting a created deal makes the very next write land
 
 test('deal-registry (c): selecting null returns the session to demo on the very next request', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const createRes = await fetch(`http://127.0.0.1:${port}/api/deals`, {
@@ -216,7 +217,7 @@ test('deal-registry (d): a non-member is refused select with 403 and their prior
   registerDeal({ id: 'deal_notpmo1', name: 'Not PMO Deal', targetCompany: 'NotPmo Co', members: ['karen'], status: 'active', createdBy: 'admin', createdAt: new Date().toISOString() });
 
   const token = newSession('pmo', 'pmo');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     // pmo binds to a deal they ARE a member of first, so we can prove the
@@ -247,7 +248,7 @@ test('deal-registry (e): a non-member\'s GET /api/deals response contains no tra
   registerDeal({ id: 'deal_secret1', name: 'Secret Target', targetCompany: 'Secretive Industries', members: ['karen'], status: 'active', createdBy: 'admin', createdAt: new Date().toISOString() });
 
   const token = newSession('pmo', 'pmo');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/deals`, { headers: { Cookie: cookieHeader(token) } });
@@ -267,7 +268,7 @@ test('deal-registry (f): deal creation is refused for employee, allowed for hrbp
   const employeeToken = newSession('employee-demo', 'employee');
   const hrbpToken = newSession('karen', 'hrbp');
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const postDeal = (token, name) => fetch(`http://127.0.0.1:${port}/api/deals`, {
@@ -294,7 +295,7 @@ test('deal-registry (f): deal creation is refused for employee, allowed for hrbp
 
 test('deal-registry (g): malformed create bodies are rejected 400 with a single-string error; an unknown key is silently stripped', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const post = (body) => fetch(`http://127.0.0.1:${port}/api/deals`, {

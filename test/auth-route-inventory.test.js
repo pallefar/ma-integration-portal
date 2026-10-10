@@ -17,6 +17,7 @@
 // (v22.18.0) — it errors with "Cannot find module '.../test'".
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 
 const app = require('../server.js');
@@ -51,7 +52,7 @@ function listApiRoutes(expressApp) {
 
 test('AUTH-01: every /api/* route (read or write) rejects an unauthenticated request with 401', async () => {
   delete process.env.DEMO_OPEN; // defensive: prove the fail-closed default, not a leaked prior toggle
-  const server = app.listen(0); // ephemeral port
+  const server = await listenLocal(app); // ephemeral port
   try {
     const { port } = server.address();
     const routes = listApiRoutes(app).filter((r) => !PUBLIC_API_PATHS.has(r.path));
@@ -67,7 +68,7 @@ test('AUTH-01: every /api/* route (read or write) rejects an unauthenticated req
 });
 
 test('AUTH-01/D-02: DEMO_OPEN=1 keeps a sample route open; unsetting it restores the fail-closed default', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const sampleUrl = `http://127.0.0.1:${port}/api/menus`;

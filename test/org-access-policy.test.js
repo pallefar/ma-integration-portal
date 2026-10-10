@@ -13,6 +13,7 @@
 // test/org-access-policy.test.js` (or `npm test`).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -86,7 +87,7 @@ test('org-access-policy: the D-07 read/write matrix across four identities, iden
     { name: 'pmo granted only it', token: pmoItToken, clearedForTarget: false },
   ];
 
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -176,7 +177,7 @@ test('org-access-policy: the refusal is on the clearance axis, not validation â€
 
   const clearedToken = newSession('pmo_cleared', 'pmo'); bindDeal(clearedToken, deal.id);
   const unclearedToken = newSession('pmo_uncleared', 'pmo'); bindDeal(unclearedToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -225,7 +226,7 @@ test('org-access-policy: GET /api/org/capabilities â€” the D-07 four-identity ma
     { name: 'pmo granted only it', token: pmoItToken, cleared: false },
   ];
 
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -263,7 +264,7 @@ test('org-access-policy: copy-to-target and delete are both refused 403 for an i
 
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

@@ -20,6 +20,7 @@
 // (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -169,7 +170,7 @@ test('synergy-phasing (http l): CR-01 â€” POST /api/settings with an out-of-rang
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -208,7 +209,7 @@ test('synergy-phasing (http a): generate-phasing on a valid initiative returns 2
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -237,7 +238,7 @@ test('synergy-phasing (http b): generate-phasing on an unknown initiative id ret
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -258,7 +259,7 @@ test('synergy-phasing (http c): generate-phasing with an out-of-enum curveShape 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -280,7 +281,7 @@ test('synergy-phasing (http d): GET /api/synergies reports targetM equal to the 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -320,7 +321,7 @@ test('synergy-phasing (http e): an initiative with zero phasing rows keeps the p
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -359,7 +360,7 @@ test('synergy-phasing (http f): a realized-value write to the CURRENT month retu
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -398,7 +399,7 @@ test('synergy-phasing (http g): a realized-value write to the month immediately 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -438,7 +439,7 @@ test('synergy-phasing (http h): a targetM write to a FUTURE month returns 200 â€
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -469,7 +470,7 @@ test('synergy-phasing (http i): the month immediately BEFORE the current month a
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -497,7 +498,7 @@ test('synergy-phasing (http j): a :month not present in item.phasing returns 404
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -519,7 +520,7 @@ test('synergy-phasing (http k): a :month failing the shape check is rejected by 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

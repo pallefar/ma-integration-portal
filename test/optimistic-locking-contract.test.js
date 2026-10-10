@@ -15,6 +15,7 @@
 'use strict';
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -282,7 +283,7 @@ test('optimistic-locking-contract (structural): db/store.js exports isConflictEr
 // ---------------------------------------------------------------------------
 
 test('optimistic-locking-contract (1): a stale-version RAID update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -332,7 +333,7 @@ test('optimistic-locking-contract (1): a stale-version RAID update returns 409 w
 // ---------------------------------------------------------------------------
 
 test('optimistic-locking-contract (2): a current-version RAID update returns 200 and the stored version is exactly one higher', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -365,7 +366,7 @@ test('optimistic-locking-contract (2): a current-version RAID update returns 200
 // ---------------------------------------------------------------------------
 
 test('optimistic-locking-contract (3): a RAID record with no version field accepts version 0 and gets version:1 stamped; a record that is only read never gets stamped', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -399,7 +400,7 @@ test('optimistic-locking-contract (3): a RAID record with no version field accep
 // ---------------------------------------------------------------------------
 
 test('optimistic-locking-contract (4, negative control): the pre-existing empty-deal steerco-pack 409 does not carry the conflict:true marker', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -425,7 +426,7 @@ test('optimistic-locking-contract (4, negative control): the pre-existing empty-
 // ---------------------------------------------------------------------------
 
 test('optimistic-locking-contract (5): a stale-version integration-task update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -460,7 +461,7 @@ test('optimistic-locking-contract (5): a stale-version integration-task update r
 });
 
 test('optimistic-locking-contract (6): a current-version integration-task update returns 200 and the stored version is exactly one higher', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -485,7 +486,7 @@ test('optimistic-locking-contract (6): a current-version integration-task update
 });
 
 test('optimistic-locking-contract (7): a status-only stale integration-task update (id, status, version only — the kanban flip shape) also returns 409, with no quick-action exemption', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -512,7 +513,7 @@ test('optimistic-locking-contract (7): a status-only stale integration-task upda
 });
 
 test('optimistic-locking-contract (8): POST /api/integration-tasks/instantiate with no version in its payload still returns its normal success status — creates are exempt', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -542,7 +543,7 @@ test('optimistic-locking-contract (8): POST /api/integration-tasks/instantiate w
 });
 
 test('optimistic-locking-contract (9): a stale-version synergy-initiative update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -577,7 +578,7 @@ test('optimistic-locking-contract (9): a stale-version synergy-initiative update
 });
 
 test('optimistic-locking-contract (10): a current-version synergy-initiative update returns 200 and the stored version is exactly one higher', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -602,7 +603,7 @@ test('optimistic-locking-contract (10): a current-version synergy-initiative upd
 });
 
 test('optimistic-locking-contract (11): a query-channel ?expectedVersion that is not a non-negative integer returns 400 before any record is mutated', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -646,7 +647,7 @@ function patchSynergyRow(dealId, synergyId, patch) {
 }
 
 test('optimistic-locking-contract (12): a stale-version POST to the stage sub-route returns 409 with the conflict marker, and the initiative\'s stage is unchanged', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -678,7 +679,7 @@ test('optimistic-locking-contract (12): a stale-version POST to the stage sub-ro
 });
 
 test('optimistic-locking-contract (13): a stale-version query-channel DELETE to the cost-entry sub-route returns 409 with the conflict marker, and the entry is still present', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -716,7 +717,7 @@ test('optimistic-locking-contract (13): a stale-version query-channel DELETE to 
 });
 
 test('optimistic-locking-contract (14): a current-version query-channel DELETE to the cost-entry sub-route succeeds, and the initiative\'s version advances by one', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -746,7 +747,7 @@ test('optimistic-locking-contract (14): a current-version query-channel DELETE t
 });
 
 test('optimistic-locking-contract (15, negative control): the pre-existing unrecognized-stage 409 does not carry the conflict:true marker', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -823,7 +824,7 @@ test('optimistic-locking-contract (16, structural): all seven synergy sub-routes
 // ---------------------------------------------------------------------------
 
 test('optimistic-locking-contract (17): a stale-version DD-finding update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -859,7 +860,7 @@ test('optimistic-locking-contract (17): a stale-version DD-finding update return
 });
 
 test('optimistic-locking-contract (18): a stale-version DD request-item update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -894,7 +895,7 @@ test('optimistic-locking-contract (18): a stale-version DD request-item update r
 });
 
 test('optimistic-locking-contract (19): a current-version DD-finding update returns 200 and the stored version is exactly one higher', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -919,7 +920,7 @@ test('optimistic-locking-contract (19): a current-version DD-finding update retu
 });
 
 test('optimistic-locking-contract (20): a current-version DD request-item update returns 200 and the stored version is exactly one higher', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -944,7 +945,7 @@ test('optimistic-locking-contract (20): a current-version DD request-item update
 });
 
 test('optimistic-locking-contract (21): the DD request-item 409 body\'s currentRecord carries the same projected shape as the route\'s 200-response item — publicDdItem() applied identically on both paths', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1001,7 +1002,7 @@ test('optimistic-locking-contract (22, direct): conflictIfStale()\'s clearanceFi
 });
 
 test('optimistic-locking-contract (23): a stale-version convert returns 409 with the conflict marker, and afterwards no task or RAID entry exists and the finding\'s link arrays are unchanged', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1040,7 +1041,7 @@ test('optimistic-locking-contract (23): a stale-version convert returns 409 with
 });
 
 test('optimistic-locking-contract (24): a current-version convert succeeds, creates the task/RAID entry, and the finding\'s version advances by one', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1104,7 +1105,7 @@ async function createEmployee(base, token, name) {
 }
 
 test('optimistic-locking-contract (26): a stale-version org-position update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1139,7 +1140,7 @@ test('optimistic-locking-contract (26): a stale-version org-position update retu
 });
 
 test('optimistic-locking-contract (27): a stale-version org flight-risk update returns 409 with the conflict marker, and the earlier writer\'s field values survive intact', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1175,7 +1176,7 @@ test('optimistic-locking-contract (27): a stale-version org flight-risk update r
 });
 
 test('optimistic-locking-contract (28): a current-version org-position update returns 200 and the stored version is exactly one higher', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1200,7 +1201,7 @@ test('optimistic-locking-contract (28): a current-version org-position update re
 });
 
 test('optimistic-locking-contract (29): a current-version org flight-risk update returns 200 and the stored version is exactly one higher', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1226,7 +1227,7 @@ test('optimistic-locking-contract (29): a current-version org flight-risk update
 });
 
 test('optimistic-locking-contract (30): an org-position update that is both stale AND graph-invalid returns 409, not 400, and the stored position is unchanged', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1259,7 +1260,7 @@ test('optimistic-locking-contract (30): an org-position update that is both stal
 });
 
 test('optimistic-locking-contract (31): POST /api/org/decisions succeeds with no version in its payload, and the created decision record has no version key — the recorded append-only exemption', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1281,7 +1282,7 @@ test('optimistic-locking-contract (31): POST /api/org/decisions succeeds with no
 });
 
 test('optimistic-locking-contract (32): POST /api/org/positions/copy-to-target and the roster import both still succeed with no version in their payload', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1311,7 +1312,7 @@ test('optimistic-locking-contract (32): POST /api/org/positions/copy-to-target a
 });
 
 test('optimistic-locking-contract (33): a stale-version flight-risk convert returns 409 with the conflict marker, and afterwards no task or RAID entry exists and the entry\'s link arrays are unchanged', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1351,7 +1352,7 @@ test('optimistic-locking-contract (33): a stale-version flight-risk convert retu
 });
 
 test('optimistic-locking-contract (34): a current-version flight-risk convert succeeds, creates the task/RAID entry, and the entry\'s version advances by one', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1423,7 +1424,7 @@ function delWithVersion(base, urlPath, token, version) {
 }
 
 test('optimistic-locking-contract (36): DELETE /api/raid/:id — stale delete 409s with the record surviving, current delete succeeds, repeat delete 404s with no conflict field, and a negative expectedVersion 400s', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1467,7 +1468,7 @@ test('optimistic-locking-contract (36): DELETE /api/raid/:id — stale delete 40
 });
 
 test('optimistic-locking-contract (37): DELETE /api/integration-tasks/:id — stale delete 409s with the record surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1500,7 +1501,7 @@ test('optimistic-locking-contract (37): DELETE /api/integration-tasks/:id — st
 });
 
 test('optimistic-locking-contract (38): DELETE /api/synergies/:id — stale delete 409s with the record surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1532,7 +1533,7 @@ test('optimistic-locking-contract (38): DELETE /api/synergies/:id — stale dele
 });
 
 test('optimistic-locking-contract (39): DELETE /api/org/positions/:id — stale delete 409s with the position surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1564,7 +1565,7 @@ test('optimistic-locking-contract (39): DELETE /api/org/positions/:id — stale 
 });
 
 test('optimistic-locking-contract (40): DELETE /api/org/flight-risk/:id — stale delete 409s with the entry surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1597,7 +1598,7 @@ test('optimistic-locking-contract (40): DELETE /api/org/flight-risk/:id — stal
 });
 
 test('optimistic-locking-contract (41): DELETE /api/dd/request-items/:id — stale delete 409s with the item surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1636,7 +1637,7 @@ test('optimistic-locking-contract (41): DELETE /api/dd/request-items/:id — sta
 });
 
 test('optimistic-locking-contract (42): DELETE /api/dd/findings/:id — stale delete 409s with the finding surviving, current delete succeeds, and repeat delete 404s with no conflict field', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1670,7 +1671,7 @@ test('optimistic-locking-contract (42): DELETE /api/dd/findings/:id — stale de
 });
 
 test('optimistic-locking-contract (43): DELETE with no expectedVersion — refused 400 versionRequired in a deal (the record survives), still deletes in the demo store (D-09)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1768,7 +1769,7 @@ async function enableCustomMode(base, token) {
 }
 
 test('optimistic-locking-contract (Part 3, dual-lane 1): in custom (demoMode:false) mode, a stale-version RAID update returns 409 and a current-version update advances the version by exactly one — and the row lives in customRaidEntries, never raidEntries', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1800,7 +1801,7 @@ test('optimistic-locking-contract (Part 3, dual-lane 1): in custom (demoMode:fal
 });
 
 test('optimistic-locking-contract (Part 3, dual-lane 2): in custom (demoMode:false) mode, a stale-version integration-task update returns 409 and a current-version update advances the version by exactly one — and the row lives in customIntegrationTasks, never integrationTasks', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1832,7 +1833,7 @@ test('optimistic-locking-contract (Part 3, dual-lane 2): in custom (demoMode:fal
 });
 
 test('optimistic-locking-contract (Part 3, dual-lane 3): in custom (demoMode:false) mode, a stale-version synergy-initiative update returns 409 and a current-version update advances the version by exactly one — and the row lives in customSynergyInitiatives, never synergyInitiatives', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

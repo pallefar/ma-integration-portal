@@ -13,6 +13,7 @@
 // (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -91,7 +92,7 @@ async function createTask(base, token, title) {
 
 test('synergy-tasks (a): POST /api/synergies with a taskIds array of existing task ids stores them in the given order', async () => {
   const token = await setupDeal('deal_syntaska');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -112,7 +113,7 @@ test('synergy-tasks (a): POST /api/synergies with a taskIds array of existing ta
 
 test('synergy-tasks (b): posting the same task id twice in one request, or an id already present, yields exactly one entry for that id', async () => {
   const token = await setupDeal('deal_syntaskb');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -135,7 +136,7 @@ test('synergy-tasks (b): posting the same task id twice in one request, or an id
 
 test('synergy-tasks (c): a task id that does not exist in the integration-task lane is refused with 400 naming the unknown id, and no partial write occurs', async () => {
   const token = await setupDeal('deal_syntaskc');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -172,7 +173,7 @@ test('synergy-tasks (c): a task id that does not exist in the integration-task l
 
 test('synergy-tasks (d): the same task id can be stored on two different initiatives simultaneously', async () => {
   const token = await setupDeal('deal_syntaskd');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -194,7 +195,7 @@ test('synergy-tasks (d): the same task id can be stored on two different initiat
 
 test('synergy-tasks (e): posting an empty array clears the list; the field\'s absence from a body leaves the stored list untouched', async () => {
   const token = await setupDeal('deal_syntaske');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -220,7 +221,7 @@ test('synergy-tasks (e): posting an empty array clears the list; the field\'s ab
 
 test('synergy-tasks (f): D-23 — marking a linked task done through the existing integration-task route leaves the initiative\'s realized value, derived totals, stage and lastConfirmedAt all unchanged', async () => {
   const token = await setupDeal('deal_syntaskf');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -254,7 +255,7 @@ test('synergy-tasks (f): D-23 — marking a linked task done through the existin
 
 test('synergy-tasks (g): a taskIds array exceeding the schema\'s array maximum is refused by the schema', async () => {
   const token = await setupDeal('deal_syntaskg');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

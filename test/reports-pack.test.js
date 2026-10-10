@@ -18,6 +18,7 @@
 // node:test — run via `node --test test/reports-pack.test.js` (or `npm test`).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 
 const reportPack = require('../lib/reportPack.js');
@@ -826,7 +827,7 @@ test.after(() => {
 
 test('reports-pack route (GET /api/reports/pack)', async (t) => {
   await t.test('(a) returns a real PDF with the codename in the filename and never the legal target name', async () => {
-    const server = app.listen(0);
+    const server = await listenLocal(app);
     try {
       const { port } = server.address();
       const base = `http://127.0.0.1:${port}`;
@@ -851,7 +852,7 @@ test('reports-pack route (GET /api/reports/pack)', async (t) => {
   });
 
   await t.test('(b) LOAD-BEARING (D-08): a member cleared for one area only gets from the pack the EXACT SAME RAID row set as their own RAID CSV export, in the same run', async () => {
-    const server = app.listen(0);
+    const server = await listenLocal(app);
     try {
       const { port } = server.address();
       const base = `http://127.0.0.1:${port}`;
@@ -900,7 +901,7 @@ test('reports-pack route (GET /api/reports/pack)', async (t) => {
   });
 
   await t.test('(c) a deal with no data at all returns 409 and generates no file', async () => {
-    const server = app.listen(0);
+    const server = await listenLocal(app);
     try {
       const { port } = server.address();
       const base = `http://127.0.0.1:${port}`;
@@ -918,7 +919,7 @@ test('reports-pack route (GET /api/reports/pack)', async (t) => {
   });
 
   await t.test('(d) an org/talent spelling injected as an extra query parameter cannot make the pack include org content (D-09)', async () => {
-    const server = app.listen(0);
+    const server = await listenLocal(app);
     try {
       const { port } = server.address();
       const base = `http://127.0.0.1:${port}`;
@@ -936,7 +937,7 @@ test('reports-pack route (GET /api/reports/pack)', async (t) => {
   });
 
   await t.test('(e) an unsupported language query value silently resolves to English rather than rejecting the request', async () => {
-    const server = app.listen(0);
+    const server = await listenLocal(app);
     try {
       const { port } = server.address();
       const base = `http://127.0.0.1:${port}`;

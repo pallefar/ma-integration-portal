@@ -11,6 +11,7 @@
 // (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -85,7 +86,7 @@ async function setupDeal(id) {
 
 test('synergy-cost (a): POST /api/synergies with costPlannedM and costExpectedMonth stores both; an invalid expected month is refused by the schema', async () => {
   const token = await setupDeal('deal_syncosta');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -106,7 +107,7 @@ test('synergy-cost (a): POST /api/synergies with costPlannedM and costExpectedMo
 
 test('synergy-cost (b): POST /api/synergies/:id/cost-entries with a valid date and amount returns 200 and appends one entry carrying a generated id; an invalid calendar date is refused by the schema', async () => {
   const token = await setupDeal('deal_syncostb');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -132,7 +133,7 @@ test('synergy-cost (b): POST /api/synergies/:id/cost-entries with a valid date a
 
 test('synergy-cost (c): an unknown initiative id returns 404 on the cost-entries route; an unknown entry id on the delete route returns 404', async () => {
   const token = await setupDeal('deal_syncostc');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -155,7 +156,7 @@ test('synergy-cost (c): an unknown initiative id returns 404 on the cost-entries
 
 test('synergy-cost (d): DELETE /api/synergies/:id/cost-entries/:eid removes exactly that entry and leaves every other entry untouched', async () => {
   const token = await setupDeal('deal_syncostd');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -188,7 +189,7 @@ test('synergy-cost (d): DELETE /api/synergies/:id/cost-entries/:eid removes exac
 
 test('synergy-cost (e): two entries posted with the identical date and amount both exist afterwards with different ids (no merge/dedupe)', async () => {
   const token = await setupDeal('deal_syncoste');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -211,7 +212,7 @@ test('synergy-cost (e): two entries posted with the identical date and amount bo
 
 test('synergy-cost (f): entries are returned newest-date-first, and two same-date entries appear in the order they were inserted', async () => {
   const token = await setupDeal('deal_syncostf');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -240,7 +241,7 @@ test('synergy-cost (f): entries are returned newest-date-first, and two same-dat
 
 test('synergy-cost (g): an initiative with zero cost entries reports cost incurred 0 and net benefit equal to its derived realized value', async () => {
   const token = await setupDeal('deal_syncostg');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -261,7 +262,7 @@ test('synergy-cost (g): an initiative with zero cost entries reports cost incurr
 
 test('synergy-cost (h): net benefit is negative when cost exceeds realized value and is not clamped to zero', async () => {
   const token = await setupDeal('deal_syncosth');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -344,7 +345,7 @@ test('synergy-cost-ui (f): public/execution.html declares .syn-cost-row and .syn
 
 test('synergy-cost (i): both new routes are registered — each returns 200, 400 or 404, never the validator registry\'s 500', async () => {
   const token = await setupDeal('deal_syncosti');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -382,7 +383,7 @@ test('synergy-cost (unit j): WR-02 — roundSynergyMoney rejects non-finite resu
 
 test('synergy-cost (http j): WR-02 — POST /api/synergies create with an overflow-string amountM (targetM/realizedM/runRateM/costPlannedM) stores 0, never `null` (Infinity would serialize as null over JSON)', async () => {
   const token = await setupDeal('deal_syncostj');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -408,7 +409,7 @@ test('synergy-cost (http j): WR-02 — POST /api/synergies create with an overfl
 
 test('synergy-cost (http k): WR-02 — POST /api/synergies update branch with an overflow-string runRateM (below committed, no reason needed) stores 0, never `null`; a cost-entries amountM overflow does the same', async () => {
   const token = await setupDeal('deal_syncostk');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

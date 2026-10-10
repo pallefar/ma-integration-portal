@@ -36,6 +36,7 @@
 // (v22.18.0) — it errors with "Cannot find module '.../test'".
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -167,7 +168,7 @@ test('CONC-01 (end-to-end): a write contended by a real second OS process return
     // this to DEMO_DB_PATH (dbFiles.DEMO_DB_PATH), the exact file the child
     // above is holding the write lock on.
     const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
-    const server = app.listen(0);
+    const server = await listenLocal(app);
     try {
       const { port } = server.address();
       const pulsePayload = { employeeName: 'Contention Test', rating: 4, comment: 'busy-retry proof', type: 'general' };

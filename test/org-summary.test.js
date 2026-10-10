@@ -20,6 +20,7 @@
 // directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -137,7 +138,7 @@ function makeFourIdentityDeal(id) {
 test('org-summary (a): an uncleared caller gets 200 with an open tier, and the restricted key is entirely absent from the serialised response', async () => {
   const deal = makeFourIdentityDeal('deal_osa');
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -160,7 +161,7 @@ test('org-summary (a): an uncleared caller gets 200 with an open tier, and the r
 test('org-summary (b): the same request from an hr-granted caller returns 200 with the restricted key present', async () => {
   const deal = makeFourIdentityDeal('deal_osb');
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -177,7 +178,7 @@ test('org-summary (b): the same request from an hr-granted caller returns 200 wi
 test('org-summary (c): current headcount counts current-state occupied positions, open positions counts current-state vacant ones, and a target-state position contributes to neither', async () => {
   const deal = makeFourIdentityDeal('deal_osc');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -200,7 +201,7 @@ test('org-summary (c): current headcount counts current-state occupied positions
 test('org-summary (d): the restricted delta is target headcount minus current headcount, negative when current exceeds target, with the expected magnitude', async () => {
   const deal = makeFourIdentityDeal('deal_osd');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -229,7 +230,7 @@ test('org-summary (d): the restricted delta is target headcount minus current he
 test('org-summary (e): decision-type counts total across the five vocabulary values, and a position with no entry counts under the open value', async () => {
   const deal = makeFourIdentityDeal('deal_ose');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -256,7 +257,7 @@ test('org-summary (e): decision-type counts total across the five vocabulary val
 test('org-summary (f): a decision entry whose position was deleted contributes to no decision-type count', async () => {
   const deal = makeFourIdentityDeal('deal_osf');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -284,7 +285,7 @@ test('org-summary (f): a decision entry whose position was deleted contributes t
 test('org-summary (g): the unmitigated count includes only high/critical entries with an empty mitigation, excluding low/medium and mitigated ones', async () => {
   const deal = makeFourIdentityDeal('deal_osg');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -308,7 +309,7 @@ test('org-summary (h): the caller-scoped mine count reports how many unmitigated
   const deal = makeFourIdentityDeal('deal_osh');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -332,7 +333,7 @@ test('org-summary (h): the caller-scoped mine count reports how many unmitigated
 test('org-summary (i): a deal with no positions at all returns a zeroed open tier rather than an error, and the restricted tier still appears for a cleared caller', async () => {
   const deal = makeFourIdentityDeal('deal_osi');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -354,7 +355,7 @@ test('org-summary (j): a summary read from both a cleared and an uncleared ident
   const deal = makeFourIdentityDeal('deal_osj');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -493,7 +494,7 @@ test('org-summary (source): the nudge is called from renderDealHome with the sam
 test('org-summary (source): the client\'s own greater-than-zero guard — not a missing field — is what suppresses the nudge for a cleared caller who owns none', async () => {
   const deal = makeFourIdentityDeal('deal_osk');
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

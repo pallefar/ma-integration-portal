@@ -16,6 +16,7 @@
 // directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -77,7 +78,7 @@ test('dd-workspace (a): an IL creates a legal item and reads it back; a member g
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -110,7 +111,7 @@ test('dd-workspace (b): a member with no area grant at all receives an empty arr
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -137,7 +138,7 @@ test('dd-workspace (c): duplicate text produces distinct ids; an empty deal retu
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -166,7 +167,7 @@ test('dd-workspace (d): two items sharing a due date and status are returned in 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -196,7 +197,7 @@ test('dd-workspace (e): two concurrent creates against the same deal both persis
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -226,7 +227,7 @@ test('dd-workspace (f): overdue is computed on read — past-due & not-closed is
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -264,7 +265,7 @@ test('dd-workspace (g): a member cleared for financial gets a byte-identical uni
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -297,7 +298,7 @@ test('dd-workspace (h): a member cleared for legal is refused moving their own i
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -330,7 +331,7 @@ test('dd-workspace (i): a caller-supplied `source` on create is stripped, never 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -354,7 +355,7 @@ test('dd-workspace (j): dueDate must be a valid calendar date — a syntacticall
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

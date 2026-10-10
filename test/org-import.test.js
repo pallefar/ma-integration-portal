@@ -8,6 +8,7 @@
 // test/org-import.test.js` (or `npm test`).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -75,7 +76,7 @@ test.after(() => {
 
 test('org-import (a): three well-formed rows from an hr-granted member create three positions with a created count of three', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpa');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -104,7 +105,7 @@ test('org-import (a): three well-formed rows from an hr-granted member create th
 
 test('org-import (b): reportsTo naming another row\'s title in the SAME paste resolves to that row\'s newly created id', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpb');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -129,7 +130,7 @@ test('org-import (b): reportsTo naming another row\'s title in the SAME paste re
 
 test('org-import (c): reportsTo naming an EXISTING position\'s title in the requested state resolves to that position\'s id', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpc');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -155,7 +156,7 @@ test('org-import (c): reportsTo naming an EXISTING position\'s title in the requ
 
 test('org-import (d): an unresolvable reportsTo returns 400 naming the offending row index, and a follow-up read shows zero positions created', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpd');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -182,7 +183,7 @@ test('org-import (d): an unresolvable reportsTo returns 400 naming the offending
 
 test('org-import (e): two rows sharing the same title return 400 naming the duplicate, and nothing is created', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpe');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -210,7 +211,7 @@ test('org-import (e): two rows sharing the same title return 400 naming the dupl
 
 test('org-import (f): a row with an empty title returns 400 with that row\'s index, and nothing is created', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpf');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -237,7 +238,7 @@ test('org-import (f): a row with an empty title returns 400 with that row\'s ind
 
 test('org-import (g): a row carrying name and email for a new person creates exactly one employee and links the position to it', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpg');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -266,7 +267,7 @@ test('org-import (g): a row carrying name and email for a new person creates exa
 
 test('org-import (h): two rows carrying the same email in different casing create exactly ONE employee and both positions link to it', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimph');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -295,7 +296,7 @@ test('org-import (h): two rows carrying the same email in different casing creat
 
 test('org-import (i): a row whose email matches an EXISTING employee (from a prior import) reuses that employee\'s id and creates no second employee row', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpi');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -330,7 +331,7 @@ test('org-import (i): a row whose email matches an EXISTING employee (from a pri
 
 test('org-import (j): an employee row created by the import carries no truthy gamification points value and no badge value', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpj');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -358,7 +359,7 @@ test('org-import (k): the route is refused with 403 for a member without the hr 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -380,7 +381,7 @@ test('org-import (k): the route is refused with 403 for a member without the hr 
 
 test('org-import (l): a payload exceeding the schema\'s row cap is refused by the validator with 400, before the handler runs, and names the limit', async () => {
   const { pmoToken } = setupHrDeal('deal_orgimpl');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

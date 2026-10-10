@@ -25,6 +25,7 @@
 // test/` (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -122,7 +123,7 @@ async function createUnphasedInitiative(base, token, title, amount) {
 
 test('synergy-rollup-split (a): BOTH DIRECTIONS in one test — a phased initiative counts in grossRealizedM and NOT in unphasedRealizedM, an unphased initiative does exactly the reverse, and gross + unphased conserves the old undifferentiated total', async () => {
   const token = await setupDeal('deal_synsplita');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -153,7 +154,7 @@ test('synergy-rollup-split (a): BOTH DIRECTIONS in one test — a phased initiat
 
 test('synergy-rollup-split (b): a rounding-edge fixture whose per-item amounts do not sum cleanly at one decimal preserves the item-level rounding discipline rather than the aggregate being re-rounded', async () => {
   const token = await setupDeal('deal_synsplitb');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -176,7 +177,7 @@ test('synergy-rollup-split (b): a rounding-edge fixture whose per-item amounts d
 
 test('synergy-rollup-split (c): a zero-initiative deal reports both figures as exactly 0, never undefined', async () => {
   const token = await setupDeal('deal_synsplitc');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

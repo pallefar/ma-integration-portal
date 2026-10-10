@@ -28,6 +28,7 @@
 'use strict';
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -324,7 +325,7 @@ test('busy-503-contract (live contention): three routes — one plain sync write
     // below (DEFAULT_WRITE_ROLES for /api/questions and /api/media; the
     // explicit /api/assessment entry also allows it).
     token = sessionsDb.createSession(runtimeConn, { username: 'busy-503-contract-test', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
-    server = app.listen(0);
+    server = await listenLocal(app);
     const { port } = server.address();
 
     async function assertBusy503(label, res) {
@@ -395,7 +396,7 @@ test('busy-503-contract (negative control): a validation failure still returns 4
   // No lock held anywhere in this test — every response below must come
   // from ordinary (non-contended) request handling.
   const token = sessionsDb.createSession(runtimeConn, { username: 'busy-503-contract-negctl', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
 

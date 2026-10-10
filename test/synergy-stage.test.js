@@ -13,6 +13,7 @@
 // (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -126,7 +127,7 @@ test('synergy-stage (d): POST /api/synergies with no stage creates an initiative
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -150,7 +151,7 @@ test('synergy-stage (e): POST /api/synergies carrying a retired legacy stage val
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -175,7 +176,7 @@ test('synergy-stage (f): T-05-13 — POST /api/synergies carrying a `stage` key 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -223,7 +224,7 @@ test('synergy-stage-gate (a): advancing to committed with an owner and a phased 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -258,7 +259,7 @@ test('synergy-stage-gate (b): advancing to committed with an empty owner is refu
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -286,7 +287,7 @@ test('synergy-stage-gate (c): advancing to committed with an owner but no run-ra
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -309,7 +310,7 @@ test('synergy-stage-gate (d): advancing to captured with zero realized value any
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -342,7 +343,7 @@ test('synergy-stage-gate (f): moving backward requires a non-empty reason — no
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -381,7 +382,7 @@ test('synergy-stage-gate (g): requesting the stage an initiative already holds i
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -407,7 +408,7 @@ test('synergy-stage-gate (h): a targetStage outside the four-value vocabulary is
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -450,7 +451,7 @@ test('synergy-stage-gate (G-05-01): CREATE cannot mint an initiative at a gated 
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -531,7 +532,7 @@ test('synergy-stage-gate (i): CR-02 — a stage-change request against an initia
   }
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -567,7 +568,7 @@ test('synergy-stage-gate (j): CR-03 — regenerating phasing on a captured initi
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -634,7 +635,7 @@ test('synergy-baseline (a): D-15 — re-baselining the SAME payload returns 200 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
   const employeeToken = newSession('employee-demo', 'employee'); bindDeal(employeeToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -672,7 +673,7 @@ test('synergy-baseline (b): the 403 is returned for an unknown initiative id too
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -690,7 +691,7 @@ test('synergy-baseline (c): re-baselining with an empty or whitespace-only reaso
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -714,7 +715,7 @@ test('synergy-baseline (d): D-14 — the deal case is stamped as version 1 the f
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -752,7 +753,7 @@ test('synergy-baseline (e): D-12 — a baseline\'s targetCurve is a deep copy; e
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -787,7 +788,7 @@ test('synergy-baseline (f): D-13 — once committed, a run-rate/curve-shape chan
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -825,7 +826,7 @@ test('synergy-baseline (g): below committed, an ordinary run-rate change require
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

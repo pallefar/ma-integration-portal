@@ -20,6 +20,7 @@
 // directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -97,7 +98,7 @@ test('dd-summary (a): an IL sees all eight areas with correct per-status counts'
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -140,7 +141,7 @@ test('dd-summary (b): a member cleared for exactly two areas sees exactly two en
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -169,7 +170,7 @@ test('dd-summary (c): totals equal the sum of the returned areas, not the deal\'
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -197,7 +198,7 @@ test('dd-summary (d): a past-due, non-closed item is counted as overdue in exact
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -223,7 +224,7 @@ test('dd-summary (e): a closed past-due item is never counted as overdue', async
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -247,7 +248,7 @@ test('dd-summary (f): findings are tallied by each of the four severities, inclu
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -278,7 +279,7 @@ test('dd-summary (g): `mine` counts only rows owned by the calling username, wit
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -308,7 +309,7 @@ test('dd-summary (h): a deal with no items and no findings returns zeroed struct
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

@@ -18,6 +18,7 @@
 // directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -120,7 +121,7 @@ test('dd-seed (b): an IL cleared for every area instantiates 80/0, a repeat call
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -170,7 +171,7 @@ test('dd-seed (e): a member cleared only for legal instantiates 10/70 and reads 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -199,7 +200,7 @@ test('dd-seed (f): deleting an instantiated item leaves the template row byte-id
   const beforeRow = readTemplateRow(deal.id, 'ddtpl_standard');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -230,7 +231,7 @@ test('dd-seed (g): an unknown templateId 404s and creates no items', async () =>
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

@@ -16,6 +16,7 @@
 // mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -221,7 +222,7 @@ test('reports-export (csvField unit) T-ERM-06: a value whose first NON-whitespac
 // assertion can never flake on the few milliseconds of real wall-clock time
 // this test itself takes to run.
 test('reports-export (n): the synergies export carries a whole-day staleDays age alongside the existing boolean — comfortably-within-threshold is not stale, well-past-threshold is, moving the deal\'s threshold flips the within-threshold item, and an item with neither timestamp exports as not stale with a null day count', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -286,7 +287,7 @@ test('reports-export (n): the synergies export carries a whole-day staleDays age
 });
 
 test('reports-export (a): four-identity parity — admin, the IL (hrbp), a one-area member and a no-area member each receive from the CSV export EXACTLY the id set GET /api/raid returns for that same identity in the same run (D-08)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -336,7 +337,7 @@ test('reports-export (a): four-identity parity — admin, the IL (hrbp), a one-a
 });
 
 test('reports-export (b): the filename/header/body are built from the deal codename ONLY — the legal-target sentinel appears ZERO times in the Content-Disposition header or the CSV body (D-07/D-09)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -358,7 +359,7 @@ test('reports-export (b): the filename/header/body are built from the deal coden
 });
 
 test('reports-export (c): a deal with no RAID entries yields byte-order-mark plus header line only — a valid, honest empty file, never an error', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -381,7 +382,7 @@ test('reports-export (c): a deal with no RAID entries yields byte-order-mark plu
 });
 
 test('reports-export (d): org and talent dataset spellings are refused with 400 before any lane is opened — no export surface exists for them at all (D-09)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -398,7 +399,7 @@ test('reports-export (d): org and talent dataset spellings are refused with 400 
 });
 
 test('reports-export (e): a title beginning with an equals sign is apostrophe-prefixed before quoting (T-07-05), and a title containing a comma and a double quote round-trips through RFC 4180 quoting', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -425,7 +426,7 @@ test('reports-export (e): a title beginning with an equals sign is apostrophe-pr
 // =====================================================================
 
 test('reports-export (f): all eight accepted dataset/format combinations return 200 with the expected content type — no 501 remains', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -455,7 +456,7 @@ test('reports-export (f): all eight accepted dataset/format combinations return 
 });
 
 test('reports-export (g): the JSON export of synergies and raid deep-equals the live GET route body for the SAME identity in the SAME run — never a bespoke export schema (D-08)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -477,7 +478,7 @@ test('reports-export (g): the JSON export of synergies and raid deep-equals the 
 });
 
 test('reports-export (h): the exported workstream rows equal what execution.js\'s own client-side math produces for the same seeded template and task set — a blocked workstream forces a red band, a zero-task workstream is absent', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -527,7 +528,7 @@ test('reports-export (h): the exported workstream rows equal what execution.js\'
 });
 
 test('reports-export (i): a deal with no data at all yields a headers-only CSV and an empty JSON array for all four datasets', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -557,7 +558,7 @@ test('reports-export (i): a deal with no data at all yields a headers-only CSV a
 // =====================================================================
 
 test('reports-export (j): the RAID clearance parity from test (a) holds in BOTH formats now that the handler branches on four datasets', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -604,7 +605,7 @@ test('reports-export (j): the RAID clearance parity from test (a) holds in BOTH 
 // dedicated over/under-filter proof for a RESTRICTED (converted) task lives
 // in test/task-access-filter.test.js.
 test('reports-export (k): workstreams and synergies carry NO per-item clearance concept, and this fixture\'s tasks are all unrestricted (manual) — all three return the IDENTICAL set for all four identities', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -641,7 +642,7 @@ test('reports-export (k): workstreams and synergies carry NO per-item clearance 
 });
 
 test('reports-export (l): the export route reads through the deal-bound context, never a global — a session bound to a SECOND deal receives ONLY that deal\'s rows', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -662,7 +663,7 @@ test('reports-export (l): the export route reads through the deal-bound context,
 });
 
 test('reports-export (m): the legal-target sentinel never appears in any response body or Content-Disposition header, across all four datasets and both formats (D-07)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

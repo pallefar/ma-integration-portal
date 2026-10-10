@@ -18,6 +18,7 @@
 // `node --test test/audit-security-events.test.js` (or `npm test`).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -92,7 +93,7 @@ test.after(() => {
 });
 
 test('audit-security-events (a): each D-08 control-plane action produces exactly one audit row with the expected action name and subject', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -167,7 +168,7 @@ test('audit-security-events (a): each D-08 control-plane action produces exactly
 });
 
 test('audit-security-events (b): a break-glass admin-token request produces an event attributed to the token identity, not to a null actor', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const before = auditHook.queryAudit({ actor: 'admin-token', limit: 500 }).length;
@@ -187,7 +188,7 @@ test('audit-security-events (b): a break-glass admin-token request produces an e
 });
 
 test('audit-security-events (c): the audit viewer route is 403 for hrbp/pmo/employee and 200 for admin', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -212,7 +213,7 @@ test('audit-security-events (c): the audit viewer route is 403 for hrbp/pmo/empl
 });
 
 test('audit-security-events (d): the deal filter, user filter and date-range filter each narrow the result set correctly, ordered by id descending', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

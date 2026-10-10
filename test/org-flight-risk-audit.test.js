@@ -18,6 +18,7 @@
 // test/` (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -124,7 +125,7 @@ async function createEmployee(base, adminToken, name) {
 test('org-flight-risk (a): GET from a caller without the hr grant returns 403 and appends exactly one denial audit row', async () => {
   const deal = makeFourIdentityDeal('deal_ofra');
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -142,7 +143,7 @@ test('org-flight-risk (a): GET from a caller without the hr grant returns 403 an
 test('org-flight-risk (b): the same request from an hr-cleared caller returns 200 and appends exactly one read audit row', async () => {
   const deal = makeFourIdentityDeal('deal_ofrb');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -163,7 +164,7 @@ test('org-flight-risk (c): GET /api/org/positions (open tier) from either caller
   const deal = makeFourIdentityDeal('deal_ofrc');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -181,7 +182,7 @@ test('org-flight-risk (c): GET /api/org/positions (open tier) from either caller
 test('org-flight-risk (d): two consecutive successful reads append exactly two read rows — no session dedupe', async () => {
   const deal = makeFourIdentityDeal('deal_ofrd');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -200,7 +201,7 @@ test('org-flight-risk (e): POST from an hrbp session with a valid body returns 2
   const deal = makeFourIdentityDeal('deal_ofre');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -228,7 +229,7 @@ test('org-flight-risk (f): the same create payload from a pmo holding the hr gra
   const deal = makeFourIdentityDeal('deal_ofrf');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -254,7 +255,7 @@ test('org-flight-risk (g): the D-04 tier-2 four-identity matrix — the SAME cre
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
   const pmoItToken = newSession('pmo_it', 'pmo'); bindDeal(pmoItToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -285,7 +286,7 @@ test('org-flight-risk (g): the D-04 tier-2 four-identity matrix — the SAME cre
 test('org-flight-risk (h): a body whose riskLevel is outside the four RAID values returns 400 from the schema', async () => {
   const deal = makeFourIdentityDeal('deal_ofrh');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -304,7 +305,7 @@ test('org-flight-risk (h): a body whose riskLevel is outside the four RAID value
 test('org-flight-risk (i): a body with no employeeId returns 400; a body naming no employee in the roster returns 404', async () => {
   const deal = makeFourIdentityDeal('deal_ofri');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -325,7 +326,7 @@ test('org-flight-risk (i): a body with no employeeId returns 400; a body naming 
 test('org-flight-risk (j): WR-02 (06-REVIEW.md) — a body with no owner returns 201 and defaults owner to the caller\'s own session username, never a 400; a body with no mitigation returns 201 and stores an empty mitigation', async () => {
   const deal = makeFourIdentityDeal('deal_ofrj');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -365,7 +366,7 @@ test('org-flight-risk (j): WR-02 (06-REVIEW.md) — a body with no owner returns
 test('org-flight-risk (j2): WR-02 — an explicitly supplied, non-blank owner is still honoured verbatim, never overridden by the caller\'s own session identity', async () => {
   const deal = makeFourIdentityDeal('deal_ofrj2');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -386,7 +387,7 @@ test('org-flight-risk (j2): WR-02 — an explicitly supplied, non-blank owner is
 test('org-flight-risk (j3): WR-02 — an unmitigated high-risk entry created with owner defaulted to the caller counts in that caller\'s GET /api/org/summary mine.unmitigatedFlightRisks', async () => {
   const deal = makeFourIdentityDeal('deal_ofrj3');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -415,7 +416,7 @@ test('org-flight-risk (j3): WR-02 — an unmitigated high-risk entry created wit
 test('org-flight-risk (k): POST with an id updates in place and does not create a second row', async () => {
   const deal = makeFourIdentityDeal('deal_ofrk');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -449,7 +450,7 @@ test('org-flight-risk (l): DELETE returns 403 for a non-IL caller and 200 for an
   const deal = makeFourIdentityDeal('deal_ofrl');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const pmoHrToken = newSession('pmo_hr', 'pmo'); bindDeal(pmoHrToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -504,7 +505,7 @@ test('org-flight-risk: grep-level guard — recordSecurityEvent has two new call
 test('org-flight-risk-scoping: reading current-state positions, the capability probe, and the decisions list each append zero rows carrying either register action name', async () => {
   const deal = makeFourIdentityDeal('deal_ofrscope');
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -527,7 +528,7 @@ test('org-flight-risk-scoping: reading current-state positions, the capability p
 test('org-flight-risk-encoding: a mitigation containing a script-tag payload and an owner containing multi-byte characters and combining marks round-trip byte-identical', async () => {
   const deal = makeFourIdentityDeal('deal_ofrenc');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -566,7 +567,7 @@ test('org-flight-risk-encoding: source-level — public/js/org.js renders throug
 test('org-flight-risk-concurrency: two simultaneous creates for two different people both land — the same-collection lost-update race is closed', async () => {
   const deal = makeFourIdentityDeal('deal_ofrconc');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -599,7 +600,7 @@ test('org-flight-risk-concurrency: two simultaneous creates for two different pe
 test('org-flight-risk-concurrency: a simultaneous flight-risk write and position write both land — the merge is per-collection, not whole-database last-writer-wins', async () => {
   const deal = makeFourIdentityDeal('deal_ofrconcmix');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -678,7 +679,7 @@ test('org-flight-risk-ui: the entry form is constructed only inside a branch tes
 test('org-flight-risk-ui: an entry with no mitigation omits the mitigation element entirely — a first-class state, not a placeholder', async () => {
   const deal = makeFourIdentityDeal('deal_ofrpartial');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -714,7 +715,7 @@ test('org-flight-risk-ui: public/org.html declares zero text-overflow/overflow:h
 test('org-flight-risk-ui: the TREE card gets the .org-node-risk border-accent only for a high/critical entry, never for low/medium, and the decision badge co-renders alongside it', async () => {
   const deal = makeFourIdentityDeal('deal_ofrtree');
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

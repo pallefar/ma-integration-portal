@@ -20,6 +20,7 @@
 // node:test — Node's built-in runner. Run via `node --test test/write-validation.test.js`.
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -79,7 +80,7 @@ test.after(() => {
 
 test('write-validation (a): wrong type / missing required / over-length each 400 with a field-naming single-string error that never echoes the submitted value', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const post = (body) => fetch(`http://127.0.0.1:${port}/api/departments`, {
@@ -113,7 +114,7 @@ test('write-validation (a): wrong type / missing required / over-length each 400
 
 test('write-validation (b): an unknown key is silently stripped and never appears in the stored row', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/departments`, {
@@ -138,7 +139,7 @@ test('write-validation (b): an unknown key is silently stripped and never appear
 
 test('write-validation (c): the boundary is inclusive at the maximum and the minimum', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const post = (body) => fetch(`http://127.0.0.1:${port}/api/departments`, {
@@ -166,7 +167,7 @@ test('write-validation (c): the boundary is inclusive at the maximum and the min
 
 test('write-validation (d): an absent, empty-object and null body all 400 without crashing for a required-field schema; an all-optional schema accepts an empty object', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
 
@@ -209,7 +210,7 @@ test('write-validation (d): an absent, empty-object and null body all 400 withou
 
 test('write-validation (e): string length limits are measured in JavaScript string units (UTF-16 code units), not UTF-8 bytes', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     // 'é' is ONE JS string unit but TWO UTF-8 bytes — 300 of them is exactly
@@ -234,7 +235,7 @@ test('write-validation (e): string length limits are measured in JavaScript stri
 
 test('write-validation (f): a multi-issue payload produces a stable, repeatable error string', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const badBody = { name: '', targetCompany: '', members: 'not-an-array' };
@@ -266,7 +267,7 @@ test('write-validation (f): a multi-issue payload produces a stable, repeatable 
 
 test('write-validation (g): two concurrent requests with different payloads each receive their own validated body', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const post = (body) => fetch(`http://127.0.0.1:${port}/api/departments`, {
@@ -291,7 +292,7 @@ test('write-validation (g): two concurrent requests with different payloads each
 
 test('write-validation: parametrized sweep — an unknown key + one invalid field 400s naming the field, and the group\'s known-good payload still succeeds with its original response shape, across every resource group', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const call = (method, urlPath, body) => fetch(`http://127.0.0.1:${port}${urlPath}`, {
@@ -349,7 +350,7 @@ test('write-validation: parametrized sweep — an unknown key + one invalid fiel
 test('write-validation (h): the same schema rejects the same payload identically for a demo-bound and a deal-bound session (D-14)', async () => {
   const demoToken = newSession('karen', 'hrbp');
   const dealToken = newSession('karen2', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const createRes = await fetch(`http://127.0.0.1:${port}/api/deals`, {
@@ -395,7 +396,7 @@ test('write-validation (h): the same schema rejects the same payload identically
 test('write-validation (i) / CR-02: DEMO_OPEN=1 still 400s a malformed write payload — the validation pipeline is not part of the auth bypass', async () => {
   const originalDemoOpen = process.env.DEMO_OPEN;
   process.env.DEMO_OPEN = '1';
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     // No cookie at all — under DEMO_OPEN an unbound request resolves to

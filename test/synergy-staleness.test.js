@@ -14,6 +14,7 @@
 // (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -92,7 +93,7 @@ async function setupDeal(id, overrides) {
 
 test('synergy-staleness (a): POST /api/synergies/:id/confirm-current sets a fresh lastConfirmedAt and changes no other field; an unknown id 404s', async () => {
   const token = await setupDeal('deal_synstala');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -130,7 +131,7 @@ test('synergy-staleness (a): POST /api/synergies/:id/confirm-current sets a fres
 
 test('synergy-staleness (b): a title-only edit leaves lastConfirmedAt byte-identical; an owner-only edit refreshes it (D-16)', async () => {
   const token = await setupDeal('deal_synstalb');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -159,7 +160,7 @@ test('synergy-staleness (b): a title-only edit leaves lastConfirmedAt byte-ident
 
 test('synergy-staleness (c): a notes-only edit leaves lastConfirmedAt byte-identical', async () => {
   const token = await setupDeal('deal_synstalc');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -183,7 +184,7 @@ test('synergy-staleness (c): a notes-only edit leaves lastConfirmedAt byte-ident
 
 test('synergy-staleness (d): runRateM, curveShape, startMonth, costPlannedM, costExpectedMonth, category, owner and workstreamId edits each refresh lastConfirmedAt', async () => {
   const token = await setupDeal('deal_synstald');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -216,7 +217,7 @@ test('synergy-staleness (d): runRateM, curveShape, startMonth, costPlannedM, cos
 
 test('synergy-staleness (e): a realized-value write through the per-month phasing route refreshes lastConfirmedAt', async () => {
   const token = await setupDeal('deal_synstale');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -240,7 +241,7 @@ test('synergy-staleness (e): a realized-value write through the per-month phasin
 
 test('synergy-staleness (f): a stage change refreshes lastConfirmedAt (already implemented; asserted here as the contract)', async () => {
   const token = await setupDeal('deal_synstalf');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -299,7 +300,7 @@ async function getSettings(base, token) {
 
 test('synergy-staleness (i): POST /api/settings with synergyStaleDays and synergyHorizonYears stores both; re-reading settings returns them (not stripped)', async () => {
   const token = await setupDeal('deal_synstali');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -337,7 +338,7 @@ test('synergy-staleness (q): WR-03 — a huge configured threshold clamps to the
 
 test('synergy-staleness (r): WR-03 — POST /api/settings with an out-of-range synergyStaleDays (e.g. 999999999) is refused with 400 by the schema, before any value can reach the settings singleton', async () => {
   const token = await setupDeal('deal_synstalr');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -355,7 +356,7 @@ test('synergy-staleness (r): WR-03 — POST /api/settings with an out-of-range s
 
 test('synergy-staleness (k): a configured short threshold on the deal changes the returned stale flags to match, not the 30-day default (D-17 configurability)', async () => {
   const token = await setupDeal('deal_synstalk');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -384,7 +385,7 @@ test('synergy-staleness (k): a configured short threshold on the deal changes th
 // gross+unphased total (grossRealizedM alone no longer sums every item).
 test('synergy-staleness (l): unconfirmedRealizedM never exceeds the conserved gross+unphased total across a lane with both stale and fresh initiatives carrying fractional values (precision)', async () => {
   const token = await setupDeal('deal_synstall');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -419,7 +420,7 @@ test('synergy-staleness (l): unconfirmedRealizedM never exceeds the conserved gr
 
 test('synergy-staleness (m): with zero stale initiatives, unconfirmedRealizedM, staleCount and mine.staleCount are all exactly zero (empty)', async () => {
   const token = await setupDeal('deal_synstalm');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -447,7 +448,7 @@ test('synergy-staleness (m): with zero stale initiatives, unconfirmedRealizedM, 
 // specific test is about.
 test('synergy-staleness (n): net benefit equals gross realized minus cost incurred and is negative when cost exceeds realized value', async () => {
   const token = await setupDeal('deal_synstaln');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -470,7 +471,7 @@ test('synergy-staleness (n): net benefit equals gross realized minus cost incurr
 
 test('synergy-staleness (o): two initiatives sharing an identical lastConfirmedAt carry the same stale flag in one response (adjacency)', async () => {
   const token = await setupDeal('deal_synstalo');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -501,7 +502,7 @@ test('synergy-staleness (p): mine.staleCount differs between two identities read
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -698,7 +699,7 @@ test('synergy-staleness-ui (o): window.makeBannerDismissible is called guarded b
 
 test('synergy-staleness (q): GET /api/synergies returns items in the lane\'s stored insertion order (ordering)', async () => {
   const token = await setupDeal('deal_synstalq');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

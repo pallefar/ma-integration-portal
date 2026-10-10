@@ -27,6 +27,7 @@
 // (v22.18.0) — it errors with "Cannot find module '.../test'".
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -119,7 +120,7 @@ test('AUTH-02 (unit): roleAllowedForWrite enforces the coarse capability map', (
 
 test('AUTH-02 (integration): an hrbp session writing to an /api/admin/* route gets 403', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody/revoke-sessions`, {
@@ -137,7 +138,7 @@ test('AUTH-02 (integration): an hrbp session writing to an /api/admin/* route ge
 
 test('AUTH-02 (integration): an employee session writing to a non-self-service route gets 403', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/questions`, {
@@ -156,7 +157,7 @@ test('AUTH-02 (integration): an employee session writing to a non-self-service r
 
 test('AUTH-02 (integration): an employee session IS allowed to write to a self-service route', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/pulses`, {
@@ -175,7 +176,7 @@ test('AUTH-02 (integration): an employee session IS allowed to write to a self-s
 
 test('AUTH-02 (integration): an admin session writing to an /api/admin/* route is not 403', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody/revoke-sessions`, {
@@ -193,7 +194,7 @@ test('AUTH-02 (integration): an admin session writing to an /api/admin/* route i
 // --- D-11: X-Admin-Token resolves to an ATTRIBUTED identity, not anonymous ---
 
 test('D-11: an X-Admin-Token request resolves to the attributed admin-token identity and is allowed on admin routes', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody/revoke-sessions`, {
@@ -212,7 +213,7 @@ test('D-11: an X-Admin-Token request resolves to the attributed admin-token iden
 
 test('AUTH-04: a request with a valid session exposes req.portalUser.username/.role via /api/auth/me', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/auth/me`, {
@@ -231,7 +232,7 @@ test('AUTH-04: role is read exclusively server-side — a client-supplied role c
   // hrbp session, but the caller ALSO tries to claim admin via a body field
   // and a custom header — neither must be able to escalate the write.
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/users/nobody/revoke-sessions`, {
@@ -273,7 +274,7 @@ test('CR-01 (unit): roleAllowedForWrite rejects employee on DELETE /api/assessme
 
 test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessments/:id', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/assessments/does-not-exist`, {
@@ -289,7 +290,7 @@ test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessmen
 
 test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessment-instances/:id', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/assessment-instances/does-not-exist`, {
@@ -307,7 +308,7 @@ test('CR-01 (integration): an employee session gets 403 on DELETE /api/assessmen
 
 test('CR-02 (integration): a non-admin (employee) session gets 403 on GET /api/admin/download-zip', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'employee-demo', role: 'employee', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/download-zip`, {
@@ -323,7 +324,7 @@ test('CR-02 (integration): a non-admin (employee) session gets 403 on GET /api/a
 
 test('CR-02 (integration): an hrbp session also gets 403 on GET /api/admin/download-zip (admin-only read, not just admin-only write)', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/download-zip`, {
@@ -344,7 +345,7 @@ test('WR-01 (integration): a successful password change revokes the caller\'s pr
   const DEMO_PASSWORD = 'TEdemo!2026';
   const oldToken = sessionsDb.createSession(runtimeConn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
   const callerToken = sessionsDb.createSession(runtimeConn, { username: 'pmo', role: 'pmo', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/auth/change-password`, {
@@ -376,7 +377,7 @@ test('WR-01 (integration): a successful password change revokes the caller\'s pr
 
 test('WR-02 (integration): repeated change-password attempts are throttled (429) after 8 tries/minute, mirroring /api/auth/login', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     let lastStatus = null;
@@ -398,7 +399,7 @@ test('WR-02 (integration): repeated change-password attempts are throttled (429)
 test('AUTH-04 (D-02): an isOpenMode request is not gated on role/session at all (req.portalUser === null, never consulted)', async () => {
   const originalDemoOpen = process.env.DEMO_OPEN;
   process.env.DEMO_OPEN = '1';
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     // No cookie, no X-Admin-Token at all — under DEMO_OPEN an unbound

@@ -7,6 +7,7 @@
 // test/org-positions.test.js` (or `npm test`).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -77,7 +78,7 @@ test('org-positions (a): POST from an hr-cleared session creates a current-state
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -105,7 +106,7 @@ test('org-positions (b): POST with state:"target" from an hr-cleared session sto
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -129,7 +130,7 @@ test('org-positions (c): POST with an empty/whitespace title and no id returns 4
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -153,7 +154,7 @@ test('org-positions (d): POST with an existing id updates in place without creat
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -189,7 +190,7 @@ test('org-positions (e): GET with no query, from a member with NO area grants, r
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -232,7 +233,7 @@ test('org-positions (f): GET ?state=target from an uncleared member returns 403 
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
   const uncleared = newSession('supporting', 'employee'); bindDeal(uncleared, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -260,7 +261,7 @@ test('org-positions (g): GET ?state=target returns 200 with target rows for an h
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id); // hrbp, no explicit memberGrants entry
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -293,7 +294,7 @@ test('org-positions (h): POST from a deal member with no hr grant returns 403 an
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -373,7 +374,7 @@ test('org-positions (o): POST with a self-referential reportsToId returns 400 an
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -409,7 +410,7 @@ test('org-positions (p): POST with a target-state reportsToId while the candidat
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -437,7 +438,7 @@ test('org-positions (q): re-parenting a position to its own descendant returns 4
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -558,7 +559,7 @@ test('org-positions (x): GET /api/org/capabilities returns a truthy restricted k
 
   const hrToken = newSession('pmo_hr', 'pmo'); bindDeal(hrToken, deal.id);
   const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -587,7 +588,7 @@ test('org-positions (y): POST /api/org/positions/copy-to-target clones every cur
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -639,7 +640,7 @@ test('org-positions (z): a second copy-to-target call is refused with 400 while 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -678,7 +679,7 @@ test('org-positions (aa): copy-to-target is refused with 403 for a member withou
 
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -708,7 +709,7 @@ test('org-positions (bb): DELETE /api/org/positions/:id is refused with 400 and 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -747,7 +748,7 @@ test('org-positions (cc): DELETE succeeds once direct reports are reassigned, re
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -795,7 +796,7 @@ test('org-positions (dd): DELETE is refused with 403 for a member without the hr
 
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const itToken = newSession('pmo_it', 'pmo'); bindDeal(itToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -851,7 +852,7 @@ test('org-positions (ee): DELETE /api/employees/:id for an employee occupying on
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -879,7 +880,7 @@ test('org-positions (ff): the SAME delete succeeds (200) once the position\'s em
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -913,7 +914,7 @@ test('org-positions (gg): the SAME delete succeeds (200) once the occupied posit
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -941,7 +942,7 @@ test('org-positions (hh): an employee occupying positions in BOTH current and ta
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -970,7 +971,7 @@ test('org-positions (ii): an employee occupying no position is still deletable (
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -995,7 +996,7 @@ test('org-positions (jj): the guard runs before removal — a refused delete lea
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1282,7 +1283,7 @@ test('org-positions (xx) [WR-01]: POST create with a bogus employeeId returns 40
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1310,7 +1311,7 @@ test('org-positions (yy) [WR-01]: POST create with a valid roster employeeId ret
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1344,7 +1345,7 @@ test('org-positions (zz) [WR-01]: POST update (id present) with a bogus employee
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

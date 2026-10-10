@@ -18,6 +18,7 @@
 // directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -85,7 +86,7 @@ test('dd-findings (a): a finding is creatable with each of the four severities a
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -118,7 +119,7 @@ test('dd-findings (b): two findings with identical title, area and severity get 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -143,7 +144,7 @@ test('dd-findings (c): a deal with zero findings returns an empty array with sta
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -163,7 +164,7 @@ test('dd-findings (d): two equal-severity findings are returned in stable insert
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -194,7 +195,7 @@ test('dd-findings (e): an uncleared member\'s list omits an area\'s findings ent
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -221,7 +222,7 @@ test('dd-findings (f): an uncleared member\'s by-id probe and an unknown-id prob
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -264,7 +265,7 @@ test('dd-findings (g): POST /api/raid carrying the new "critical" severity succe
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -293,7 +294,7 @@ test('dd-findings (h): POST /api/raid carrying a value outside the four levels i
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -330,7 +331,7 @@ test('dd-findings (j): an existing RAID entry created before this change still r
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -373,7 +374,7 @@ test('dd-findings (k): converting a critical finding to both a task and a RAID e
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -422,7 +423,7 @@ test('dd-findings (l): the created task\'s and entry\'s workstream ids match DD_
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -454,7 +455,7 @@ test('dd-findings (m): converting the same finding a second time creates nothing
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -499,7 +500,7 @@ test('dd-findings (n): a conversion requested with both flags false is rejected 
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -528,7 +529,7 @@ test('dd-findings (o): a member uncleared for the finding\'s area gets the unifo
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

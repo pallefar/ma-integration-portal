@@ -16,6 +16,7 @@
 // node:test — Node's built-in runner. Run via `node --test test/rag-upload.test.js`.
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -108,7 +109,7 @@ test.after(() => {
 
 test('CR-01: POST /api/rag/upload persists a new ragUploads row instead of throwing ReferenceError: db is not defined', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/rag/upload`, {
@@ -139,7 +140,7 @@ test('CR-01: POST /api/rag/upload persists a new ragUploads row instead of throw
 
 test('CR-01: a second upload persists as its own independent row (no stale/shared handler-scope state)', async () => {
   const token = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const post = () => fetch(`http://127.0.0.1:${port}/api/rag/upload`, {

@@ -15,6 +15,7 @@
 // `node --test` (bare — this repo's default test discovery), or `npm test`.
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -94,7 +95,7 @@ test('deal-lifecycle (a): hrbp is refused archive and delete; admin succeeds', a
 
   const hrbpToken = newSession('karen', 'hrbp');
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const hrbpArchive = await fetch(`http://127.0.0.1:${port}/api/admin/deals/${dealA.id}/archive`, {
@@ -135,7 +136,7 @@ test('deal-lifecycle (b): a mismatched confirmation value 400s and leaves the de
   const dealPath = dbFiles.dealDbPath(deal.id);
 
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/deals/${deal.id}`, {
@@ -166,7 +167,7 @@ test('deal-lifecycle (c): a correctly-confirmed delete removes the file, its sid
   assert.ok(openedConn, 'precondition: the deal file has a live cached connection before delete');
 
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const res = await fetch(`http://127.0.0.1:${port}/api/admin/deals/${deal.id}`, {
@@ -195,7 +196,7 @@ test('deal-lifecycle (d): after archive, the file survives but the deal no longe
 
   const karenToken = newSession('karen', 'hrbp');
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const archiveRes = await fetch(`http://127.0.0.1:${port}/api/admin/deals/${deal.id}/archive`, {
@@ -235,7 +236,7 @@ test('deal-lifecycle (e): a session bound to a deal that is archived/deleted und
   const karenTokenB = newSession('karen', 'hrbp');
   sessionsDb.bindSessionDeal(runtimeConn, karenTokenB, deletedDeal.id);
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     await fetch(`http://127.0.0.1:${port}/api/admin/deals/${archivedDeal.id}/archive`, {
@@ -281,7 +282,7 @@ test('deal-lifecycle (f): adding a member grants list+select access; removing re
 
   const pmoToken = newSession('pmo', 'pmo');
   const adminToken = newSession('admin', 'admin');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
 

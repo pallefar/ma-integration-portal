@@ -16,6 +16,7 @@
 // --test test/` (the directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -183,7 +184,7 @@ test.after(() => {
 });
 
 test('task-access-filter (a): admin receives every task, including the manually created source-less one — the over-filtering regression a field-name-compatible-looking filter reuse would cause', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -200,7 +201,7 @@ test('task-access-filter (a): admin receives every task, including the manually 
 });
 
 test('task-access-filter (b): the IL (hrbp) identity receives every task, exactly like admin', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -217,7 +218,7 @@ test('task-access-filter (b): the IL (hrbp) identity receives every task, exactl
 });
 
 test('task-access-filter (c): a member cleared only for legal receives the manual task and the legal-provenance task, and EXCLUDES the financial- and hr-provenance tasks', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -234,7 +235,7 @@ test('task-access-filter (c): a member cleared only for legal receives the manua
 });
 
 test('task-access-filter (d): a member cleared only for hr receives the manual task and the flight-risk-provenance task, and EXCLUDES the legal- and financial-provenance tasks', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -251,7 +252,7 @@ test('task-access-filter (d): a member cleared only for hr receives the manual t
 });
 
 test('task-access-filter (e): the SAME exclusion holds for GET /api/reports/export?dataset=tasks — the CSV id set equals the caller\'s own /api/integration-tasks id set', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -273,7 +274,7 @@ test('task-access-filter (e): the SAME exclusion holds for GET /api/reports/expo
 });
 
 test('task-access-filter (f): LOAD-BEARING (D-08 parity) — the pack\'s own tasks row count equals the caller\'s live /api/integration-tasks length, for a legal-only member', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -297,7 +298,7 @@ test('task-access-filter (f): LOAD-BEARING (D-08 parity) — the pack\'s own tas
 });
 
 test('task-access-filter (g): WR-03 parity — an entry whose originating finding has been DELETED still returns the converted task to admin, and STAYS INVISIBLE to a member who was never cleared for the finding\'s area — deletion must never retroactively declassify a converted task', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -324,7 +325,7 @@ test('task-access-filter (g): WR-03 parity — an entry whose originating findin
 });
 
 test('task-access-filter (h): rollup count parity — a hidden hr-retention task is counted in ws_hr for pmo_hr/admin but NOT for pmo_legal', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

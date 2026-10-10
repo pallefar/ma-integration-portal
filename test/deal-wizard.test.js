@@ -33,6 +33,7 @@
 // directory argument is mis-parsed on this Node version).
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -178,7 +179,7 @@ test('deal-wizard (a): assigning an instance produces a pending row with an owne
   const deal = createTestDeal('deal_wa');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -207,7 +208,7 @@ test('deal-wizard (b): the status rollup reports the pending instance while sati
   const deal = createTestDeal('deal_wb');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -235,7 +236,7 @@ test('deal-wizard (c): completing it by id promotes the same row and leaves the 
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -273,7 +274,7 @@ test('deal-wizard (d): the rollup then reports satisfied true with the score pre
   const deal = createTestDeal('deal_wd');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -305,7 +306,7 @@ test('deal-wizard (e): completing an already-submitted instance by id is refused
   const deal = createTestDeal('deal_we');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -336,7 +337,7 @@ test('deal-wizard (f): completing an unknown instance id returns 404', async () 
   const deal = createTestDeal('deal_wf');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -357,7 +358,7 @@ test('deal-wizard (g): a submission with no instanceId still creates a new row e
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -386,7 +387,7 @@ test('deal-wizard (g): a submission with no instanceId still creates a new row e
 
 test('deal-wizard (h): creating a deal through the basics-plus-team payload returns the basics fields and a setup skeleton with basics/team stamped and the rest null', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -423,7 +424,7 @@ test('deal-wizard (h): creating a deal through the basics-plus-team payload retu
 
 test('deal-wizard (i): a create missing a required basics field is refused with a 400 and creates neither a registry row nor a deal database file', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -450,7 +451,7 @@ test('deal-wizard (i): a create missing a required basics field is refused with 
 
 test('deal-wizard (j): the basics validate-only route returns 200 for a valid payload and 400 for an invalid one, creating nothing in either case', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -480,7 +481,7 @@ test('deal-wizard (j): the basics validate-only route returns 200 for a valid pa
 
 test('deal-wizard (k): posting a setup step stamps only that step and leaves the others untouched', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -512,7 +513,7 @@ test('deal-wizard (k): posting a setup step stamps only that step and leaves the
 
 test('deal-wizard (l): posting an unknown step name is refused with a 400', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -536,7 +537,7 @@ test('deal-wizard (l): posting an unknown step name is refused with a 400', asyn
 
 test('deal-wizard (m): the deal becomes complete once every mandatory step is stamped', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -564,7 +565,7 @@ test('deal-wizard (m): the deal becomes complete once every mandatory step is st
 
 test('deal-wizard (n): a pmo session is refused both new wizard routes', async () => {
   const pmoToken = newSession('pmo', 'pmo');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -589,7 +590,7 @@ test('deal-wizard (n): a pmo session is refused both new wizard routes', async (
 
 test('deal-wizard (o): a failed database provisioning rolls back the registry row — never an orphaned entry pointing at a missing file', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   const dealsDir = process.env.MA_DEALS_DIR;
   try {
     const { port } = server.address();
@@ -622,7 +623,7 @@ test('deal-wizard (o): a failed database provisioning rolls back the registry ro
 
 test('deal-wizard (p): the full ordered wizard walk ends with setup complete and three pending readiness assessments outstanding', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -702,7 +703,7 @@ test('deal-wizard (q): D-09 — with three assessments still pending, DD request
   const deal = createTestDeal('deal_wq');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -738,7 +739,7 @@ test('deal-wizard (q): D-09 — with three assessments still pending, DD request
 
 test('deal-wizard (r): a second session for the same user resumes a skipped setup step without recreating the deal', async () => {
   const firstToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -779,7 +780,7 @@ test('deal-wizard (s): the status rollup subject order is acquirer, target, Inte
   const deal = createTestDeal('deal_ws');
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -815,7 +816,7 @@ test('deal-wizard (t): a deal member who is NOT the assigned owner cannot fabric
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -857,7 +858,7 @@ test('deal-wizard (u): an hrbp (Integration Lead) session may complete a pending
   const deal = createTestDeal('deal_wu', { members: ['karen', 'pmo'] });
 
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -892,7 +893,7 @@ test('deal-wizard (v): the pending array\'s owner field is visible to the assign
   const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
   const empToken = newSession('employee-demo', 'employee'); bindDeal(empToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -928,7 +929,7 @@ test('deal-wizard (w): completing a pending instance by id stamps respondentName
   const deal = createTestDeal('deal_ww', { members: ['karen', 'pmo'] });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -958,7 +959,7 @@ test('deal-wizard (w): completing a pending instance by id stamps respondentName
 
 test('deal-wizard (x): a completion-only setup post marks the deal complete without stamping a skipped step', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1001,7 +1002,7 @@ test('deal-wizard (x): a completion-only setup post marks the deal complete with
 
 test('deal-wizard (y): a setup post naming neither a step nor completion is refused and changes nothing', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1033,7 +1034,7 @@ test('deal-wizard (y): a setup post naming neither a step nor completion is refu
 
 test('deal-wizard (z): a setup post carrying step data but no step name is refused', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1063,7 +1064,7 @@ test('deal-wizard (z): a setup post carrying step data but no step name is refus
 
 test('deal-wizard (aa): posting the identical basics-and-team payload twice returns the SAME deal and creates nothing the second time', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1097,7 +1098,7 @@ test('deal-wizard (aa): posting the identical basics-and-team payload twice retu
 
 test('deal-wizard (ab): a create with a different deal name is still a genuinely new deal', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -1128,7 +1129,7 @@ test('deal-wizard (ab): a create with a different deal name is still a genuinely
 
 test('deal-wizard (ac): once every setup step is stamped, an identical payload creates a new deal', async () => {
   const karenToken = newSession('karen', 'hrbp');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

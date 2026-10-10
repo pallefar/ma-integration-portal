@@ -10,6 +10,7 @@
 'use strict';
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -94,7 +95,7 @@ test.after(() => {
 });
 
 test('reports-audit (a): one successful REAL-deal RAID CSV export increases the audit row count by EXACTLY one, with the correct action/actor/deal id/after-value (D-10)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -123,7 +124,7 @@ test('reports-audit (a): one successful REAL-deal RAID CSV export increases the 
 });
 
 test('reports-audit (b): the byte-identical request against DEMO increases the audit row count by EXACTLY zero, while still returning 200 with a valid CSV body — demo keeps full export parity and gains no audit rows (D-11)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -143,7 +144,7 @@ test('reports-audit (b): the byte-identical request against DEMO increases the a
 });
 
 test('reports-audit (c): a 400 dataset refusal writes no audit row, since nothing was exported', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -166,7 +167,7 @@ test('reports-audit (c): a 400 dataset refusal writes no audit row, since nothin
 // ============================================================
 
 test('reports-audit (d): one successful REAL-deal pack generation increases the audit row count by EXACTLY one, naming the pack action/actor/deal/format/language (D-10)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -194,7 +195,7 @@ test('reports-audit (d): one successful REAL-deal pack generation increases the 
 });
 
 test('reports-audit (e): the byte-identical pack request against DEMO increases the audit row count by EXACTLY zero, while still returning a valid PDF — demo keeps full pack parity and gains no audit rows (D-11)', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
@@ -221,7 +222,7 @@ test('reports-audit (e): the byte-identical pack request against DEMO increases 
 });
 
 test('reports-audit (f): a 409 empty-deal pack refusal writes no audit row, since nothing was generated', async () => {
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;

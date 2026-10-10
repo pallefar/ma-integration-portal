@@ -12,6 +12,7 @@
 // `node --test` (bare — this repo's default test discovery), or `npm test`.
 
 const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -84,7 +85,7 @@ test.after(() => {
 
 test('demo-only-gating (a): a demo-bound session can still set a time-travel day and complete a lesson — the showcase must not regress', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const ttRes = await fetch(`http://127.0.0.1:${port}/api/settings/time-travel`, {
@@ -114,7 +115,7 @@ test('demo-only-gating (a): a demo-bound session can still set a time-travel day
 test('demo-only-gating (b)+(c): a deal-bound session calling each demo-only endpoint gets 403, and the deal\'s stored data is byte-identical afterwards', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   sessionsDb.bindSessionDeal(runtimeConn, token, 'deal_gate1');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
 
@@ -147,7 +148,7 @@ test('demo-only-gating (b)+(c): a deal-bound session calling each demo-only endp
 test('demo-only-gating (d): a deal-bound read of employees and pulses returns the stored rows with no day-scaling transformation applied', async () => {
   const token = sessionsDb.createSession(runtimeConn, { username: 'karen', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
   sessionsDb.bindSessionDeal(runtimeConn, token, 'deal_gate1');
-  const server = app.listen(0);
+  const server = await listenLocal(app);
   try {
     const { port } = server.address();
 
