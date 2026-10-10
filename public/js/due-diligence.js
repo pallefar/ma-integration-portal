@@ -607,15 +607,25 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    // D-18: resolve the caller's role + current deal id ONCE, before the
-    // first render, so the access-grant form's visibility gate and its
-    // target deal id are both known up front — mirrors
-    // public/js/deal-switcher.js's own GET /api/auth/me bootstrap.
-    fetch('/api/auth/me').then(function (r) { return r.json(); }).then(function (me) {
-      state.role = (me && me.user && me.user.role) || '';
-      state.dealId = (me && me.dealId) || null;
-    }).catch(function () { /* best-effort — the grant form simply stays hidden */ })
-      .then(function () { return load().then(render); })
-      .then(function () { return loadOwnerNudge(); });
+    // [security] WR-C04 (Phase 11 review): the workspace is gated on the
+    // server-computed `dd` capability (window.maCanReady, transitions.js). A
+    // role the read policy refuses every /api/dd route (an employee in a real
+    // deal) sends NO request here — transitions.js's handshake redirects it
+    // home. pmo (cleared or not) keeps the page; the server filters per area.
+    // No map (demo-open, demo store) => loads exactly as before.
+    var ddReady = typeof window.maCanReady === 'function' ? window.maCanReady('dd') : Promise.resolve(true);
+    ddReady.then(function (allowed) {
+      if (!allowed) return;
+      // D-18: resolve the caller's role + current deal id ONCE, before the
+      // first render, so the access-grant form's visibility gate and its
+      // target deal id are both known up front — mirrors
+      // public/js/deal-switcher.js's own GET /api/auth/me bootstrap.
+      return fetch('/api/auth/me').then(function (r) { return r.json(); }).then(function (me) {
+        state.role = (me && me.user && me.user.role) || '';
+        state.dealId = (me && me.dealId) || null;
+      }).catch(function () { /* best-effort — the grant form simply stays hidden */ })
+        .then(function () { return load().then(render); })
+        .then(function () { return loadOwnerNudge(); });
+    });
   });
 })();

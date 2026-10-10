@@ -1058,3 +1058,271 @@ test('inline-edit.js is loaded with a bumped stamp by transitions.js', () => {
 test('transitions.js: the app-wide Edit Content toggle is not offered without configWrite', () => {
   assert.ok(/window\.maCanReady\('configWrite'\)\.then\(function \(ok\) \{\s*if \(ok\) return;\s*editWrap\.style\.display = 'none';/.test(TRANSITIONS_SRC));
 });
+
+// ======================================================================
+// Phase 11 review fixes (11-REVIEW-CLIENT.md, FIXER C)
+// ======================================================================
+
+/** A fetch that records every call and never settles (nothing downstream renders). */
+function pendingFetch(passThrough) {
+  const calls = [];
+  const fn = (url, init) => {
+    calls.push({ url: String(url), method: (init && init.method) || 'GET' });
+    const key = Object.keys(passThrough || {}).find((k) => String(url).startsWith(k));
+    if (key) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(passThrough[key]) });
+    return new Promise(() => {});
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+/** A permissive fake DOM node: any property is itself, any call returns itself. */
+function anyEl() {
+  const store = {};
+  const p = new Proxy(function () {}, {
+    get(t, k) {
+      if (k in store) return store[k];
+      if (k === 'then') return undefined;
+      if (k === Symbol.toPrimitive) return () => '';
+      if (k === Symbol.iterator) return function* () {};
+      if (k === 'length') return 0;
+      if (k === 'forEach' || k === 'map' || k === 'filter') return () => [];
+      return p;
+    },
+    set(t, k, v) { store[k] = v; return true; },
+    apply() { return p; },
+  });
+  return p;
+}
+
+// ---------------------------------------- WR-C01 / WR-C04: the page gate itself
+/** The page-gate IIFE + the real-login handshake, run together against a stubbed /api/auth/me. */
+function pageGateSource() {
+  const begin = TRANSITIONS_SRC.indexOf('// Access Control redirection check');
+  const end = TRANSITIONS_SRC.indexOf('/**\n * TE Connectivity M&A Integration Portal - Transitions Manager');
+  assert.ok(begin >= 0 && end > begin, 'expected the page-gate + handshake region in transitions.js');
+  return TRANSITIONS_SRC.slice(begin, end);
+}
+
+/**
+ * Boots the page gate on `pathname`. `stored` seeds localStorage (a returning
+ * browser). `meBody === 'pending'` leaves the probe unanswered, so a row can
+ * observe what the SYNCHRONOUS check did before the server answered.
+ */
+async function bootPage(pathname, meBody, stored) {
+  const ls = Object.assign({}, stored || {});
+  const ss = {};
+  const window = { location: { pathname, href: '' } };
+  const sandbox = {
+    window,
+    console,
+    Promise,
+    setTimeout: () => 0,
+    localStorage: {
+      getItem: (k) => (k in ls ? ls[k] : null),
+      setItem: (k, v) => { ls[k] = String(v); },
+      removeItem: (k) => { delete ls[k]; },
+    },
+    sessionStorage: { getItem: (k) => (k in ss ? ss[k] : null), setItem: (k, v) => { ss[k] = String(v); } },
+    document: { getElementById: () => null, querySelector: () => null, createElement: () => fakeEl(), body: { appendChild() {} } },
+    fetch: (url) => {
+      if (url !== '/api/auth/me') return Promise.reject(new Error('unexpected fetch ' + url));
+      if (meBody === 'pending') return new Promise(() => {});
+      return Promise.resolve({ json: () => Promise.resolve(meBody) });
+    },
+  };
+  vm.createContext(sandbox);
+  const syncHref = (() => { vm.runInContext(pageGateSource(), sandbox); return window.location.href; })();
+  if (meBody !== 'pending') await window.maAccessReady;
+  return { window, ls, ss, syncHref };
+}
+
+test('WR-C01 (vm): the page gate uses the SERVER-VERIFIED role — employee and pmo are sent home from admin.html, employee from pmo.html', async () => {
+  for (const [page, meBody] of [['/admin.html', ME_EMPLOYEE], ['/pmo.html', ME_EMPLOYEE], ['/admin.html', ME_PMO]]) {
+    const b = await bootPage(page, meBody);
+    assert.strictEqual(b.syncHref, '', `${page}: a first-ever visit is not decided by the path-derived persona alone`);
+    assert.strictEqual(b.window.location.href, '/', `${meBody.user.role} on ${page} is redirected after the handshake`);
+    assert.match(b.ss.access_denied_message, new RegExp(meBody.user.role.toUpperCase()), 'the existing access-denied toast names the verified role');
+    assert.strictEqual(b.ls.active_demo_role, meBody.user.role);
+    assert.strictEqual(b.ls.ma_auth_role_verified, '1');
+  }
+});
+
+test('WR-C01 (vm): the roles a page is for keep it (hrbp + admin on admin.html, pmo on pmo.html, hrbp on dashboard.html)', async () => {
+  for (const [page, meBody] of [['/admin.html', ME_HRBP], ['/admin.html', ME_ADMIN], ['/pmo.html', ME_PMO], ['/dashboard.html', ME_HRBP], ['/employee.html', ME_EMPLOYEE]]) {
+    const b = await bootPage(page, meBody);
+    assert.strictEqual(b.window.location.href, '', `${meBody.user.role} stays on ${page}`);
+  }
+});
+
+test('WR-C01 (vm): a returning browser with a verified role is gated synchronously, before any page loader runs', () => {
+  return (async () => {
+    const emp = await bootPage('/admin.html', 'pending', { ma_auth_role_verified: '1', active_demo_role: 'employee' });
+    assert.strictEqual(emp.syncHref, '/', 'redirected before the probe answered');
+    assert.strictEqual(emp.ls.active_demo_role, 'employee', 'the path never overwrites a verified role');
+    const hrbp = await bootPage('/employee.html', 'pending', { ma_auth_role_verified: '1', active_demo_role: 'hrbp' });
+    assert.strictEqual(hrbp.syncHref, '/');
+  })();
+});
+
+test('WR-C01 (vm): demo-open keeps the path-derived personas exactly as before and clears a stale verified flag', async () => {
+  const b = await bootPage('/admin.html', ME_OPEN, { ma_auth_role_verified: '1', active_demo_role: 'admin' });
+  assert.strictEqual(b.window.location.href, '');
+  assert.strictEqual(b.ls.ma_auth_role_verified, undefined, 'auth off => the verified flag is cleared');
+  const fresh = await bootPage('/employee.html', ME_OPEN, { active_demo_role: 'hrbp' });
+  assert.strictEqual(fresh.window.location.href, '', 'demo persona: opening employee.html makes you the employee');
+  assert.strictEqual(fresh.ls.active_demo_role, 'employee');
+  const pmoPage = await bootPage('/pmo.html', ME_OPEN, { active_demo_role: 'employee' });
+  assert.strictEqual(pmoPage.window.location.href, '');
+});
+
+test('WR-C04 (vm): due-diligence.html and org.html are gated on the dd / org capability, not a role', async () => {
+  for (const page of ['/due-diligence.html', '/org.html']) {
+    const emp = await bootPage(page, ME_EMPLOYEE);
+    assert.strictEqual(emp.window.location.href, '/', `employee (dd/org refused) is sent home from ${page}`);
+    for (const meBody of [ME_PMO, ME_HRBP, ME_ADMIN, ME_OPEN]) {
+      const ok = await bootPage(page, meBody);
+      assert.strictEqual(ok.window.location.href, '', `${(meBody.user && meBody.user.role) || 'demo-open'} keeps ${page}`);
+    }
+  }
+});
+
+test('WR-C04 (source): the two stale IN-02 "a pmo/employee member must reach this page" justifications are gone', () => {
+  const region = pageGateSource();
+  assert.ok(!/pmo\/employee deal member legitimately granted an area must be able to\s*\/\/\s*reach this page/.test(region));
+  assert.ok(/const pageCapability = \{ 'due-diligence\.html': 'dd', 'org\.html': 'org' \};/.test(region));
+});
+
+// ------------------------------- WR-C01: the staff loaders behind the page gate
+test('WR-C01 (vm): admin.js staff loaders wait on the access map and fire only the reads the role may make', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody, '/admin.html');
+    const fired = [];
+    const ex = loadBlocks(ADMIN_SRC, [
+      'function whenReadable(', 'function loadAssessmentsHistory(', 'function loadEmployees(',
+      'function loadHrbps(', 'function loadCommunications(',
+    ], {
+      window: win,
+      fetchAssessmentsHistory() { fired.push('assessments'); },
+      fetchEmployeesRoster() { fired.push('employees'); },
+      fetchHrbpsList() { fired.push('hrbps'); },
+      fetchCommunicationsLedger() { fired.push('communications'); },
+    }, ['loadAssessmentsHistory', 'loadEmployees', 'loadHrbps', 'loadCommunications']);
+    ex.loadAssessmentsHistory(); ex.loadEmployees(); ex.loadHrbps(); ex.loadCommunications();
+    await settle(win);
+    return fired.sort();
+  };
+  assert.deepStrictEqual(await run(ME_EMPLOYEE), [], 'employee: no staff read is attempted');
+  assert.deepStrictEqual(await run(ME_PMO), ['assessments', 'communications', 'employees'], 'pmo: no /api/hrbps');
+  for (const meBody of [ME_HRBP, ME_ADMIN, ME_OPEN]) {
+    assert.deepStrictEqual(await run(meBody), ['assessments', 'communications', 'employees', 'hrbps']);
+  }
+});
+
+test('WR-C01 (source): each admin.js staff loader really goes through its capability key', () => {
+  const pairs = [
+    ['function loadAssessmentsHistory(', "whenReadable('assessmentsList', fetchAssessmentsHistory)"],
+    ['function loadEmployees(', "whenReadable('roster', fetchEmployeesRoster)"],
+    ['function loadHrbps(', "whenReadable('hrbps', fetchHrbpsList)"],
+    ['function loadCommunications(', "whenReadable('communications', fetchCommunicationsLedger)"],
+  ];
+  for (const [header, call] of pairs) assert.ok(extractBlock(ADMIN_SRC, header).includes(call), `${header} -> ${call}`);
+  assert.ok(/function fetchHrbpsList\(\) \{\s*fetch\('\/api\/hrbps'\)/.test(ADMIN_SRC), 'the request itself lives only in the gated body');
+});
+
+test('WR-C01 (vm): the admin broadcast recipient picker requests only the directories the map allows', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody, '/admin.html');
+    const fetchImpl = recordingFetch({ '/api/employees': [], '/api/hrbps': [] });
+    const ex = loadBlocks(ADMIN_SRC, ['function loadRecipientDropdownOptions('], {
+      window: win, fetch: fetchImpl, specificRecipientSelect: fakeEl(), document: { createElement: () => fakeEl() },
+    }, ['loadRecipientDropdownOptions']);
+    ex.loadRecipientDropdownOptions();
+    await settle(win);
+    return urls(fetchImpl).sort();
+  };
+  assert.deepStrictEqual(await run(ME_PMO), ['/api/employees']);
+  assert.deepStrictEqual(await run(ME_EMPLOYEE), []);
+  assert.deepStrictEqual(await run(ME_OPEN), ['/api/employees', '/api/hrbps']);
+});
+
+test('WR-C01 (vm): admin-cms.js loads projects / processes only for a role that may read them', async () => {
+  const win = await bootWindow(ME_EMPLOYEE, '/admin.html');
+  const fetchImpl = recordingFetch({});
+  const listeners = {};
+  const sandbox = {
+    window: win, console, Promise, fetch: fetchImpl, setTimeout,
+    localStorage: { getItem: () => null, setItem() {} },
+    document: {
+      addEventListener(ev, cb) { listeners[ev] = cb; },
+      getElementById: () => fakeEl(), querySelector: () => fakeEl(), querySelectorAll: () => [],
+      createElement: () => fakeEl(), body: fakeEl(),
+    },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(readPublic('js', 'admin-cms.js'), sandbox);
+  listeners.DOMContentLoaded();
+  await settle(win);
+  assert.deepStrictEqual(urls(fetchImpl), ['/api/departments'], 'employee: no /api/projects, no /api/processes');
+});
+
+test('WR-C01 (vm): pmo.js communications ledger — refused role loses the card and sends no request; staff and demo-open load it', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody, '/pmo.html');
+    const ledger = fakeEl();
+    const card = fakeEl();
+    ledger.closest = (sel) => (sel === '.card' ? card : null);
+    const fetchImpl = pendingFetch();
+    const ex = loadBlocks(PMO_SRC, PMO_HELPERS.concat('function loadPmoCommunications(', 'function fetchPmoCommunications('), {
+      window: win, fetch: fetchImpl, pmoCommLedgerContainer: ledger, pmoCommLedgerCount: null,
+    }, ['loadPmoCommunications']);
+    ex.loadPmoCommunications();
+    await settle(win);
+    return { urls: urls(fetchImpl), card };
+  };
+  const emp = await run(ME_EMPLOYEE);
+  assert.deepStrictEqual(emp.urls, []);
+  assert.strictEqual(emp.card.hidden, true);
+  for (const meBody of [ME_PMO, ME_OPEN]) {
+    const ok = await run(meBody);
+    assert.deepStrictEqual(ok.urls, ['/api/communications']);
+    assert.notStrictEqual(ok.card.hidden, true);
+  }
+});
+
+/** Runs a whole page script with a permissive DOM and returns the requests it made on boot. */
+async function bootPageScript(file, meBody, pathname, passThrough) {
+  const win = await bootWindow(meBody, pathname);
+  const fetchImpl = pendingFetch(passThrough);
+  const listeners = {};
+  const doc = anyEl();
+  doc.addEventListener = (ev, cb) => { listeners[ev] = cb; };
+  const sandbox = { window: win, console, Promise, fetch: fetchImpl, setTimeout: () => 0, clearTimeout() {}, document: doc,
+    localStorage: { getItem: () => null, setItem() {} }, sessionStorage: { getItem: () => null, setItem() {} } };
+  vm.createContext(sandbox);
+  vm.runInContext(readPublic('js', file), sandbox);
+  if (listeners.DOMContentLoaded) listeners.DOMContentLoaded();
+  await settle(win);
+  return urls(fetchImpl);
+}
+
+test('WR-C04 (vm): due-diligence.js and org.js send no request for a role refused dd / org; pmo and demo-open load as before', async () => {
+  const me = { '/api/auth/me': { authEnabled: true, user: { role: 'pmo' }, dealId: 'd1' } };
+  assert.deepStrictEqual(await bootPageScript('due-diligence.js', ME_EMPLOYEE, '/due-diligence.html', me), []);
+  assert.deepStrictEqual(await bootPageScript('org.js', ME_EMPLOYEE, '/org.html', me), []);
+  for (const meBody of [ME_PMO, ME_OPEN]) {
+    const dd = await bootPageScript('due-diligence.js', meBody, '/due-diligence.html', me);
+    assert.deepStrictEqual(dd, ['/api/auth/me', '/api/dd/areas']);
+    const org = await bootPageScript('org.js', meBody, '/org.html', me);
+    assert.deepStrictEqual(org.sort(), ['/api/auth/me', '/api/employees', '/api/org/capabilities', '/api/org/positions']);
+  }
+});
+
+test('WR-C01 (vm): execution.js waits for the map — a role refused the task lane sends nothing on a first-ever visit', async () => {
+  assert.deepStrictEqual(await bootPageScript('execution.js', ME_EMPLOYEE, '/execution.html'), []);
+  for (const meBody of [ME_PMO, ME_OPEN]) {
+    assert.deepStrictEqual((await bootPageScript('execution.js', meBody, '/execution.html')).sort(), [
+      '/api/checklist-templates', '/api/integration-tasks', '/api/raid', '/api/synergies', '/api/synergies/rollup',
+    ]);
+  }
+});

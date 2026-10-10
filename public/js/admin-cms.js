@@ -1267,11 +1267,16 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     // Own the Projects + Courses + Pages + Menus + Banners panels (replaces admin.js's read-only renders)
-    loadProjects();
+    // [security] WR-C01 (Phase 11 review): projects and the process catalog are
+    // staff reads; a role the server's access map refuses them (an employee who
+    // reached admin.html before the handshake sent it home) sends no request.
+    // No map (demo-open) => both load exactly as before.
+    const readable = (key) => (typeof window.maCanReady === 'function' ? window.maCanReady(key) : Promise.resolve(true));
+    readable('projects').then((ok) => { if (ok) loadProjects(); });
     const bnp = document.getElementById('btn-new-project');
     if (bnp) bnp.addEventListener('click', newProjectWizard);
     loadDepartments();
-    loadProcesses();
+    readable('processes').then((ok) => { if (ok) loadProcesses(); });
     // [security] D-11-02 (Phase 11, plan 11-07): slides, courses, pages, menus and
     // banners are the instance content surface — admin-only writes server-side.
     // admin.js hides those tabs for a role without `configWrite` (the server-

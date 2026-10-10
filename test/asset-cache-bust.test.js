@@ -44,10 +44,11 @@ const FROZEN = {
   '/css/style.css': { v21: [1784600001, 1784500010], before: [1784600001, 1784500010] },
   // 1791628622 = the stamp on all 18 pages before Phase 10 changed transitions.js
   // (10-06: 403 mustChangePassword branch, handshake redirect, account-menu loader).
-  '/js/transitions.js': { v21: [1784900002], before: [1784900002, 1791628622] },
-  '/js/execution.js': { v21: [1786250900], before: [1786433369] },
-  '/js/org.js': { v21: [1784900011], before: [1786433369] },
-  '/js/due-diligence.js': { v21: [1784800006], before: [1786427686] },
+  // 1791800001 = the 11-07 stamp, replaced by the Phase-11 review fixes (WR-C01/WR-C04).
+  '/js/transitions.js': { v21: [1784900002], before: [1784900002, 1791628622, 1791800001] },
+  '/js/execution.js': { v21: [1786250900], before: [1786433369, 1791628622] },
+  '/js/org.js': { v21: [1784900011], before: [1786433369, 1791625638] },
+  '/js/due-diligence.js': { v21: [1784800006], before: [1786427686, 1791628622] },
 };
 
 // Phase 10 (accounts & identity) assets. They did not exist at v2.1.0, so they
