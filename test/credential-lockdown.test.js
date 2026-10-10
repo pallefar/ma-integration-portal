@@ -118,11 +118,11 @@ function activeLockdown() {
   return lockdown;
 }
 
-test('allowlist: one frozen constant of exactly the eleven public names (seven pages/assets + the four vendored fonts)', () => {
+test('allowlist: one frozen constant of exactly the twelve public names (eight pages/assets + the four vendored fonts)', () => {
   assert.strictEqual(Object.isFrozen(LOCKDOWN_STATIC_ALLOWLIST), true);
   assert.deepStrictEqual([...LOCKDOWN_STATIC_ALLOWLIST].sort(), [
     '/change-password.html', '/css/style.css', '/favicon.ico', '/js/change-password.js',
-    '/js/login.js', '/login.html', '/te-logo.png',
+    '/js/client-storage.js', '/js/login.js', '/login.html', '/te-logo.png',
     '/vendor/fonts/inter-latin-ext.woff2', '/vendor/fonts/inter-latin.woff2',
     '/vendor/fonts/outfit-latin-ext.woff2', '/vendor/fonts/outfit-latin.woff2',
   ]);

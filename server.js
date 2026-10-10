@@ -274,6 +274,23 @@ if (dbFiles.IS_REAL_MODE) {
 // resolved before this point), rate-bounded by the same auditor as the gate.
 app.use(lockdownMiddleware(credentialLockdown, (req, status) => recordDenial(req, status, 'credential-lockdown')));
 
+// [security] SAFE-07 / D-13-06 (a) / T-13-30 (R1-14): no /api response is ever
+// stored by a browser — not in the HTTP cache and not in the back/forward
+// cache. An MNPI page must not be restorable on a shared workstation after
+// logout. The header is set HERE, before any body parser, so a parser's own 400
+// (malformed JSON) and 413 (oversized body) answers carry it too, and so every
+// later status (401/403/404/409/500/503) inherits it without per-route edits;
+// the explicit `res.set('Cache-Control', 'no-store')` sites further down stay
+// (a no-op re-set). The prefix match is the canonical `/api` form exactly as the
+// CR-01 guard above: non-canonical spellings were already answered 404 there.
+// Closes 12-CARRY-INS row 4 (per-caller ETag without Cache-Control).
+app.use((req, res, next) => {
+  if (req.path === '/api' || req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // VAL-01: a malformed JSON body (including a bare top-level `null`, which
@@ -1272,6 +1289,13 @@ app.post('/api/auth/logout', (req, res) => {
   const token = readSessionCookie(req);
   if (token) sessions.deleteSession(getRuntimeConnection(), token);
   res.setHeader('Set-Cookie', clearedSessionCookieHeader(req));
+  // [security] SAFE-07 / D-13-06 (b) / T-13-31: ask the browser to drop its
+  // HTTP cache and origin storage (cookies are not named: the session cookie is
+  // cleared by the Set-Cookie above, and the language preference must survive).
+  // Honoured in secure contexts only (https / localhost) — a plain-http LAN host
+  // ignores it, which is why public/js/client-storage.js clears the same state
+  // client-side regardless (T-13-34, PD-19).
+  res.setHeader('Clear-Site-Data', '"cache", "storage"');
   res.json({ success: true });
 });
 

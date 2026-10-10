@@ -1391,17 +1391,36 @@
       amScript.src = '/js/account-menu.js?v=1791700102';
       document.body.appendChild(amScript);
     }
+    // [security] SAFE-07 / D-13-06: client storage hygiene (logout clearing +
+    // the one-time legacy clean-up). Same id-guarded dynamic loader; the
+    // logout handler below uses window.MAClientStorage when it has loaded and
+    // otherwise still performs the server logout (PD-34 degraded path).
+    if (!document.getElementById('client-storage-js')) {
+      const csScript = document.createElement('script');
+      csScript.id = 'client-storage-js';
+      csScript.src = '/js/client-storage.js?v=1';
+      document.body.appendChild(csScript);
+    }
     let tries = 0;
     const addLogout = () => {
       const foot = document.querySelector('.sidebar-footer');
       if (!foot) { if (tries++ < 40) setTimeout(addLogout, 250); return; }
       const a = document.createElement('a');
-      a.href = 'javascript:void(0)';
+      a.href = '#';
       a.textContent = '⎋ ' + (me.user.name || me.user.username) + ' — Logout';
       a.style.cssText = 'display:block;margin-top:0.4rem;font-size:0.72rem;color:inherit;text-decoration:underline;cursor:pointer;';
-      a.addEventListener('click', () => {
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
         forgetVerifiedRole();
-        fetch('/api/auth/logout', { method: 'POST' }).then(() => { window.location.href = '/login.html'; });
+        const goLogin = () => { window.location.href = '/login.html'; };
+        // [security] SAFE-07 (T-13-31): the server logout runs INSIDE
+        // clearOnLogout (after the language-key snapshot); a failed request
+        // still clears this browser and navigates.
+        if (window.MAClientStorage && typeof window.MAClientStorage.clearOnLogout === 'function') {
+          window.MAClientStorage.clearOnLogout().then(goLogin, goLogin);
+        } else {
+          fetch('/api/auth/logout', { method: 'POST' }).then(goLogin, goLogin);
+        }
       });
       foot.appendChild(a);
     };
@@ -1857,23 +1876,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Inject Role Guidance & Action Timeline Banner Card
   injectRoleGuidanceBanner();
-  // Register Service Worker for PWA
-  // Unregister Service Worker and clear caches to prevent layout update lag during development
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (let registration of registrations) {
-        registration.unregister().then(() => {
-          console.log('Active Service Worker unregistered.');
-        });
-      }
-    });
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        for (let name of names) {
-          caches.delete(name);
-        }
-      });
-    }
+  // [security] SAFE-07 / D-13-06 (c) / T-13-32 (R5-15): this page-init block
+  // used to unregister every service worker and DELETE EVERY Cache Storage
+  // entry on every page load — which also threw away the downloaded
+  // Transformers model each navigation. That unconditional wipe is gone. The
+  // only clean-up left is MAClientStorage.runLegacyCleanupOnce(): once per
+  // browser, /sw.js registrations and previously shipped legacy cache names
+  // only, never the model cache. client-storage.js also runs it on load, so the
+  // order of the two scripts never matters.
+  if (window.MAClientStorage && typeof window.MAClientStorage.runLegacyCleanupOnce === 'function') {
+    window.MAClientStorage.runLegacyCleanupOnce();
   }
 
   // Apply edit mode body class immediately on load if enabled
