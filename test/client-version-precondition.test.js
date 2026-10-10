@@ -85,3 +85,49 @@ test('client-version-precondition (C2): renderRaid() sends maVersionOf(...) at b
   const conditional = body.match(/if\s*\([^)]*\.version\s*!==\s*undefined[^)]*\)/g) || [];
   assert.deepStrictEqual(conditional, [], 'no branch may conditionally add a version to a request — an omitted precondition is refused in a real deal (R7 F-1)');
 });
+
+// ---------------------------------------------------------------------------
+// Plan 09-12 — client sweep (GD-1, GD-5, T-09-36, T-09-49).
+//
+// C3 flags ONLY a guard whose consequent assigns into a request body or URL
+// (e.g. `body.version =`, `expectedVersion=`). Legitimate state-sync lines
+// such as `res.initiative.version !== undefined` or `item.version = res...`
+// are NOT violations.
+// ---------------------------------------------------------------------------
+
+const PUBLIC_JS = path.join(__dirname, '..', 'public', 'js');
+
+function readPublicJs(name) {
+  return fs.readFileSync(path.join(PUBLIC_JS, name), 'utf8');
+}
+
+// Brace-matched body of the first function expression following `anchor`.
+function handlerAfter(src, anchor) {
+  const a = src.indexOf(anchor);
+  assert.ok(a !== -1, `anchor not found: ${anchor}`);
+  const open = src.indexOf('{', src.indexOf('function', a));
+  const close = braceMatch(src, open);
+  assert.ok(close !== -1, `could not isolate the handler after: ${anchor}`);
+  return src.slice(open, close + 1);
+}
+
+// A conditional-version idiom: an `if (... version !== undefined ...)` guard
+// whose consequent assigns into a request body or URL.
+function conditionalVersionIdioms(src) {
+  const out = [];
+  const guard = /if\s*\(([^)]*version\s*!==\s*undefined[^)]*)\)\s*([^;\n{]*;?)/g;
+  let m;
+  while ((m = guard.exec(src)) !== null) {
+    const consequent = m[2] || '';
+    if (/\.version\s*=|\bversion\s*:|expectedVersion|(url|path|href)\s*\+=/i.test(consequent)) out.push(m[0]);
+  }
+  return out;
+}
+
+test('client-version-precondition (C3a): the task status-flip handler sends maVersionOf unconditionally and re-reads after a conflict', () => {
+  const src = readPublicJs('execution.js');
+  const handler = handlerAfter(src, "row.querySelector('.ex-status').addEventListener('click'");
+  assert.ok(/maVersionOf\(/.test(handler), 'the task flip must send window.maVersionOf(task)');
+  assert.deepStrictEqual(conditionalVersionIdioms(handler), [], 'no conditional-version guard in the task flip (R7 F-1)');
+  assert.ok(/reloadAfterConflict\(/.test(handler), 'the task flip must have a non-success branch calling reloadAfterConflict( (GD-5)');
+});

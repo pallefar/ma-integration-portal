@@ -28,6 +28,24 @@
     window.alert((res && res.error) || 'That action could not be completed. Please try again.');
   }
 
+  // GD-5 (09-12, T-09-49): the conflict dialog has settled WITHOUT applying
+  // this user's change (Discard, Escape, overlay-click, Close, Cancel, or a
+  // record that was withheld/deleted underneath them). Re-reading the server
+  // state is what makes "keep theirs" true on screen — otherwise the page
+  // keeps presenting the stale copy the user just declined to overwrite. The
+  // held promise (09-11) guarantees this runs only AFTER the dialog is gone,
+  // so it can never re-render underneath an open dialog. The re-read goes
+  // through the normal clearance-filtered GET routes (T-09-38): a record the
+  // caller is no longer cleared for simply disappears. Returns true when it
+  // handled a conflict (callers then skip their own failure alert, WR-01).
+  function reloadAfterConflict(res) {
+    if (!(res && res.conflict === true)) return false;
+    load().then(function () {
+      render(); renderSynergy(); renderRaid(); applyI18n();
+    }).catch(function (e) { console.error('re-read after conflict failed', e); });
+    return true;
+  }
+
   var PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
   var PHASE_LABELS = { pre: 'Pre-close', day1: 'Day 1', d30: 'Day 30', d60: 'Day 60', d100: 'Day 100' };
   var STATUS_ORDER = ['todo', 'doing', 'blocked', 'done'];
@@ -195,13 +213,12 @@
         var next = STATUS_ORDER[(STATUS_ORDER.indexOf(task.status) + 1) % STATUS_ORDER.length];
         // CONC-02/D-02 (Phase 9): a single-field kanban status flip goes
         // through the SAME version check as a full edit — no exemptions.
-        // Send the version this page already holds in memory for this
-        // record; send nothing when the held record has no version (the
-        // server treats an absent version as "no precondition supplied",
-        // and the WHERE-clause layer in db/store.js still covers the
-        // cross-process case for it) — mirrors the RAID status-flip site.
-        var body = { id: id, status: next };
-        if (task.version !== undefined) body.version = task.version;
+        // The version this page already holds in memory for this record is
+        // ALWAYS sent: window.maVersionOf() yields it, or 0 for a never-
+        // edited record (D-09 / GD-1 — the strict server refuses an absent
+        // version in a real deal, so omission is never a valid state; R7
+        // F-1 was exactly a silent clobber on a never-edited task).
+        var body = { id: id, status: next, version: window.maVersionOf(task) };
         fetch('/api/integration-tasks', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -214,6 +231,10 @@
             task.status = res.task.status;
             task.version = res.task.version;
             render();
+          } else {
+            // GD-5: a conflict that settled without applying this change
+            // (Discard etc.) — show the server's state, not the stale copy.
+            reloadAfterConflict(res);
           }
         }).catch(function (e) { console.error('status update failed', e); });
       });
