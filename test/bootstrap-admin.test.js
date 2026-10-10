@@ -73,6 +73,34 @@ test('passwords: a lower-cost new-format hash verifies but needsRehash (cost tra
   assert.deepStrictEqual(await passwords.verifyPassword('lowcost-password', { hash: h }), { ok: true, needsRehash: true });
 });
 
+// WR-02 (Phase 10 review): the lazy rehash must never DOWNGRADE a stored hash.
+test('passwords (WR-02): a stronger-than-current or mixed-cost hash verifies with needsRehash:false', async () => {
+  const make = (pw, N, r, p) => {
+    const salt = crypto.randomBytes(16);
+    const key = crypto.scryptSync(pw, salt, 32, { N, r, p, maxmem: 512 * 1024 * 1024 });
+    return `scrypt$n=${N},r=${r},p=${p}$${salt.toString('hex')}$${key.toString('hex')}`;
+  };
+  // N=262144 at r=8 needs more than the 256 MiB derivation ceiling, so the
+  // "stronger N" case is asserted on the predicate; the derivable stronger /
+  // mixed hashes are verified end-to-end below.
+  assert.strictEqual(passwords.isWeakerThanCurrent({ n: 262144, r: 8, p: 1 }), false, 'stronger N is never rehashed');
+  assert.strictEqual(passwords.isWeakerThanCurrent({ n: 131072, r: 16, p: 1 }), false, 'stronger r is never rehashed');
+  assert.strictEqual(passwords.isWeakerThanCurrent({ n: 131072, r: 8, p: 1 }), false, 'current is not rehashed');
+  assert.strictEqual(passwords.isWeakerThanCurrent({ n: 16384, r: 8, p: 1 }), true, 'weaker N is rehashed');
+  const cases = [
+    ['stronger p', 131072, 8, 2, false],
+    ['mixed: N higher, r lower', 262144, 4, 1, false],
+    ['weaker N only', 65536, 8, 1, true],
+    ['weaker r only', 131072, 4, 1, true],
+  ];
+  for (const [label, N, r, p, expected] of cases) {
+    const pw = 'wr02-' + label;
+    const h = make(pw, N, r, p);
+    assert.deepStrictEqual(await passwords.verifyPassword(pw, { hash: h }), { ok: true, needsRehash: expected }, label);
+    assert.deepStrictEqual(passwords.verifyPasswordSync(pw, { hash: h }), { ok: true, needsRehash: expected }, label + ' (sync)');
+  }
+});
+
 test('passwords: malformed / missing / out-of-bounds stored hashes are not-ok and never throw', async () => {
   const salt = '00'.repeat(16);
   const key = '11'.repeat(32);
