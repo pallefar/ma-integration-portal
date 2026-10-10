@@ -80,4 +80,5 @@ for that one page only.
 
 Rows prefixed `OBSERVATION (not an assertion)` in `phase11-real.log` are measurements of
 navigation targets outside Phase 11's landing-page contract; they are quoted as findings
-F-1 to F-3 in `11-08-SUMMARY.md`.
+F-1 to F-4 in `11-08-SUMMARY.md` (F-1/F-2: admin console, F-3: due-diligence and org pages,
+F-4: the employee helpdesk form).
