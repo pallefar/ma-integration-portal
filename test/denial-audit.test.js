@@ -507,6 +507,15 @@ test('suite isolation: every test file that requires server.js points the audit 
   assert.deepStrictEqual(offenders, [], 'these suites would write access-denied rows into the developer data/audit.db');
 });
 
+test('docs: DEPLOYMENT.md states the rate bound and the accepted crash-loss of pending denial counts (amendment 7 / T-11-35)', () => {
+  const doc = fs.readFileSync(path.join(__dirname, '..', 'DEPLOYMENT.md'), 'utf8');
+  assert.match(doc, /## Denial audit/);
+  assert.match(doc, /access-denied/);
+  assert.match(doc, /Crash loss \(accepted\)/);
+  assert.match(doc, /one row per account \+ method \+ route \+ reason per 60 seconds/);
+  assert.match(doc, /per process/i);
+});
+
 test('lockdown: a credential-lockdown refusal reports through onDenied (anonymous, 403); allowlisted paths report nothing', () => {
   const lockdown = createLockdown({ enabled: true });
   lockdown.noteDemoLogin('someone');

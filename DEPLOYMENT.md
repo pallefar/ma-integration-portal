@@ -177,6 +177,38 @@ dev/demo committed database (`accountsWritable:false`) **Change password** is
 disabled with an explanatory note; **My sessions** still lists your sessions but
 offers no **End session**.
 
+## Denial audit (refused requests)
+
+Every request the server **refuses on authorization grounds** is written to the
+audit trail as an `access-denied` security event, visible to an admin in the audit
+viewer (Admin console, **Audit**): the account (or `(anonymous)`), the HTTP method,
+the canonical route (a template such as `DELETE /api/raid/:id`, never a record id),
+the reason, the HTTP status, and the deal when one applies. Reasons: `no-session`
+(401), `must-change-password`, `demo-only`, `role-write`, `role-read`,
+`deal-access`, `role-inline` and `credential-lockdown` (all 403), and
+`clearance-404` (a record the caller is not cleared for, answered 404 exactly like
+a missing id). A genuinely missing id is **not** recorded. Audit rows never carry
+request bodies, passwords or record content.
+
+- **Rate-bounded.** The audit trail is append-only, so a probe must not be able to
+  flood it: at most **one row per account + method + route + reason per 60 seconds**.
+  Further identical refusals inside the window are counted, and when the window ends
+  the count is written once as the next row (`folded: true`, `count: n`). The
+  bound is per route *template*, so probing many random ids on one route is a single
+  key. The in-memory key table is capped (5000); beyond that, refusals fold into one
+  `(overflow)` key per reason.
+- **Crash loss (accepted).** The folded counts of the *current* window live in
+  process memory until the window ends. If the server is killed or crashes inside
+  a window, that window's not-yet-written folded count is lost; the first refusal of
+  every window is always already on disk, so the *fact* of a probe is never lost —
+  only its repeat count. A graceful restart loses the same pending counts.
+- **Per process.** The bound applies per server process; the supported shared-host
+  shape runs a small fixed number of processes against one SQLite file, so the
+  worst case is that number times the rate above.
+- **Busy audit database.** If the audit database cannot be written because of
+  write-lock contention, the refused request is answered `503` with `Retry-After`
+  (never turned into a success) and the client retries.
+
 ## ADMIN_TOKEN (optional break-glass, discouraged)
 
 `ADMIN_TOKEN` is an optional shared secret: a request carrying it in the
