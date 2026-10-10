@@ -1,0 +1,77 @@
+/* Account self-service surfaces (Phase 10, plan 10-06): the header-menu
+   "Change password" / "My sessions" items and their modals. Loaded on demand by
+   public/js/account-menu.js. The modals reuse the .deal-modal shell from
+   style.css; this file only adds the menu items, the session rows, the badge
+   and the <= 480px rules (the modals must work at 390px without horizontal
+   scrolling, D-10-07). */
+
+/* ---- menu items (profile dropdown + sidebar footer) ---- */
+.am-menu { display: flex; flex-direction: column; gap: 0.4rem; }
+.am-menu--dropdown {
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+}
+.am-item {
+  width: 100%; text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-light, #f4f7f8);
+  border: 1px solid var(--border-color, #dde3e6);
+  border-radius: 6px;
+  font-family: inherit; font-size: 0.8rem; font-weight: 700;
+  color: var(--te-dark-teal, #244C5A);
+  cursor: pointer;
+}
+.am-item:hover:not(:disabled) { border-color: var(--te-orange, #E98300); }
+.am-item:focus-visible { outline: 2px solid var(--te-orange, #E98300); outline-offset: 1px; }
+.am-item:disabled { opacity: 0.55; cursor: not-allowed; }
+.am-note {
+  margin: 0; font-size: 0.72rem; line-height: 1.4;
+  color: var(--text-secondary, #5b666c);
+}
+.am-menu--sidebar { margin-top: 0.4rem; gap: 0.25rem; }
+.am-menu--sidebar .am-item {
+  background: transparent; border: none; padding: 0;
+  font-size: 0.72rem; font-weight: 500; color: inherit;
+  text-decoration: underline;
+}
+.am-menu--sidebar .am-note { color: inherit; opacity: 0.8; }
+
+/* ---- modals (shell = .deal-modal) ---- */
+.am-overlay { z-index: 12100; }
+.am-modal { width: min(480px, 94vw); max-height: 90vh; overflow-y: auto; box-sizing: border-box; }
+.am-modal .deal-modal-field input { width: 100%; box-sizing: border-box; }
+.am-success {
+  margin: 0; font-size: 0.82rem; font-weight: 700;
+  color: var(--status-success, #047857);
+}
+
+/* ---- sessions list ---- */
+.am-sessions {
+  display: flex; flex-direction: column; gap: 0.6rem;
+  max-height: 50vh; overflow-y: auto; margin-bottom: 0.5rem;
+}
+.am-session {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem;
+  border: 1px solid var(--border-color, #dde3e6); border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+.am-session-info { flex: 1 1 auto; min-width: 0; }
+.am-session-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.am-session-device { font-weight: 700; font-size: 0.82rem; overflow-wrap: anywhere; }
+.am-session-meta { font-size: 0.74rem; color: var(--text-secondary, #5b666c); margin-top: 0.15rem; }
+.am-session-end { flex: 0 0 auto; white-space: nowrap; }
+.am-badge {
+  display: inline-block; padding: 0.1rem 0.5rem; border-radius: 50px;
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em;
+  background: var(--status-success-light, #d1fae5); color: #047857;
+}
+
+@media (max-width: 480px) {
+  .am-overlay { padding: 0.75rem; }
+  .am-modal { width: min(480px, calc(100vw - 1.5rem)); padding: 1.1rem; }
+  .am-session { flex-direction: column; align-items: stretch; }
+  .am-session-end { width: 100%; }
+  .am-modal .deal-modal-actions { flex-direction: column-reverse; }
+  .am-modal .deal-modal-actions .btn { width: 100%; }
+}

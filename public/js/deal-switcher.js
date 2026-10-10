@@ -128,12 +128,21 @@
     const staleMenu = document.getElementById('deal-switcher-menu');
     if (staleMenu) staleMenu.remove();
 
-    Promise.all([
-      fetch('/api/auth/me').then((r) => (r.ok ? r.json() : { user: null })),
-      fetch('/api/deals').then((r) => (r.ok ? r.json() : [])),
-    ]).then(([me, deals]) => {
-      const user = me && me.user;
-      if (!user) return; // no session (e.g. DEMO_OPEN anonymous demo) — nothing to switch
+    // WINDOWS #4 / D-10-08 (Phase 10): ask /api/auth/me FIRST and never request
+    // the control-plane /api/deals without a session. /api/deals is never open
+    // under DEMO_OPEN=1, so a cookie-less demo-open tab used to get a 401
+    // authRequired here, which the fetch wrapper turns into a redirect to
+    // /login.html — and the old login page redirected straight back to '/':
+    // an endless loop. With no user there is nothing to switch, so no deal
+    // list is fetched at all.
+    fetch('/api/auth/me').then((r) => (r.ok ? r.json() : { user: null })).then((me) => {
+      if (!(me && me.user)) return null;
+      return fetch('/api/deals').then((r) => (r.ok ? r.json() : [])).then((deals) => ({ me, deals }));
+    }).then((loaded) => {
+      if (!loaded) return; // no session (e.g. DEMO_OPEN anonymous demo) — nothing to switch
+      const me = loaded.me;
+      let deals = loaded.deals;
+      const user = me.user;
       const canCreate = CREATE_ROLES.has(user.role);
       if (!Array.isArray(deals)) deals = [];
       if (!deals.length && !canCreate) return; // an employee/pmo with zero deals sees no new chrome
