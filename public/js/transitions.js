@@ -1175,34 +1175,72 @@
 
   // Generic HTML-slide overlay: an admin-provided HTML slide (pasted link or uploaded
   // file) is shown full-screen over the app; closing (✕ / Esc) returns to the page.
+  //
+  // [security] SAFE-03 / D-13-04 (b) / T-13-20 / T-13-24 (plan 13-03): a slide is
+  // untrusted markup. The overlay is built with createElement/textContent (the label
+  // is never parsed as HTML) and every non-PDF slide is framed with a script-only
+  // sandbox — no same-origin token (opaque origin: no portal cookies, storage or
+  // parent DOM), no top-navigation, no forms, no popups. The served
+  // response carries the same sandbox as a CSP header, so opening the URL top-level
+  // is contained too. A PDF is framed unsandboxed (Chromium cannot render a PDF in a
+  // sandboxed frame); it is magic-byte verified at upload and cannot run script in
+  // the portal origin.
   function openHtmlSlide(url, label) {
     if (!url) return;
     const existing = document.getElementById('html-slide-overlay');
     if (existing) existing.remove();
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     // Only allow http(s) / same-origin URLs — encodeURI does NOT neutralise a
     // 'javascript:' (or data:/vbscript:) scheme, so validate the protocol instead.
     let safeUrl = '#';
+    let isPdf = false;
     try {
       const u = new URL(url, window.location.origin);
-      if (u.protocol === 'http:' || u.protocol === 'https:') safeUrl = u.href;
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        safeUrl = u.href;
+        isPdf = /\.pdf$/i.test(u.pathname);
+      }
     } catch (_) { safeUrl = '#'; }
+    const text = String(label == null || label === '' ? 'Slide' : label);
+
     const overlay = document.createElement('div');
     overlay.id = 'html-slide-overlay';
     overlay.className = 'slide-overlay';
-    overlay.innerHTML =
-      '<div class="slide-overlay-bar">' +
-        '<span class="slide-overlay-title">\u{1F5A5}️ ' + esc(label || 'Slide') + '</span>' +
-        '<div class="slide-overlay-actions">' +
-          '<a href="' + safeUrl + '" target="_blank" rel="noopener" class="slide-overlay-open">Open in new tab ↗</a>' +
-          '<button type="button" class="slide-overlay-x" aria-label="Close">✕ Close</button>' +
-        '</div>' +
-      '</div>' +
-      '<iframe class="slide-overlay-frame" src="' + safeUrl + '" title="' + esc(label || 'Slide') + '"></iframe>';
+
+    const bar = document.createElement('div');
+    bar.className = 'slide-overlay-bar';
+    const title = document.createElement('span');
+    title.className = 'slide-overlay-title';
+    title.textContent = '\u{1F5A5}\uFE0F ' + text;
+    const actions = document.createElement('div');
+    actions.className = 'slide-overlay-actions';
+    const open = document.createElement('a');
+    open.className = 'slide-overlay-open';
+    open.href = safeUrl;
+    open.target = '_blank';
+    open.rel = 'noopener noreferrer';
+    open.textContent = 'Open in new tab \u2197';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'slide-overlay-x';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '\u2715 Close';
+    actions.appendChild(open);
+    actions.appendChild(closeBtn);
+    bar.appendChild(title);
+    bar.appendChild(actions);
+
+    const frame = document.createElement('iframe');
+    frame.className = 'slide-overlay-frame';
+    frame.title = text;
+    if (!isPdf) frame.setAttribute('sandbox', 'allow-scripts');
+    frame.src = safeUrl;
+
+    overlay.appendChild(bar);
+    overlay.appendChild(frame);
     document.body.appendChild(overlay);
     const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
     function onKey(e) { if (e.key === 'Escape') close(); }
-    overlay.querySelector('.slide-overlay-x').addEventListener('click', close);
+    closeBtn.addEventListener('click', close);
     document.addEventListener('keydown', onKey);
   }
   window.openHtmlSlide = openHtmlSlide;
