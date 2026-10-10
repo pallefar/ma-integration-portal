@@ -1,8 +1,7 @@
-evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b09-ad34-f2dd9f2a2950/scratchpad/ev-p9
-[setup] PASS - deal deal_mv2kma9bdae0e0d8 created, pmo granted legal :: 200
-[raid-f1] PASS - A request carries version 0 :: {"id":"raid_mv2kmady51904ef4","status":"mitigating","version":0}
+[setup] PASS - deal deal_mv2o3mrvf0e45779 created, pmo granted legal :: 200
+[raid-f1] PASS - A request carries version 0 :: {"id":"raid_mv2o3mwhf4fe97ec","status":"mitigating","version":0}
 [raid-f1] PASS - A response 200 :: 200
-[raid-f1] PASS - B request carries version 0 :: {"id":"raid_mv2kmady51904ef4","status":"mitigating","version":0}
+[raid-f1] PASS - B request carries version 0 :: {"id":"raid_mv2o3mwhf4fe97ec","status":"mitigating","version":0}
 [raid-f1] PASS - B response 409 conflict:true :: {"status":409,"conflict":true}
 [raid-f1] PASS - one overlay :: 1
 [raid-f1] PASS - status row present :: [{"label":"Status","mine":"mitigating","theirs":"mitigating"}]
@@ -15,18 +14,18 @@ evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b0
 [raid-delete-f1] PASS - one overlay throughout :: 1
 [raid-delete-f1] PASS - no "changed again" banner on the first conflict :: null
 [raid-delete-f1] PASS - native dialogs: 0 :: []
-[raid-delete-f1] PASS - DELETE carries expectedVersion=0 :: /api/raid/raid_mv2kme5939743636?expectedVersion=0
+[raid-delete-f1] PASS - DELETE carries expectedVersion=0 :: /api/raid/raid_mv2o3qq6310765c6?expectedVersion=0
 [raid-delete-f1] PASS - DELETE response 409 conflict:true :: 409
 [raid-delete-f1] PASS - 409 stale-delete dialog :: {"title":"Someone else updated this — still delete it?","buttons":[{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete anyway","cls":"btn btn-danger conflict-btn-delete","disabled":false}]}
 [raid-delete-f1] PASS - dialog closes on Cancel
-[raid-delete-f1] PASS - entry survives Cancel :: {"id":"raid_mv2kme5939743636","version":1}
+[raid-delete-f1] PASS - entry survives Cancel :: {"id":"raid_mv2o3qq6310765c6","version":1}
 [api-version-required] PASS - update with no version refused 400 versionRequired :: {"status":400,"body":{"error":"This save did not include the version of the record it was based on. Reload the page and try again.","versionRequired":true}}
 [api-version-required] PASS - refusal body has exactly {error, versionRequired} :: ["error","versionRequired"]
 [api-version-required] PASS - delete with no expectedVersion refused 400 versionRequired :: {"status":400,"body":{"error":"This save did not include the version of the record it was based on. Reload the page and try again.","versionRequired":true}}
 [api-version-required] PASS - entry intact after both refusals :: {"notes":""}
 [task-f1-never-edited] PASS - A flip #1 carries version 0 and is 200 :: {"status":200,"version":0}
 [task-f1-never-edited] PASS - A flip #2 carries version 1 and is 200 :: {"status":200,"version":1}
-[task-f1-never-edited] PASS - B request version 0 :: {"id":"task_mv2kmhcq8690b81b","status":"doing","version":0}
+[task-f1-never-edited] PASS - B request version 0 :: {"id":"task_mv2o3txx342aa23e","status":"doing","version":0}
 [task-f1-never-edited] PASS - B 409 + one overlay :: {"status":409,"conflict":true,"overlays":1}
 [task-f1-never-edited] PASS - server keeps A's status :: {"status":"blocked","version":2}
 [task-f1-never-edited] PASS - no page errors :: []
@@ -66,7 +65,7 @@ evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b0
 [org-delete-anyway-f2] PASS - position stamped to version 1 :: {"status":200,"version":1}
 [org-delete-anyway-f2] PASS - A edit 200 :: 200
 [org-delete-anyway-f2] PASS - in-app confirm shown first :: Delete position? This cannot be undone.
-[org-delete-anyway-f2] PASS - DELETE carries expectedVersion=1 :: /api/org/positions/pos_mv2kn32te774167b?expectedVersion=1
+[org-delete-anyway-f2] PASS - DELETE carries expectedVersion=1 :: /api/org/positions/pos_mv2o4fo1e7f43e83?expectedVersion=1
 [org-delete-anyway-f2] PASS - 409 stale-delete dialog :: {"title":"Someone else updated this — still delete it?","overlays":1}
 [org-delete-anyway-f2] PASS - no inline org error alongside the dialog (WR-02)
 [org-delete-anyway-f2] PASS - dialog closes after Delete anyway
@@ -126,14 +125,14 @@ evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b0
 [synergy-stage-f3] PASS - dialog closes on Discard
 [synergy-stage-f3] PASS - A's stage survived (no clobber) :: committed
 [confirm-current-neutral-f3] PASS - other user stamped a newer version :: 2
-[confirm-current-neutral-f3] PASS - request was confirm-current with only a version :: {"url":"/api/synergies/syn_mv2koi4y381c3055/confirm-current","body":{"version":1}}
+[confirm-current-neutral-f3] PASS - request was confirm-current with only a version :: {"url":"/api/synergies/syn_mv2o5mxk33038e9d/confirm-current","body":{"version":1}}
 [confirm-current-neutral-f3] PASS - 409 conflict:true :: 409
 [confirm-current-neutral-f3] PASS - no diff rows :: []
 [confirm-current-neutral-f3] PASS - neutral sentence exactly once :: 1
 [confirm-current-neutral-f3] PASS - Apply my changes anyway present :: [{"text":"Discard mine, keep theirs","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Apply my changes anyway","cls":"btn btn-primary conflict-btn-apply","disabled":false}]
 [confirm-current-neutral-f3] PASS - retired sentence absent :: Someone else updated thisChanged by karen, just nowYour changes are still here. Review what changed below, then decide how to proceed.This record changed since 
 [confirm-current-neutral-f3] PASS - dialog closes on Discard
-[phasing-month-f3] PASS - A month write 200 :: {"url":"/api/synergies/syn_mv2komr935972da3/phasing/2026-01","status":200}
+[phasing-month-f3] PASS - A month write 200 :: {"url":"/api/synergies/syn_mv2o5r2ec3fbfc68/phasing/2026-01","status":200}
 [phasing-month-f3] PASS - one overlay :: 1
 [phasing-month-f3] PASS - row labelled with the month :: [{"label":"Target (M) · 2026-01","mine":"9","theirs":"7"}]
 [phasing-month-f3] PASS - mine = B's cell value :: {"label":"Target (M) · 2026-01","mine":"9","theirs":"7"}
@@ -299,15 +298,15 @@ evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b0
 [asset-stamps] PASS - /execution.html requests /css/style.css (stamp matches the page on disk) :: {"requested":1791625638,"disk":1791625638}
 [asset-stamps] PASS - /execution.html requests /css/style.css (stamp > pre-gap-closure 1784600001) :: 1791625638
 [asset-stamps] PASS - /execution.html requests /css/style.css (200) :: [200]
-[asset-stamps] PASS - /execution.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=1791800001","status":200}]
-[asset-stamps] PASS - /execution.html requests /js/transitions.js (one numeric stamp) :: ["1791800001"]
-[asset-stamps] PASS - /execution.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":1791800001,"disk":1791800001}
-[asset-stamps] PASS - /execution.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: 1791800001
+[asset-stamps] PASS - /execution.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=1791800101","status":200}]
+[asset-stamps] PASS - /execution.html requests /js/transitions.js (one numeric stamp) :: ["1791800101"]
+[asset-stamps] PASS - /execution.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":1791800101,"disk":1791800101}
+[asset-stamps] PASS - /execution.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: 1791800101
 [asset-stamps] PASS - /execution.html requests /js/transitions.js (200) :: [200]
-[asset-stamps] PASS - /execution.html requests /js/execution.js (requested) :: [{"url":"/js/execution.js?v=1791628622","status":200}]
-[asset-stamps] PASS - /execution.html requests /js/execution.js (one numeric stamp) :: ["1791628622"]
-[asset-stamps] PASS - /execution.html requests /js/execution.js (stamp matches the page on disk) :: {"requested":1791628622,"disk":1791628622}
-[asset-stamps] PASS - /execution.html requests /js/execution.js (stamp > pre-gap-closure 1786433369) :: 1791628622
+[asset-stamps] PASS - /execution.html requests /js/execution.js (requested) :: [{"url":"/js/execution.js?v=1791800101","status":200}]
+[asset-stamps] PASS - /execution.html requests /js/execution.js (one numeric stamp) :: ["1791800101"]
+[asset-stamps] PASS - /execution.html requests /js/execution.js (stamp matches the page on disk) :: {"requested":1791800101,"disk":1791800101}
+[asset-stamps] PASS - /execution.html requests /js/execution.js (stamp > pre-gap-closure 1786433369) :: 1791800101
 [asset-stamps] PASS - /execution.html requests /js/execution.js (200) :: [200]
 [asset-stamps] PASS - /execution.html loaded without a page error :: []
 [asset-stamps] PASS - /org.html requests /css/style.css (requested) :: [{"url":"/css/style.css?v=1791625638","status":200}]
@@ -315,15 +314,15 @@ evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b0
 [asset-stamps] PASS - /org.html requests /css/style.css (stamp matches the page on disk) :: {"requested":1791625638,"disk":1791625638}
 [asset-stamps] PASS - /org.html requests /css/style.css (stamp > pre-gap-closure 1784600001) :: 1791625638
 [asset-stamps] PASS - /org.html requests /css/style.css (200) :: [200]
-[asset-stamps] PASS - /org.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=1791800001","status":200}]
-[asset-stamps] PASS - /org.html requests /js/transitions.js (one numeric stamp) :: ["1791800001"]
-[asset-stamps] PASS - /org.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":1791800001,"disk":1791800001}
-[asset-stamps] PASS - /org.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: 1791800001
+[asset-stamps] PASS - /org.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=1791800101","status":200}]
+[asset-stamps] PASS - /org.html requests /js/transitions.js (one numeric stamp) :: ["1791800101"]
+[asset-stamps] PASS - /org.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":1791800101,"disk":1791800101}
+[asset-stamps] PASS - /org.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: 1791800101
 [asset-stamps] PASS - /org.html requests /js/transitions.js (200) :: [200]
-[asset-stamps] PASS - /org.html requests /js/org.js (requested) :: [{"url":"/js/org.js?v=1791625638","status":200}]
-[asset-stamps] PASS - /org.html requests /js/org.js (one numeric stamp) :: ["1791625638"]
-[asset-stamps] PASS - /org.html requests /js/org.js (stamp matches the page on disk) :: {"requested":1791625638,"disk":1791625638}
-[asset-stamps] PASS - /org.html requests /js/org.js (stamp > pre-gap-closure 1786433369) :: 1791625638
+[asset-stamps] PASS - /org.html requests /js/org.js (requested) :: [{"url":"/js/org.js?v=1791800101","status":200}]
+[asset-stamps] PASS - /org.html requests /js/org.js (one numeric stamp) :: ["1791800101"]
+[asset-stamps] PASS - /org.html requests /js/org.js (stamp matches the page on disk) :: {"requested":1791800101,"disk":1791800101}
+[asset-stamps] PASS - /org.html requests /js/org.js (stamp > pre-gap-closure 1786433369) :: 1791800101
 [asset-stamps] PASS - /org.html requests /js/org.js (200) :: [200]
 [asset-stamps] PASS - /org.html loaded without a page error :: []
 [asset-stamps] PASS - /due-diligence.html requests /css/style.css (requested) :: [{"url":"/css/style.css?v=1791625638","status":200}]
@@ -331,15 +330,15 @@ evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b0
 [asset-stamps] PASS - /due-diligence.html requests /css/style.css (stamp matches the page on disk) :: {"requested":1791625638,"disk":1791625638}
 [asset-stamps] PASS - /due-diligence.html requests /css/style.css (stamp > pre-gap-closure 1784600001) :: 1791625638
 [asset-stamps] PASS - /due-diligence.html requests /css/style.css (200) :: [200]
-[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=1791800001","status":200}]
-[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (one numeric stamp) :: ["1791800001"]
-[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":1791800001,"disk":1791800001}
-[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: 1791800001
+[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=1791800101","status":200}]
+[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (one numeric stamp) :: ["1791800101"]
+[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":1791800101,"disk":1791800101}
+[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: 1791800101
 [asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (200) :: [200]
-[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (requested) :: [{"url":"/js/due-diligence.js?v=1791628622","status":200}]
-[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (one numeric stamp) :: ["1791628622"]
-[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (stamp matches the page on disk) :: {"requested":1791628622,"disk":1791628622}
-[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (stamp > pre-gap-closure 1786427686) :: 1791628622
+[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (requested) :: [{"url":"/js/due-diligence.js?v=1791800101","status":200}]
+[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (one numeric stamp) :: ["1791800101"]
+[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (stamp matches the page on disk) :: {"requested":1791800101,"disk":1791800101}
+[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (stamp > pre-gap-closure 1786427686) :: 1791800101
 [asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (200) :: [200]
 [asset-stamps] PASS - /due-diligence.html loaded without a page error :: []
 [asset-stamps] PASS - /login.html requests /css/style.css (requested) :: [{"url":"/css/style.css?v=1791625638","status":200}]
@@ -349,5 +348,3 @@ evidence dir: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b0
 [asset-stamps] PASS - /login.html requests /css/style.css (200) :: [200]
 [asset-stamps] PASS - /login.html loaded without a page error :: []
 [data-integrity] PASS - committed data/demo.db* and data/control.db* unchanged :: 4 file(s) identical
-
-350 PASS, 0 FAIL. results: /private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b09-ad34-f2dd9f2a2950/scratchpad/ev-p9/results.json
