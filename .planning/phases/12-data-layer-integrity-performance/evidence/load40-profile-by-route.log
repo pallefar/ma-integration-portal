@@ -1,0 +1,46 @@
+# Main-thread time of the instrumented server per INNERMOST registered handler (V8 --cpu-prof sampling).
+# Produced by: node by-route.js <server.cpuprofile> server.js   (diagnostics/by-route.js)
+# Source profiles: load40-profile.log "A" (fresh deal, 45 s) and "B" (deal pre-grown to 5,300 RAID rows, 20 s).
+# (idle) is 0.5 % in both: the single main thread is saturated, so event-loop delay is queueing delay.
+
+== A: fresh deal (40 seeded RAID rows), 45 s - what run 1 of `--runs 3` measures
+total 45339 ms
+  21289 ms  47.0%  server.js:5972 app.get('/api/raid')
+  16625 ms  36.7%  server.js:6014 app.post('/api/raid')
+   2637 ms   5.8%  (garbage collector)
+   2038 ms   4.5%  server.js:889 app.use('/api')            (session + deal resolution middleware)
+    245 ms   0.5%  server.js:234 app.use((req)
+    212 ms   0.5%  (idle)
+    206 ms   0.5%  server.js:4462 app.get('/api/integration-tasks')
+    192 ms   0.4%  (program)
+    151 ms   0.3%  (writev)
+    130 ms   0.3%  server.js:176 app.use((req)
+    130 ms   0.3%  server.js:358 app.use((req)
+    120 ms   0.3%  server.js:8353 app.get('/api/employees')
+
+== B: deal pre-grown to 5,300 RAID rows, 20 s - the state runs 2 and 3 of `--runs 3` start from
+total 20488 ms
+  10112 ms  49.4%  server.js:5972 app.get('/api/raid')
+   7451 ms  36.4%  server.js:6014 app.post('/api/raid')
+   1466 ms   7.2%  (garbage collector)
+    517 ms   2.5%  server.js:889 app.use('/api')
+    109 ms   0.5%  (idle)
+     64 ms   0.3%  server.js:4462 app.get('/api/integration-tasks')
+     52 ms   0.3%  readFileUtf8
+     44 ms   0.2%  server.js:234 app.use((req)
+     43 ms   0.2%  (program)
+     36 ms   0.2%  server.js:8353 app.get('/api/employees')
+     35 ms   0.2%  (writev)
+     29 ms   0.1%  server.js:358 app.use((req)
+
+# Per request (main-thread ms, sampled): GET /api/raid 3.8 ms (A, list grows 40 -> 3.7k rows) / 10.2 ms (B, ~5.3k-5.8k rows);
+#                                        POST /api/raid 5.1 ms (A) / 13.3 ms (B).
+# GET /api/integration-tasks, GET /api/employees, GET /healthz together are < 2 % of the loop in both windows.
+
+# Inside res.send(<1.7-3 MB string>) of GET /api/raid (profile A, caller chains):
+#   2230 ms (4.9 % of the loop)  etag -> entitytag -> crypto Hash.update   (Express computes a SHA-1 ETag over the whole body)
+#   2119 ms (4.7 % of the loop)  Buffer.from(string) -> utf8Write          (UTF-8 encode of the whole body)
+# Inside POST /api/raid (profile A, self time attributed to db/store.js):
+#   store.js:637 afterArr.forEach (writeDb: JSON.stringify of EVERY loaded item to detect the untouched rows)  16.0 %
+#   store.js:406 rows.map(JSON.parse) + store.js:392 readCollections (parse of EVERY row of the lane)         ~16 %
+#   store.js:455 readProjection (GET path: SELECT + json_extract per row + object per row)                    23.0 %

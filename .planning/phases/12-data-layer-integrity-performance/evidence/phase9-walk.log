@@ -1,0 +1,356 @@
+HOST: load1=10.77 cpus=11 at 2026-10-10T21:15:40Z (threshold 12)
+evidence dir: <scratch>/p9-normal
+[setup] PASS - deal deal_mv2w8jif5bc16dde created, pmo granted legal :: 200
+[raid-f1] PASS - A request carries version 0 :: {"id":"raid_mv2w8johd3856328","status":"mitigating","version":0}
+[raid-f1] PASS - A response 200 :: 200
+[raid-f1] PASS - B request carries version 0 :: {"id":"raid_mv2w8johd3856328","status":"mitigating","version":0}
+[raid-f1] PASS - B response 409 conflict:true :: {"status":409,"conflict":true}
+[raid-f1] PASS - one overlay :: 1
+[raid-f1] PASS - status row present :: [{"label":"Status","mine":"mitigating","theirs":"mitigating"}]
+[raid-f1] PASS - A's write survived (no silent clobber) :: {"status":"mitigating","version":1}
+[raid-f1] PASS - dialog opens at 390 :: 1
+[raid-f1] PASS - fit at 390 :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":243.703125,"right":358,"bottom":600.28125},"viewport":{"w":390,"h":844},"overflowing":[]}
+[raid-delete-f1] PASS - in-app confirm titled "Delete this entry?" :: Delete this entry?
+[raid-delete-f1] PASS - confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[raid-delete-f1] PASS - no DELETE sent before the confirm click
+[raid-delete-f1] PASS - one overlay throughout :: 1
+[raid-delete-f1] PASS - no "changed again" banner on the first conflict :: null
+[raid-delete-f1] PASS - native dialogs: 0 :: []
+[raid-delete-f1] PASS - DELETE carries expectedVersion=0 :: /api/raid/raid_mv2w8ofm8855612a?expectedVersion=0
+[raid-delete-f1] PASS - DELETE response 409 conflict:true :: 409
+[raid-delete-f1] PASS - 409 stale-delete dialog :: {"title":"Someone else updated this — still delete it?","buttons":[{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete anyway","cls":"btn btn-danger conflict-btn-delete","disabled":false}]}
+[raid-delete-f1] PASS - dialog closes on Cancel
+[raid-delete-f1] PASS - entry survives Cancel :: {"id":"raid_mv2w8ofm8855612a","version":1}
+[api-version-required] PASS - update with no version refused 400 versionRequired :: {"status":400,"body":{"error":"This save did not include the version of the record it was based on. Reload the page and try again.","versionRequired":true}}
+[api-version-required] PASS - refusal body has exactly {error, versionRequired} :: ["error","versionRequired"]
+[api-version-required] PASS - delete with no expectedVersion refused 400 versionRequired :: {"status":400,"body":{"error":"This save did not include the version of the record it was based on. Reload the page and try again.","versionRequired":true}}
+[api-version-required] PASS - entry intact after both refusals :: {"notes":""}
+[task-f1-never-edited] PASS - A flip #1 carries version 0 and is 200 :: {"status":200,"version":0}
+[task-f1-never-edited] PASS - A flip #2 carries version 1 and is 200 :: {"status":200,"version":1}
+[task-f1-never-edited] PASS - B request version 0 :: {"id":"task_mv2w8s7h391eb4df","status":"doing","version":0}
+[task-f1-never-edited] PASS - B 409 + one overlay :: {"status":409,"conflict":true,"overlays":1}
+[task-f1-never-edited] PASS - server keeps A's status :: {"status":"blocked","version":2}
+[task-f1-never-edited] PASS - no page errors :: []
+[task-discard-keeps-theirs] PASS - dialog closes on Discard
+[task-discard-keeps-theirs] PASS - after Discard row shows A's status :: {"aLabel":"Blocked","bBefore":"To do","bAfter":"Blocked"}
+[task-discard-keeps-theirs] PASS - next flip 200 no overlay :: {"status":200,"sentVersion":2,"serverVersion":2}
+[task-discard-keeps-theirs] PASS - no page errors :: []
+[synergy-stage-never-edited] PASS - A stage request carries version 0 and is 200 :: {"status":200,"version":0}
+[synergy-stage-never-edited] PASS - B request version 0 :: {"targetStage":"validated","version":0}
+[synergy-stage-never-edited] PASS - B 409 + one overlay :: {"status":409,"conflict":true,"overlays":1}
+[synergy-stage-never-edited] PASS - no native alert alongside the dialog (WR-01) :: []
+[synergy-stage-never-edited] PASS - server keeps A's stage change :: {"stage":"validated","version":1}
+[synergy-realized-f2] PASS - A header write 200 with version 1 :: {"status":200,"version":1}
+[synergy-realized-f2] PASS - B 409 + one overlay :: {"status":409,"overlays":1}
+[synergy-realized-f2] PASS - dialog carries mine/theirs values :: [{"label":"Realized (M)","mine":"2.5","theirs":"1.5"}]
+[synergy-realized-f2] PASS - no native alert alongside the dialog (WR-01) :: []
+[synergy-realized-f2] PASS - dialog closes after Apply
+[synergy-realized-f2] PASS - B made exactly one conflicting write then one reapply :: [[1,409],[2,200]]
+[synergy-realized-f2] PASS - API holds B's value :: {"realizedM":2.5,"version":3}
+[synergy-realized-f2] PASS - B's card header shows B's value :: {"money":"$2.5M","input":"2.5"}
+[dd-f2] PASS - A write 200 (1440) :: 200
+[dd-f2] PASS - B request version 0 and 409 (1440) :: {"status":409,"version":0}
+[dd-f2] PASS - one overlay, no native alert (1440) :: {"overlays":1,"native":[]}
+[dd-f2] PASS - no re-fetch while the dialog is open (1440) :: {"before":0,"now":0}
+[dd-f2] PASS - B's select still shows B's value under the dialog (1440) :: received
+[dd-f2] PASS - fit at 1440 (DD dialog) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":298.203125,"right":1000,"bottom":601.78125},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[dd-f2] PASS - dialog closes after Apply (1440)
+[dd-f2] PASS - after Apply B's select shows the server value and the API holds it (1440) :: {"api":"received","select":"received"}
+[dd-f2] PASS - A write 200 (390) :: 200
+[dd-f2] PASS - B request version 0 and 409 (390) :: {"status":409,"version":0}
+[dd-f2] PASS - one overlay, no native alert (390) :: {"overlays":1,"native":[]}
+[dd-f2] PASS - no re-fetch while the dialog is open (390) :: {"before":0,"now":0}
+[dd-f2] PASS - B's select still shows B's value under the dialog (390) :: received
+[dd-f2] PASS - fit at 390 (DD dialog) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":243.703125,"right":358,"bottom":600.28125},"viewport":{"w":390,"h":844},"overflowing":[]}
+[dd-f2] PASS - dialog closes after Apply (390)
+[dd-f2] PASS - after Apply B's select shows the server value and the API holds it (390) :: {"api":"received","select":"received"}
+[org-delete-anyway-f2] PASS - position stamped to version 1 :: {"status":200,"version":1}
+[org-delete-anyway-f2] PASS - A edit 200 :: 200
+[org-delete-anyway-f2] PASS - in-app confirm shown first :: Delete position? This cannot be undone.
+[org-delete-anyway-f2] PASS - DELETE carries expectedVersion=1 :: /api/org/positions/pos_mv2w9jicd374c80c?expectedVersion=1
+[org-delete-anyway-f2] PASS - 409 stale-delete dialog :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[org-delete-anyway-f2] PASS - no inline org error alongside the dialog (WR-02)
+[org-delete-anyway-f2] PASS - dialog closes after Delete anyway
+[org-delete-anyway-f2] PASS - node gone from DOM and API :: {"inDom":false,"serverHasPosition":false}
+[org-delete-anyway-f2] PASS - native dialogs: 0 :: []
+[one-tab-no-self-conflict] PASS - synergy sub-route twice: versions 0 then 1, both 200 :: [{"status":200,"version":0},{"status":200,"version":1}]
+[one-tab-no-self-conflict] PASS - no overlay in the synergy tab
+[one-tab-no-self-conflict] PASS - DD item twice: versions 0 then 1, both 200 :: [{"status":200,"version":0},{"status":200,"version":1}]
+[one-tab-no-self-conflict] PASS - no overlay in the DD tab
+[one-tab-no-self-conflict] PASS - API holds the second write :: received
+[raid-f2-apply] PASS - A flip 200 :: 200
+[raid-f2-apply] PASS - dialog shown :: 1
+[raid-f2-apply] PASS - dialog closes after Apply
+[raid-f2-apply] PASS - after Apply row shows server status :: {"serverStatus":"mitigating","serverVersion":2,"rowLabel":"Mitigating"}
+[raid-f2-apply] PASS - Apply reapplied with the fresh version :: {"status":200,"version":2}
+[raid-f2-apply] PASS - next flip 200 without overlay :: {"status":200,"sentVersion":2,"serverVersion":2}
+[raid-f2-apply] PASS - no page errors :: []
+[raid-f2-delete-anyway] PASS - in-app confirm shown first (1440) :: Delete this entry?
+[raid-f2-delete-anyway] PASS - stale-delete dialog shown (1440) :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[raid-f2-delete-anyway] PASS - fit at 1440 (stale-delete dialog) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":373.796875,"right":1000,"bottom":526.1875},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[raid-f2-delete-anyway] PASS - dialog closes after Delete anyway (1440)
+[raid-f2-delete-anyway] PASS - row removed after Delete anyway (1440) :: {"inDom":false,"serverHasEntry":false}
+[raid-f2-delete-anyway] PASS - native dialogs: 0 (1440) :: []
+[raid-f2-delete-anyway] PASS - in-app confirm shown first (390) :: Delete this entry?
+[raid-f2-delete-anyway] PASS - stale-delete dialog shown (390) :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[raid-f2-delete-anyway] PASS - fit at 390 (stale-delete dialog) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":335,"right":358,"bottom":508.984375},"viewport":{"w":390,"h":844},"overflowing":[]}
+[raid-f2-delete-anyway] PASS - dialog closes after Delete anyway (390)
+[raid-f2-delete-anyway] PASS - row removed after Delete anyway (390) :: {"inDom":false,"serverHasEntry":false}
+[raid-f2-delete-anyway] PASS - native dialogs: 0 (390) :: []
+[third-writer] PASS - writer A 200 (1440) :: 200
+[third-writer] PASS - conflict dialog, no banner, theirs=closed (1440) :: {"overlays":1,"banner":null,"rows":[{"label":"Status","mine":"mitigating","theirs":"closed"}]}
+[third-writer] PASS - fit at 1440 (edit dialog) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":298.203125,"right":1000,"bottom":601.78125},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[third-writer] PASS - third writer 200 (1440) :: 200
+[third-writer] PASS - banner on third writer (1440) :: That didn't go through — the record changed again. Your edits are still here; review the fresh values below and try again.
+[third-writer] PASS - one overlay throughout (1440) :: 1
+[third-writer] PASS - theirs refreshed, mine unchanged (1440) :: [{"label":"Status","mine":"mitigating","theirs":"open"}]
+[third-writer] PASS - fit at 1440 (banner state) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":256.203125,"right":1000,"bottom":643.78125},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[third-writer] PASS - final Apply resolves and row shows server status (1440) :: {"closed":true,"serverStatus":"mitigating","serverVersion":4,"rowLabel":"Mitigating"}
+[third-writer] PASS - writer A 200 (390) :: 200
+[third-writer] PASS - conflict dialog, no banner, theirs=closed (390) :: {"overlays":1,"banner":null,"rows":[{"label":"Status","mine":"mitigating","theirs":"closed"}]}
+[third-writer] PASS - fit at 390 (edit dialog) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":243.703125,"right":358,"bottom":600.28125},"viewport":{"w":390,"h":844},"overflowing":[]}
+[third-writer] PASS - third writer 200 (390) :: 200
+[third-writer] PASS - banner on third writer (390) :: That didn't go through — the record changed again. Your edits are still here; review the fresh values below and try again.
+[third-writer] PASS - one overlay throughout (390) :: 1
+[third-writer] PASS - theirs refreshed, mine unchanged (390) :: [{"label":"Status","mine":"mitigating","theirs":"open"}]
+[third-writer] PASS - fit at 390 (banner state) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":180.703125,"right":358,"bottom":663.28125},"viewport":{"w":390,"h":844},"overflowing":[]}
+[third-writer] PASS - final Apply resolves and row shows server status (390) :: {"closed":true,"serverStatus":"mitigating","serverVersion":4,"rowLabel":"Mitigating"}
+[different-records] PASS - different records: both flips 200 :: {"a":200,"b":200}
+[different-records] PASS - different records: no overlay
+[synergy-stage-f3] PASS - A advanced the initiative to committed :: committed
+[synergy-stage-f3] PASS - dialog opened (one overlay) :: 1
+[synergy-stage-f3] PASS - Stage row present :: [{"label":"Stage","mine":"validated","theirs":"committed"}]
+[synergy-stage-f3] PASS - mine = the stage B asked for :: {"label":"Stage","mine":"validated","theirs":"committed"}
+[synergy-stage-f3] PASS - theirs = server stage :: {"label":"Stage","mine":"validated","theirs":"committed"}
+[synergy-stage-f3] PASS - no neutral panel :: 0
+[synergy-stage-f3] PASS - retired sentence absent :: Someone else updated thisChanged by karen, just nowYour changes are still here. Review what changed below, then decide h
+[synergy-stage-f3] PASS - dialog closes on Discard
+[synergy-stage-f3] PASS - A's stage survived (no clobber) :: committed
+[confirm-current-neutral-f3] PASS - other user stamped a newer version :: 2
+[confirm-current-neutral-f3] PASS - request was confirm-current with only a version :: {"url":"/api/synergies/syn_mv2wb0gx8f539b90/confirm-current","body":{"version":1}}
+[confirm-current-neutral-f3] PASS - 409 conflict:true :: 409
+[confirm-current-neutral-f3] PASS - no diff rows :: []
+[confirm-current-neutral-f3] PASS - neutral sentence exactly once :: 1
+[confirm-current-neutral-f3] PASS - Apply my changes anyway present :: [{"text":"Discard mine, keep theirs","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Apply my changes anyway","cls":"btn btn-primary conflict-btn-apply","disabled":false}]
+[confirm-current-neutral-f3] PASS - retired sentence absent :: Someone else updated thisChanged by karen, just nowYour changes are still here. Review what changed below, then decide how to proceed.This record changed since 
+[confirm-current-neutral-f3] PASS - dialog closes on Discard
+[phasing-month-f3] PASS - A month write 200 :: {"url":"/api/synergies/syn_mv2wb5crf5110498/phasing/2026-01","status":200}
+[phasing-month-f3] PASS - one overlay :: 1
+[phasing-month-f3] PASS - row labelled with the month :: [{"label":"Target (M) · 2026-01","mine":"9","theirs":"7"}]
+[phasing-month-f3] PASS - mine = B's cell value :: {"label":"Target (M) · 2026-01","mine":"9","theirs":"7"}
+[phasing-month-f3] PASS - theirs = A's cell value, not the total :: {"row":{"label":"Target (M) · 2026-01","mine":"9","theirs":"7"},"total":10.7}
+[phasing-month-f3] PASS - dialog closes on Discard
+[labels-f5] PASS - other user stamped realized 3 :: 3
+[labels-f5] PASS - Realized (M) label :: [{"label":"Realized (M)","mine":"5","theirs":"3"}]
+[labels-f5] PASS - values mine 5 / theirs 3 :: {"label":"Realized (M)","mine":"5","theirs":"3"}
+[labels-f5] PASS - realized dialog closes
+[labels-f5] PASS - other user set due date :: 200
+[labels-f5] PASS - Due date label :: [{"label":"Due date","mine":"2026-12-15","theirs":"2026-12-01"}]
+[labels-f5] PASS - values mine 2026-12-15 / theirs 2026-12-01 :: {"label":"Due date","mine":"2026-12-15","theirs":"2026-12-01"}
+[labels-f5] PASS - due-date dialog closes
+[withheld-f4] PASS - one overlay :: 1
+[withheld-f4] PASS - title is the edit title :: Someone else updated this
+[withheld-f4] PASS - attribution still shown :: Changed by karen, just now
+[withheld-f4] PASS - withheld sentence shown :: Someone else updated thisChanged by karen, just nowThis record is no longer within your clearance; your change cannot be applied.Close
+[withheld-f4] PASS - no diff rows :: []
+[withheld-f4] PASS - no Apply / Delete anyway :: [{"text":"Close","cls":"btn btn-secondary conflict-btn-discard","disabled":false}]
+[withheld-f4] PASS - exactly one button, Close :: [{"text":"Close","cls":"btn btn-secondary conflict-btn-discard","disabled":false}]
+[withheld-f4] PASS - retired sentence absent :: Someone else updated thisChanged by karen, just nowThis record is no longer within your clearance; your change cannot be
+[withheld-f4] PASS - Close closes the dialog
+[reapply-4xx-f4] PASS - other user stamped a newer version :: 2
+[reapply-4xx-f4] PASS - real first 409 -> dialog with an Apply :: [{"text":"Discard mine, keep theirs","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Apply my changes anyway","cls":"btn btn-primary conflict-btn-apply","disabled":false}]
+[reapply-4xx-f4] PASS - banner shows the server reason :: That didn't go through — You are not cleared for that due-diligence area. Your edits are still here; review the fresh values below and try again.
+[reapply-4xx-f4] PASS - banner is not a network error :: That didn't go through — You are not cleared for that due-diligence area. Your edits are still here; review the fresh values below and try again.
+[reapply-4xx-f4] PASS - dialog still open, still one overlay :: 1
+[reapply-4xx-f4] PASS - dialog closes on Discard
+[deleted-variant-f7] PASS - title is "Someone else deleted this" :: Someone else deleted this
+[deleted-variant-f7] PASS - no attribution element :: 0
+[deleted-variant-f7] PASS - intro kept :: Someone else deleted thisSomeone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.Close
+[deleted-variant-f7] PASS - contradictory fallback line absent :: Someone else deleted thisSomeone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.Close
+[deleted-variant-f7] PASS - exactly one button, Close :: [{"text":"Close","cls":"btn btn-secondary conflict-btn-discard","disabled":false}]
+[deleted-variant-f7] PASS - Close closes the dialog
+[dialog-widths] PASS - edit @1440: variant content :: {"title":"Someone else updated this","rows":[{"label":"Target (M) · 2026-01","mine":"9.5","theirs":"0.2"},{"label":"Realized (M) · 2026-01","mine":"2","theirs":"0"}],"buttons":2}
+[dialog-widths] PASS - edit @1440: fits the viewport :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":255.609375,"right":1000,"bottom":644.375},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[dialog-widths] PASS - withheld @1440: variant content :: {"title":"Someone else updated this","rows":[],"buttons":1}
+[dialog-widths] PASS - withheld @1440: fits the viewport :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":344.796875,"right":1000,"bottom":555.1875},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[dialog-widths] PASS - deleted @1440: variant content :: {"title":"Someone else deleted this","rows":[],"buttons":1}
+[dialog-widths] PASS - deleted @1440: fits the viewport :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":353.203125,"right":1000,"bottom":546.796875},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[dialog-widths] PASS - edit @390: variant content :: {"title":"Someone else updated this","rows":[{"label":"Target (M) · 2026-01","mine":"9.5","theirs":"0.2"},{"label":"Realized (M) · 2026-01","mine":"2","theirs":"0"}],"buttons":2}
+[dialog-widths] PASS - edit @390: fits the viewport :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":201.109375,"right":358,"bottom":642.875},"viewport":{"w":390,"h":844},"overflowing":[]}
+[dialog-widths] PASS - withheld @390: variant content :: {"title":"Someone else updated this","rows":[],"buttons":1}
+[dialog-widths] PASS - withheld @390: fits the viewport :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":306.296875,"right":358,"bottom":537.6875},"viewport":{"w":390,"h":844},"overflowing":[]}
+[dialog-widths] PASS - deleted @390: variant content :: {"title":"Someone else deleted this","rows":[],"buttons":1}
+[dialog-widths] PASS - deleted @390: fits the viewport :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":304.203125,"right":358,"bottom":539.796875},"viewport":{"w":390,"h":844},"overflowing":[]}
+[delete-confirm-raid] PASS - raid untouched: in-app confirm titled "Delete this entry?" :: Delete this entry?
+[delete-confirm-raid] PASS - raid untouched: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-raid] PASS - raid untouched: no DELETE sent before the confirm click
+[delete-confirm-raid] PASS - raid untouched: dialog closes
+[delete-confirm-raid] PASS - raid untouched: record gone from the DOM and the API :: null
+[delete-confirm-raid] PASS - raid untouched: native dialogs: 0 :: []
+[delete-confirm-raid] PASS - raid untouched: one DELETE :: 1
+[delete-confirm-raid] PASS - stale entry edited behind the tab (v2) :: 200
+[delete-confirm-raid] PASS - raid stale: in-app confirm titled "Delete this entry?" :: Delete this entry?
+[delete-confirm-raid] PASS - raid stale: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-raid] PASS - raid stale: no DELETE sent before the confirm click
+[delete-confirm-raid] PASS - raid stale: same overlay became the stale-delete state :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[delete-confirm-raid] PASS - raid stale: stale buttons Cancel + Delete anyway :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete anyway","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-raid] PASS - raid stale: no "changed again" banner :: null
+[delete-confirm-raid] PASS - raid stale: dialog closes
+[delete-confirm-raid] PASS - raid stale: record gone from the DOM and the API :: null
+[delete-confirm-raid] PASS - raid stale: native dialogs: 0 :: []
+[delete-confirm-raid] PASS - raid stale: two DELETEs (409 then 2xx) :: 2
+[delete-confirm-raid] PASS - no page errors :: []
+[delete-confirm-surfaces] PASS - task untouched: in-app confirm titled "Delete this task?" :: Delete this task?
+[delete-confirm-surfaces] PASS - task untouched: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - task untouched: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - task untouched: dialog closes
+[delete-confirm-surfaces] PASS - task untouched: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - task untouched: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - task untouched: one DELETE :: 1
+[delete-confirm-surfaces] PASS - task edited behind the tab :: 200
+[delete-confirm-surfaces] PASS - task stale: in-app confirm titled "Delete this task?" :: Delete this task?
+[delete-confirm-surfaces] PASS - task stale: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - task stale: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - task stale: same overlay became the stale-delete state :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[delete-confirm-surfaces] PASS - task stale: stale buttons Cancel + Delete anyway :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete anyway","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - task stale: no "changed again" banner :: null
+[delete-confirm-surfaces] PASS - task stale: dialog closes
+[delete-confirm-surfaces] PASS - task stale: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - task stale: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - task stale: two DELETEs (409 then 2xx) :: 2
+[delete-confirm-surfaces] PASS - initiative untouched: in-app confirm titled "Delete this initiative?" :: Delete this initiative?
+[delete-confirm-surfaces] PASS - initiative untouched: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - initiative untouched: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - initiative untouched: dialog closes
+[delete-confirm-surfaces] PASS - initiative untouched: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - initiative untouched: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - initiative untouched: one DELETE :: 1
+[delete-confirm-surfaces] PASS - initiative edited behind the tab :: 200
+[delete-confirm-surfaces] PASS - initiative stale: in-app confirm titled "Delete this initiative?" :: Delete this initiative?
+[delete-confirm-surfaces] PASS - initiative stale: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - initiative stale: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - initiative stale: same overlay became the stale-delete state :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[delete-confirm-surfaces] PASS - initiative stale: stale buttons Cancel + Delete anyway :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete anyway","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - initiative stale: no "changed again" banner :: null
+[delete-confirm-surfaces] PASS - initiative stale: dialog closes
+[delete-confirm-surfaces] PASS - initiative stale: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - initiative stale: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - initiative stale: two DELETEs (409 then 2xx) :: 2
+[delete-confirm-surfaces] PASS - cost entry untouched: in-app confirm titled "Delete this cost entry?" :: Delete this cost entry?
+[delete-confirm-surfaces] PASS - cost entry untouched: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - cost entry untouched: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - cost entry untouched: dialog closes
+[delete-confirm-surfaces] PASS - cost entry untouched: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - cost entry untouched: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - cost entry untouched: one DELETE :: 1
+[delete-confirm-surfaces] PASS - cost-entry holder edited behind the tab :: 200
+[delete-confirm-surfaces] PASS - cost entry stale: in-app confirm titled "Delete this cost entry?" :: Delete this cost entry?
+[delete-confirm-surfaces] PASS - cost entry stale: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - cost entry stale: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - cost entry stale: same overlay became the stale-delete state :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[delete-confirm-surfaces] PASS - cost entry stale: stale buttons Cancel + Delete anyway :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete anyway","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - cost entry stale: no "changed again" banner :: null
+[delete-confirm-surfaces] PASS - cost entry stale: dialog closes
+[delete-confirm-surfaces] PASS - cost entry stale: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - cost entry stale: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - cost entry stale: two DELETEs (409 then 2xx) :: 2
+[delete-confirm-surfaces] PASS - execution page: no page errors :: []
+[delete-confirm-surfaces] PASS - position untouched: in-app confirm titled "Delete position? This cannot be undone." :: Delete position? This cannot be undone.
+[delete-confirm-surfaces] PASS - position untouched: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - position untouched: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - position untouched: dialog closes
+[delete-confirm-surfaces] PASS - position untouched: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - position untouched: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - position untouched: one DELETE :: 1
+[delete-confirm-surfaces] PASS - position edited behind the tab :: 200
+[delete-confirm-surfaces] PASS - position stale: in-app confirm titled "Delete position? This cannot be undone." :: Delete position? This cannot be undone.
+[delete-confirm-surfaces] PASS - position stale: confirm offers Cancel + Delete :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - position stale: no DELETE sent before the confirm click
+[delete-confirm-surfaces] PASS - position stale: same overlay became the stale-delete state :: {"title":"Someone else updated this — still delete it?","overlays":1}
+[delete-confirm-surfaces] PASS - position stale: stale buttons Cancel + Delete anyway :: [{"text":"Cancel","cls":"btn btn-secondary conflict-btn-discard","disabled":false},{"text":"Delete anyway","cls":"btn btn-danger conflict-btn-delete","disabled":false}]
+[delete-confirm-surfaces] PASS - position stale: no "changed again" banner :: null
+[delete-confirm-surfaces] PASS - position stale: dialog closes
+[delete-confirm-surfaces] PASS - position stale: record gone from the DOM and the API :: null
+[delete-confirm-surfaces] PASS - position stale: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - position stale: two DELETEs (409 then 2xx) :: 2
+[delete-confirm-surfaces] PASS - refusal: in-app confirm shown :: Delete position? This cannot be undone.
+[delete-confirm-surfaces] PASS - refusal: dialog closes
+[delete-confirm-surfaces] PASS - refusal: inline error carries the server message :: This position has 1 direct report(s) — reassign them before deleting.
+[delete-confirm-surfaces] PASS - refusal: position still exists
+[delete-confirm-surfaces] PASS - refusal: native dialogs: 0 :: []
+[delete-confirm-surfaces] PASS - org page: no page errors :: []
+[confirm-widths] PASS - entry edited behind the tab (1440) :: 200
+[confirm-widths] PASS - confirm state opens (1440) :: Delete this entry?
+[confirm-widths] PASS - fit at 1440 (confirm state) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":382.203125,"right":1000,"bottom":517.796875},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[confirm-widths] PASS - stale state (1440) :: Someone else updated this — still delete it?
+[confirm-widths] PASS - fit at 1440 (stale state) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":440,"top":373.796875,"right":1000,"bottom":526.1875},"viewport":{"w":1440,"h":900},"overflowing":[]}
+[confirm-widths] PASS - Cancel closes (1440)
+[confirm-widths] PASS - entry survives Cancel (1440)
+[confirm-widths] PASS - native dialogs: 0 (1440) :: []
+[confirm-widths] PASS - entry edited behind the tab (390) :: 200
+[confirm-widths] PASS - confirm state opens (390) :: Delete this entry?
+[confirm-widths] PASS - fit at 390 (confirm state) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":354.203125,"right":358,"bottom":489.796875},"viewport":{"w":390,"h":844},"overflowing":[]}
+[confirm-widths] PASS - stale state (390) :: Someone else updated this — still delete it?
+[confirm-widths] PASS - fit at 390 (stale state) :: {"noHorizontalScroll":true,"dialogInside":true,"rect":{"left":32,"top":335,"right":358,"bottom":508.984375},"viewport":{"w":390,"h":844},"overflowing":[]}
+[confirm-widths] PASS - Cancel closes (390)
+[confirm-widths] PASS - entry survives Cancel (390)
+[confirm-widths] PASS - native dialogs: 0 (390) :: []
+[asset-stamps] PASS - /execution.html requests /css/style.css (requested) :: [{"url":"/css/style.css?v=0a15d3862f10cf25","status":200}]
+[asset-stamps] FAIL - /execution.html requests /css/style.css (one numeric stamp) :: ["0a15d3862f10cf25"]
+[asset-stamps] FAIL - /execution.html requests /css/style.css (stamp matches the page on disk) :: {"requested":null,"disk":1791625638}
+[asset-stamps] FAIL - /execution.html requests /css/style.css (stamp > pre-gap-closure 1784600001) :: null
+[asset-stamps] PASS - /execution.html requests /css/style.css (200) :: [200]
+[asset-stamps] PASS - /execution.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=f0eabd798b4f0d1d","status":200}]
+[asset-stamps] FAIL - /execution.html requests /js/transitions.js (one numeric stamp) :: ["f0eabd798b4f0d1d"]
+[asset-stamps] FAIL - /execution.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":null,"disk":1791900001}
+[asset-stamps] FAIL - /execution.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: null
+[asset-stamps] PASS - /execution.html requests /js/transitions.js (200) :: [200]
+[asset-stamps] PASS - /execution.html requests /js/execution.js (requested) :: [{"url":"/js/execution.js?v=e34feea288830918","status":200}]
+[asset-stamps] FAIL - /execution.html requests /js/execution.js (one numeric stamp) :: ["e34feea288830918"]
+[asset-stamps] FAIL - /execution.html requests /js/execution.js (stamp matches the page on disk) :: {"requested":null,"disk":1791800101}
+[asset-stamps] FAIL - /execution.html requests /js/execution.js (stamp > pre-gap-closure 1786433369) :: null
+[asset-stamps] PASS - /execution.html requests /js/execution.js (200) :: [200]
+[asset-stamps] PASS - /execution.html loaded without a page error :: []
+[asset-stamps] PASS - /org.html requests /css/style.css (requested) :: [{"url":"/css/style.css?v=0a15d3862f10cf25","status":200}]
+[asset-stamps] FAIL - /org.html requests /css/style.css (one numeric stamp) :: ["0a15d3862f10cf25"]
+[asset-stamps] FAIL - /org.html requests /css/style.css (stamp matches the page on disk) :: {"requested":null,"disk":1791625638}
+[asset-stamps] FAIL - /org.html requests /css/style.css (stamp > pre-gap-closure 1784600001) :: null
+[asset-stamps] PASS - /org.html requests /css/style.css (200) :: [200]
+[asset-stamps] PASS - /org.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=f0eabd798b4f0d1d","status":200}]
+[asset-stamps] FAIL - /org.html requests /js/transitions.js (one numeric stamp) :: ["f0eabd798b4f0d1d"]
+[asset-stamps] FAIL - /org.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":null,"disk":1791900001}
+[asset-stamps] FAIL - /org.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: null
+[asset-stamps] PASS - /org.html requests /js/transitions.js (200) :: [200]
+[asset-stamps] PASS - /org.html requests /js/org.js (requested) :: [{"url":"/js/org.js?v=727f280b6e89858b","status":200}]
+[asset-stamps] FAIL - /org.html requests /js/org.js (one numeric stamp) :: ["727f280b6e89858b"]
+[asset-stamps] FAIL - /org.html requests /js/org.js (stamp matches the page on disk) :: {"requested":null,"disk":1791800101}
+[asset-stamps] FAIL - /org.html requests /js/org.js (stamp > pre-gap-closure 1786433369) :: null
+[asset-stamps] PASS - /org.html requests /js/org.js (200) :: [200]
+[asset-stamps] PASS - /org.html loaded without a page error :: []
+[asset-stamps] PASS - /due-diligence.html requests /css/style.css (requested) :: [{"url":"/css/style.css?v=0a15d3862f10cf25","status":200}]
+[asset-stamps] FAIL - /due-diligence.html requests /css/style.css (one numeric stamp) :: ["0a15d3862f10cf25"]
+[asset-stamps] FAIL - /due-diligence.html requests /css/style.css (stamp matches the page on disk) :: {"requested":null,"disk":1791625638}
+[asset-stamps] FAIL - /due-diligence.html requests /css/style.css (stamp > pre-gap-closure 1784600001) :: null
+[asset-stamps] PASS - /due-diligence.html requests /css/style.css (200) :: [200]
+[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (requested) :: [{"url":"/js/transitions.js?v=f0eabd798b4f0d1d","status":200}]
+[asset-stamps] FAIL - /due-diligence.html requests /js/transitions.js (one numeric stamp) :: ["f0eabd798b4f0d1d"]
+[asset-stamps] FAIL - /due-diligence.html requests /js/transitions.js (stamp matches the page on disk) :: {"requested":null,"disk":1791900001}
+[asset-stamps] FAIL - /due-diligence.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002) :: null
+[asset-stamps] PASS - /due-diligence.html requests /js/transitions.js (200) :: [200]
+[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (requested) :: [{"url":"/js/due-diligence.js?v=18f10b95b63a2f44","status":200}]
+[asset-stamps] FAIL - /due-diligence.html requests /js/due-diligence.js (one numeric stamp) :: ["18f10b95b63a2f44"]
+[asset-stamps] FAIL - /due-diligence.html requests /js/due-diligence.js (stamp matches the page on disk) :: {"requested":null,"disk":1791800101}
+[asset-stamps] FAIL - /due-diligence.html requests /js/due-diligence.js (stamp > pre-gap-closure 1786427686) :: null
+[asset-stamps] PASS - /due-diligence.html requests /js/due-diligence.js (200) :: [200]
+[asset-stamps] PASS - /due-diligence.html loaded without a page error :: []
+[asset-stamps] PASS - /login.html requests /css/style.css (requested) :: [{"url":"/css/style.css?v=0a15d3862f10cf25","status":200}]
+[asset-stamps] FAIL - /login.html requests /css/style.css (one numeric stamp) :: ["0a15d3862f10cf25"]
+[asset-stamps] FAIL - /login.html requests /css/style.css (stamp matches the page on disk) :: {"requested":null,"disk":1791625638}
+[asset-stamps] FAIL - /login.html requests /css/style.css (stamp > pre-gap-closure 1784600001) :: null
+[asset-stamps] PASS - /login.html requests /css/style.css (200) :: [200]
+[asset-stamps] PASS - /login.html loaded without a page error :: []
+[data-integrity] PASS - committed data/demo.db* and data/control.db* unchanged :: 6 file(s) identical
+
+320 PASS, 30 FAIL. results: <scratch>/p9-normal/results.json
+HOST: load at end: 26.04 16.93 40.14 at 2026-10-10T21:20:00Z
+EXIT=1

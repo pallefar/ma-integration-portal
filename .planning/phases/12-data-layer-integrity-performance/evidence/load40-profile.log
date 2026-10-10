@@ -1,0 +1,117 @@
+HOST: load1=9.07 cpus=11 at 2026-10-10T19:02:07Z (threshold 10)
+##### A: fresh deal (40 seeded RAID rows), 45 s (= run 1 of the committed profile)  load1=9.07
+prefilled RAID rows seeded=40; GET /api/raid status 200, decoded bytes 13403
+profile run: 12672 requests in 45.1 s = 280.9 rps
+  GET /api/employees           n= 1292 p50    74.2 p95   157.5 p99   207.9 ms
+  GET /api/integration-tasks   n= 1861 p50    71.5 p95   144.3 p99   180.7 ms
+  GET /api/raid                n= 5603 p50   231.7 p95   445.9 p99   512.9 ms
+  GET /healthz                 n=  638 p50    75.3 p95   158.8 p99   194.9 ms
+  POST /api/raid               n= 3278 p50    58.0 p95   119.9 p99   162.0 ms
+  event loop: p50 41.2 p95 82.1 p99 113.7 max 172.4 | heartbeat p99 113.7 max 172.3 | rss 327 MB
+##### B: deal pre-grown to 5300 RAID rows (= the state runs 2 and 3 inherit), 20 s  load1=8.15
+prefilled RAID rows seeded=5300; GET /api/raid status 200, decoded bytes 1798453
+profile run: 2259 requests in 20.3 s = 111.4 rps
+  GET /api/employees           n=  250 p50   147.4 p95   308.3 p99   537.1 ms
+  GET /api/integration-tasks   n=  351 p50   149.1 p95   248.8 p99   296.4 ms
+  GET /api/raid                n=  990 p50   593.4 p95   911.5 p99  1141.4 ms
+  GET /healthz                 n=  108 p50   157.8 p95   259.6 p99   337.9 ms
+  POST /api/raid               n=  560 p50   121.2 p95   264.3 p99  1176.0 ms
+  event loop: p50 70.4 p95 133.6 p99 197.7 max 237.2 | heartbeat p99 216.4 max 237.2 | rss 388 MB
+##### analysis A
+profile: 45.3 s sampled
+    212 ms   0.5%  (idle)
+    192 ms   0.4%  (program)
+   2637 ms   5.8%  (garbage collector)
+      0 ms   0.0%  (root)
+--- top self time (excluding idle) ---
+  10447 ms  23.0%  readProjection  <repo>/db/store.js:455
+   7233 ms  16.0%  (anonymous)  <repo>/db/store.js:637
+   3738 ms   8.2%  (anonymous)  <repo>/db/store.js:406
+   3610 ms   8.0%  readCollections  <repo>/db/store.js:392
+   3047 ms   6.7%  (anonymous)  
+   2637 ms   5.8%  (garbage collector)  
+   2245 ms   5.0%  update  node:internal/crypto/hash:132
+   2119 ms   4.7%  utf8Write  node:internal/buffer:1061
+   1493 ms   3.3%  sendList  <repo>/lib/listQuery.js:145
+    757 ms   1.7%  (anonymous)  <repo>/db/store.js:471
+    727 ms   1.6%  prepare  <repo>/node_modules/better-sqlite3/lib/methods/wrappers.js:4
+    518 ms   1.1%  sqliteTransaction  <repo>/node_modules/better-sqlite3/lib/methods/transaction.js:52
+    516 ms   1.1%  (anonymous)  <repo>/db/store.js:597
+    267 ms   0.6%  writev  
+    266 ms   0.6%  (anonymous)  <repo>/server.js:5972
+    192 ms   0.4%  (program)  
+    154 ms   0.3%  findSession  <repo>/db/sessions.js:66
+    125 ms   0.3%  getDeal  <repo>/db/controlStore.js:210
+     96 ms   0.2%  next  <repo>/node_modules/express/lib/router/index.js:177
+     88 ms   0.2%  rowFactory  <repo>/node_modules/better-sqlite3/lib/database.js:94
+     82 ms   0.2%  (anonymous)  <repo>/server.js:889
+     80 ms   0.2%  dealResolverMiddleware  <repo>/db/resolver.js:144
+     76 ms   0.2%  send  <repo>/node_modules/express/lib/response.js:111
+     74 ms   0.2%  parse  <repo>/node_modules/content-type/index.js:106
+     74 ms   0.2%  compression  <repo>/node_modules/compression/index.js:80
+     71 ms   0.2%  match  <repo>/node_modules/express/lib/router/layer.js:110
+     70 ms   0.2%  write_  node:_http_outgoing:943
+     70 ms   0.2%  getAccount  <repo>/db/controlStore.js:66
+     66 ms   0.1%  handle  <repo>/node_modules/express/lib/router/layer.js:86
+     65 ms   0.1%  (anonymous)  <repo>/server.js:6014
+--- inclusive (frames anywhere on the stack) ---
+   9736 ms  21.5%  route GET /api/raid handler (anonymous in server.js, via listQuery/sendList)
+  39098 ms  86.2%  db/store.js (readProjection/readCollections/writeDb/readDb)
+    690 ms   1.5%  db/auditChain.js + auditHook.js
+   1494 ms   3.3%  compression middleware
+    290 ms   0.6%  zlib
+  41103 ms  90.7%  server.js
+      0 ms   0.0%  JSON.parse
+      0 ms   0.0%  JSON.stringify
+  41192 ms  90.9%  express (router/layer/response)
+  18458 ms  40.7%  node:internal/streams + net write
+##### analysis B
+profile: 20.5 s sampled
+    109 ms   0.5%  (idle)
+     43 ms   0.2%  (program)
+   1466 ms   7.2%  (garbage collector)
+      0 ms   0.0%  (root)
+--- top self time (excluding idle) ---
+   5966 ms  29.1%  readProjection  <repo>/db/store.js:455
+   2419 ms  11.8%  (anonymous)  <repo>/db/store.js:637
+   2121 ms  10.4%  (anonymous)  <repo>/db/store.js:406
+   2078 ms  10.1%  readCollections  <repo>/db/store.js:392
+   1466 ms   7.2%  (garbage collector)  
+   1019 ms   5.0%  (anonymous)  
+    854 ms   4.2%  utf8Write  node:internal/buffer:1061
+    792 ms   3.9%  update  node:internal/crypto/hash:132
+    619 ms   3.0%  sendList  <repo>/lib/listQuery.js:145
+    497 ms   2.4%  (anonymous)  <repo>/db/store.js:471
+    387 ms   1.9%  (anonymous)  <repo>/db/store.js:597
+    194 ms   0.9%  prepare  <repo>/node_modules/better-sqlite3/lib/methods/wrappers.js:4
+    100 ms   0.5%  sqliteTransaction  <repo>/node_modules/better-sqlite3/lib/methods/transaction.js:52
+     68 ms   0.3%  (anonymous)  <repo>/server.js:5972
+     61 ms   0.3%  writev  
+     54 ms   0.3%  findSession  <repo>/db/sessions.js:66
+     53 ms   0.3%  readFileUtf8  
+     43 ms   0.2%  (program)  
+     37 ms   0.2%  (anonymous)  <repo>/db/store.js:407
+     35 ms   0.2%  rowFactory  <repo>/node_modules/better-sqlite3/lib/database.js:94
+     35 ms   0.2%  getDeal  <repo>/db/controlStore.js:210
+     29 ms   0.1%  (anonymous)  <repo>/server.js:6001
+     29 ms   0.1%  wrapSafe  node:internal/modules/cjs/loader:1578
+     28 ms   0.1%  parse  <repo>/node_modules/content-type/index.js:106
+     27 ms   0.1%  digest  node:internal/crypto/hash:150
+     26 ms   0.1%  getAccount  <repo>/db/controlStore.js:66
+     25 ms   0.1%  (anonymous)  <repo>/server.js:889
+     24 ms   0.1%  (anonymous)  <repo>/server.js:6014
+     21 ms   0.1%  arrayAppender  <repo>/node_modules/better-sqlite3/lib/database.js:87
+     20 ms   0.1%  (anonymous)  <repo>/db/auditChain.js:123
+--- inclusive (frames anywhere on the stack) ---
+   3519 ms  17.2%  route GET /api/raid handler (anonymous in server.js, via listQuery/sendList)
+  17833 ms  87.0%  db/store.js (readProjection/readCollections/writeDb/readDb)
+    159 ms   0.8%  db/auditChain.js + auditHook.js
+    351 ms   1.7%  compression middleware
+    115 ms   0.6%  zlib
+  18462 ms  90.1%  server.js
+      0 ms   0.0%  JSON.parse
+      0 ms   0.0%  JSON.stringify
+  18429 ms  89.9%  express (router/layer/response)
+   7967 ms  38.9%  node:internal/streams + net write
+HOST: load at end: 11.41 11.32 15.33 at 2026-10-10T19:03:14Z
+EXIT=0

@@ -1,0 +1,37 @@
+QUIET-WAIT: gave up after 10 min at load1=20.47 (threshold 12) - running anyway
+HOST: load1=20.47 cpus=11 at 2026-10-10T19:38:52Z (threshold 12)
+##### alone run 1  load1=20.47 at 2026-10-10T19:38:52Z
+ok 1 - soak harness: the write payload carries the correlator in comment, not employeeName
+ok 2 - soak harness: exactness compares employeeName with the account name and comment with the correlator
+ok 3 - soak harness: refused-write attribution is keyed on the correlator in comment
+ok 4 - soak harness: a real 2-process smoke run passes every D-15 check (exit 0)
+# tests 4
+# pass 4
+# fail 0
+# cancelled 0
+# duration_ms 6707.851041
+alone run 1 exit=0 wall=7 s
+##### alone run 2  load1=20.59 at 2026-10-10T19:38:59Z
+ok 1 - soak harness: the write payload carries the correlator in comment, not employeeName
+ok 2 - soak harness: exactness compares employeeName with the account name and comment with the correlator
+ok 3 - soak harness: refused-write attribution is keyed on the correlator in comment
+ok 4 - soak harness: a real 2-process smoke run passes every D-15 check (exit 0)
+# tests 4
+# pass 4
+# fail 0
+# cancelled 0
+# duration_ms 6757.120583
+alone run 2 exit=0 wall=7 s
+##### alone run 3  load1=19.82 at 2026-10-10T19:39:06Z
+ok 1 - soak harness: the write payload carries the correlator in comment, not employeeName
+ok 2 - soak harness: exactness compares employeeName with the account name and comment with the correlator
+ok 3 - soak harness: refused-write attribution is keyed on the correlator in comment
+ok 4 - soak harness: a real 2-process smoke run passes every D-15 check (exit 0)
+# tests 4
+# pass 4
+# fail 0
+# cancelled 0
+# duration_ms 6631.837959
+alone run 3 exit=0 wall=7 s
+HOST: load at end: 18.56 16.90 15.95 at 2026-10-10T19:39:13Z
+EXIT=0
