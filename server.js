@@ -844,6 +844,18 @@ app.post('/api/auth/change-password', async (req, res, next) => {
     if (loginThrottled('change-password:' + req.portalUser.username)) {
       return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
     }
+    // [security] D-10-01/T-10-09: a credential hash must never be written into
+    // the committed data/control.db (a git-tracked file). Outside real mode
+    // that file is the active control database unless MA_CONTROL_DB_PATH
+    // points elsewhere; the SAME predicate backs /api/auth/mode's
+    // `accountsWritable` flag so the UI never offers what would only fail.
+    // Refused BEFORE the current password is verified or anything is written.
+    if (dbFiles.isCommittedControlDbActive()) {
+      return res.status(403).json({
+        error: 'Accounts on the committed demo database are read-only. Use a real-deal host (start-real-deal) to manage real accounts.',
+        committedControlDb: true,
+      });
+    }
     // VAL-01: the type/shape check is owned by validators/settings.js's
     // ChangePasswordSchema (min 8); the real-mode policy (min 12, no
     // published demo password) is passwords.checkNewPassword() below.
@@ -979,6 +991,18 @@ app.post('/api/deals/wizard/basics', (req, res) => {
 // /api gate above) resolves+validates+sanitizes req.body generically for
 // every write route in the app, including this one.
 app.post('/api/deals', (req, res) => {
+  // [security] D-10-01: a real deal (MNPI target names, valuations) must never
+  // be registered in the committed data/control.db — it is a git-tracked file.
+  // Real deals are created only on a real-deal host (MA_MODE=real, its own
+  // gitignored data directory) or against an explicit MA_CONTROL_DB_PATH
+  // override; this refusal precedes every controlStore call, so a refused
+  // request leaves the committed file byte-for-byte untouched.
+  if (dbFiles.isCommittedControlDbActive()) {
+    return res.status(403).json({
+      error: 'Real deals cannot be created on the committed demo database. Start the portal with start-real-deal.command (macOS/Linux) or start-real-deal.bat (Windows), which run MA_MODE=real on its own data directory.',
+      realModeRequired: true,
+    });
+  }
   const { name, targetCompany, members, dealType, signingDate, expectedClose, day1Date, dealSizeM, currency } = req.body;
   // G-04-8: re-entering the wizard after an interruption must RESUME the
   // caller's own unfinished deal, never mint a second, indistinguishable
@@ -1382,7 +1406,10 @@ app.get('/api/admin/download-zip', (req, res) => {
     // nested data/deals/ directory (Phase 3, D-07/T-03-01) — real-deal
     // databases, the live session store and the audit trail each need their
     // own explicit exclusion entry or they would ship inside this export.
-    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" "db.json.bak" "data/*.db" "data/*.db-wal" "data/*.db-shm" "data/*.db.bak" "data/runtime.db*" "data/audit.db*" "data/deals/*" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
+    // [security] D-10-01 (Phase 10): the real-deal-mode data directory
+    // (MA_MODE=real default, gitignored) holds MNPI — accounts, deal
+    // databases, sessions, the audit trail — and is likewise excluded.
+    execSync(`zip -r "${zipPath}" . -x "node_modules/*" ".git/*" ".gemini/*" "public/ma-app.zip" "ma-portal.zip" "looxmaxing/*" ".playwright-mcp/*" ".DS_Store" "*/.DS_Store" "db.json" "db.json.tmp" "db.json.bak" "data/*.db" "data/*.db-wal" "data/*.db-shm" "data/*.db.bak" "data/runtime.db*" "data/audit.db*" "data/deals/*" "data/real/*" ".env" ".env.*" "public/sent_emails/*" "sent_emails/*"`, { cwd: __dirname });
 
     res.download(zipPath, 'te-ma-integration-portal.zip', (err) => {
       if (err) console.error('Error sending zip file to browser:', err);

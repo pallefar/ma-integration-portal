@@ -57,3 +57,23 @@ test('db-artifact-exclusion: admin download-zip export excludes the same three f
     'download-zip -x list must exclude "data/deals/*" — the flat "data/*.db" pattern does not recurse into this nested directory (Pitfall 4), so a real-deal database would otherwise ship in the export'
   );
 });
+
+// D-10-01 (Phase 10): the real-deal-mode data directory (MA_MODE=real default
+// data/real/) holds accounts, deal databases, sessions and the audit trail —
+// MNPI. It must reach neither git nor the admin download-zip export.
+test('db-artifact-exclusion: data/real/ is gitignored and excluded from the download-zip export', () => {
+  const gitignore = fs.readFileSync(GITIGNORE_PATH, 'utf8')
+    .split('\n').map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith('#'));
+  assert.ok(
+    gitignore.includes('data/real/'),
+    '.gitignore must have "data/real/" on its own non-comment line — the real-deal data directory (MNPI) must never be committed'
+  );
+
+  const contents = fs.readFileSync(SERVER_PATH, 'utf8');
+  const zipCommandMatch = contents.match(/execSync\(`zip -r[^`]*`/);
+  assert.ok(zipCommandMatch, 'server.js must contain the download-zip execSync zip command');
+  assert.ok(
+    zipCommandMatch[0].includes('"data/real/*"'),
+    'download-zip -x list must exclude "data/real/*" — the real-deal data directory must never ship in an export'
+  );
+});

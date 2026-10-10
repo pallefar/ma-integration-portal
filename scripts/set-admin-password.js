@@ -1,125 +1,131 @@
 #!/usr/bin/env node
-// First-run / operator mechanism to set the REAL admin password (D-09) so
-// real-deal mode never ships on the publicly-known demo password
-// (D-10 — TEdemo!2026, shared by every seeded demo account). Mirrors
-// scripts/migrate-db-json-to-sqlite.js's established one-shot CLI shape: a
-// single exported run() function, plus a require.main === module guard so
-// this file is usable both as `node scripts/set-admin-password.js` and as a
-// requireable function from a test or another script.
+// Operator mechanism to rotate the `admin` account's password on the ACTIVE
+// data directory (D-09 originally; re-pointed by D-10-02, Phase 10) so a
+// real-deal host never keeps a published credential. Mirrors
+// scripts/migrate-db-json-to-sqlite.js's one-shot CLI shape: an exported run()
+// plus a require.main === module guard.
 //
 // Usage:
-//   ADMIN_PASSWORD='a real secret' node scripts/set-admin-password.js
-//   node scripts/set-admin-password.js        (interactive prompt if
+//   ADMIN_PASSWORD='a real secret, 12+ chars' node scripts/set-admin-password.js
+//   node scripts/set-admin-password.js        (no-echo TTY prompt if
 //                                               ADMIN_PASSWORD is unset)
 //
-// This does NOT implement user-CRUD (create/delete/rename users, assign
-// roles) — that is explicitly deferred per D-09. This script only rotates
-// the salt/hash of the EXISTING `admin` account.
+// [security] D-10-02 — what changed from the pre-Phase-10 script:
+//   - MA_MODE defaults to `real` when run directly, so it acts on the real
+//     host's own data directory (MA_DATA_DIR, default data/real) — never the
+//     committed demo database. It refuses outright when the active control
+//     database is the committed data/control.db.
+//   - The secret comes from ADMIN_PASSWORD or a no-echo TTY prompt, never argv
+//     (visible in `ps`/shell history): any positional argument is refused
+//     before a database is opened.
+//   - The new password is checked against the real-mode policy (>= 12
+//     characters, not a published demo password) and stored as a
+//     self-describing scrypt N=131072 hash (lib/passwords.js); the account's
+//     mustChangePassword flag is cleared (the operator chose this value) and
+//     `disabled` is reset to false.
+//   - Every admin session minted under the old credential is revoked, and a
+//     control-plane security event is recorded with actor `cli:<os-user>`.
 //
-// ISO-01 (Phase 3 cutover): accounts moved out of the request-bound
-// readDb()/writeDb() model into control.db, reached only through
-// db/controlStore.js — this script no longer touches db/store.js's
-// readDb()/writeDb() at all for the account lookup/update. To point this
-// script at a temp control.db/runtime.db pair (tests), set the
-// MA_CONTROL_DB_PATH / MA_RUNTIME_DB_PATH env vars (db/dbFiles.js) before
-// requiring this module — the previous `opts.dbPath` override is retired
-// along with the single-file architecture it pointed at.
-
-const crypto = require('crypto');
-const readline = require('readline');
-const controlStore = require('../db/controlStore');
-const dbFiles = require('../db/dbFiles');
-const store = require('../db/store');
-const sessions = require('../db/sessions');
+// This does NOT create accounts (scripts/bootstrap-admin.js creates the first
+// admin; user CRUD lives under /api/admin/users) — it only rotates the
+// EXISTING `admin` account.
+//
+// To point this script at a temp data directory (tests) set MA_DATA_DIR (or
+// MA_CONTROL_DB_PATH / MA_RUNTIME_DB_PATH, db/dbFiles.js) before requiring it.
 
 // The publicly-known demo password shared by every seeded demo account
-// (admin/karen/pmo/employee-demo) — see 02-CONTEXT.md D-10.
+// (admin/karen/pmo/employee-demo) — see 02-CONTEXT.md D-10. lib/passwords.js
+// carries the same value in KNOWN_DEMO_PASSWORDS (asserted equal by tests).
 const DEMO_PASSWORD = 'TEdemo!2026';
-
-// Same primitive as server.js's hashPassword() — deliberately reimplemented
-// here (not required from server.js) so this script never triggers
-// server.js's own module-load side effects (RAG index build, its own
-// initDb() against the default path, etc.) just to rotate a password.
-function hashPassword(password, saltHex) {
-  return crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 32).toString('hex');
-}
-
-function timingSafeEqualStr(a, b) {
-  const ha = crypto.createHash('sha256').update(String(a)).digest();
-  const hb = crypto.createHash('sha256').update(String(b)).digest();
-  return crypto.timingSafeEqual(ha, hb);
-}
-
-function promptPassword(question) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
-}
 
 /**
  * Rotate the `admin` account's password. Resolves { success: true, username }
- * on success; throws (never silently no-ops) if there is no admin account or
- * the supplied password is too short.
+ * on success; throws (never silently no-ops) on every refusal.
  *
  * @param {object} [opts]
- * @param {string} [opts.password] - the new admin password. If omitted, an
- *   interactive stdin prompt is used (CLI-only path) — a caller invoking
- *   run() programmatically (e.g. a test) must always supply it directly.
+ * @param {string} [opts.password] - the new admin password. If omitted,
+ *   ADMIN_PASSWORD or a no-echo TTY prompt is used (CLI-only path).
+ * @param {string} [opts.osUser] - overrides the audited `cli:<os-user>`.
  */
 async function run(opts = {}) {
-  let { password } = opts;
-  if (!password) {
-    password = await promptPassword('New admin password (min 8 characters): ');
-  }
-  if (typeof password !== 'string' || password.length < 8) {
-    throw new Error('Password must be at least 8 characters.');
-  }
+  const dbFiles = require('../db/dbFiles');
+  const { ensureRealDataDir } = require('../db/realDataDir');
+  const controlStore = require('../db/controlStore');
+  const store = require('../db/store');
+  const sessions = require('../db/sessions');
+  const auditHook = require('../db/auditHook');
+  const passwords = require('../lib/passwords');
+  const { obtainSecret, currentOsUser } = require('./bootstrap-admin');
 
-  const user = controlStore.findUser('admin');
-  if (!user) {
-    throw new Error("No 'admin' user found in control.db — cannot set its password.");
-  }
-
-  // D-10: warn loudly (do not silently proceed) if the admin account is
-  // CURRENTLY still on the known demo password and this deployment hasn't
-  // explicitly opted into DEMO_OPEN — real-deal mode must never silently
-  // ship on a publicly-known credential. This warns on the state BEFORE the
-  // rotation this call is about to perform, i.e. it flags "you were exposed
-  // until just now."
-  const stillOnDemoPassword = !!(user.hash && user.salt &&
-    timingSafeEqualStr(hashPassword(DEMO_PASSWORD, user.salt), user.hash));
-  if (stillOnDemoPassword && process.env.DEMO_OPEN !== '1') {
-    console.warn(
-      "[security] admin account was still on the known demo password (D-10) — " +
-      'rotating it now. Real-deal (non-DEMO_OPEN) deployments must never run ' +
-      'with the publicly-known demo credential.'
+  ensureRealDataDir();
+  if (dbFiles.isCommittedControlDbActive()) {
+    throw new Error(
+      '[security] the active control database is the committed data/control.db — refusing to rotate a credential in a git-tracked file. ' +
+      'Run with MA_MODE=real (the default for this script) and a data directory outside git.'
     );
   }
 
-  const newSalt = crypto.randomBytes(16).toString('hex');
-  controlStore.updateUser('admin', { salt: newSalt, hash: hashPassword(password, newSalt) });
+  let { password } = opts;
+  if (password === undefined || password === '') {
+    password = await obtainSecret({
+      envValue: process.env.ADMIN_PASSWORD,
+      envName: 'ADMIN_PASSWORD',
+      label: 'New admin password',
+    });
+  }
+  const problem = passwords.checkNewPassword(password, { realMode: true });
+  if (problem) throw new Error(problem);
+
+  const user = controlStore.findUser('admin');
+  if (!user) {
+    throw new Error("No 'admin' user found in control.db — create it with `node scripts/bootstrap-admin.js`.");
+  }
+
+  // D-10: warn loudly if the admin account is CURRENTLY still on the known
+  // demo password — real-deal mode must never silently ship on a publicly-
+  // known credential. This flags the state BEFORE the rotation about to run.
+  if (passwords.verifyPasswordSync(DEMO_PASSWORD, user).ok) {
+    console.warn(
+      '[security] admin account was still on the known demo password (D-10) — rotating it now. ' +
+      'Real-deal deployments must never run with the publicly-known demo credential.'
+    );
+  }
+
+  controlStore.updateUser('admin', {
+    hash: await passwords.hashPassword(password),
+    salt: null,
+    mustChangePassword: false,
+    disabled: false,
+  });
 
   // WR-01: rotating the admin credential must revoke every outstanding admin
-  // session immediately (db/sessions.js's own docstring calls this "Admin
-  // offboarding action") — otherwise a session token issued under the OLD
-  // password (e.g. one an attacker already stole via a leaked cookie, the
-  // exact scenario this script's D-10 warning above responds to) stays valid
-  // for up to SESSION_TTL_MS after this rotation. Sessions live in
-  // runtime.db (D-07), reached the same way server.js's own gate does.
+  // session immediately (db/sessions.js calls this "Admin offboarding
+  // action") — otherwise a token issued under the OLD password stays valid for
+  // up to SESSION_TTL_MS. Sessions live in runtime.db (D-07).
   const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
   sessions.deleteAllSessionsForUser(runtimeConn, user.username);
 
+  auditHook.recordSecurityEvent({
+    // audit_log.actor_role is NOT NULL; a CLI actor has no portal role.
+    actor: { username: 'cli:' + (opts.osUser || currentOsUser()), role: 'cli' },
+    action: 'admin-password-set',
+    subject: user.username,
+  });
+
+  console.log(`[security] real-deal data directory: ${dbFiles.DATA_DIR}`);
   console.log(`Admin password updated for user '${user.username}'.`);
   return { success: true, username: user.username };
 }
 
 async function main() {
-  const password = process.env.ADMIN_PASSWORD || undefined;
-  await run({ password });
+  const extra = process.argv.slice(2);
+  if (extra.length > 0) {
+    console.error('Unexpected argument — passwords are never accepted on the command line. Set ADMIN_PASSWORD or use the interactive prompt.');
+    process.exit(1);
+  }
+  // The real-host tool: default the mode BEFORE any db module is required.
+  if (!process.env.MA_MODE) process.env.MA_MODE = 'real';
+  await run({});
 }
 
 if (require.main === module) {
@@ -129,4 +135,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { run };
+module.exports = { run, DEMO_PASSWORD };
