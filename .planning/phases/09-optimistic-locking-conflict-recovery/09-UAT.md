@@ -20,7 +20,8 @@ reported: "Core path PASS (same record → correct dialog + diff, reapply persis
 severity: blocker
 
 ### 2. Two-tab conflict walk — Due Diligence (findings + request items)
-expected: The second save shows the conflict dialog with the area-filtered currentRecord (an uncleared caller sees the attribution fallback, never field values from an uncleared area).
+expected: The second save shows the conflict dialog. A caller cleared for the item's area sees the area-filtered current record and a field diff; a caller whose clearance no longer covers the item sees who changed it and when (attribution is deliberately disclosed — T-09-17 / 09-REVIEW IN-01) but no field value, and the dialog states the change cannot be applied.
+expectation corrected 2026-10-10 (gap closure 09-15) — R7 item 2
 result: issue
 reported: "Cleared same-user conflicts render a correct diff on items and findings; leak-safety holds (uncleared caller gets 403 at the route layer / currentRecord:null on the WHERE-layer body, never field values). But the null-record body renders 'No conflicting fields … Apply your changes to continue' and Apply then reports the 403 as 'a network error' (F-4). The expectation text is also wrong against the accepted T-09-17/IN-01 contract: attribution is deliberately disclosed, only the record is withheld."
 severity: major
