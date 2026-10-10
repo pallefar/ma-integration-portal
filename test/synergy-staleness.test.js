@@ -76,6 +76,19 @@ test.after(() => {
   try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
 });
 
+// D-11-02 (Phase 11): POST /api/settings is admin-only now. Instance-settings
+// writes in this suite go through an admin session bound to the SAME deal as
+// the caller's token, so the schema bounds and stored-value round-trips these
+// tests protect are exercised exactly as before.
+function postSettings(base, token, body) {
+  const bound = sessionsDb.findSession(runtimeConn, token);
+  const adminToken = newSession('admin', 'admin');
+  if (bound && bound.dealId) bindDeal(adminToken, bound.dealId);
+  return postJSON(base, '/api/settings', adminToken, body).finally(() => {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+  });
+}
+
 // Small shared setup helper — boots a fresh deal + hrbp session, following
 // this file's own established one-deal-per-test convention.
 async function setupDeal(id, overrides) {
@@ -305,7 +318,7 @@ test('synergy-staleness (i): POST /api/settings with synergyStaleDays and synerg
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    const writeRes = await postJSON(base, '/api/settings', token, { synergyStaleDays: 45, synergyHorizonYears: 5 });
+    const writeRes = await postSettings(base, token, { synergyStaleDays: 45, synergyHorizonYears: 5 });
     assert.strictEqual(writeRes.status, 200);
 
     const settings = await getSettings(base, token);
@@ -343,10 +356,10 @@ test('synergy-staleness (r): WR-03 — POST /api/settings with an out-of-range s
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    const res = await postJSON(base, '/api/settings', token, { synergyStaleDays: 999999999 });
+    const res = await postSettings(base, token, { synergyStaleDays: 999999999 });
     assert.strictEqual(res.status, 400, 'an out-of-range synergyStaleDays must be refused by the schema, not silently accepted');
 
-    const validRes = await postJSON(base, '/api/settings', token, { synergyStaleDays: 90 });
+    const validRes = await postSettings(base, token, { synergyStaleDays: 90 });
     assert.strictEqual(validRes.status, 200, 'an in-range synergyStaleDays must still be accepted');
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
@@ -361,7 +374,7 @@ test('synergy-staleness (k): a configured short threshold on the deal changes th
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    await postJSON(base, '/api/settings', token, { synergyStaleDays: 1 });
+    await postSettings(base, token, { synergyStaleDays: 1 });
 
     const createRes = await postJSON(base, '/api/synergies', token, { title: 'Short threshold', category: 'cost', owner: 'karen' });
     const { initiative: created } = await createRes.json();
@@ -406,7 +419,7 @@ test('synergy-staleness (l): unconfirmedRealizedM never exceeds the conserved gr
     // not tip over depending on timing — the precision property under test
     // (unconfirmed <= gross) holds regardless of exactly which items land on
     // which side, so this does not need to pin down which item is stale.
-    await postJSON(base, '/api/settings', token, { synergyStaleDays: 0.0000000001 });
+    await postSettings(base, token, { synergyStaleDays: 0.0000000001 });
 
     const rollup = await getRollup(base, token);
     assert.ok(rollup.unconfirmedRealizedM <= (rollup.grossRealizedM + rollup.unphasedRealizedM), 'unconfirmedRealizedM must never exceed the conserved gross+unphased total');
@@ -483,7 +496,7 @@ test('synergy-staleness (o): two initiatives sharing an identical lastConfirmedA
 
     // Both fall back to createdAt (never confirmed) — a very short threshold
     // makes both stale in the same request, judged against the same clock.
-    await postJSON(base, '/api/settings', token, { synergyStaleDays: 0.0000000001 });
+    await postSettings(base, token, { synergyStaleDays: 0.0000000001 });
 
     const list = await getSynergies(base, token);
     const storedA = list.find((s) => s.id === a.id);
@@ -507,7 +520,7 @@ test('synergy-staleness (p): mine.staleCount differs between two identities read
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    await postJSON(base, '/api/settings', karenToken, { synergyStaleDays: 0.0000000001 });
+    await postSettings(base, karenToken, { synergyStaleDays: 0.0000000001 });
 
     const karenItemRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Owned by karen', category: 'cost', owner: 'karen' });
     await karenItemRes.json();

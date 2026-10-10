@@ -432,6 +432,32 @@ function pathMatchesPrefix(path, prefix) {
 const ROLE_WRITE_POLICY = [
   { prefix: '/api/admin', roles: ['admin'] }, // migrate-db, download-zip, revoke-sessions — ALL methods (see CR-02 gate below)
 
+  // [security] D-11-02 / AUTHZ-02 (Phase 11; R1-05, R1-16, R3 F-1): the
+  // instance CONFIGURATION and CONTENT surface is admin-only. These routes
+  // were silently inheriting DEFAULT_WRITE_ROLES, so any pmo/hrbp session
+  // could flip demoMode, set geminiApiKey (third-party egress) or rewrite
+  // menus/pages/banners for every user of the instance. The deal-level
+  // values an Integration Lead legitimately edits (currency, Day-1 date,
+  // synergy target/staleness/horizon) live on POST /api/deals/:id/setup
+  // instead. Placed ahead of the self-service and default entries
+  // (first-match wins); each rule is boundary-safe, so /api/settings also
+  // covers /api/settings/new-ma, /api/slides covers /api/slides/upload and
+  // /api/courses covers /api/courses/:courseId/lessons*.
+  //
+  // The demo time-travel control is the ONE settings sub-route staff keep —
+  // it is a showcase-only mechanic already refused outside the demo store by
+  // DEMO_ONLY_PREFIXES, so this entry leaves the demo exactly as it was.
+  // It must precede the admin-only '/api/settings' rule below.
+  { prefix: '/api/settings/time-travel', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo'] },
+  { prefix: '/api/settings', roles: ['admin'] },
+  { prefix: '/api/menus', roles: ['admin'] },
+  { prefix: '/api/pages', roles: ['admin'] },
+  { prefix: '/api/banners', roles: ['admin'] },
+  { prefix: '/api/slides', roles: ['admin'] },
+  { prefix: '/api/media', roles: ['admin'] },
+  { prefix: '/api/i18n', roles: ['admin'] },
+  { prefix: '/api/courses', roles: ['admin'] },
+
   // Self-service allowlist: the ONLY prefixes 'employee' may write to today.
   { prefix: '/api/pulses', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/employees/complete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
@@ -470,9 +496,10 @@ const ROLE_WRITE_POLICY = [
 
   // Everything else under /api that accepts writes today (projects, employees
   // roster CRUD, integration-tasks, raid, synergies, departments, processes,
-  // CMS: courses/pages/menus/slides/media/banners, settings, communications,
-  // alerts, questions, hrbps, dashboard/reorder-widgets) — no explicit entry
-  // needed; falls through to DEFAULT_WRITE_ROLES below.
+  // communications, alerts, questions, hrbps, dashboard/reorder-widgets) —
+  // no explicit entry needed; falls through to DEFAULT_WRITE_ROLES below.
+  // (The CMS and settings groups are NOT in that list any more: D-11-02 made
+  // them admin-only, see the rules at the top of this table.)
 ];
 const DEFAULT_WRITE_ROLES = ['admin', 'hrbp', 'pmo'];
 
@@ -2210,6 +2237,15 @@ app.get('/api/settings', (req, res) => {
 
 // POST Settings
 app.post('/api/settings', (req, res) => {
+  // [security] D-11-02 / T-11-12 (Phase 11): defence in depth, independent of
+  // ROLE_WRITE_POLICY's table order. This handler can write the AI key and the
+  // browser-model / database-config egress settings, so a non-admin must never
+  // reach the write even if the policy table is later re-ordered. DEMO_OPEN
+  // open mode sets req.portalUser to null by design (anonymous showcase) and
+  // keeps working — the guard applies only to a resolved identity.
+  if (req.portalUser && !isAdminRequest(req)) {
+    return res.status(403).json({ error: 'Your role cannot perform this action.' });
+  }
   const db = readDb();
   db.settings = db.settings || {};
 

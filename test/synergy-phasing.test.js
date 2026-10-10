@@ -169,25 +169,27 @@ test('synergy-phasing (http l): CR-01 — POST /api/settings with an out-of-rang
   const deal = freshDeal('deal_synhorz');
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
-  const karenToken = newSession('karen', 'hrbp'); bindDeal(karenToken, deal.id);
+  // D-11-02 (Phase 11): POST /api/settings is admin-only — the schema bound
+  // under test is unchanged, only the identity that reaches it differs.
+  const adminToken = newSession('admin', 'admin'); bindDeal(adminToken, deal.id);
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
     const res = await fetch(`${base}/api/settings`, {
-      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      method: 'POST', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
       body: JSON.stringify({ synergyHorizonYears: 2000 }),
     });
     assert.strictEqual(res.status, 400, 'an out-of-range synergyHorizonYears must be refused by the schema, not silently accepted');
 
     const validRes = await fetch(`${base}/api/settings`, {
-      method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
+      method: 'POST', headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
       body: JSON.stringify({ synergyHorizonYears: 5 }),
     });
     assert.strictEqual(validRes.status, 200, 'an in-range synergyHorizonYears must still be accepted');
   } finally {
-    sessionsDb.deleteSession(runtimeConn, karenToken);
+    sessionsDb.deleteSession(runtimeConn, adminToken);
     server.close();
   }
 });

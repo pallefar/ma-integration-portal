@@ -320,16 +320,23 @@ test('busy-503-contract (live contention): three routes — one plain sync write
 
   let server;
   let token;
+  let adminToken;
   try {
     await waitForReady(child);
 
     // A session with NO dealId — db/resolver.js's resolveDatabase() binds
     // this to DEMO_DB_PATH, the exact file the child above is holding the
     // write lock on. 'hrbp' covers the write policy for all three routes
-    // below (DEFAULT_WRITE_ROLES for /api/questions and /api/media; the
-    // explicit /api/assessment entry also allows it).
+    // below (DEFAULT_WRITE_ROLES for /api/questions; the explicit
+    // /api/assessment entry also allows it; /api/media is admin-only — see
+    // the admin identity minted below).
     ensureUser(controlConn, { username: 'busy-503-contract-test', role: 'hrbp' });
     token = sessionsDb.createSession(runtimeConn, { username: 'busy-503-contract-test', role: 'hrbp', ttlMs: 12 * 60 * 60 * 1000 });
+    // D-11-02 (Phase 11): POST /api/media is admin-only now, so the media
+    // probe (3) below runs as an admin identity. The contract under test —
+    // a contended write returns the fixed 503 — is independent of the role.
+    ensureUser(controlConn, { username: 'busy-503-contract-admin', role: 'admin' });
+    adminToken = sessionsDb.createSession(runtimeConn, { username: 'busy-503-contract-admin', role: 'admin', ttlMs: 12 * 60 * 60 * 1000 });
     server = await listenLocal(app);
     const { port } = server.address();
 
@@ -371,13 +378,16 @@ test('busy-503-contract (live contention): three routes — one plain sync write
     // (filesystem) error handling.
     const mediaRes = await fetch(`http://127.0.0.1:${port}/api/media`, {
       method: 'POST',
-      headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+      headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
       body: JSON.stringify({ fileName: 'busy-503-contract-probe.txt', fileData: 'data:text/plain;base64,cHJvYmU=' }),
     });
     await assertBusy503('POST /api/media (sync, Task-1-patched catch)', mediaRes);
 
     await childExited;
   } finally {
+    if (adminToken) {
+      try { sessionsDb.deleteSession(runtimeConn, adminToken); } catch (e) { /* ignore */ }
+    }
     if (token) {
       try { sessionsDb.deleteSession(runtimeConn, token); } catch (e) { /* ignore */ }
     }
