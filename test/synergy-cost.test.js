@@ -316,14 +316,15 @@ test('synergy-cost-ui (b): the cost-entry add handler reuses the existing .ex-ad
   assert.ok(!/entries\.slice\(\)\.sort/.test(body) && !/costEntries.*\.sort\(/.test(body), 'renderCostSection must apply no client-side sort — the server\'s own order is authoritative');
 });
 
-test('synergy-cost-ui (c): the delete handler calls window.confirm() before issuing its DELETE request', () => {
+test('synergy-cost-ui (c): the delete handler asks through the in-app maConfirmDelete and issues no direct DELETE fetch before the user confirms (09-14, SC7)', () => {
   const src = readClientSrc();
   const handlerMatch = src.match(/delBtn\.addEventListener\('click', function \(\) \{([\s\S]*?)\n {8}\}\);/);
   assert.ok(handlerMatch, 'a .syn-cost-del click handler must be attached');
   const handlerBody = handlerMatch[1];
-  const confirmIdx = handlerBody.indexOf("window.confirm('Delete this cost entry?')");
-  const fetchIdx = handlerBody.indexOf('fetch(');
-  assert.ok(confirmIdx > -1 && fetchIdx > confirmIdx, 'window.confirm() must be called strictly BEFORE the delete fetch');
+  const confirmIdx = handlerBody.indexOf("window.maConfirmDelete('Delete this cost entry?'");
+  assert.ok(confirmIdx > -1, 'the DELETE must be routed through window.maConfirmDelete(\'Delete this cost entry?\', url)');
+  assert.ok(!/\bconfirm\s*\(/.test(handlerBody), 'no browser-native confirm in the cost-entry delete handler');
+  assert.ok(!/\bfetch\(/.test(handlerBody), 'the handler issues no direct fetch — the DELETE is sent only after the in-app confirm click');
 });
 
 test('synergy-cost-ui (d): a note-less cost entry renders date and amount only, with nothing occupying the note position', () => {

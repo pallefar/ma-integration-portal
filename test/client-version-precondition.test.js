@@ -192,3 +192,38 @@ test('client-version-precondition (C3a): the task status-flip handler sends maVe
   assert.deepStrictEqual(conditionalVersionIdioms(handler), [], 'no conditional-version guard in the task flip (R7 F-1)');
   assert.ok(/reloadAfterConflict\(/.test(handler), 'the task flip must have a non-success branch calling reloadAfterConflict( (GD-5)');
 });
+
+// ---------------------------------------------------------------------------
+// Plan 09-14 — C5 (R7 F-6 / GD-9 / SC7): every covered delete path asks with
+// the in-app confirm (window.maConfirmDelete — the dialog that becomes the
+// stale-delete variant on a conflict) and never the browser-native confirm.
+// The two native confirms that are NOT delete paths (generate-phasing, the org
+// decision-record confirm) are outside the scanned handlers and must remain.
+// ---------------------------------------------------------------------------
+
+test('client-version-precondition (C5): the five covered delete handlers route through maConfirmDelete and contain no native confirm', () => {
+  const exec = readPublicJs('execution.js');
+  const org = readPublicJs('org.js');
+  const handlers = [
+    { name: 'task .ex-del', q: 'Delete this task?', body: handlerAfter(functionBody(exec, 'render'), "row.querySelector('.ex-del').addEventListener('click'") },
+    { name: 'cost entry .syn-cost-del', q: 'Delete this cost entry?', body: handlerAfter(functionBody(exec, 'renderSynergy'), "delBtn.addEventListener('click'") },
+    { name: 'initiative .ex-del', q: 'Delete this initiative?', body: handlerAfter(functionBody(exec, 'renderSynergy'), "card.querySelector('.ex-del').addEventListener('click'") },
+    { name: 'RAID .ex-del', q: 'Delete this entry?', body: handlerAfter(functionBody(exec, 'renderRaid'), "row.querySelector('.ex-del').addEventListener('click'") },
+    { name: 'org .org-node-delete', q: 'Delete position? This cannot be undone.', body: handlerAfter(org, "deleteBtn.addEventListener('click'") },
+  ];
+  handlers.forEach((h) => {
+    assert.ok(h.body.indexOf(`maConfirmDelete('${h.q}'`) !== -1, `${h.name}: must call window.maConfirmDelete('${h.q}', ...)`);
+    assert.ok(!/\bconfirm\s*\(/.test(h.body), `${h.name}: must not call a native confirm`);
+    assert.ok(!/method:\s*'DELETE'/.test(h.body), `${h.name}: the DELETE is sent by maConfirmDelete, never by a direct fetch before the user confirms`);
+  });
+  // The version precondition stays in each URL (checked on the enclosing
+  // handler plus the URL it builds — the org/cost handlers build it just above
+  // the maConfirmDelete call inside the same handler).
+  handlers.forEach((h) => assert.ok(/maVersionOf\(/.test(h.body), `${h.name}: the version precondition stays in the URL`));
+  // Non-delete confirms are untouched: exactly one native confirm remains in
+  // each file (generate-phasing in execution.js, the decision record in org.js).
+  // (calls only — a comment that mentions `window.confirm()` has no argument.)
+  assert.strictEqual((exec.match(/window\.confirm\(\s*[^)\s]/g) || []).length, 1, 'execution.js keeps only the generate-phasing confirm');
+  assert.ok(exec.indexOf("window.confirm('This replaces the existing phasing rows. Continue?')") !== -1);
+  assert.strictEqual((org.match(/window\.confirm\(\s*[^)\s]/g) || []).length, 1, 'org.js keeps only the decision-record confirm');
+});

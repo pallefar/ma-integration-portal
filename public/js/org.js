@@ -579,11 +579,13 @@
     var deleteBtn = el('button', { className: 'org-node-delete', text: 'Delete' });
     deleteBtn.type = 'button';
     deleteBtn.addEventListener('click', function () {
-      // Copywriting Contract's destructive-confirmation gate runs first;
-      // the {N}-direct-report count is interpolated afterwards, into the
+      // Copywriting Contract's destructive-confirmation gate runs first —
+      // since 09-14 (R7 F-6 / GD-9, UI-SPEC A8) it is the IN-APP confirm
+      // (window.maConfirmDelete), which becomes the stale-delete variant when
+      // the DELETE meets a conflict; no browser-native confirm. The
+      // {N}-direct-report count is interpolated afterwards, into the
       // error surface below, using the SERVER-reported count from a
       // refusal — never a client-guessed number.
-      if (!window.confirm('Delete position? This cannot be undone.')) return;
       clearDeleteError();
       deleteBtn.disabled = true;
       // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
@@ -593,11 +595,16 @@
       // server refuses a delete that carries no precondition.
       var delUrl = '/api/org/positions/' + node.position.id
         + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(node.position));
-      fetch(delUrl, { method: 'DELETE' })
+      window.maConfirmDelete('Delete position? This cannot be undone.', delUrl)
         .then(function (r) {
+          if (r === null) return { cancelled: true }; // nothing was sent
           return r.json().then(function (data) { return { ok: r.ok, data: data }; });
         })
         .then(function (result) {
+          if (result.cancelled) {
+            deleteBtn.disabled = false;
+            return undefined;
+          }
           if (!result.ok) {
             // [Rule 1] CONC-02/D-08: a stale-delete 409 is already fully
             // handled by the shared conflict dialog (public/js/transitions.js's
