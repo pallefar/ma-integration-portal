@@ -319,21 +319,160 @@ function readDb() {
 
   // Non-enumerable: never leaks into JSON.stringify(db)/res.json(db) responses,
   // and Object.keys(db) never exposes it — dozens of endpoints serialize the
-  // read-model object straight to API clients.
+  // read-model object straight to API clients. ISO-03: __dbContext records which
+  // physical database this read came from so db/auditHook.js can attribute a
+  // write without a second AsyncLocalStorage lookup (`null` outside any request
+  // context — server startup, migration scripts, pre-Phase-3 tests).
+  stampReadMeta(out, snapshot, seqs, null);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// D-12-02 (Phase 12, plan 12-05): the PROPORTIONAL read API.
+//
+// readDb() above reconstructs all 38 collections and 5 singletons on every
+// call (R5-05: a 1.6 MB parse for a request that needs one lane). The three
+// functions below let a route read only what it needs:
+//
+//   readCollections(names)   whole-object read of ONLY the named collections,
+//                            same row shapes as readDb(); every collection NOT
+//                            named is a throwing accessor (never an empty
+//                            array — an empty lane would be a fail-open
+//                            clearance risk, PD-11), and writeDb() on the result
+//                            writes only the loaded ones.
+//   readSingleton(key)       one app_state value.
+//   readProjection(c, [..])  a LIGHT row set for list endpoints: id, seq, the
+//                            stored raw JSON string and a few extracted scalar
+//                            fields — no per-row JSON.parse, so a list can be
+//                            filtered/paged and its unparameterized form
+//                            assembled from the stored raw strings.
+//
+// Every statement here is a SELECT. No call issues a write.
+// ---------------------------------------------------------------------------
+
+class CollectionNotLoadedError extends Error {
+  constructor(key, op) {
+    super(
+      `db/store.js: collection '${key}' was ${op === 'set' ? 'assigned' : 'read'} but was not loaded by readCollections() — ` +
+      `add '${key}' to this route's read set`
+    );
+    this.name = 'CollectionNotLoadedError';
+    this.code = 'COLLECTION_NOT_LOADED';
+    this.collection = key;
+  }
+}
+
+const KNOWN_KEYS = new Set([...ARRAY_COLLECTIONS, ...SINGLETON_KEYS]);
+const ARRAY_KEY_SET = new Set(ARRAY_COLLECTIONS);
+const SINGLETON_KEY_SET = new Set(SINGLETON_KEYS);
+// A projection field name is an identifier, never free text: it becomes a BOUND
+// JSON path ('$.' + field), and the regex is the second line of defence behind
+// the caller (T-12-43). Same shape as every JSON key this schema stores.
+const PROJECTION_FIELD_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+
+/** Stamp the hidden bookkeeping both readDb() and readCollections() carry. */
+function stampReadMeta(out, snapshot, seqs, loaded) {
   Object.defineProperty(out, '__snapshot', { value: snapshot, enumerable: false, configurable: true });
   Object.defineProperty(out, '__seq', { value: seqs, enumerable: false, configurable: true });
-
-  // ISO-03: which physical database this read actually came from, stamped
-  // the same non-enumerable way as __snapshot so a later plan's audit hook
-  // (db/auditHook.js, Plan 05) can tell which database a write is landing in
-  // without a second AsyncLocalStorage lookup of its own. `null` outside any
-  // request context (server startup, migration scripts, pre-Phase-3 tests).
+  if (loaded) Object.defineProperty(out, '__loaded', { value: loaded, enumerable: false, configurable: true });
   const scoped = requestDbStorage.getStore();
   const dbContext = scoped
     ? { kind: scoped.kind, dealId: scoped.dealId, dbPath: scoped.dbPath }
     : { kind: null, dealId: null, dbPath };
   Object.defineProperty(out, '__dbContext', { value: dbContext, enumerable: false, configurable: true });
+}
+
+/**
+ * Read ONLY `names` (array collections and/or singleton keys). The returned
+ * object is writeDb()-compatible: it carries `__snapshot`/`__seq` for the
+ * loaded array collections and a `__loaded` Set, and writeDb() diffs and
+ * writes only those. Touching (get or set) any other known collection throws
+ * CollectionNotLoadedError naming it. An unknown name throws immediately.
+ */
+function readCollections(names) {
+  if (!Array.isArray(names)) throw new TypeError('db/store.js: readCollections() needs an array of collection names');
+  for (const name of names) {
+    if (!KNOWN_KEYS.has(name)) throw new Error(`db/store.js: readCollections() got an unknown collection name '${name}'`);
+  }
+  const want = new Set(names);
+  const conn = requireDb();
+  const out = {};
+  const snapshot = {};
+  const seqs = {};
+
+  for (const key of ARRAY_COLLECTIONS) {
+    if (!want.has(key)) continue;
+    const rows = prep(conn, `SELECT id, seq, data FROM ${key} ORDER BY seq`).all();
+    out[key] = rows.map((r) => JSON.parse(r.data));
+    snapshot[key] = new Map(rows.map((r) => [r.id, r.data]));
+    seqs[key] = new Map(rows.map((r) => [r.id, r.seq]));
+  }
+  // The stored text of each loaded singleton, so writeDb() can skip re-upserting
+  // one the handler never changed (a lane lookup that only READS settings must
+  // not rewrite it from a possibly stale copy).
+  const singletonRaw = new Map();
+  for (const key of SINGLETON_KEYS) {
+    if (!want.has(key)) continue;
+    const row = prep(conn, 'SELECT data FROM app_state WHERE key = ?').get(key);
+    out[key] = row ? JSON.parse(row.data) : undefined;
+    if (row) singletonRaw.set(key, row.data);
+  }
+
+  // PD-11: every known key that was NOT loaded fails loudly on get AND set. The
+  // accessor is non-enumerable so JSON.stringify(db) / Object.keys(db) /
+  // spreads never trip it — only a handler that actually names the collection.
+  for (const key of KNOWN_KEYS) {
+    if (want.has(key)) continue;
+    Object.defineProperty(out, key, {
+      enumerable: false,
+      configurable: true,
+      get() { throw new CollectionNotLoadedError(key, 'get'); },
+      set() { throw new CollectionNotLoadedError(key, 'set'); },
+    });
+  }
+
+  stampReadMeta(out, snapshot, seqs, want);
+  Object.defineProperty(out, '__singletonRaw', { value: singletonRaw, enumerable: false, configurable: true });
   return out;
+}
+
+/** One app_state singleton (parsed), or undefined when it was never written. */
+function readSingleton(key) {
+  if (!SINGLETON_KEY_SET.has(key)) throw new Error(`db/store.js: readSingleton() got '${key}', which is not a singleton key`);
+  const row = prep(requireDb(), 'SELECT data FROM app_state WHERE key = ?').get(key);
+  return row ? JSON.parse(row.data) : undefined;
+}
+
+/**
+ * The light list read: every row of `collection` in seq order as
+ * `{ id, seq, raw, f }` where `raw` is the stored JSON string (never parsed
+ * here) and `f` maps each requested field name to the scalar the database
+ * extracts for it (null when the field is absent). Field names are validated
+ * against an identifier regex and bound as JSON path parameters — never
+ * interpolated into SQL. The statement is prepared once per
+ * (connection, collection, fields).
+ */
+function readProjection(collection, fields) {
+  if (!ARRAY_KEY_SET.has(collection)) {
+    throw new Error(`db/store.js: readProjection() got '${collection}', which is not an array collection`);
+  }
+  const list = Array.isArray(fields) ? fields : [];
+  for (const f of list) {
+    if (typeof f !== 'string' || !PROJECTION_FIELD_RE.test(f)) {
+      throw new Error('db/store.js: readProjection() field names must match /^[A-Za-z][A-Za-z0-9_]{0,63}$/');
+    }
+  }
+  // Each extracted column sits on its own line carrying its bound parameter
+  // (test/optimistic-locking-contract's structural rule: no line naming the
+  // extractor may lack a bound placeholder).
+  const columns = list.map((f, i) => `, json_extract(data, ?) AS f${i}`).join('');
+  const stmt = prep(requireDb(), `SELECT id, seq, data${columns} FROM ${collection} ORDER BY seq`);
+  const rows = list.length ? stmt.all(...list.map((f) => '$.' + f)) : stmt.all();
+  return rows.map((r) => {
+    const f = {};
+    for (let i = 0; i < list.length; i++) f[list[i]] = r['f' + i];
+    return { id: r.id, seq: r.seq, raw: r.data, f };
+  });
 }
 
 /**
@@ -400,6 +539,26 @@ function writeDb(data) {
   // pre-Phase-12 persistence behaviour for positions.
   const beforeSeq = data.__seq || null;
 
+  // D-12-02 (PD-11): an object produced by readCollections() carries a
+  // `__loaded` Set — only those collections were read, so only those are
+  // diffed and written. A full readDb() object has no `__loaded`: every
+  // collection is walked exactly as before. A partial payload that carries an
+  // OWN ENUMERABLE value for a collection it never loaded is refused outright
+  // (it would otherwise be silently dropped, i.e. a write that looks accepted
+  // and is not).
+  const loaded = data.__loaded instanceof Set ? data.__loaded : null;
+  const arrayKeys = loaded ? ARRAY_COLLECTIONS.filter((k) => loaded.has(k)) : ARRAY_COLLECTIONS;
+  const singletonKeys = loaded ? SINGLETON_KEYS.filter((k) => loaded.has(k)) : SINGLETON_KEYS;
+  if (loaded) {
+    for (const key of KNOWN_KEYS) {
+      if (loaded.has(key)) continue;
+      const desc = Object.getOwnPropertyDescriptor(data, key);
+      if (desc && desc.enumerable && 'value' in desc) {
+        throw new Error(`db/store.js: writeDb() payload carries '${key}', which readCollections() did not load — add it to the route's read set`);
+      }
+    }
+  }
+
   // AUD-01/D-08 (Phase 3 Plan 05): only collect a per-row delta list when
   // THIS request's resolved context is one of auditHook.AUDITED_DB_KINDS —
   // `scoped` is null/undefined outside any runWithDb() context (server
@@ -415,6 +574,7 @@ function writeDb(data) {
   // transaction runs and applied only after it COMMITS. Each entry is
   // `{ key, id, raw?, seq?, del? }`.
   const refresh = [];
+  const singletonWrites = [];
 
   // D-03/CONC-01 (Phase 8): .immediate acquires the write lock UP FRONT via
   // BEGIN IMMEDIATE, rather than a plain/deferred BEGIN that only acquires
@@ -435,7 +595,7 @@ function writeDb(data) {
   // transaction — see the comment immediately above the audit block below
   // for the full invariant this establishes.
   const applyWrite = conn.transaction((payload) => {
-    for (const key of ARRAY_COLLECTIONS) {
+    for (const key of arrayKeys) {
       const beforeMap = before[key] || new Map();
       before[key] = beforeMap; // so a later refresh below is visible to a second writeDb() call reusing this same snapshot.
       const seqMap = (beforeSeq && beforeSeq[key]) || null;
@@ -625,12 +785,20 @@ function writeDb(data) {
       }
     }
 
-    for (const key of SINGLETON_KEYS) {
+    const singletonRaw = data.__singletonRaw instanceof Map ? data.__singletonRaw : null;
+    for (const key of singletonKeys) {
       if (payload[key] !== undefined) {
+        const serialized = JSON.stringify(payload[key]);
+        // D-12-02: a singleton read by readCollections() and left unchanged is
+        // not re-upserted (and so cannot overwrite a concurrent writer's newer
+        // value with this request's stale copy). readDb() objects carry no
+        // __singletonRaw and keep the unconditional upsert exactly as before.
+        if (singletonRaw && singletonRaw.get(key) === serialized) continue;
         prep(conn,
           `INSERT INTO app_state (key, data) VALUES (?, ?)
            ON CONFLICT(key) DO UPDATE SET data = excluded.data`
-        ).run(key, JSON.stringify(payload[key]));
+        ).run(key, serialized);
+        singletonWrites.push([key, serialized]);
       }
     }
 
@@ -696,6 +864,12 @@ function writeDb(data) {
 
   applyWrite(data);
 
+  // Post-commit, like the row baselines below: a later writeDb() on the same
+  // partial object compares against what is now actually stored.
+  if (singletonWrites.length && data.__singletonRaw instanceof Map) {
+    for (const [key, serialized] of singletonWrites) data.__singletonRaw.set(key, serialized);
+  }
+
   // D-12-01 / PD-24: the transaction committed — only now is it safe to move
   // the caller's baseline forward (inserts, changed rows, re-seq'd rows and
   // deletes), so a second writeDb() on the same readDb() object writes and
@@ -730,4 +904,6 @@ module.exports = {
   // CONC-02 (Phase 9): the shared conflict-error predicate/factory — server.js
   // re-exports isConflictError the same way it exports isBusyError.
   isConflictError, makeConflictError,
+  // D-12-02 (Phase 12): the proportional read API.
+  readCollections, readSingleton, readProjection, CollectionNotLoadedError,
 };
