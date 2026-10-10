@@ -65,3 +65,19 @@ test('perf harness: pack-isolation removes its scratch dir on SIGINT/SIGTERM and
   assert.ok(/fs\.rmSync\(TMP_DIR/.test(src), 'the scratch dir must be removed');
   assert.ok(/MA_CONTROL_DB_PATH = path\.join\(TMP_DIR/.test(src), 'the data set must live under the scratch dir');
 });
+
+test('perf harness: WR-B02 — npm run perf asserts, and run-all fails on a reported FAIL:, non-200s or a non-429 second pack', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'));
+  assert.match(pkg.scripts.perf, /run-all\.js --assert\b/, 'npm run perf forwards --assert');
+  const { outputFailures } = require('../scripts/perf/run-all.js');
+  // pack-isolation run WITHOUT --assert: exit 0, latency fine, but the 429 guard regressed.
+  const packOut = 'round 1: A 200 B 200\nworst round: event loop p99 12.0 ms, max 30.0 ms\n\nFAIL:\n  round 1: concurrent pack B was 200, expected 429\n';
+  const pack = outputFailures('pack-isolation', packOut);
+  assert.ok(pack.some((r) => /^reported FAIL:/.test(r)), JSON.stringify(pack));
+  assert.ok(pack.some((r) => /not 429/.test(r)), JSON.stringify(pack));
+  // list-reads whose route answered errors on some requests.
+  assert.deepStrictEqual(outputFailures('list-reads', 'run 1: p95 10.0 ms | non-200: 3 | bytes x=1'), ['non-200 responses: 3']);
+  // A clean run reports nothing.
+  assert.deepStrictEqual(outputFailures('list-reads', 'run 1: p95 10.0 ms | non-200: 0 | bytes x=1\nPASS: ok'), []);
+  assert.deepStrictEqual(outputFailures('pack-isolation', 'worst round: event loop p99 12.0 ms\n\nPASS: every round ... refused 429 + Retry-After.'), []);
+});

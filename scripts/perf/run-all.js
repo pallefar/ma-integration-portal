@@ -4,7 +4,12 @@
 // Phase 12 performance script against its PRD budget.
 //
 //   node scripts/perf/run-all.js [--assert] [--runs N] [--seconds N]
-//   npm run perf
+//   npm run perf          (= run-all.js --assert — WR-B02, 12-REVIEW-B)
+//
+// Independently of --assert, a script FAILS here when its output reports a
+// contract failure (a `FAIL:` line, `non-200: N` > 0, or a second concurrent
+// pack answered anything but 429) — outputFailures() below — so a run whose
+// 429 guard or list routes regressed can never end with `PERF PASS`.
 //
 //   --assert    forwarded to every script (each exits 1 when its budget is missed)
 //   --runs N    measured rounds for list-reads and load-40 (default 3)
@@ -110,6 +115,34 @@ const SCRIPTS = [
 
 function pad(s, n) { s = String(s); return s.length >= n ? s : s + ' '.repeat(n - s.length); }
 
+/**
+ * WR-B02 (12-REVIEW-B): contract failures a child REPORTED in its output, even
+ * when it exited 0 (a script run without --assert prints `FAIL:` and exits 0)
+ * or its latency numbers are inside budget. Returns a list of reasons:
+ *   - any line beginning `FAIL:` (or `FAIL ` / `OVER BUDGET`),
+ *   - a `non-200: N` count above zero (a list route answering errors),
+ *   - pack-isolation: a second concurrent pack request that was not 429.
+ */
+function outputFailures(name, out) {
+  const reasons = [];
+  const text = String(out || '');
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (/^FAIL[:\s]/.test(t) || /^OVER BUDGET/.test(t)) reasons.push(`reported ${t.slice(0, 120)}`);
+    const n = /non-200:\s*(\d+)/.exec(t);
+    if (n && Number(n[1]) > 0) reasons.push(`non-200 responses: ${n[1]}`);
+  }
+  if (name === 'pack-isolation') {
+    const re = /concurrent pack B was (\S+), expected 429/g;
+    let m;
+    while ((m = re.exec(text)) !== null) reasons.push(`second concurrent pack answered ${m[1]}, not 429`);
+  }
+  return reasons;
+}
+
+if (require.main === module) main();
+
+function main() {
 const results = [];
 for (const spec of SCRIPTS) {
   const args = [path.join(HERE, spec.name + '.js')].concat(spec.args, ASSERT ? ['--assert'] : []);
@@ -124,7 +157,7 @@ for (const spec of SCRIPTS) {
   process.stdout.write(out.endsWith('\n') ? out : out + '\n');
   const exit = child.status === null ? (child.signal ? 128 : 1) : child.status;
   const measured = spec.parse(out).map((r) => Object.assign(r, { over: r.value > spec.budgetMs }));
-  results.push({ spec, exit, measured, seconds: (Date.now() - started) / 1000 });
+  results.push({ spec, exit, measured, reported: outputFailures(spec.name, out), seconds: (Date.now() - started) / 1000 });
 }
 
 console.log('\n===== PERF SUMMARY =====');
@@ -133,13 +166,14 @@ const failing = [];
 for (const r of results) {
   const over = r.measured.some((m) => m.over);
   const noData = r.measured.length === 0;
-  const ok = r.exit === 0 && !over && !noData;
+  const ok = r.exit === 0 && !over && !noData && r.reported.length === 0;
   if (!ok) failing.push(r.spec.name);
   const measured = noData
     ? '(no measurement parsed)'
     : r.measured.map((m) => `${m.label} ${m.value.toFixed(1)} ms${m.over ? ' OVER' : ''}`).join('; ');
   console.log(pad(r.spec.name, 16) + pad(r.spec.budget, 50) + pad(r.spec.baseline, 46) +
     `${measured} | exit ${r.exit} | ${ok ? 'PASS' : 'FAIL'} (${r.seconds.toFixed(0)} s)`);
+  for (const reason of r.reported) console.log(`  ${r.spec.name}: ${reason}`);
 }
 console.log('');
 if (failing.length) {
@@ -147,3 +181,6 @@ if (failing.length) {
   process.exit(1);
 }
 console.log('PERF PASS');
+}
+
+module.exports = { outputFailures };
