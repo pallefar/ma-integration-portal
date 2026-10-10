@@ -4192,6 +4192,22 @@ function taskLane(db) {
   return db.integrationTasks;
 }
 
+// D-12-02 (Phase 12, plan 12-09): the lane NAME taskLane() resolves, from the
+// settings singleton alone — beside (never inside) taskLane(): the Phase 9
+// structural test source-scans taskLane's body for exactly its two
+// db.<collection> keys, and test/tasks-list-query asserts the two always agree
+// for demoMode false / true / absent.
+function taskLaneName(settings) {
+  return settings && settings.demoMode === false ? 'customIntegrationTasks' : 'integrationTasks';
+}
+
+// The collections a task write handler needs: settings (lane choice), both
+// lanes (the delete assigns whichever it does not read), and ddFindings (the
+// provenance rule resolves `dd-finding:<id>` to that finding's area). A handler
+// touching any other collection throws CollectionNotLoadedError naming it —
+// add it here, never fall back to readDb().
+const TASK_READ_SET = ['settings', 'integrationTasks', 'customIntegrationTasks', 'ddFindings'];
+
 // RPT-01 (07-02): the SINGLE server-side port of public/js/execution.js's
 // own client-side workstream rollup math (render()'s wsGrid block, ~line
 // 130-144, and ragColor() ~line 105) — this is what lets the Reports export,
@@ -4232,19 +4248,70 @@ function computeWorkstreamRollup(db, deal, portalUser) {
 const TASK_STATUSES = ['todo', 'doing', 'blocked', 'done'];
 const TASK_PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
 
+// What GET /api/integration-tasks accepts (PD-12). Same grammar as RAID plus the
+// task-only `phase`; `q` scans the title (tasks carry no free-text notes).
+const TASK_LIST_SPEC = {
+  filters: { status: 'status', owner: 'owner', workstream: 'workstreamId', phase: 'phase' },
+  enums: { status: TASK_STATUSES, phase: TASK_PHASES },
+  search: ['title'],
+};
+
+// The task-lane rows of a projection read that the caller may see, judged by
+// taskRowVisible() — the SAME predicate reportTaskRows() (export, pack,
+// workstream rollup) filters with, so the paged list and the whole-db readers
+// can never disagree about a task. Built lazily: the finding-area map is only
+// read when an unstamped `dd-finding:` provenance is present.
+function taskProjectionVisibleRows(rows, deal, portalUser) {
+  let findingAreas = null;
+  const findingAreaOf = (findingId) => {
+    if (!findingAreas) {
+      findingAreas = new Map();
+      for (const r of readProjection('ddFindings', ['id', 'area'])) {
+        if (findingAreas.has(r.f.id)) continue;
+        findingAreas.set(r.f.id, r.f.area === null ? JSON.parse(r.raw).area : r.f.area);
+      }
+    }
+    return findingAreas.has(findingId) ? findingAreas.get(findingId) : null;
+  };
+  return rows.filter((row) => {
+    let { clearanceArea, source } = row.f;
+    // A non-string stamp/source cannot be judged from the projection alone.
+    if ((clearanceArea && typeof clearanceArea !== 'string') || (source && typeof source !== 'string')) {
+      const full = JSON.parse(row.raw);
+      clearanceArea = full.clearanceArea;
+      source = full.source;
+    }
+    return taskRowVisible({ clearanceArea, source }, findingAreaOf, deal, portalUser);
+  });
+}
+
+// D-12-02 / PD-10 / PD-12: the proportional task list read — one lane through a
+// light projection, then taskRowVisible() BEFORE filters, total and page
+// (T-12-80: `total` and `?q=` can never confirm a restricted task exists). No
+// list parameter -> the legacy bare array, byte-identical to the previous
+// reportTaskRows() output. [security] T-ERM-01 (260810-erm) clearance rule
+// unchanged: reportTaskRows() remains the whole-db reader of the same rule.
 app.get('/api/integration-tasks', (req, res) => {
-  const db = readDb();
-  // [security] T-ERM-01 (260810-erm): routed through the single clearance-
-  // filtered reportTaskRows() read — mirrors GET /api/raid's identical
-  // reportRaidRows() delegation immediately above in the RAID section.
+  let parsed;
+  try {
+    parsed = listQuery.parseListQuery(req.query, TASK_LIST_SPEC);
+  } catch (err) {
+    if (err instanceof listQuery.ListQueryError) return res.status(400).json({ error: 'Invalid list query.' });
+    throw err;
+  }
+  // Visibility below is the reportTaskRows() rule (taskRowVisible), evaluated
+  // per row over projections instead of over a fully-read db object.
   const deal = controlStore.getDeal(req.dealContext.dealId);
-  res.json(reportTaskRows(db, deal, req.portalUser));
+  const lane = taskLaneName(readSingleton('settings'));
+  const rows = readProjection(lane, listQuery.projectionFields(TASK_LIST_SPEC, parsed, ['clearanceArea', 'source']));
+  const visible = taskProjectionVisibleRows(rows, deal, req.portalUser);
+  listQuery.sendList(res, listQuery.applyListFilters(visible, parsed, TASK_LIST_SPEC), parsed);
 });
 
 // Create or update a task (upsert by id, like departments/processes)
 app.post('/api/integration-tasks', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(TASK_READ_SET);
   const lane = taskLane(db);
   if (b.id) {
     const task = lane.find(t => t.id === b.id);
@@ -4302,7 +4369,7 @@ app.post('/api/integration-tasks', (req, res) => {
 });
 
 app.delete('/api/integration-tasks/:id', (req, res) => {
-  const db = readDb();
+  const db = readCollections(TASK_READ_SET);
   const lane = taskLane(db);
   const task = lane.find(t => t.id === req.params.id);
   // [security] D-11-03 / R1-02: missing AND out-of-clearance both answer the
@@ -5574,18 +5641,29 @@ function areaVisibleTo(area, deal, portalUser) {
 // Day-1/100-day task is not MNPI; only content republished FROM a
 // restricted source is gated.
 function resolveTaskClearanceArea(task, db) {
-  if (task && task.clearanceArea) return task.clearanceArea;
-  const source = task && task.source;
-  if (!source) return null;
-  const ddMatch = /^dd-finding:(.+)$/.exec(source);
-  if (ddMatch) {
-    const finding = ddFindingsLane(db).find((f) => f.id === ddMatch[1]);
-    return finding ? finding.area : null;
-  }
-  // Retention clearance is always the fixed `hr` area, mirroring
-  // resolveRaidEntryClearanceArea's identical rule for the RAID twin.
-  if (source.indexOf('org-flightrisk:') === 0) return 'hr';
-  return null;
+  // D-12-02 (T-12-81): the provenance rule is the SHARED core the RAID lane
+  // uses (clearanceAreaFromProvenance) — same stamp-first / dd-finding /
+  // org-flightrisk order, so the two lanes cannot drift apart.
+  return clearanceAreaFromProvenance(
+    task && task.clearanceArea,
+    task && task.source,
+    (findingId) => {
+      const finding = ddFindingsLane(db).find((f) => f.id === findingId);
+      return finding ? finding.area : null;
+    }
+  );
+}
+
+// The per-row task visibility predicate behind reportTaskRows() AND the paged /
+// filtered GET /api/integration-tasks: `entryLike` is anything carrying
+// `clearanceArea` and `source` (a full task or a two-field projection). The
+// twin of raidRowVisible() — both end in areaVisibleTo().
+function taskRowVisible(entryLike, findingAreaOf, deal, portalUser) {
+  return areaVisibleTo(
+    clearanceAreaFromProvenance(entryLike.clearanceArea, entryLike.source, findingAreaOf),
+    deal,
+    portalUser
+  );
 }
 
 // [security] T-ERM-01: the SINGLE clearance-filtered task read — every
@@ -5597,10 +5675,14 @@ function resolveTaskClearanceArea(task, db) {
 // exits disagree with the others about which tasks a given caller may see.
 function reportTaskRows(db, deal, portalUser) {
   ddFindingsLane(db);
-  return taskLane(db).filter((task) => {
-    const area = resolveTaskClearanceArea(task, db);
-    return area === null || accessPolicy.hasAreaGrant(deal, portalUser, area);
-  });
+  // The area is resolved by resolveTaskClearanceArea() (stamp, then
+  // provenance) and judged by taskRowVisible() — the predicate the paged list
+  // uses — with the resolved area presented as the stamp, so no provenance
+  // lookup repeats and the two readers share the one visibility tail.
+  return taskLane(db).filter((task) => taskRowVisible(
+    { clearanceArea: resolveTaskClearanceArea(task, db), source: '' },
+    null, deal, portalUser
+  ));
 }
 
 // RPT-01/RPT-02 (07-06 Task 2/T-07-28): the SINGLE clearance-filtered RAID
