@@ -136,6 +136,7 @@ registerSchema('DELETE', '/api/admin/deals/:id', DeleteConfirmSchema);
 // destructive actions (seal, purge) take the same typed confirmation as
 // archive/delete — `confirm` must equal the deal id (compared by the route).
 registerSchema('POST', '/api/admin/deals/:id/audit/seal', DeleteConfirmSchema);
+registerSchema('POST', '/api/admin/deals/:id/audit/purge', DeleteConfirmSchema);
 
 module.exports = {
   CreateDealSchema, SelectDealSchema, DealMembersSchema, DealGrantsSchema, VdrGrantSchema, DeleteConfirmSchema,

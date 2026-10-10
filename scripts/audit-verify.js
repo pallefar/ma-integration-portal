@@ -5,7 +5,10 @@
 //   node scripts/audit-verify.js <file.db> [<file.db> ...]
 //   node scripts/audit-verify.js --deal <dealId>
 //   node scripts/audit-verify.js --all
+//   node scripts/audit-verify.js --jsonl <export.jsonl>
 //
+//   --jsonl <f>   verify an exported partition on its own (header + chained
+//                 rows; prints the file's SHA-256 for the export event)
 //   --deal <id>   data/audit/<id>.db (the resolved audit directory)
 //   --all         every partition in the audit directory (deal_*.db, legacy.db);
 //                 audit.db is reported `unchained` until plan 12-13 chains it
@@ -135,8 +138,59 @@ function verifyFile(file) {
   }
 }
 
+/**
+ * [security] D-12-04 (plan 12-12): verify an exported JSONL on its own — no
+ * database, no audit.db. Line 1 is the `ma-audit-export` header; every other
+ * line is one row. The chain is walked from the partition-bound genesis
+ * (derived from the header's partition id), so an edited, deleted, reordered or
+ * appended line, or a truncated file, fails. The file's own SHA-256 is printed
+ * so it can be compared with the `audit-partition-exported` control event.
+ */
+function verifyJsonl(file) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    return { file, status: 'error', exit: 2, line: `ERROR ${file} cannot read: ${e && e.message ? e.message : e}` };
+  }
+  const fail = (lineNo, reason) => ({ file, status: 'fail', exit: 1, line: `FAIL ${file} line=${lineNo} ${reason}` });
+  const lines = text.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  if (lines.length === 0) return fail(1, 'empty-file');
+  let header;
+  try { header = JSON.parse(lines[0]); } catch (e) { return fail(1, 'header-not-json'); }
+  const partition = header && header.partition;
+  if (!header || header.type !== 'ma-audit-export' || header.version !== 1
+      || typeof partition !== 'string' || !(dbFiles.DEAL_ID_RE.test(partition) || partition === 'legacy')) {
+    return fail(1, 'bad-header');
+  }
+  let prev = auditChain.genesisHash(partition);
+  let lastId = 0;
+  let rows = 0;
+  for (let i = 1; i < lines.length; i += 1) {
+    let row;
+    try { row = JSON.parse(lines[i]); } catch (e) { return fail(i + 1, 'row-not-json'); }
+    if (!row || typeof row !== 'object' || typeof row.row_hash !== 'string' || typeof row.prev_hash !== 'string') {
+      return fail(i + 1, 'unchained-row');
+    }
+    if (!Number.isInteger(row.id) || row.id <= lastId) return fail(i + 1, 'id-order');
+    if (row.prev_hash !== prev) return fail(i + 1, 'prev-link-broken');
+    if (auditChain.rowHash(row, row.prev_hash) !== row.row_hash) return fail(i + 1, 'row-hash-mismatch');
+    prev = row.row_hash;
+    lastId = row.id;
+    rows += 1;
+  }
+  if (rows !== header.rowCount) return fail(lines.length, 'row-count-mismatch');
+  if (prev !== header.headHash) return fail(lines.length, 'head-mismatch');
+  const sha = auditLifecycle.fileSha256(file);
+  return {
+    file, status: 'ok', exit: 0, sha256: sha,
+    line: `OK ${file} jsonl partition=${partition} rows=${rows} head=${prev} sha256=${sha}`,
+  };
+}
+
 function usage(out) {
-  out('usage: node scripts/audit-verify.js <file.db>... | --deal <dealId> | --all');
+  out('usage: node scripts/audit-verify.js <file.db>... | --deal <dealId> | --all | --jsonl <export.jsonl>');
 }
 
 /**
@@ -147,6 +201,7 @@ function main(argv, io) {
   const err = (io && io.err) || ((s) => console.error(s));
   const args = argv.slice();
   const files = [];
+  const jsonlFiles = [];
   let all = false;
   while (args.length) {
     const a = args.shift();
@@ -157,6 +212,10 @@ function main(argv, io) {
       let p;
       try { p = dbFiles.auditPartitionPath(id); } catch (e) { err('audit-verify: --deal needs a valid deal id'); usage(err); return 2; }
       files.push(p);
+    } else if (a === '--jsonl') {
+      const jf = args.shift();
+      if (!jf) { err('audit-verify: --jsonl needs a file'); usage(err); return 2; }
+      jsonlFiles.push(jf);
     } else if (a === '-h' || a === '--help') {
       usage(out);
       return 0;
@@ -174,11 +233,17 @@ function main(argv, io) {
     for (const name of listing.sort()) if (PARTITION_FILE_RE.test(name)) files.push(path.join(dbFiles.AUDIT_DIR, name));
     if (fs.existsSync(dbFiles.AUDIT_DB_PATH)) files.push(dbFiles.AUDIT_DB_PATH);
   }
-  if (files.length === 0 && !all) {
+  if (files.length === 0 && jsonlFiles.length === 0 && !all) {
     usage(err);
     return 2;
   }
   let code = 0;
+  for (const jf of jsonlFiles) {
+    const r = verifyJsonl(jf);
+    out(r.line);
+    if (r.exit === 1) code = 1;
+    else if (r.exit === 2 && code !== 1) code = 2;
+  }
   for (const file of files) {
     if (!fs.existsSync(file)) {
       err(`ERROR ${file} does not exist`);
@@ -199,4 +264,4 @@ if (require.main === module) {
   process.exitCode = main(process.argv.slice(2));
 }
 
-module.exports = { main, verifyFile, partitionIdFor };
+module.exports = { main, verifyFile, verifyJsonl, partitionIdFor };

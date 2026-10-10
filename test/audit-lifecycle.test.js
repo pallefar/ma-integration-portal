@@ -426,3 +426,180 @@ test('lifecycle (j): sealing a deal with no partition file is refused no-partiti
   assert.strictEqual(res.json.reason, 'no-partition');
   assert.strictEqual(fs.existsSync(partitionFile(dealId)), false, 'a probe never creates a partition');
 });
+
+// ===========================================================================
+// Task 2: retention, purge decision, export batching, CLI
+// ===========================================================================
+
+test('lifecycle (k): retentionPolicy — unset/never/invalid are "never" (invalid warns once); a positive integer is days', () => {
+  const warn = console.warn;
+  const warnings = [];
+  console.warn = (m) => warnings.push(String(m));
+  try {
+    assert.deepStrictEqual(auditLifecycle.retentionPolicy({}), { days: null });
+    assert.deepStrictEqual(auditLifecycle.retentionPolicy({ MA_AUDIT_RETENTION_DAYS: '' }), { days: null });
+    assert.deepStrictEqual(auditLifecycle.retentionPolicy({ MA_AUDIT_RETENTION_DAYS: 'never' }), { days: null });
+    assert.deepStrictEqual(auditLifecycle.retentionPolicy({ MA_AUDIT_RETENTION_DAYS: ' 30 ' }), { days: 30 });
+    assert.strictEqual(warnings.length, 0, 'valid values never warn');
+    for (const bad of ['0', '-1', '1.5', '7d', 'forever']) {
+      assert.strictEqual(auditLifecycle.retentionPolicy({ MA_AUDIT_RETENTION_DAYS: bad }).days, null);
+    }
+    assert.strictEqual(warnings.length, 1, 'an invalid value warns ONCE');
+    assert.match(warnings[0], /treating it as "never"/);
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('lifecycle (l): purgeDecision follows the documented refusal order with an injected clock', () => {
+  const sealedEvent = { ts: '2026-01-01T00:00:00.000Z', sha256: 'a'.repeat(64), rows: 5, headHash: 'h' };
+  const matching = { exists: true, sealed: true, fileSha256: 'a'.repeat(64), rows: 5, headHash: 'h' };
+  const exportEvents = [{ sealedSha256: 'a'.repeat(64), exportSha256: 'e'.repeat(64) }];
+  const base = { status: matching, sealedEvent, exportEvents, retention: { days: 30 }, now: new Date('2026-03-01T00:00:00Z') };
+  const decide = (over) => auditLifecycle.purgeDecision({ ...base, ...over });
+
+  assert.strictEqual(decide({ status: { exists: false } }).reason, 'no-partition');
+  assert.strictEqual(decide({ status: { ...matching, sealed: false } }).reason, 'not-sealed');
+  assert.strictEqual(decide({ sealedEvent: null }).reason, 'not-sealed');
+  assert.strictEqual(decide({ status: { ...matching, fileSha256: 'b'.repeat(64) } }).reason, 'modified-after-seal');
+  assert.strictEqual(decide({ exportEvents: [] }).reason, 'no-sealed-export');
+  assert.strictEqual(decide({ exportEvents: [{ sealedSha256: 'c'.repeat(64), exportSha256: 'x' }] }).reason, 'no-sealed-export', 'an export of a DIFFERENT sealed state does not count');
+  assert.strictEqual(decide({ retention: { days: null } }).reason, 'retention-never');
+  assert.strictEqual(decide({ now: new Date('2026-01-30T23:59:59Z') }).reason, 'retention-not-elapsed');
+  assert.strictEqual(decide({ now: new Date('NaN') }).reason, 'retention-not-elapsed', 'an unusable clock fails closed');
+  const ok = decide({ now: new Date('2026-01-31T00:00:00Z') });
+  assert.strictEqual(ok.allowed, true);
+  assert.strictEqual(ok.eligibleAt, '2026-01-31T00:00:00.000Z');
+  // earlier refusals outrank later ones
+  assert.strictEqual(decide({ status: { ...matching, sealed: false }, exportEvents: [], retention: { days: null } }).reason, 'not-sealed');
+});
+
+test('lifecycle (m): a permitted purge records audit-partition-purged BEFORE it deletes the file', () => {
+  const dealId = makeDealWithPartition('m', 2);
+  archive(dealId);
+  auditHook.closePartitionConnection(dealId);
+  const sealed = auditLifecycle.sealPartitionFile(dealId, { actor: { username: 'lcadmin', role: 'admin' } });
+  const file = partitionFile(dealId);
+
+  const recorded = [];
+  const result = auditLifecycle.purgePartition(dealId, {
+    findEvents: (actions) => {
+      if (actions.includes('audit-partition-sealed')) return [{ ts: '2026-01-01T00:00:00.000Z', after: { sha256: sealed.sha256, rows: sealed.rows, headHash: sealed.headHash } }];
+      if (actions.includes('audit-partition-exported')) return [{ ts: '2026-01-02T00:00:00.000Z', after: { exportSha256: 'e'.repeat(64), sealedSha256: sealed.sha256 } }];
+      return [];
+    },
+    recordEvent: (ev) => recorded.push({ action: ev.action, fileExistedAtRecord: fs.existsSync(file) }),
+    closeConnection: () => {},
+    now: new Date('2026-06-01T00:00:00Z'),
+    env: { MA_AUDIT_RETENTION_DAYS: '30' },
+  });
+  assert.strictEqual(result.outcome, 'purged');
+  assert.deepStrictEqual(recorded, [{ action: 'audit-partition-purged', fileExistedAtRecord: true }]);
+  assert.strictEqual(fs.existsSync(file), false);
+});
+
+test('lifecycle (n): a 5,000-row export streams in <= 500-row batches with an event-loop yield per batch (T-12-114)', async () => {
+  const partitionId = newDealId();
+  const file = dbFiles.auditPartitionPath(partitionId);
+  const conn = dbFiles.openDbFile(file, dbFiles.AUDIT_PARTITION_SCHEMA_PATH);
+  try {
+    const rows = [];
+    for (let i = 0; i < 5000; i += 1) {
+      rows.push({
+        ts: new Date(1700000000000 + i).toISOString(), actor_username: 'bulk', actor_role: 'hrbp', db_kind: 'deal',
+        deal_id: partitionId, action: 'insert', collection: 'alerts', row_id: `alert_bulk_${i}`, after_json: JSON.stringify({ i }),
+      });
+    }
+    auditChain.appendChained(conn, rows, { partitionId });
+  } finally {
+    conn.close();
+  }
+  const sealed = auditLifecycle.sealPartitionFile(partitionId, { actor: { username: 'lcadmin', role: 'admin' } });
+  assert.strictEqual(sealed.rows, 5001);
+
+  const origImmediate = global.setImmediate;
+  let yields = 0;
+  global.setImmediate = (...args) => { yields += 1; return origImmediate(...args); };
+  const chunks = [];
+  let maxChunkRows = 0;
+  let result;
+  try {
+    result = await auditLifecycle.exportPartitionJsonl(partitionId, (chunk) => {
+      chunks.push(chunk);
+      maxChunkRows = Math.max(maxChunkRows, chunk.split('\n').length - 1);
+    }, { sealedSha256: sealed.sha256 });
+  } finally {
+    global.setImmediate = origImmediate;
+  }
+  assert.ok(yields >= 10, `>= 10 yields for 5001 rows, saw ${yields}`);
+  assert.ok(result.batches >= 10);
+  assert.ok(maxChunkRows <= auditLifecycle.EXPORT_BATCH_ROWS, `no chunk over ${auditLifecycle.EXPORT_BATCH_ROWS} rows (saw ${maxChunkRows})`);
+  assert.strictEqual(result.rowCount, 5001);
+  const body = chunks.join('');
+  assert.strictEqual(result.sha256, crypto.createHash('sha256').update(body, 'utf8').digest('hex'));
+  assert.strictEqual(body.split('\n').filter(Boolean).length, 5002, 'header + 5001 rows');
+});
+
+test('lifecycle (o): scripts/audit-admin.js — seal/export/purge with actor cli:<os-user>, same events as the routes', () => {
+  const dealId = makeDealWithPartition('o', 3);
+  const cliPath = path.join(__dirname, '..', 'scripts', 'audit-admin.js');
+  const cli = (args, extraEnv) => spawnSync(process.execPath, [cliPath, ...args], {
+    env: { ...process.env, MA_MODE: 'real', ...(extraEnv || {}) }, encoding: 'utf8',
+  });
+
+  const help = cli(['--help']);
+  assert.strictEqual(help.status, 0);
+  assert.match(help.stdout, /Usage: node scripts\/audit-admin\.js/);
+  assert.strictEqual(cli([]).status, 2, 'no command is a usage error');
+  assert.strictEqual(cli(['seal', dealId]).status, 2, 'seal without --confirm is refused before anything runs');
+  assert.strictEqual(cli(['seal', dealId, '--confirm', 'deal_other']).status, 2, 'a mismatched --confirm is refused');
+  assert.strictEqual(cli(['bogus', dealId]).status, 2);
+
+  // active deal: refused with a reason, exit 1
+  const active = cli(['seal', dealId, '--confirm', dealId]);
+  assert.strictEqual(active.status, 1, active.stdout + active.stderr);
+  assert.match(active.stderr, /REFUSED deal-active/);
+
+  archive(dealId);
+  const list = cli(['list']);
+  assert.strictEqual(list.status, 0, list.stderr);
+  assert.match(list.stdout, new RegExp(`${dealId}  rows=3  sealed=no`));
+
+  const sealed = cli(['seal', dealId, '--confirm', dealId]);
+  assert.strictEqual(sealed.status, 0, sealed.stdout + sealed.stderr);
+  const sha = /sha256=([0-9a-f]{64})/.exec(sealed.stdout)[1];
+  const ev = events(dealId, 'audit-partition-sealed');
+  assert.strictEqual(ev.length, 1);
+  assert.strictEqual(ev[0].after.sha256, sha);
+  assert.match(ev[0].actor_username, /^cli:/);
+  assert.strictEqual(ev[0].actor_role, 'cli');
+
+  const out = path.join(TMP, `cli-${dealId}.jsonl`);
+  const exp = cli(['export', dealId, '--out', out]);
+  assert.strictEqual(exp.status, 0, exp.stdout + exp.stderr);
+  if (POSIX) assert.strictEqual(fs.statSync(out).mode & 0o777, 0o600, 'export file is 0600');
+  assert.strictEqual(cli(['export', dealId, '--out', out]).status, 2, 'an existing export is never overwritten');
+  const verified = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'audit-verify.js'), '--jsonl', out], { env: { ...process.env }, encoding: 'utf8' });
+  assert.strictEqual(verified.status, 0, verified.stdout + verified.stderr);
+  const exported = events(dealId, 'audit-partition-exported');
+  assert.strictEqual(exported.length, 1);
+  assert.strictEqual(exported[0].after.exportSha256, /sha256=([0-9a-f]{64})/.exec(verified.stdout)[1]);
+
+  const never = cli(['purge', dealId, '--confirm', dealId]);
+  assert.strictEqual(never.status, 1);
+  assert.match(never.stderr, /REFUSED retention-never/);
+  const notYet = cli(['purge', dealId, '--confirm', dealId], { MA_AUDIT_RETENTION_DAYS: '1' });
+  assert.strictEqual(notYet.status, 1);
+  assert.match(notYet.stderr, /REFUSED retention-not-elapsed/);
+  assert.ok(fs.existsSync(partitionFile(dealId)), 'both refusals deleted nothing');
+  assert.strictEqual(events(dealId, 'audit-partition-purge-refused').length, 2);
+
+  const status = cli(['status', dealId, '--json']);
+  assert.strictEqual(status.status, 0, status.stderr);
+  const parsed = JSON.parse(status.stdout);
+  assert.strictEqual(parsed.sealed, true);
+  assert.strictEqual(parsed.fileMatchesSeal, true);
+  assert.strictEqual(parsed.dealState, 'archived');
+  assert.strictEqual(parsed.purgeBlockedBy, 'retention-never');
+  assert.ok(parsed.events.length >= 4);
+});
