@@ -1622,6 +1622,31 @@ function recordDenial(req, status, reason, route) {
   });
 }
 
+/**
+ * [security] WR-01 (Phase 11 review): the DD / org clean-room clearance
+ * refusals go through the SAME rate bound as every other denial (one row per
+ * actor + deal + method + route TEMPLATE + reason [+ subject] per window), so a
+ * probe loop over `/api/dd/findings/<random id>` or `/api/org/flight-risk` can no
+ * longer append one permanent audit.db row per request. Their historical
+ * action names and row shape are preserved (lib/denialAudit.js "CLEARANCE
+ * DENIALS"); `subject` must be a bounded value (a DD area id, or null).
+ */
+function recordClearanceDenial(req, action, reason, subject) {
+  denialAuditor.startSweeper();
+  denialAuditor.record({
+    actor: req.portalUser || null,
+    method: req.method,
+    path: canonicalPathOf(req),
+    reason,
+    status: 403,
+    route: (req.route && typeof req.route.path === 'string') ? req.route.path : undefined,
+    dealId: (req.dealContext && req.dealContext.dealId) || null,
+    request: requestMeta(req),
+    action,
+    subject: subject === undefined ? null : subject,
+  });
+}
+
 /** Audit the refusal, then answer it with the SAME status/body the caller always sent. */
 function denyAt(req, res, status, reason, body) {
   recordDenial(req, status, reason);
@@ -5502,11 +5527,9 @@ app.get('/api/org/positions', (req, res) => {
     // mirroring GET /api/org/flight-risk's identical read-audit shape.
     // Gated real-deal-only (!req.isDemo), matching GET /api/reports/export's
     // established audit-scoping rule.
+    // WR-01: rate-bounded via the shared denial auditor (same row shape).
     if (!req.isDemo) {
-      auditHook.recordSecurityEvent({
-        actor: req.portalUser, action: 'org-positions-target-access-denied', dealId: req.dealContext.dealId,
-        subject: null, before: null, after: null, request: requestMeta(req),
-      });
+      recordClearanceDenial(req, 'org-positions-target-access-denied', 'org-clearance', null);
     }
     return res.status(403).json({ error: 'You are not cleared to view the target org design.' });
   }
@@ -5949,11 +5972,9 @@ app.get('/api/org/decisions', (req, res) => {
     // /api/org/flight-risk's identical read-audit shape. Gated real-deal-
     // only (!req.isDemo), matching GET /api/reports/export's established
     // audit-scoping rule.
+    // WR-01: rate-bounded via the shared denial auditor (same row shape).
     if (!req.isDemo) {
-      auditHook.recordSecurityEvent({
-        actor: req.portalUser, action: 'org-decisions-access-denied', dealId: req.dealContext.dealId,
-        subject: null, before: null, after: null, request: requestMeta(req),
-      });
+      recordClearanceDenial(req, 'org-decisions-access-denied', 'org-clearance', null);
     }
     return res.status(403).json({ error: 'You are not cleared to view org decisions.' });
   }
@@ -6069,10 +6090,8 @@ app.post('/api/org/decisions', (req, res) => {
 app.get('/api/org/flight-risk', (req, res) => {
   const deal = controlStore.getDeal(req.dealContext.dealId);
   if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
-    auditHook.recordSecurityEvent({
-      actor: req.portalUser, action: 'org-flightrisk-access-denied', dealId: req.dealContext.dealId,
-      subject: null, before: null, after: null, request: requestMeta(req),
-    });
+    // WR-01: rate-bounded via the shared denial auditor (same row shape).
+    recordClearanceDenial(req, 'org-flightrisk-access-denied', 'org-clearance', null);
     return res.status(403).json({ error: 'You are not cleared to view the flight-risk register.' });
   }
   auditHook.recordSecurityEvent({
@@ -6493,10 +6512,9 @@ app.get('/api/dd/request-items', (req, res) => {
 // dependency, mirroring why db/controlStore.js holds no reference to
 // audit.db (AUD-02's isolation precedent).
 function refuseDdArea(req, res, areaId) {
-  auditHook.recordSecurityEvent({
-    actor: req.portalUser, action: 'dd-access-denied', dealId: req.dealContext.dealId, subject: areaId,
-    before: null, after: null, request: requestMeta(req),
-  });
+  // WR-01: rate-bounded (first denial of a window writes this exact row; the
+  // rest fold into one counted row) — see recordClearanceDenial().
+  recordClearanceDenial(req, 'dd-access-denied', 'dd-clearance', areaId == null ? null : areaId);
   const err = new accessPolicy.AreaAccessError();
   res.status(err.status).json({ error: err.message });
 }

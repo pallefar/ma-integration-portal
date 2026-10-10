@@ -295,14 +295,20 @@ test('org-dd-read-audit (i): grep-level guard — each of the four route handler
   // otherwise inflate a naive substring count by one.
   const countIsDemoGates = (body) => (body.match(/if \([^)]*!req\.isDemo[^)]*\)\s*\{/g) || []).length;
 
+  // Phase 11 review WR-01: the DENIAL half now goes through
+  // recordClearanceDenial(req, ...) — the rate-bounded wrapper that writes the
+  // SAME action-named row via the shared denial auditor — so an audit call
+  // site is either name.
+  const auditCalls = (body) => (body.match(/recordSecurityEvent|recordClearanceDenial\(req/g) || []).length;
+
   const decisionsMatch = /app\.get\('\/api\/org\/decisions'[\s\S]*?\n\}\);/.exec(src);
   assert.ok(decisionsMatch, 'expected to locate GET /api/org/decisions');
-  assert.strictEqual((decisionsMatch[0].match(/recordSecurityEvent/g) || []).length, 2, 'GET /api/org/decisions must call recordSecurityEvent exactly twice — denial and success');
+  assert.strictEqual(auditCalls(decisionsMatch[0]), 2, 'GET /api/org/decisions must audit exactly twice — denial and success');
   assert.strictEqual(countIsDemoGates(decisionsMatch[0]), 2, 'both recordSecurityEvent call sites in GET /api/org/decisions must be gated on !req.isDemo');
 
   const positionsMatch = /app\.get\('\/api\/org\/positions'[\s\S]*?\n\}\);/.exec(src);
   assert.ok(positionsMatch, 'expected to locate GET /api/org/positions');
-  assert.strictEqual((positionsMatch[0].match(/recordSecurityEvent/g) || []).length, 2, 'GET /api/org/positions must call recordSecurityEvent exactly twice — target denial and target success');
+  assert.strictEqual(auditCalls(positionsMatch[0]), 2, 'GET /api/org/positions must audit exactly twice — target denial and target success');
   assert.strictEqual(countIsDemoGates(positionsMatch[0]), 2, 'both recordSecurityEvent call sites in GET /api/org/positions must be gated on !req.isDemo');
 
   const findingsListMatch = /app\.get\('\/api\/dd\/findings',[\s\S]*?\n\}\);/.exec(src);

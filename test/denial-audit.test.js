@@ -466,6 +466,107 @@ test('live: a refused probe cannot flood audit.db — 60 denials across 3 templa
   });
 });
 
+// Phase 11 review WR-01: the DD and org clean-room refusals keep their own
+// action names but are rate-bounded by the SAME auditor (25 probes -> 1 row).
+function actionRows(action, actor) {
+  return auditHook.getAuditConnection().prepare(
+    'SELECT * FROM audit_log WHERE action = ? AND actor_username = ? ORDER BY id'
+  ).all(action, actor);
+}
+
+test('live WR-01 (DD by-id): uncleared pmo GET /api/dd/findings/<random> x25 -> 403 x25 -> ONE dd-access-denied row; the folded count is written, not lost', async () => {
+  const fx = realDeal('deal_daddbound', [
+    { username: 'da-dd-admin', role: 'admin' },
+    { username: 'da-dd-none', role: 'pmo' }, // member, no clearance
+  ]);
+  await withServer(async (base) => {
+    const created = await call(base, 'POST', '/api/dd/findings', fx.cookie('da-dd-admin'), {
+      area: 'hr', title: 'DA-DD-SECRET retention', severity: 'high',
+    });
+    const { finding } = await created.json();
+    let firstBody;
+    for (let i = 0; i < 25; i += 1) {
+      const res = await call(base, 'GET', `/api/dd/findings/probe-${i}-${Math.random().toString(36).slice(2)}`, fx.cookie('da-dd-none'));
+      assert.strictEqual(res.status, 403);
+      const text = await res.text();
+      firstBody = firstBody || text;
+      assert.strictEqual(text, firstBody, 'the refusal body is unchanged and identical for every probe');
+    }
+    let rows = actionRows('dd-access-denied', 'da-dd-none');
+    assert.strictEqual(rows.length, 1, `25 probes on one template = ONE dd-access-denied row, got ${rows.length}`);
+    assert.strictEqual(rows[0].row_id, null, 'unknown-id probes keep the null subject');
+    assert.strictEqual(rows[0].after_json, null, 'the first row keeps the historical shape (no detail blob)');
+    assert.strictEqual(rows[0].deal_id, 'deal_daddbound');
+
+    // An uncleared REAL id is a different subject (the area): its own first row.
+    const real = await call(base, 'GET', `/api/dd/findings/${finding.id}`, fx.cookie('da-dd-none'));
+    assert.strictEqual(real.status, 403);
+    assert.strictEqual(await real.text(), firstBody, 'uncleared == unknown: byte-identical body');
+    rows = actionRows('dd-access-denied', 'da-dd-none');
+    assert.strictEqual(rows.length, 2);
+    assert.strictEqual(rows[1].row_id, 'hr');
+
+    app.denialAuditor.flushAll();
+    rows = actionRows('dd-access-denied', 'da-dd-none');
+    assert.strictEqual(rows.length, 3, 'the 24 folded denials are written once, as the key\'s next row');
+    const folded = JSON.parse(rows[2].after_json);
+    assert.strictEqual(folded.count, 24);
+    assert.strictEqual(folded.folded, true);
+    assert.strictEqual(folded.route, 'GET /api/dd/findings/:id');
+    for (const r of rows) assert.ok(!/DA-DD-SECRET/.test(JSON.stringify(r)), 'no record content in the audit rows');
+  });
+});
+
+test('live WR-01 (org): uncleared pmo GET /api/org/decisions?positionId=<random> x25 and GET /api/org/flight-risk x25 -> ONE row each, historical action names kept', async () => {
+  const fx = realDeal('deal_daorgbound', [{ username: 'da-org-none', role: 'pmo' }]);
+  await withServer(async (base) => {
+    for (let i = 0; i < 25; i += 1) {
+      const d = await call(base, 'GET', `/api/org/decisions?positionId=pos_${i}_${Math.random().toString(36).slice(2)}`, fx.cookie('da-org-none'));
+      assert.strictEqual(d.status, 403);
+      assert.deepStrictEqual(await d.json(), { error: 'You are not cleared to view org decisions.' });
+      const f = await call(base, 'GET', '/api/org/flight-risk', fx.cookie('da-org-none'));
+      assert.strictEqual(f.status, 403);
+      assert.deepStrictEqual(await f.json(), { error: 'You are not cleared to view the flight-risk register.' });
+    }
+    assert.strictEqual(actionRows('org-decisions-access-denied', 'da-org-none').length, 1, '25 decision probes = ONE row');
+    assert.strictEqual(actionRows('org-flightrisk-access-denied', 'da-org-none').length, 1, '25 flight-risk probes = ONE row');
+    app.denialAuditor.flushAll();
+    for (const action of ['org-decisions-access-denied', 'org-flightrisk-access-denied']) {
+      const rows = actionRows(action, 'da-org-none');
+      assert.strictEqual(rows.length, 2);
+      assert.strictEqual(JSON.parse(rows[1].after_json).count, 24, `${action}: every denial is counted`);
+    }
+  });
+});
+
+test('unit WR-01: a legacy-named clearance denial keeps its action / subject / after:null first row and folds like every other key; the deal id separates keys', () => {
+  const { auditor, clock, rows } = unitAuditor();
+  const p = (over) => probe(Object.assign({ reason: 'dd-clearance', action: 'dd-access-denied', subject: 'hr', dealId: 'deal_a' }, over || {}));
+  assert.strictEqual(auditor.record(p()), true);
+  assert.deepStrictEqual(
+    { action: rows[0].action, subject: rows[0].subject, before: rows[0].before, after: rows[0].after, dealId: rows[0].dealId },
+    { action: 'dd-access-denied', subject: 'hr', before: null, after: null, dealId: 'deal_a' }
+  );
+  for (let i = 0; i < 9; i += 1) assert.strictEqual(auditor.record(p()), false);
+  assert.strictEqual(auditor.record(p({ subject: null })), true, 'a different subject (unknown id) is its own key');
+  assert.strictEqual(auditor.record(p({ dealId: 'deal_b' })), true, 'a different deal is its own key');
+  assert.strictEqual(rows.length, 3);
+  clock.t += 60000;
+  auditor.sweep();
+  assert.strictEqual(rows.length, 4);
+  assert.strictEqual(rows[3].action, 'dd-access-denied');
+  assert.strictEqual(rows[3].after.count, 9);
+  assert.strictEqual(rows[3].after.folded, true);
+});
+
+test('structural WR-01: no DD/org clearance refusal writes its own unbounded audit row any more', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  for (const action of ['dd-access-denied', 'org-positions-target-access-denied', 'org-decisions-access-denied', 'org-flightrisk-access-denied']) {
+    assert.ok(!new RegExp(`recordSecurityEvent\\(\\{[^}]*action: '${action}'`).test(src), `${action} must not be a direct recordSecurityEvent call`);
+    assert.ok(src.includes(`recordClearanceDenial(req, '${action}'`), `${action} goes through recordClearanceDenial`);
+  }
+});
+
 test('structural: the inline grants 403 and the clearance-404 branch go through the auditor; the gate has no raw 401/403 left', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   assert.ok((src.match(/denyAt\(req, res/g) || []).length >= 6, 'gate + grants refusals use denyAt');
