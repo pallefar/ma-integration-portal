@@ -1935,43 +1935,85 @@ document.addEventListener('DOMContentLoaded', () => {
   const hrForm = document.getElementById('hr-inquiry-form');
   const hrSuccess = document.getElementById('hr-form-success-message');
 
-  if (hrForm && hrSuccess) {
-    hrForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const submitBtn = hrForm.querySelector('button[type="submit"]');
-      const lang = localStorage.getItem('employeeLanguage') || 'en';
-      const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  // [security] WR-C02 (Phase 11 review): the ticket is filed through POST
+  // /api/communications/send, which the write policy has never allowed an
+  // `employee` (DEFAULT_WRITE_ROLES). In a real deal the card is hidden for a
+  // role the server-computed `helpdesk` capability refuses (window.maCan — no
+  // role table here); a dedicated employee helpdesk channel is Phase 22. With
+  // no map (demo-open) the card stays exactly as before.
+  function gateHelpdesk(form) {
+    canReady('helpdesk').then(ok => { if (!ok) hideCardOf(form); });
+  }
 
-      submitBtn.disabled = true;
-      submitBtn.textContent = dict.hr_submitting || "Submitting Ticket...";
+  // WR-C02: success is shown ONLY when the server accepted the ticket. Any
+  // refusal (403), contention (503 after the Phase-8 retries), conflict (409)
+  // or network failure leaves the form (and the typed question) in place and
+  // says plainly that nothing was sent — never the old `.finally(success)`.
+  function submitHelpdeskTicket(e) {
+    e.preventDefault();
+    const submitBtn = hrForm.querySelector('button[type="submit"]');
+    const lang = localStorage.getItem('employeeLanguage') || 'en';
+    const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+    const originalLabel = submitBtn.textContent;
+    const errorBox = helpdeskErrorBox();
+    errorBox.hidden = true;
+    errorBox.style.display = 'none';
 
-      // File the ticket into the real communications ledger so it shows up
-      // in the Integration Leader dashboard & Admin broadcast centers.
-      const topicSelect = document.getElementById('hr-inquiry-subject');
-      const topicLabel = topicSelect && topicSelect.selectedOptions[0] ? topicSelect.selectedOptions[0].textContent.trim() : 'General HR Inquiry';
-      const message = (document.getElementById('hr-inquiry-msg') || {}).value || '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = dict.hr_submitting || "Submitting Ticket...";
 
-      fetch('/api/communications/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender: name,
-          senderRole: 'employee',
-          recipientType: 'hrbp',
-          recipientId: 'hrbp',
-          recipientName: 'Integration Leader Helpdesk',
-          recipientEmail: 'integration-leaders@te.com',
-          subject: `[HR Ticket] ${topicLabel}`,
-          template: 'custom',
-          body: message
-        })
+    // File the ticket into the real communications ledger so it shows up
+    // in the Integration Leader dashboard & Admin broadcast centers.
+    const topicSelect = document.getElementById('hr-inquiry-subject');
+    const topicLabel = topicSelect && topicSelect.selectedOptions[0] ? topicSelect.selectedOptions[0].textContent.trim() : 'General HR Inquiry';
+    const message = (document.getElementById('hr-inquiry-msg') || {}).value || '';
+
+    return fetch('/api/communications/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender: name,
+        senderRole: 'employee',
+        recipientType: 'hrbp',
+        recipientId: 'hrbp',
+        recipientName: 'Integration Leader Helpdesk',
+        recipientEmail: 'integration-leaders@te.com',
+        subject: `[HR Ticket] ${topicLabel}`,
+        template: 'custom',
+        body: message
       })
-        .catch(err => console.error('Error filing HR helpdesk ticket:', err))
-        .finally(() => {
-          hrForm.style.display = 'none';
-          hrSuccess.style.display = 'block';
-        });
-    });
+    })
+      .then(res => {
+        if (!res || !res.ok) throw new Error('helpdesk ticket refused (HTTP ' + (res && res.status) + ')');
+        hrForm.style.display = 'none';
+        hrSuccess.style.display = 'block';
+      })
+      .catch(err => {
+        console.error('Error filing HR helpdesk ticket:', err);
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+        errorBox.textContent = dict.hr_send_failed || 'Your question could not be sent — please contact your Integration Leader directly.';
+        errorBox.hidden = false;
+        errorBox.style.display = 'block';
+      });
+  }
+
+  // The honest error line under the form (created once; textContent only).
+  function helpdeskErrorBox() {
+    let box = document.getElementById('hr-form-error-message');
+    if (!box) {
+      box = document.createElement('p');
+      box.id = 'hr-form-error-message';
+      box.setAttribute('role', 'alert');
+      box.style.cssText = 'margin-top:0.75rem;font-size:0.8rem;font-weight:600;color:#B91C1C;';
+      hrForm.appendChild(box);
+    }
+    return box;
+  }
+
+  if (hrForm && hrSuccess) {
+    gateHelpdesk(hrForm);
+    hrForm.addEventListener('submit', submitHelpdeskTicket);
   }
 
   // Interactive 30-Day Onboarding Pulse Rating Selection

@@ -1181,6 +1181,10 @@ app.get('/api/auth/me', (req, res) => {
   // means "show everything exactly as the showcase always did". `dealBound`
   // mirrors the gate's own leniency predicate: a session with no deal binding
   // resolves to the demo store (req.isDemo === true), where reads stay open.
+  // `helpdesk` (Phase 11 review WR-C02): may this role file the employee-portal
+  // HR helpdesk ticket (POST /api/communications/send)? Taken from the SAME
+  // write table the gate enforces, so the portal hides a form that could only
+  // be refused (an employee has never been on DEFAULT_WRITE_ROLES).
   const role = user && user.role;
   res.json({
     authEnabled: true,
@@ -1189,7 +1193,10 @@ app.get('/api/auth/me', (req, res) => {
     access: Object.assign(
       {},
       readPolicy.accessSummaryFor(role, !!sess.dealId),
-      { configWrite: roleAllowedForWrite(role, '/api/settings', 'POST') }
+      {
+        configWrite: roleAllowedForWrite(role, '/api/settings', 'POST'),
+        helpdesk: roleAllowedForWrite(role, '/api/communications/send', 'POST'),
+      }
     ),
   });
 });

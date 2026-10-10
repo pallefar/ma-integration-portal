@@ -1326,3 +1326,102 @@ test('WR-C01 (vm): execution.js waits for the map — a role refused the task la
     ]);
   }
 });
+
+// ---------------------------------------------- WR-C02: employee HR helpdesk
+test('WR-C02 (server): `helpdesk` follows the write table — an employee is refused POST /api/communications/send, staff are not', async () => {
+  const fx = createDealFixture({ controlConn, runtimeConn, dealId: 'deal_ahhelp', members: MEMBERS });
+  const demoEmp = demoSession({ controlConn, runtimeConn, username: 'ah-demo-help-emp', role: 'employee' });
+  await withServer(async (base) => {
+    const access = async (cookie) => (await me(base, cookie)).json.access;
+    assert.strictEqual((await access(fx.cookie('ah-emp'))).helpdesk, false, 'employee, real deal');
+    assert.strictEqual((await access(demoEmp)).helpdesk, false, 'employee, demo store: writes follow the same table');
+    for (const u of ['ah-pmo', 'ah-hrbp', 'ah-admin']) assert.strictEqual((await access(fx.cookie(u))).helpdesk, true, u);
+    // the map agrees with the gate: the employee's ticket POST is refused before the handler
+    const res = await fetch(`${base}/api/communications/send`, {
+      method: 'POST',
+      headers: { cookie: fx.cookie('ah-emp'), 'content-type': 'application/json' },
+      body: JSON.stringify({ sender: 'x', subject: 's', body: 'b', recipientType: 'hrbp', template: 'custom' }),
+    });
+    assert.strictEqual(res.status, 403);
+  });
+});
+
+function helpdeskHarness(win, response) {
+  const form = fakeEl();
+  const card = fakeEl();
+  form.closest = (sel) => (sel === '.card' ? card : null);
+  const btn = fakeEl({ textContent: 'Submit to Integration Leader', disabled: false });
+  form.querySelector = (sel) => (sel === 'button[type="submit"]' ? btn : fakeEl());
+  const success = fakeEl();
+  success.style.display = 'none';
+  form.style.display = 'block';
+  const created = {};
+  const calls = [];
+  const fetchImpl = (url, init) => {
+    calls.push({ url: String(url), method: (init && init.method) || 'GET' });
+    if (response === Error) return Promise.reject(new Error('network down'));
+    return Promise.resolve({ ok: response >= 200 && response < 300, status: response, json: () => Promise.resolve({}) });
+  };
+  const ex = loadBlocks(EMPLOYEE_SRC, [
+    'function canReady(', 'function hideSection(', 'function hideCardOf(', 'function gateHelpdesk(',
+    'function submitHelpdeskTicket(', 'function helpdeskErrorBox(',
+  ], {
+    window: win,
+    fetch: fetchImpl,
+    hrForm: form,
+    hrSuccess: success,
+    name: 'Alex',
+    TRANSLATIONS: { en: {} },
+    localStorage: { getItem: () => null },
+    document: {
+      getElementById: (id) => (id === 'hr-form-error-message' ? created.err || null : null),
+      createElement: () => { created.err = fakeEl(); return created.err; },
+    },
+  }, ['gateHelpdesk', 'submitHelpdeskTicket']);
+  return { form, card, btn, success, created, calls, ex };
+}
+
+test('WR-C02 (vm): a refused / failed ticket never shows "Inquiry Received!" — the form stays and an honest error is shown', async () => {
+  for (const status of [403, 409, 503, Error]) {
+    const h = helpdeskHarness(await bootWindow(ME_OPEN), status);
+    await h.ex.submitHelpdeskTicket({ preventDefault() {} });
+    assert.strictEqual(h.success.style.display, 'none', `HTTP ${status}: no success card`);
+    assert.strictEqual(h.form.style.display, 'block', 'the form (and the typed question) stays');
+    assert.ok(h.created.err, 'an error line is rendered');
+    assert.match(h.created.err.textContent, /could not be sent .* contact your Integration Leader directly/);
+    assert.strictEqual(h.created.err.style.display, 'block');
+    assert.strictEqual(h.btn.disabled, false, 'the button is usable again');
+    assert.strictEqual(h.btn.textContent, 'Submit to Integration Leader');
+  }
+});
+
+test('WR-C02 (vm): an accepted ticket (demo-open) keeps the success path', async () => {
+  const h = helpdeskHarness(await bootWindow(ME_OPEN), 200);
+  await h.ex.submitHelpdeskTicket({ preventDefault() {} });
+  assert.deepStrictEqual(h.calls.map((c) => c.method + ' ' + c.url), ['POST /api/communications/send']);
+  assert.strictEqual(h.success.style.display, 'block');
+  assert.strictEqual(h.form.style.display, 'none');
+});
+
+test('WR-C02 (vm): the helpdesk card is hidden for a role the `helpdesk` capability refuses, kept for demo-open and staff', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody);
+    const h = helpdeskHarness(win, 200);
+    h.ex.gateHelpdesk(h.form);
+    await settle(win);
+    return h.card;
+  };
+  const refused = await run(Object.assign({}, ME_EMPLOYEE, { access: Object.assign({}, ME_EMPLOYEE.access, { helpdesk: false }) }));
+  assert.strictEqual(refused.hidden, true);
+  assert.strictEqual(refused.style.display, 'none');
+  for (const meBody of [ME_OPEN, Object.assign({}, ME_PMO, { access: Object.assign({}, ME_PMO.access, { helpdesk: true }) })]) {
+    assert.notStrictEqual((await run(meBody)).hidden, true);
+  }
+});
+
+test('WR-C02 (source): the submit handler is wired to submitHelpdeskTicket and the old .finally(success) is gone', () => {
+  assert.ok(EMPLOYEE_SRC.includes("hrForm.addEventListener('submit', submitHelpdeskTicket);"));
+  const body = extractBlock(EMPLOYEE_SRC, 'function submitHelpdeskTicket(');
+  assert.ok(!/\.finally\(/.test(body), 'success must not be shown unconditionally');
+  assert.ok(/if \(!res \|\| !res\.ok\) throw/.test(body), 'res.ok is checked before the success card');
+});
