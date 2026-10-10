@@ -1,59 +1,54 @@
 ---
-status: diagnosed
+status: complete
 phase: 09-optimistic-locking-conflict-recovery
 source: [09-VERIFICATION.md, .planning/reviews/v3.0/R7-phase9-uat.md]
 started: 2026-08-11T09:05:00Z
-updated: 2026-10-10T09:45:00Z
-verification: automated — real two-context Playwright walks on an isolated real-deal-mode instance, judged by Fable against 09-CONTEXT.md D-01..D-09, 09-UI-SPEC.md (literal Copywriting Contract), REQUIREMENTS.md CONC-02 (per standing directive 2026-08-08; evidence in R7-phase9-uat.md)
+updated: 2026-10-10T13:30:00Z
+verification: automated — real two-context Playwright walks on an isolated real-deal-mode instance (plus a --demo-open lane), judged by Fable against 09-CONTEXT.md D-01..D-09, 09-UI-SPEC.md (literal Copywriting Contract + Amendments A1–A11), REQUIREMENTS.md CONC-02 (per standing directive 2026-08-08). R7 evidence in R7-phase9-uat.md; gap-closure evidence in walk-evidence/ (committed run) and re-run independently by the verifier 2026-10-10 (350 PASS / 0 FAIL real-deal; 18 PASS / 0 FAIL demo-open; suite 875/875 twice).
 ---
 
 ## Current Test
 
-[testing complete — diagnosed; gap closure planned via `/gsd-plan-phase 9 --gaps`]
+[testing complete — all 7 R7 gaps closed and re-verified; see 09-VERIFICATION.md (status: passed)]
 
 ## Tests
 
 ### 1. Two-tab conflict walk — Execution Hub (integration tasks + synergy initiatives)
 expected: Tab B shows the conflict dialog with a correct field diff on the same-record case; no dialog on the different-record case.
-result: issue
-reported: "Core path PASS (same record → correct dialog + diff, reapply persists, different records don't fight, second conflict re-renders in place, 390 px fits). But: (F-1) a never-edited record's first concurrent edit silently clobbers — no dialog; (F-2) after a successful reapply the page is stale and the next click self-conflicts; (F-3) a synergy *stage* conflict shows 'No conflicting fields'."
-severity: blocker
+result: pass
+reported: "R7 2026-10-10 found F-1/F-2/F-3 (core path PASS). Gap closure verified 2026-10-10: F-1 — never-edited record's first co-edit now 409s (client sends version 0 via window.maVersionOf; Playwright `task-f1-never-edited` 6/6, `synergy-stage-never-edited` 5/5; test precondition P2). F-2 — page reflects the reapplied state, no self-conflict (`one-tab-no-self-conflict` 5/5, `synergy-realized-f2` 8/8; transitions.js held promise settles with the 2xx). F-3 — stage conflict shows a Stage row via the per-route field map, neutral panel for `{}` payloads, per-month cells compare cell-to-cell (`synergy-stage-f3` 9/9, `confirm-current-neutral-f3` 8/8, `phasing-month-f3` 6/6; test DT4). Different records: `different-records` 2/2."
 
 ### 2. Two-tab conflict walk — Due Diligence (findings + request items)
 expected: The second save shows the conflict dialog. A caller cleared for the item's area sees the area-filtered current record and a field diff; a caller whose clearance no longer covers the item sees who changed it and when (attribution is deliberately disclosed — T-09-17 / 09-REVIEW IN-01) but no field value, and the dialog states the change cannot be applied.
 expectation corrected 2026-10-10 (gap closure 09-15) — R7 item 2
-result: issue
-reported: "Cleared same-user conflicts render a correct diff on items and findings; leak-safety holds (uncleared caller gets 403 at the route layer / currentRecord:null on the WHERE-layer body, never field values). But the null-record body renders 'No conflicting fields … Apply your changes to continue' and Apply then reports the 403 as 'a network error' (F-4). The expectation text is also wrong against the accepted T-09-17/IN-01 contract: attribution is deliberately disclosed, only the record is withheld."
-severity: major
+result: pass
+reported: "R7 found F-4. Gap closure verified 2026-10-10: `currentRecord:null` renders the withheld variant ('This record is no longer within your clearance; your change cannot be applied.', attribution kept, no diff rows, no Apply, one Close — UI-SPEC A2; test DT8/DT9; Playwright `withheld-f4` 9/9, screenshot `dialog-widths-withheld-390.png`); a reapply 4xx shows the server's own error, never 'a network error' (A6; `reapply-4xx-f4` 6/6). DD refresh never runs under an open dialog (`dd-f2` 16/16). Leak-safety unchanged: CR-01 (a–d, c2) pass; DD routes run ddAreaRefused() before conflictIfStale()."
 
 ### 3. Two-tab conflict walk — Org design (position edit)
 expected: The second save shows the conflict dialog.
-result: issue
-reported: "org.html has no position-edit surface (per node: toggle, Decisions, Delete; zero inputs) — only create/delete/copy-to-target/import exist, so the walk is not performable as written. Contract-level PASS: a stale POST /api/org/positions from the real page context produced the dialog with a Title/Level diff and Apply persisted."
-severity: minor
+result: pass
+reported: "Contract-level PASS stands (stale POST /api/org/positions from the real page → dialog with Title/Level diff → reapply persisted, R7 item 3). The missing position-edit UI is a pre-existing product gap, now recorded as WINDOWS.md #3 (routed Phase 18 IL-18) per SC9; org delete/convert surfaces walked in Playwright `org-delete-anyway-f2` 9/9 and `delete-confirm-surfaces`."
 
 ### 4. Two-tab destructive-delete walk — execution.html (RAID/task/synergy) + org.html (position)
 expected: Edit a record in tab A and save, then delete that same record in tab B → tab B shows the destructive-variant dialog (no diff list, delete/cancel actions; the dialog IS the confirmation) and the record still exists until confirm. Deleting an untouched record works in one click with no dialog.
-result: issue
-reported: "All four destructive dialogs correct (title, attribution, no diff, Cancel + red 'Delete anyway', zero orange), record survives until confirm, untouched delete shows no dialog. But a native window.confirm precedes every delete so a stale delete is two prompts (F-6), and rows deleted via 'Delete anyway' stay on the page (F-2c)."
-severity: minor
+result: pass
+reported: "R7 found F-6 (native confirm stacked) and F-2c (row stays after Delete anyway). Gap closure verified 2026-10-10: every delete path opens the in-app confirm `window.maConfirmDelete` (execution.js:260,1053,1096,1190; org.js:598; no window.confirm left on any delete path; UI-SPEC A8) which becomes the stale-delete variant on 409 — Playwright `delete-confirm-surfaces` 79/79 ('native dialogs: 0', 'two DELETEs (409 then 2xx)'), `delete-confirm-raid` 19/19, `confirm-widths` 16/16; rows are gone from DOM and API after Delete anyway (`raid-f2-delete-anyway` 12/12, `org-delete-anyway-f2`). Screenshots `delete-confirm-state-390.png`, `delete-stale-state-390.png` match the contract (Cancel + red Delete / Delete anyway, no orange)."
 
 ### 5. FA-1 review — hand-derived CONC-02 truth list
 expected: Confirm the hand-derived must_haves decomposition of CONC-02 (stale-write / reapply / per-record granularity / version-less legacy rows / update-vs-delete) is accurate and complete.
-result: issue
-reported: "Accurate for what it states, incomplete: no per-record-granularity truth (SC3 lives only in the roadmap); no client-side truth for version-less records (the exact hole F-1 fell through); no 409-body clearance truth (the hole CR-01 fell through)."
-severity: minor
+result: pass
+reported: "Amended in 09-15: 09-01-PLAN.md now carries the per-record-granularity truth (:42, proven by cross-process different-records), the client-precondition truth for version-less records (:50, proven by precondition P1–P3 and client-version-precondition C1) and the WHERE-layer 409-clearance truth (:68, proven by CR-01 a–d). Verified present and each test green 2026-10-10."
 
 ### 6. FA-2 review — deleted-record dialog copy extends the signed UI-SPEC
 expected: Confirm the three fresh EN literals (CONFLICT_TITLE_DELETED / CONFLICT_DELETED_INTRO / CONFLICT_CLOSE_LABEL) are acceptable, or route them through a UI-SPEC amendment.
 result: pass
-reported: "Accept with a one-line UI-SPEC amendment: keep hardcoded EN via textContent (the signed spec prescribes it — do NOT i18n these three); add the three literals to the Copywriting Contract; voice tweak 'Someone else deleted this'; suppress the contradictory attribution line in the deleted variant (F-7)."
+reported: "Accepted with UI-SPEC Amendment A1 (title 'Someone else deleted this', intro kept, single Close, NO attribution line — closes F-7); literals stay hardcoded EN via textContent. Verified in transitions.js:159-161,753; test DT13/HP13; Playwright `deleted-variant-f7` 6/6; screenshot `dialog-widths-deleted-390.png`."
 
 ## Summary
 
 total: 6
-passed: 1
-issues: 5
+passed: 6
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -61,103 +56,43 @@ blocked: 0
 ## Gaps
 
 - truth: "The first concurrent edit of a record that was never edited before is rejected with a 409 (CONC-02; D-02 'no exemptions'; D-09 'legacy records gain protection the moment two people co-edit one')"
-  status: failed
-  reason: "R7 F-1: both tabs loaded T4 with no version field; A flipped twice (server v2); B's single flip carried no version → 200, server v3 — A's write is gone, no dialog anywhere."
+  status: resolved
+  resolved_by: "Plans 09-08/09-09/09-10/09-12 (GD-1, GD-1a, GD-1b, GD-2): window.maVersionOf at 29 client sites; server.js:507-512 refuses a precondition-less update/delete of an existing record with 400 {error, versionRequired:true} unless req.isDemo === true. Tests: optimistic-locking-precondition P1–P7/U1–U3; contract (3)/(43); client-version-precondition C1. Playwright: task-f1-never-edited, synergy-stage-never-edited, raid-f1, raid-delete-f1, api-version-required. Re-verified 2026-10-10."
   severity: blocker
   test: 1
-  root_cause: "Every record is INSERTed without a version (db/store.js:404-411) and every client call site omits `version` when the held record has none (execution.js:203-204,230,421,815,857,885,919,951,987,1016,1060,1123,1146; org.js:594,960; due-diligence.js:114-116,173-175,248-250,264-266). With no client version the route precheck returns false (server.js:450-455) and the WHERE layer binds this request's own fresh snapshot version (db/store.js:421), which always matches in-process. The server tests enshrine the 'no-version-supplied exemption' (09-06-SUMMARY) so the coverage gate cannot catch it."
-  artifacts:
-    - path: "db/store.js"
-      issue: "records inserted with no version stamp (404-411); fresh-snapshot version bound when client sends none (421)"
-    - path: "public/js/execution.js, org.js, due-diligence.js"
-      issue: "omit `version` for version-less records at ~20 call sites"
-    - path: "test/optimistic-locking-contract.test.js"
-      issue: "missing the contract 'a client that loaded a version-less record and sends 0 gets 409 after another writer stamps it'"
-  missing:
-    - "Send `version: rec.version !== undefined ? rec.version : 0` at every call site (server already treats a missing stored version as 0, server.js:456; zod accepts 0; parseExpectedVersion accepts expectedVersion=0) — or stamp version:0 on INSERT so every GET carries one"
-    - "Add the contract test; amend the 09-01 truth list (test 5)"
-  debug_session: ""
 
 - truth: "After 'Apply my changes anyway' or 'Delete anyway' succeeds the page shows the server's resulting state (D-03 'form state is never lost' end to end)"
-  status: failed
-  reason: "R7 F-2: task row still 'To do' while server says doing → next click sends stale v1 → false 'doing vs doing' self-conflict; synergy header stale; RAID row and org node remain in the DOM after Delete anyway; DD select re-renders to 'theirs' while the dialog is open and shows 'requested' after Apply when server holds 'received'."
+  status: resolved
+  resolved_by: "Plans 09-11/09-12 (GD-4, GD-5) + WR-03 fix 522eb1b: the wrapper holds the original promise and settles it with the reapply's response (transitions.js:533,611); every exit locked while a request is in flight; page re-reads after Discard; DD refresh only after its own dialog closes. Tests: client-conflict-dialog HP3/HP4/HP9/HP11, WR03a-c. Playwright: one-tab-no-self-conflict, raid-f2-apply, raid-f2-delete-anyway, org-delete-anyway-f2, synergy-realized-f2, dd-f2, task-discard-keeps-theirs. Re-verified 2026-10-10."
   severity: major
   test: 1
-  root_cause: "The page handler has already consumed the 409 (res.success falsy → no state update) when the dialog's Apply fires a fresh window.fetch and simply closes on success (public/js/transitions.js:455-459; delete variant 337-341). D-05 'no per-page wiring' means no page learns the outcome; DD pages additionally call refresh unconditionally (due-diligence.js:119,253)."
-  artifacts:
-    - path: "public/js/transitions.js"
-      issue: "dialog outcome never propagated to the originating call (337-356, 455-474)"
-    - path: "public/js/due-diligence.js"
-      issue: "unconditional .then(refresh) re-renders under the open dialog (119, 253)"
-  missing:
-    - "Resolve the ORIGINAL fetch promise with the reapplied response (hold pending while the dialog is open; resolve with the 409 on Discard) — or dispatch a `ma:conflict-resolved` event the three pages handle; keep D-05"
-    - "Remove/guard DD unconditional refresh"
-  debug_session: ""
 
 - truth: "The conflict dialog shows a CORRECT field diff for every conflicting write, and never claims 'no conflicting fields' when it cannot tell"
-  status: failed
-  reason: "R7 F-3/F-5: synergy stage change sends {targetStage} but the record field is `stage` → zero diff rows → 'No conflicting fields … without affecting anything you edited' while the other user changed the stage; same for confirm-current ({}), convert ({toTask,toRaid}), rebaseline ({reason}); per-month phasing {targetM|realizedM} would compare a month cell to the initiative total (code-traced); labels are raw keys ('RealizedM', 'DueDate', 'ReportsToId')."
+  status: resolved
+  resolved_by: "Plan 09-13 (GD-6, GD-8; UI-SPEC A3/A4/A5): CONFLICT_FIELD_MAP (aliases, per-month cells, ignored action params) + CONFLICT_FIELD_LABELS with humanised fallback; the 'No conflicting fields…' sentence is retired, the neutral panel 'This record changed since you loaded it.' replaces it. Tests: DT4, DT6. Playwright: synergy-stage-f3, confirm-current-neutral-f3, phasing-month-f3, labels-f5. Re-verified 2026-10-10."
   severity: major
   test: 1
-  root_cause: "Diff is keyed on payload keys that also exist on currentRecord (transitions.js:394-395); label.textContent = field + CSS capitalize (408)."
-  artifacts:
-    - path: "public/js/transitions.js"
-      issue: "payload∩record diff; raw key labels (388-427)"
-  missing:
-    - "Per-route diff mapping (or diff currentRecord against the client's held copy for the route's known fields); never state 'without affecting anything you edited' when the payload has no record-mirroring key"
-    - "Display labels for known keys with a humanised fallback"
-  debug_session: ""
 
 - truth: "A caller whose clearance no longer covers the record is told so truthfully and sees the server's real reason on reapply"
-  status: failed
-  reason: "R7 F-4: currentRecord:null body renders 'No conflicting fields … Apply your changes to continue' (telling an uncleared user to apply a change to a record outside their clearance); Apply then hits 403 and is reported as 'a network error occurred'."
+  status: resolved
+  resolved_by: "Plan 09-13 (GD-7; UI-SPEC A2/A6): withheld variant (transitions.js:667,696) with one Close; conflictServerReason() surfaces the 4xx body's error (200-char cap). Tests: DT8, DT9, CF6. Playwright: withheld-f4, reapply-4xx-f4. Re-verified 2026-10-10."
   severity: major
   test: 2
-  root_cause: "transitions.js:397-401 has no null-record branch; transitions.js:465 maps every non-409/non-5xx outcome to NETWORK."
-  artifacts:
-    - path: "public/js/transitions.js"
-      issue: "397-401, 460-466"
-  missing:
-    - "Branch on currentRecord === null ('This record is no longer within your clearance; your change cannot be applied.'); surface the response's own `error` for 4xx"
-  debug_session: ""
 
 - truth: "A stale delete is confirmed by the destructive dialog alone, with no stacked native prompt (09-UI-SPEC 'Destructive confirmation')"
-  status: failed
-  reason: "R7 F-6: every delete handler calls window.confirm before the request (execution.js:222,1053,1139; org.js:586) so a stale delete is confirm() → 409 → dialog."
+  status: resolved
+  resolved_by: "Plan 09-14 (GD-9; UI-SPEC A8): window.maConfirmDelete(question, url) at every delete surface (execution.js:260,1053,1096,1190; org.js:598); the in-app confirm becomes the stale-delete variant on 409; no window.confirm remains on a delete path. Playwright: delete-confirm-raid, delete-confirm-surfaces (79/79, native dialogs 0), confirm-widths. Re-verified 2026-10-10."
   severity: minor
   test: 4
-  root_cause: "Pre-existing native confirm retained when the destructive dialog was added."
-  artifacts:
-    - path: "public/js/execution.js, public/js/org.js"
-      issue: "native confirm precedes the DELETE"
-  missing:
-    - "Drop the native confirm when the held record carries a version (the dialog is the safety net), or re-word the spec"
-  debug_session: ""
 
 - truth: "The deleted-record variant is internally consistent"
-  status: failed
-  reason: "R7 F-7: the `deleted` throw carries no actor/time (db/store.js:483) so the variant always renders the fallback 'This record changed since you loaded it.' directly under 'This record was deleted'."
+  status: resolved
+  resolved_by: "Plan 09-13 (GD-10; UI-SPEC A1/A7): title 'Someone else deleted this', no attribution element in the deleted variant (transitions.js:753). Tests: DT13, HP13. Playwright: deleted-variant-f7. Re-verified 2026-10-10."
   severity: cosmetic
   test: 6
-  root_cause: "Attribution fallback is unconditional in the deleted variant."
-  artifacts:
-    - path: "public/js/transitions.js"
-      issue: "deleted variant attribution line"
-  missing:
-    - "Suppress the attribution line in the deleted variant (or word it '…was deleted since you loaded it'); title 'Someone else deleted this'; add the three literals to the 09-UI-SPEC Copywriting Contract"
-  debug_session: ""
 
 - truth: "Phase documentation is accurate"
-  status: failed
-  reason: "R7 items 2/3/5: UAT item-2 expectation contradicts accepted T-09-17/IN-01; org position-edit UI gap not recorded in WINDOWS.md; FA-1 truth list lacks per-record-granularity, client-version-less and 409-body-clearance truths."
+  status: resolved
+  resolved_by: "Plan 09-15 (GD-12): 09-01-PLAN.md truths :42/:50/:68 added with tests; 09-UI-SPEC Copywriting Contract rows + Amendments A1–A11; UAT item-2 expectation corrected; WINDOWS.md #3 records the org position-edit gap (Phase 18 IL-18). Re-verified 2026-10-10."
   severity: minor
   test: 5
-  root_cause: "Hand-derived docs not reconciled with the as-built contract."
-  artifacts:
-    - path: ".planning/WINDOWS.md"
-      issue: "missing org position-edit gap"
-    - path: ".planning/phases/09-optimistic-locking-conflict-recovery/09-01-PLAN.md"
-      issue: "truth list incomplete (lines 25-41, 123-127)"
-  missing:
-    - "Amend the three docs; record the org position-edit UI gap (candidate for Phase 15)"
-  debug_session: ""
