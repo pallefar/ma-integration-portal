@@ -59,6 +59,10 @@ const actor = { username: 'karen', role: 'hrbp', sessionId: 'sess_' + label };
 const request = { method: 'TEST', path: '/mp', ip: null };
 const acked = [];
 let busyRetries = 0;
+// IN-02 (12-REVIEW): a start barrier — both children finish loading, report
+// READY, and only start their loops when the parent releases them together.
+process.stdout.write('READY\\n');
+require('fs').readSync(0, Buffer.alloc(1), 0, 1, null);
 for (let i = 0; i < n; i++) {
   const id = 'mp_' + label + '_' + i;
   for (let attempt = 0; ; attempt++) {
@@ -80,8 +84,11 @@ process.stdout.write(JSON.stringify({ label, acked, busyRetries }) + '\\n');
 `;
 
 function runChild(label, dealId) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['-e', CHILD_SRC], {
+  let markReady;
+  const ready = new Promise((resolve) => { markReady = resolve; });
+  let child;
+  const done = new Promise((resolve, reject) => {
+    child = spawn(process.execPath, ['-e', CHILD_SRC], {
       env: {
         ...process.env,
         CHILD_REPO_ROOT: path.join(__dirname, '..'),
@@ -89,27 +96,56 @@ function runChild(label, dealId) {
         CHILD_LABEL: label,
         CHILD_WRITES: String(WRITES_PER_CHILD),
       },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     let out = '';
     let err = '';
-    child.stdout.on('data', (d) => { out += d; });
+    child.stdout.on('data', (d) => { out += d; if (out.includes('READY\n')) markReady(); });
     child.stderr.on('data', (d) => { err += d; });
     child.on('error', reject);
     child.on('close', (code) => {
+      markReady();
       if (code !== 0) return reject(new Error(`child ${label} exited ${code}: ${err}`));
       try { resolve(JSON.parse(out.trim().split('\n').pop())); } catch (e) { reject(new Error(`child ${label} bad output: ${out} ${err}`)); }
     });
   });
+  return { ready, done, go: () => { try { child.stdin.end('g'); } catch (e) { /* exited */ } } };
+}
+
+/** Number of label switches in rowid order (1 = fully serialised a…a b…b). */
+function labelSwitches(rows) {
+  let switches = 0;
+  for (let i = 1; i < rows.length; i += 1) {
+    if (rows[i].row_id.slice(0, 5) !== rows[i - 1].row_id.slice(0, 5)) switches += 1;
+  }
+  return switches;
 }
 
 test('audit-chain-multiprocess: two processes appending to one partition leave a contiguous valid chain', async () => {
-  const deal = controlStore.createDeal({ name: 'MP Deal', targetCompany: 'MP Co', members: ['karen'], createdBy: 'admin' });
-  createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
-  const dealId = deal.id;
-
-  const results = await Promise.all([runChild('a', dealId), runChild('b', dealId)]);
-  const acked = results.flatMap((r) => r.acked);
+  // IN-02 (12-REVIEW): the fork-the-chain regression is only exercised when the
+  // two children's appends actually INTERLEAVE in the partition. Both start
+  // behind a barrier; if scheduling still serialised them, retry on a fresh
+  // deal (bounded) and fail if they never overlapped.
+  const MAX_ATTEMPTS = 4;
+  let dealId = null;
+  let acked = null;
+  let switches = 0;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const deal = controlStore.createDeal({ name: `MP Deal ${attempt}`, targetCompany: 'MP Co', members: ['karen'], createdBy: 'admin' });
+    createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
+    const children = [runChild('a', deal.id), runChild('b', deal.id)];
+    await Promise.all(children.map((c) => c.ready));
+    children.forEach((c) => c.go());
+    const results = await Promise.all(children.map((c) => c.done));
+    const probe = dbFiles.openDbFileReadOnly(dbFiles.auditPartitionPath(deal.id));
+    try {
+      switches = labelSwitches(probe.prepare('SELECT row_id FROM audit_log ORDER BY id').all());
+    } finally { probe.close(); }
+    dealId = deal.id;
+    acked = results.flatMap((r) => r.acked);
+    if (switches >= 2) break;
+  }
+  assert.ok(switches >= 2, `the two children's appends interleaved in the partition (label switches: ${switches})`);
   assert.strictEqual(acked.length, 2 * WRITES_PER_CHILD, 'every write was acknowledged');
 
   const file = dbFiles.auditPartitionPath(dealId);
