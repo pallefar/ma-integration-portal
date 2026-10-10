@@ -367,9 +367,14 @@ section.
 
 ## Denial audit (refused requests)
 
-Every request the server **refuses on authorization grounds** is written to the
-audit trail as an `access-denied` security event, visible to an admin in the audit
-viewer (Admin console, **Audit**): the account (or `(anonymous)`), the HTTP method,
+Every request that the central authorization gate, the deal resolver, the
+credential lockdown or a clearance guard **refuses on authorization grounds** is
+written to the audit trail as an `access-denied` security event, visible to an
+admin in the audit viewer (Admin console, **Audit**). Not yet covered (tracked for a
+later release): about twenty handler-level inline 403s — organisation-design write
+clearance, Integration-Leader-only inline checks, deal-member administration,
+selecting a deal one is not a member of, and assessment-owner checks — answer 403
+without an audit row. Each event records the account (or `(anonymous)`), the HTTP method,
 the canonical route (a template such as `DELETE /api/raid/:id`, never a record id),
 the reason, the HTTP status, and the deal when one applies. Reasons: `no-session`
 (401), `must-change-password`, `demo-only`, `role-write`, `role-read`,

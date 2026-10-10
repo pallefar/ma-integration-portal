@@ -383,6 +383,19 @@ Plans:
 
 **Plans**: TBD
 
+## Carry-ins from completed phases
+
+Items a closed phase deferred or accepted, owned by a later phase (full table with sources: `.planning/phases/11-authorization-clean-room-closure/11-CARRY-INS.md`). A phase's discuss/plan step must read its row.
+
+- **Phase 12**: soak/perf scripts run with `SOAK_WRITE_INTERVAL_MS=250` until DATA-01 removes the audit write amplification (the default soak writes ~5 GB).
+- **Phase 15**: default-hidden reveal pattern for capability-gated controls (header pills/settings cards flash); academy/lesson completion in real deals; `/` and denied pages resolve to the role's home (MOD-03).
+- **Phase 17**: one target-company visibility rule for every exit (deal record vs `/api/settings`, `/api/assessment-status`, header); real mode has no unbound data lane (fail-closed "choose a deal" shell); no demo copy in real-deal portals.
+- **Phase 18**: filter stored `taskIds` on synergy write/409 echoes; decide IL visibility of assessment-instance trends.
+- **Phase 19**: pin the access-map capability keys in the DEPLOYMENT.md drift test.
+- **Phase 20**: control-plane write/audit ordering; `denialAuditor.flushAll()` on SIGTERM drain; route the ~20 inline 403 handlers through `denyAt`; structured 404 for unrouted writes; demo-open admin redirect decision.
+- **Phase 22**: employee→IL helpdesk channel; employee own-messages inbox; explicit account↔roster linkage.
+- **Phase 23**: re-test the unbound-session lane; decide whether DD by-id adopts the 404 rule; confirm every carry-in above is closed or an accepted risk in the security-decisions record.
+
 ## Progress
 
 **Execution Order:** Phases execute in numeric order: 8 → 9 → 10 → … → 23
