@@ -187,3 +187,21 @@ None. No new endpoints or trust boundaries; scenarios use existing routes. T-10-
 - Commits `471227d`, `ec75065`, `161dba9`, `e992732` present on `worktree-agent-a201d8ec01328f48d`
 - `du -sk evidence` = 1092 (<= 1200); `grep -c PASS evidence/phase10-walk.log` = 179; WINDOWS.md row 4 = fixed; 10-VALIDATION.md frontmatter lists `deferrals: [DEFERRED-REL-02]`
 - Full suite 1038/1038 (twice); soak PASS; phase10 runner 179/0; phase9 walk 350/0 + 18/0; `git status --porcelain data/` empty
+
+## Post-verification correction
+
+`10-VERIFICATION.md` (gaps_found, 15/16) reported the Phase 10 runner red on HEAD (179 PASS / 1
+FAIL). The WR-C01 check that review fix `1d92eb8` added to `scripts/uat/phase10-scenarios/users-tab.js`
+after this plan's evidence run asserted the temporary-password field still equalled the secret
+after `takeTempPassword()` had masked it to `••••` for the T-10-45 screenshot, so it could never
+pass. The 179 PASS / 0 FAIL recorded in this summary was true when written (that check did not
+exist yet); product code was never at fault.
+
+Fixed in `e7a36bf` (users-tab.js only): the secret is read unmasked and the sticky contract is
+asserted against it; masking happens only inside `shot()`, which refuses to write the screenshot
+unless the secret is provably absent from the DOM; shown-once, masked-at-screenshot and
+wiped-on-Done checks were added and mutation-tested. Corrected run: **184 PASS / 0 FAIL**, six
+lanes, committed `data/demo.db` + `data/control.db` (+ `-wal`) sha256 unchanged, `git status
+--porcelain -- data` empty, `node --test` 1055/1055; the evidence directory (33 files, 1100 KB by
+`du -sk`, limit 1200) and the counts in `10-VALIDATION.md` were refreshed to match. No STATE.md,
+ROADMAP.md, REQUIREMENTS.md or product source was touched.

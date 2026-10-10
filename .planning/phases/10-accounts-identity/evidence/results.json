@@ -345,7 +345,7 @@
     "scenario": "selfServiceSessions@real",
     "step": "second context is signed in (stays on /admin.html)",
     "status": "PASS",
-    "detail": "http://127.0.0.1:61679/admin.html"
+    "detail": "http://127.0.0.1:58751/admin.html"
   },
   {
     "scenario": "selfServiceSessions@real",
@@ -525,6 +525,36 @@
   },
   {
     "scenario": "usersTabLifecycle@real",
+    "step": "shown once: the credential is rendered in exactly one place (the modal’s read-only field)",
+    "status": "PASS",
+    "detail": {
+      "renderedIn": 1
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "Escape and a scrim click leave the temp-password modal open with the value intact",
+    "status": "PASS",
+    "detail": {
+      "escapeDelivered": true,
+      "scrimDelivered": true,
+      "modalOpen": true,
+      "valueIntact": true
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the temporary password is masked in the DOM before the temp-password-modal-1440 screenshot (T-10-45)",
+    "status": "PASS",
+    "detail": {
+      "fieldReadsMask": true,
+      "domCopiesLeft": [
+        0
+      ]
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
     "step": "alice appears in the list as Active + Must change password",
     "status": "PASS",
     "detail": "ActiveMust change password"
@@ -539,7 +569,18 @@
     "scenario": "usersTabLifecycle@real",
     "step": "the modal input no longer holds the password (Done clears it)",
     "status": "PASS",
-    "detail": ""
+    "detail": {
+      "fieldBlankedAndRemoved": true
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "shown once: a fresh Users listing never carries the temporary password",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "listed": true
+    }
   },
   {
     "scenario": "usersTabLifecycle@real",
@@ -607,6 +648,16 @@
     "status": "PASS",
     "detail": {
       "length": 20
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "Done wipes the reset password: field blanked and removed, no copy left in the DOM",
+    "status": "PASS",
+    "detail": {
+      "renderedBeforeDone": 1,
+      "fieldBlankedAndRemoved": true,
+      "copiesLeft": 0
     }
   },
   {

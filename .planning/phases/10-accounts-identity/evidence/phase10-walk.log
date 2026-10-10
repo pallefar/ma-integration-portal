@@ -1,0 +1,184 @@
+[lane:real] PASS - server booted, /api/auth/mode answers :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[lane:real] PASS - bootstrap-admin created the first admin :: {"preBootstrapUserCount":0}
+[realEmptyDirBootstrap@real] PASS - GET /api/auth/mode says mode real, demoOpen false, accountsWritable true :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[realEmptyDirBootstrap@real] PASS - the seeded control.db had 0 users before bootstrap-admin ran :: 0
+[realEmptyDirBootstrap@real] PASS - the lane data dir is a temp dir, not the committed data/ :: real-data
+[realEmptyDirBootstrap@real] PASS - 1440px: no demo panel, no "Demo accounts", no password in the DOM :: {"slotChildren":0}
+[realEmptyDirBootstrap@real] PASS - 1440px: the sign-in form is present
+[realEmptyDirBootstrap@real] PASS - 390px: no demo panel, no "Demo accounts", no password in the DOM :: {"slotChildren":0}
+[realEmptyDirBootstrap@real] PASS - 390px: the sign-in form is present
+[realEmptyDirBootstrap@real] PASS - bootstrap admin signed in and completed the forced rotation
+[realEmptyDirBootstrap@real] PASS - GET /api/admin/users returns exactly one account, admin :: {"status":200,"count":1}
+[realEmptyDirBootstrap@real] PASS - the account listing carries no hash / salt / password field :: ["username","name","role","disabled","mustChangePassword","createdAt","createdBy","lastLoginAt"]
+[realEmptyDirBootstrap@real] PASS - browser sign-in as the bootstrap admin leaves the login page :: /
+[realEmptyDirBootstrap@real] PASS - no page error :: []
+[forcedChangeLandsOnChangePassword@real] PASS - login with a temp password lands on /change-password.html :: /change-password.html
+[forcedChangeLandsOnChangePassword@real] PASS - heading says the password must be changed :: You must change your password
+[forcedChangeLandsOnChangePassword@real] PASS - opening /index.html directly bounces back to /change-password.html :: /change-password.html
+[forcedChangeLandsOnChangePassword@real] PASS - a too-short password is refused client-side with the 12-char rule :: The new password must be at least 12 characters.
+[forcedChangeLandsOnChangePassword@real] PASS - changing to a 12+ char password lands on / :: /
+[forcedChangeLandsOnChangePassword@real] PASS - the temporary password stops working :: 401
+[forcedChangeLandsOnChangePassword@real] PASS - the new password signs in and is no longer forced :: false
+[forcedChangeLandsOnChangePassword@real] PASS - no page error :: []
+[forcedChangeLandsOnChangePassword@real] PASS - 390px: change-password screen has no horizontal overflow
+[forcedChangeLandsOnChangePassword@real] PASS - a wrong current password reads "Current password is incorrect." :: Current password is incorrect.
+[realLoginHasNoDemoCredentials@real] PASS - mode probe says real, accountsWritable true :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[realLoginHasNoDemoCredentials@real] PASS - real lane: first boot seeded zero accounts before bootstrap :: 0
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: stayed on /login.html with no session :: /login.html
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: #lg-demo-slot has no children :: 0
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: page text has no "Demo accounts"
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: page text has no published demo password
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: no demo account buttons :: []
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: no horizontal overflow
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: no page error :: []
+[realLoginHasNoDemoCredentials@real] PASS - 1440px: sign-in form present
+[realLoginHasNoDemoCredentials@real] PASS - 390px: stayed on /login.html with no session :: /login.html
+[realLoginHasNoDemoCredentials@real] PASS - 390px: #lg-demo-slot has no children :: 0
+[realLoginHasNoDemoCredentials@real] PASS - 390px: page text has no "Demo accounts"
+[realLoginHasNoDemoCredentials@real] PASS - 390px: page text has no published demo password
+[realLoginHasNoDemoCredentials@real] PASS - 390px: no demo account buttons :: []
+[realLoginHasNoDemoCredentials@real] PASS - 390px: no horizontal overflow
+[realLoginHasNoDemoCredentials@real] PASS - 390px: no page error :: []
+[realLoginHasNoDemoCredentials@real] PASS - 390px: sign-in form present
+[selfServiceSessions@real] PASS - 1440px: My sessions is reachable from the header menu :: dropdown
+[selfServiceSessions@real] PASS - 1440px: exactly one session is marked "This device" :: [{"device":"node","current":true,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like…","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true}]
+[selfServiceSessions@real] PASS - 1440px: every row has an End-session button (real mode is writable) :: [{"device":"node","current":true,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like…","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true}]
+[selfServiceSessions@real] PASS - second context is signed in (stays on /admin.html) :: http://127.0.0.1:58751/admin.html
+[selfServiceSessions@real] PASS - the list now shows both sessions :: 5
+[selfServiceSessions@real] PASS - ending the other session removes exactly that row; this device remains :: [{"device":"node","current":true,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like…","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true}]
+[selfServiceSessions@real] PASS - the ended session is bounced to /login.html on its next navigation :: /login.html
+[selfServiceSessions@real] PASS - no page error (1440) :: []
+[selfServiceSessions@real] PASS - 390px: My sessions is reachable (dropdown) :: dropdown
+[selfServiceSessions@real] PASS - 390px: no horizontal scroll with the sessions modal open :: {"fits":true,"scrollWidth":390,"innerWidth":390}
+[selfServiceSessions@real] PASS - 390px: the sessions modal lies inside the viewport :: {"inside":true,"left":12,"right":378,"top":131.6875,"vw":390}
+[selfServiceSessions@real] PASS - 390px: Escape closes the modal
+[selfServiceSessions@real] PASS - 390px: Change password is reachable for a non-admin (dropdown) :: dropdown
+[selfServiceSessions@real] PASS - 390px: no horizontal scroll with the change-password modal open :: {"fits":true,"scrollWidth":390,"innerWidth":390}
+[selfServiceSessions@real] PASS - 390px: the change-password modal lies inside the viewport :: {"inside":true,"left":12,"right":378,"top":205.703125,"vw":390}
+[selfServiceSessions@real] PASS - a mismatched confirmation is refused before any request :: The new password and its confirmation do not match.
+[selfServiceSessions@real] PASS - success reads "Password changed. Your other sessions were signed out." :: Password changed. Your other sessions were signed out.
+[selfServiceSessions@real] PASS - the modal closes itself after success
+[selfServiceSessions@real] PASS - the new password signs in :: 200
+[selfServiceSessions@real] PASS - no page error (390) :: []
+[usersTabLifecycle@real] PASS - the Users tab lists the bootstrap admin :: ["Edit","Reset password"]
+[usersTabLifecycle@real] PASS - the signed-in admin’s own row offers Edit and Reset password but never Disable :: ["Edit","Reset password"]
+[usersTabLifecycle@real] PASS - table columns are Username/Name/Role/Status/Last sign-in/Actions :: ["Username","Name","Role","Status","Last sign-in","Actions"]
+[usersTabLifecycle@real] PASS - a temporary password was generated and shown :: {"length":20}
+[usersTabLifecycle@real] PASS - shown once: the credential is rendered in exactly one place (the modal’s read-only field) :: {"renderedIn":1}
+[usersTabLifecycle@real] PASS - Escape and a scrim click leave the temp-password modal open with the value intact :: {"escapeDelivered":true,"scrimDelivered":true,"modalOpen":true,"valueIntact":true}
+[usersTabLifecycle@real] PASS - the temporary password is masked in the DOM before the temp-password-modal-1440 screenshot (T-10-45) :: {"fieldReadsMask":true,"domCopiesLeft":[0]}
+[usersTabLifecycle@real] PASS - alice appears in the list as Active + Must change password :: ActiveMust change password
+[usersTabLifecycle@real] PASS - alice’s role shows the display label PMO :: PMO
+[usersTabLifecycle@real] PASS - the modal input no longer holds the password (Done clears it) :: {"fieldBlankedAndRemoved":true}
+[usersTabLifecycle@real] PASS - shown once: a fresh Users listing never carries the temporary password :: {"status":200,"listed":true}
+[usersTabLifecycle@real] PASS - alice’s temp-password login lands on /change-password.html :: /change-password.html
+[usersTabLifecycle@real] PASS - alice rotates her password and reaches the app :: /
+[usersTabLifecycle@real] PASS - alice’s session reports role pmo :: {"status":200,"role":"pmo"}
+[usersTabLifecycle@real] PASS - the list shows alice as Employee after the edit
+[usersTabLifecycle@real] PASS - alice’s next API call reports role employee without re-login :: {"status":200,"role":"employee"}
+[usersTabLifecycle@real] PASS - the disable dialog names the effect (signs out on next request) :: Disabling alice signs them out everywhere on their next request and blocks sign-in. Their account and audit trail are kept; you can re-enable it later.
+[usersTabLifecycle@real] PASS - the list shows alice as Disabled
+[usersTabLifecycle@real] PASS - alice’s next navigation ends on /login.html :: /login.html
+[usersTabLifecycle@real] PASS - the list shows alice as Active again after Enable
+[usersTabLifecycle@real] PASS - reset-password shows a new temporary password once :: {"length":20}
+[usersTabLifecycle@real] PASS - Done wipes the reset password: field blanked and removed, no copy left in the DOM :: {"renderedBeforeDone":1,"fieldBlankedAndRemoved":true,"copiesLeft":0}
+[usersTabLifecycle@real] PASS - alice’s previous password no longer signs in after the reset :: 401
+[usersTabLifecycle@real] PASS - demoting the only admin shows the last-admin message in the modal :: At least one enabled admin must remain.
+[usersTabLifecycle@real] PASS - the modal stays open (the refusal is not swallowed)
+[usersTabLifecycle@real] PASS - no page error (admin) :: []
+[usersTabLifecycle@real] PASS - 390px: the Users tab has no horizontal overflow :: {"ok":true,"scrollWidth":390,"innerWidth":390}
+[usersTabLifecycle@real] PASS - 390px: the add-user modal sits inside the viewport :: {"inside":true,"left":32,"right":358,"vw":390,"scrollWidth":390}
+[usersTabLifecycle@real] PASS - no page error (phone) :: []
+[usersTabLifecycle@real] PASS - audit log has user-create for alice with actor admin :: ["user-password-reset","user-update","user-create"]
+[usersTabLifecycle@real] PASS - audit log has user-update for alice with actor admin :: ["user-password-reset","user-update","user-create"]
+[usersTabLifecycle@real] PASS - audit log has user-password-reset for alice with actor admin :: ["user-password-reset","user-update","user-create"]
+[usersTabLifecycle@real] PASS - no temporary password appears in any audit row
+[lane:real-handcopied] PASS - server booted, /api/auth/mode answers :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[handCopiedControlDbLockdown@real-handcopied] PASS - GET /healthz answers 200 :: 200
+[handCopiedControlDbLockdown@real-handcopied] PASS - a data API route answers 403 credentialLockdown:true :: {"status":403}
+[handCopiedControlDbLockdown@real-handcopied] PASS - 1440px: /index.html shows the lockdown page (403) :: {"status":403}
+[handCopiedControlDbLockdown@real-handcopied] PASS - 1440px: lockdown page has no horizontal overflow :: {"ok":true,"scrollWidth":1440,"innerWidth":1440}
+[handCopiedControlDbLockdown@real-handcopied] PASS - 390px: /index.html shows the lockdown page (403) :: {"status":403}
+[handCopiedControlDbLockdown@real-handcopied] PASS - 390px: lockdown page has no horizontal overflow :: {"ok":true,"scrollWidth":390,"innerWidth":390}
+[handCopiedControlDbLockdown@real-handcopied] PASS - /login.html renders (200) under lockdown :: 200
+[handCopiedControlDbLockdown@real-handcopied] PASS - /login.html shows the sign-in form
+[handCopiedControlDbLockdown@real-handcopied] PASS - signing in as karen with the published password lands on /change-password.html :: /change-password.html
+[handCopiedControlDbLockdown@real-handcopied] PASS - /change-password.html renders its form under lockdown
+[handCopiedControlDbLockdown@real-handcopied] PASS - no same-origin response was refused (>= 400) while loading login + change-password :: 13 responses
+[handCopiedControlDbLockdown@real-handcopied] PASS - no page error :: []
+[lane:dev] PASS - server booted, /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[devLoginShowsDemoPanel@dev] PASS - mode probe says dev :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[devLoginShowsDemoPanel@dev] PASS - dev: accountsWritable is true (temp control copy) :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[devLoginShowsDemoPanel@dev] PASS - demo panel shows the three account buttons :: ["admin","karen","pmo"]
+[devLoginShowsDemoPanel@dev] PASS - no "Open the demo" link outside demo-open
+[devLoginShowsDemoPanel@dev] PASS - stayed on /login.html :: /login.html
+[devLoginShowsDemoPanel@dev] PASS - click fills username and password :: {"user":"karen","passLen":11}
+[devLoginShowsDemoPanel@dev] PASS - no page error :: []
+[lane:demo-open] PASS - server booted, /api/auth/mode answers :: {"mode":"demo","demoOpen":true,"accountsWritable":true}
+[demoOpenAnonymousNoLoop@demo-open] PASS - a cookie-less tab stays on /execution.html :: /execution.html
+[demoOpenAnonymousNoLoop@demo-open] PASS - at most 2 document navigations in 6 s (the loop made dozens) :: 2
+[demoOpenAnonymousNoLoop@demo-open] PASS - no /api/deals request without a session :: []
+[demoOpenAnonymousNoLoop@demo-open] PASS - no page error :: []
+[demoOpenLoginStays@demo-open] PASS - mode probe says demo-open :: {"mode":"demo","demoOpen":true,"accountsWritable":true}
+[demoOpenLoginStays@demo-open] PASS - anonymous /api/auth/me is authEnabled:false (the loop trigger) :: {"authEnabled":false,"user":null}
+[demoOpenLoginStays@demo-open] PASS - demo panel visible with three buttons :: ["admin","karen","pmo"]
+[demoOpenLoginStays@demo-open] PASS - "Open the demo without signing in" link present, href / :: {"has":true,"href":"/"}
+[demoOpenLoginStays@demo-open] PASS - cookie-less /login.html stays on /login.html for 4 s :: {"pathNow":"/login.html","navigations":0}
+[demoOpenLoginStays@demo-open] PASS - no page error :: []
+[lane:dev-committed] PASS - server booted, /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":false}
+[committedControlAccountWritesHidden@dev-committed] PASS - GET /api/auth/mode: accountsWritable is false :: {"mode":"dev","demoOpen":false,"accountsWritable":false}
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: header "Change password" is disabled with aria-disabled and its note :: {"disabled":true,"ariaDisabled":"true","note":"Read-only demo accounts — password changes need a real-deal host (start-real-deal)."}
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: My sessions lists >= 1 session with no End-session button :: [{"canEnd":false}]
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: My sessions shows the read-only note :: Read-only demo accounts — password changes need a real-deal host (start-real-deal).
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: change-password page form is disabled with the note :: {"note":"Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to change passwords.","disabled":true}
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: Users tab lists accounts :: 4
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: Users tab has no Add / Edit / Disable / Reset password control :: {"rows":4,"actionButtons":0,"addVisible":false,"noteVisible":true,"note":"Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to add or change users."}
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: Users tab shows the one-line note :: Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to add or change users.
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: Users tab has no horizontal overflow :: {"ok":true,"scrollWidth":1440,"innerWidth":1440}
+[committedControlAccountWritesHidden@dev-committed] PASS - 1440px: no page error :: []
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: header "Change password" is disabled with aria-disabled and its note :: {"disabled":true,"ariaDisabled":"true","note":"Read-only demo accounts — password changes need a real-deal host (start-real-deal)."}
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: My sessions lists >= 1 session with no End-session button :: [{"canEnd":false}]
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: My sessions shows the read-only note :: Read-only demo accounts — password changes need a real-deal host (start-real-deal).
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: change-password page form is disabled with the note :: {"note":"Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to change passwords.","disabled":true}
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: Users tab lists accounts :: 4
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: Users tab has no Add / Edit / Disable / Reset password control :: {"rows":4,"actionButtons":0,"addVisible":false,"noteVisible":true,"note":"Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to add or change users."}
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: Users tab shows the one-line note :: Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to add or change users.
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: Users tab has no horizontal overflow :: {"ok":true,"scrollWidth":390,"innerWidth":390}
+[committedControlAccountWritesHidden@dev-committed] PASS - 390px: no page error :: []
+[committedControlAccountWritesHidden@dev-committed] PASS - POST /api/admin/users answers 403 committedControlDb :: {"status":403}
+[devLoginShowsDemoPanel@dev-committed] PASS - mode probe says dev :: {"mode":"dev","demoOpen":false,"accountsWritable":false}
+[devLoginShowsDemoPanel@dev-committed] PASS - dev-committed: accountsWritable is false (committed control.db active) :: {"mode":"dev","demoOpen":false,"accountsWritable":false}
+[devLoginShowsDemoPanel@dev-committed] PASS - demo panel shows the three account buttons :: ["admin","karen","pmo"]
+[devLoginShowsDemoPanel@dev-committed] PASS - no "Open the demo" link outside demo-open
+[devLoginShowsDemoPanel@dev-committed] PASS - stayed on /login.html :: /login.html
+[devLoginShowsDemoPanel@dev-committed] PASS - click fills username and password :: {"user":"karen","passLen":11}
+[devLoginShowsDemoPanel@dev-committed] PASS - no page error :: []
+[selfServiceReadOnly@dev-committed] PASS - Change password is disabled with aria-disabled :: {"disabled":true,"ariaDisabled":"true","note":"Read-only demo accounts — password changes need a real-deal host (start-real-deal)."}
+[selfServiceReadOnly@dev-committed] PASS - the one-line note names start-real-deal :: Read-only demo accounts — password changes need a real-deal host (start-real-deal).
+[selfServiceReadOnly@dev-committed] PASS - My sessions lists sessions without End-session buttons :: [{"device":"node","current":true,"canEnd":false}]
+[selfServiceReadOnly@dev-committed] PASS - the sessions modal repeats the read-only note :: Read-only demo accounts — password changes need a real-deal host (start-real-deal).
+[selfServiceReadOnly@dev-committed] PASS - change-password page: form disabled with the start-real-deal note :: {"note":"Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to change passwords.","current":true,"next":true,"submit":true}
+[selfServiceReadOnly@dev-committed] PASS - no page error :: []
+[lane:dev-committed] PASS - committed data/control.db AND control.db-wal unchanged across this lane :: {"control":"e83f049e9f01","wal":"absent-or-em"}
+[lane:demo-committed] PASS - server booted, /api/auth/mode answers :: {"mode":"demo","demoOpen":true,"accountsWritable":false}
+[committedControlAccountWritesHidden@demo-committed] PASS - GET /api/auth/mode: accountsWritable is false :: {"mode":"demo","demoOpen":true,"accountsWritable":false}
+[committedControlAccountWritesHidden@demo-committed] PASS - demo-open ignores a session cookie: /api/auth/me is authEnabled:false, user:null :: {"authEnabled":false,"user":null}
+[committedControlAccountWritesHidden@demo-committed] PASS - 1440px: demo-open app page stays put and offers no Change password / My sessions item :: {"path":"/execution.html","accountItems":0,"usersTabVisible":false,"usersAddVisible":false,"fits":true}
+[committedControlAccountWritesHidden@demo-committed] PASS - 1440px: no horizontal overflow :: {"path":"/execution.html","accountItems":0,"usersTabVisible":false,"usersAddVisible":false,"fits":true}
+[committedControlAccountWritesHidden@demo-committed] PASS - 1440px: no page error :: []
+[committedControlAccountWritesHidden@demo-committed] PASS - 1440px: demo-open admin console is not reachable cookie-less (stays on /login.html) and shows no Users tab / Add user :: {"path":"/login.html","usersTabVisible":false,"usersAddVisible":false}
+[committedControlAccountWritesHidden@demo-committed] PASS - 390px: demo-open app page stays put and offers no Change password / My sessions item :: {"path":"/execution.html","accountItems":0,"usersTabVisible":false,"usersAddVisible":false,"fits":true}
+[committedControlAccountWritesHidden@demo-committed] PASS - 390px: no horizontal overflow :: {"path":"/execution.html","accountItems":0,"usersTabVisible":false,"usersAddVisible":false,"fits":true}
+[committedControlAccountWritesHidden@demo-committed] PASS - 390px: no page error :: []
+[committedControlAccountWritesHidden@demo-committed] PASS - 390px: demo-open admin console is not reachable cookie-less (stays on /login.html) and shows no Users tab / Add user :: {"path":"/login.html","usersTabVisible":false,"usersAddVisible":false}
+[committedControlAccountWritesHidden@demo-committed] PASS - demo-open change-password page: no enabled form (disabled with the note, or bounced to sign-in) :: {"path":"/login.html","disabled":true,"note":""}
+[committedControlAccountWritesHidden@demo-committed] PASS - POST /api/admin/users is refused (401/403, never 2xx) under demo-open :: {"status":401}
+[demoOpenLoginStays@demo-committed] PASS - mode probe says demo-open :: {"mode":"demo","demoOpen":true,"accountsWritable":false}
+[demoOpenLoginStays@demo-committed] PASS - anonymous /api/auth/me is authEnabled:false (the loop trigger) :: {"authEnabled":false,"user":null}
+[demoOpenLoginStays@demo-committed] PASS - demo panel visible with three buttons :: ["admin","karen","pmo"]
+[demoOpenLoginStays@demo-committed] PASS - "Open the demo without signing in" link present, href / :: {"has":true,"href":"/"}
+[demoOpenLoginStays@demo-committed] PASS - cookie-less /login.html stays on /login.html for 4 s :: {"pathNow":"/login.html","navigations":0}
+[demoOpenLoginStays@demo-committed] PASS - no page error :: []
+[lane:demo-committed] PASS - committed data/control.db AND control.db-wal unchanged across this lane :: {"control":"e83f049e9f01","wal":"absent-or-em"}
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data` unchanged :: clean

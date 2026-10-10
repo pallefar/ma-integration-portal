@@ -4,9 +4,9 @@ slug: accounts-identity
 status: signed-off
 nyquist_compliant: true
 deferrals: [DEFERRED-REL-02]
-suite: { tests: 1038, pass: 1038, fail: 0, runs: 2 }
+suite: { tests: 1055, pass: 1055, fail: 0, runs: 1 }
 soak: { verdict: PASS, acknowledged: 4288, lost: 0, audit_rows: 4288, bounded_503: 21 }
-runner: { pass: 179, fail: 0, lanes: 6 }
+runner: { pass: 184, fail: 0, lanes: 6 }
 phase9_walk: { normal: "350 PASS / 0 FAIL", demo_open: "18 PASS / 0 FAIL" }
 signed: 2026-10-10
 plan: 10-09
@@ -20,9 +20,12 @@ locked decisions D-10-01..D-10-10 in `10-CONTEXT.md`. Every PASS names a test fi
 name where one exists) or an evidence file. Anything not proven is under "Open items".
 
 Evidence directory: `.planning/phases/10-accounts-identity/evidence/` (README.md maps each
-screenshot to its scenario). Runner log: `evidence/phase10-walk.log` (179 PASS / 0 FAIL, six
+screenshot to its scenario). Runner log: `evidence/phase10-walk.log` (184 PASS / 0 FAIL, six
 lanes, committed `data/demo.db` + `data/control.db` (+ `-wal`) sha256 unchanged, `git status
---porcelain -- data` empty). Regression results are recorded in `evidence/README.md`.
+--porcelain -- data` empty). Regression results are recorded in `evidence/README.md`. The
+runner and suite figures describe the post-verification re-run (see "Post-verification
+correction" below); the soak and Phase 9 walk figures are from the plan 10-09 sign-off run
+(re-run independently by the verifier: soak PASS, Phase 9 walk 350/0 and 18/0).
 
 ## PRD acceptance
 
@@ -34,13 +37,13 @@ lanes, committed `data/demo.db` + `data/control.db` (+ `-wal`) sha256 unchanged,
 | 4 | alice x9 does not block bob; Secure cookie under TRUST_PROXY+https; N=2^17 hashes + lazy rehash | PASS | `test/login-throttle.test.js` ("HTTP: nine wrong passwords for alice do not block bob; alice stays 429 even with the right password"); `test/auth-transport.test.js` ("cookie: Secure behind TRUST_PROXY + X-Forwarded-Proto https, even with ENABLE_HSTS unset"); `test/password-rehash.test.js` ("new accounts: create, reset and change all produce N=131072 hashes", "legacy hash: a successful sign-in rewrites it to the current format ...") |
 | 5a | DB files 0600 / dirs 0700 under umask 022 | PASS | `test/file-modes.test.js` ("file-modes (A) ... 0600 in 0700 directories, sidecars 0600", "(C) a real-mode instance under umask 022 holds only 0700 directories and 0600 files, including a freshly created deal"); ran in both full-suite passes, 0 skipped |
 | 5b | `compression` >= 1.8.2 | DEFERRED | **DEFERRED-REL-02** recorded in `10-08-SUMMARY.md` ("DEFERRED-REL-02" section): package-legitimacy gate verdict `SUS` / `too-new`, checked 2026-10-10T12:32Z, gate clears **2026-10-11T11:17Z**; installed tree is `compression@1.8.1`; nothing installed, `package.json`, `package-lock.json`, `node_modules` untouched. Owner: REL-02 / Phase 21, or an earlier `/gsd-quick` once `package-legitimacy check compression` reports OK. Open advisory GHSA-vc2v-76pw-4v95 (HIGH, memory leak on premature close) remains |
-| 6 | Suite green (>= 878 base); demo launchers and dev flow unchanged; Playwright smoke at 1440/390 | PASS | `node --test` x2: 1038/1038, 0 failures both runs (1031 at plan base + 7 new); `test/launcher-mode.test.js` (demo launchers never mention `MA_MODE`); runner lanes `dev`, `demo-open`, `dev-committed`, `demo-committed` all PASS; Phase 9 walk 350 PASS and `--demo-open` 18 PASS (no superseded check needed); smoke shots at 1440 and 390: login (`login-real-*`), change password (`forced-change-*`, `change-password-modal-390`), My sessions (`sessions-*`), Users tab (`users-tab-*`) |
+| 6 | Suite green (>= 878 base); demo launchers and dev flow unchanged; Playwright smoke at 1440/390 | PASS | `node --test`: 1055/1055, 0 failures, 0 skipped (post-verification re-run; 1038/1038 twice at the original sign-off, before the Phase 10 review fixes added 17 tests); `test/launcher-mode.test.js` (demo launchers never mention `MA_MODE`); runner lanes `dev`, `demo-open`, `dev-committed`, `demo-committed` all PASS; Phase 9 walk 350 PASS and `--demo-open` 18 PASS (no superseded check needed); smoke shots at 1440 and 390: login (`login-real-*`), change password (`forced-change-*`, `change-password-modal-390`), My sessions (`sessions-*`), Users tab (`users-tab-*`) |
 
 ## ROADMAP success criteria
 
 | SC | Verdict | Proof |
 |----|---------|-------|
-| SC1 admin creates/disables/enables, sets roles, resets passwords from the console; disable and role change bind next request; audited | PASS | `test/user-admin.test.js`; `test/admin-users-ui.test.js`; scenario `usersTabLifecycle` (32 checks, evidence `users-tab-1440/-390.jpg`, `temp-password-modal-1440.jpg`) |
+| SC1 admin creates/disables/enables, sets roles, resets passwords from the console; disable and role change bind next request; audited | PASS | `test/user-admin.test.js`; `test/admin-users-ui.test.js`; scenario `usersTabLifecycle` (33 checks, evidence `users-tab-1440/-390.jpg`, `temp-password-modal-1440.jpg`) |
 | SC2 bootstrap CLI; `start-real-deal.*` boots `MA_MODE=real` on its own data dir without demo accounts; committed DBs never written | PASS | `test/bootstrap-admin.test.js`; `test/real-mode-boot.test.js`; `test/real-mode-guards.test.js`; `test/launcher-mode.test.js`; `test/db-artifact-exclusion.test.js`; runner data-integrity + lane guards |
 | SC3 no demo password verifies in real mode; server refuses beyond login/change-password; login shows demo creds only in demo-open/dev; deal creation on the committed control path refused outside real mode | PASS | `test/credential-lockdown.test.js`; `test/lockdown-asset-allowlist.test.js`; scenarios `realLoginHasNoDemoCredentials`, `handCopiedControlDbLockdown`, `devLoginShowsDemoPanel`, `demoOpenLoginStays`; `test/real-mode-guards.test.js` ("guards (A): POST /api/deals and POST /api/auth/change-password are refused 403 on the committed control.db") |
 | SC4 8 wrong passwords do not lock out a colleague; temp passwords force a change; hashes upgrade; users change password and end own sessions from the UI | PASS | `test/login-throttle.test.js`; `test/forced-rotation.test.js`; `test/password-rehash.test.js`; `test/self-sessions.test.js`; `test/client-account-surfaces.test.js`; scenario `selfServiceSessions` (`sessions-1440/-390.jpg`, `change-password-modal-390.jpg`) |
@@ -104,6 +107,30 @@ navigations in 6 s, no `/api/deals` request; evidence `demo-open-anonymous-1440.
    account row; with identity re-read per request (D-10-04) every write was 401. The harness now
    seeds a credential-less admin account per worker via `controlStore.createAccount` (commit `ec75065`).
    Product code untouched; soak PASS afterwards.
+
+## Post-verification correction (2026-10-10)
+
+`10-VERIFICATION.md` (status `gaps_found`, 15/16) found the Phase 10 runner red on HEAD: the
+WR-C01 check added by review fix `1d92eb8` compared `#au-temp-password` with the real secret
+after the scenario had already masked it to `••••` for the T-10-45 screenshot, so it could never
+pass (`phase10-walk.js` exited 1 at 179 PASS / 1 FAIL, so the originally signed "179 PASS / 0
+FAIL" no longer reproduced; 179 / 0 was the count before that check existed). The product
+behaviour was correct throughout.
+
+Fix `e7a36bf` (`scripts/uat/phase10-scenarios/users-tab.js` only; no product code, no committed
+data): the secret is read unmasked and the sticky contract is asserted against the real value,
+counting only when the Escape and the scrim click demonstrably reached the page; masking now
+happens only inside `shot()`, which refuses to write a screenshot unless the secret is provably
+absent from the DOM. Four checks were added to `usersTabLifecycle` (shown once: one DOM
+rendering, and a fresh Users listing never carries it; masked in the DOM before the
+temp-password screenshot; reset password wiped on Done with no copy left). Each assertion was
+mutation-tested against a deliberately broken modal (non-sticky, blank-on-Escape, no wipe on
+Done, duplicate rendering) and failed as intended.
+
+Corrected state: `phase10-walk.js` **184 PASS / 0 FAIL** over six lanes (`usersTabLifecycle`
+33/33), committed `data/demo.db` + `data/control.db` (+ `-wal`) sha256 unchanged, `git status
+--porcelain -- data` empty; `node --test` 1055/1055. All 30 screenshots were re-viewed:
+no real credential in any shot.
 
 ## Open items
 
