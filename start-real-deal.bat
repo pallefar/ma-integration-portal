@@ -34,6 +34,12 @@ REM gitignored data directory (data\real, or MA_DATA_DIR) seeded WITHOUT the
 REM published demo accounts, and refuse to ever open the committed data\*.db
 REM files. Without this line the server would run in dev mode.
 set "MA_MODE=real"
+REM [security] IN-C01: the launcher also CLEARS any DEMO_OPEN inherited from the
+REM environment (a `setx DEMO_OPEN 1` left over from a demo session). The server
+REM refuses MA_MODE=real + DEMO_OPEN=1 at boot (fail-closed), but the browser
+REM timer below would still open a dead tab - clearing it here means a real-deal
+REM host simply starts, auth mandatory.
+set "DEMO_OPEN="
 
 echo.
 echo   ----------------------------------------------------------------
@@ -53,8 +59,8 @@ echo.
 
 start "" cmd /c "timeout /t 3 >nul & start http://localhost:3000"
 
-REM NOTE: DEMO_OPEN is deliberately NOT set here (and is refused together with
-REM MA_MODE=real). Auth stays mandatory.
+REM NOTE: DEMO_OPEN is deliberately NOT set here - it is cleared above (and is
+REM refused together with MA_MODE=real). Auth stays mandatory.
 "%NODE_CMD%" server.js
 
 echo.

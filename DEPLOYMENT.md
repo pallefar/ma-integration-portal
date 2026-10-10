@@ -18,8 +18,9 @@ database files (dev). Only real-deal mode is safe for MNPI.
 > **Never run `start.command` / `start.bat` on a host that will hold real deal
 > data.** Those launchers set `DEMO_OPEN=1`, which disables all `/api`
 > authentication and authorization so the showcase runs without a login. The
-> real-deal launchers deliberately do not set it — and the server refuses to boot
-> at all when `MA_MODE=real` and `DEMO_OPEN=1` are set together.
+> real-deal launchers deliberately do not set it — they clear any `DEMO_OPEN`
+> inherited from your shell or profile — and the server refuses to boot at all
+> when `MA_MODE=real` and `DEMO_OPEN=1` are set together.
 
 The server prints a `[security]` warning at boot whenever `DEMO_OPEN=1` is in
 effect — if you see that line on a real-deal host, stop and switch launchers.

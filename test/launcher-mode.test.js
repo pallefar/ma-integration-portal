@@ -31,6 +31,20 @@ test('launchers: start-real-deal.command exports MA_MODE=real before exec and po
   assert.ok(!/set-admin-password/.test(src), 'a zero-account host must not be told to run set-admin-password');
   assert.ok(!lines.some((l) => /DEMO_OPEN\s*=\s*1/.test(l)), 'real-deal launcher must not set DEMO_OPEN');
   assert.ok(!/MA_BOOTSTRAP_PASSWORD=\S/.test(src), 'no password value may be embedded in the launcher');
+  // IN-C01: an inherited DEMO_OPEN is cleared after MA_MODE=real, before the server starts.
+  const unsetIdx = lines.findIndex((l) => /^unset\s+DEMO_OPEN\s*$/.test(l.trim()));
+  assert.ok(unsetIdx > exportIdx && unsetIdx < execIdx, 'unset DEMO_OPEN must sit between export MA_MODE=real and exec');
+});
+
+test('launchers (IN-C01): start-real-deal.command really clears an inherited DEMO_OPEN', () => {
+  const { spawnSync } = require('child_process');
+  const src = read('start-real-deal.command');
+  const lines = codeLines(src, ['#']);
+  const start = lines.findIndex((l) => /^export\s+MA_MODE=real\s*$/.test(l.trim()));
+  const unset = lines.findIndex((l) => /^unset\s+DEMO_OPEN\s*$/.test(l.trim()));
+  const snippet = lines.slice(start, unset + 1).join('\n') + '\nprintf "%s|%s" "$MA_MODE" "${DEMO_OPEN-UNSET}"';
+  const out = spawnSync('/bin/sh', ['-c', snippet], { env: { PATH: process.env.PATH, DEMO_OPEN: '1' }, encoding: 'utf8' });
+  assert.strictEqual(out.stdout, 'real|UNSET');
 });
 
 test('launchers: start-real-deal.bat sets MA_MODE=real before node and points at bootstrap-admin', () => {
@@ -42,7 +56,10 @@ test('launchers: start-real-deal.bat sets MA_MODE=real before node and points at
   assert.ok(runIdx > setIdx, 'MA_MODE=real must be set before node server.js runs');
   assert.ok(/scripts\\bootstrap-admin\.js/.test(src), 'banner must point first-run operators at bootstrap-admin');
   assert.ok(!/set-admin-password/.test(src), 'a zero-account host must not be told to run set-admin-password');
-  assert.ok(!lines.some((l) => /set\s+"?DEMO_OPEN/i.test(l)), 'real-deal launcher must not set DEMO_OPEN');
+  // IN-C01: the only DEMO_OPEN line allowed is the one that CLEARS it.
+  assert.ok(!lines.some((l) => /set\s+"?DEMO_OPEN=[^"\s]/i.test(l)), 'real-deal launcher must not set DEMO_OPEN to a value');
+  const clearIdx = lines.findIndex((l) => /^set\s+"DEMO_OPEN="\s*$/i.test(l.trim()));
+  assert.ok(clearIdx > setIdx && clearIdx < runIdx, 'set "DEMO_OPEN=" must sit between set "MA_MODE=real" and node server.js');
 });
 
 test('launchers: the demo launchers are unchanged — they never mention MA_MODE', () => {

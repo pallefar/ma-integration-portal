@@ -27,6 +27,12 @@ fi
 # published demo accounts, and refuse to ever open the committed data/*.db files.
 # Without this line the server would run in dev mode on the committed control.db.
 export MA_MODE=real
+# [security] IN-C01: the launcher also CLEARS any DEMO_OPEN inherited from the
+# shell or a profile (`export DEMO_OPEN=1` in ~/.zshrc after a demo session).
+# The server refuses MA_MODE=real + DEMO_OPEN=1 at boot (fail-closed), but the
+# browser timer below would still open a dead tab with the error hidden behind
+# it — clearing it here means a real-deal host simply starts, auth mandatory.
+unset DEMO_OPEN
 
 # [security] First-run bootstrap (D-10-02). A real-deal host starts with ZERO
 # accounts — there is no published password to rotate. Create the first admin
@@ -47,6 +53,6 @@ echo "  Opening http://localhost:3000 - keep this window open; close it to stop 
 
 ( sleep 3; (command -v open >/dev/null && open "http://localhost:3000") || (command -v xdg-open >/dev/null && xdg-open "http://localhost:3000") ) >/dev/null 2>&1 &
 
-# NOTE: DEMO_OPEN is deliberately NOT set here (and is refused together with
-# MA_MODE=real). Auth stays mandatory.
+# NOTE: DEMO_OPEN is deliberately NOT set here — it is cleared above (and is
+# refused together with MA_MODE=real). Auth stays mandatory.
 exec "$NODE_CMD" server.js
