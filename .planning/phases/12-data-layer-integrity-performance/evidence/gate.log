@@ -184,7 +184,7 @@ absent  data/runtime.db-shm
 63d552c4c4d8e301752d5f47b7f82b4fd391ee7d32534e7ea0b808cdcba805a8  1310720 B  data/demo.db
 e83f049e9f018d84e363031a9b1c29613e0ad682d6585b6cee13f783c4854a72  36864 B  data/control.db
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  0 B  data/control.db-wal
-/private/tmp/claude-501/-Users-karstenhaldan-M-A/ff1cc7dd-35c3-4b09-ad34-f2dd9f2a2950/scratchpad/gate-wrap-sampled.sh: line 24: 94634 Terminated: 15          bash "$SCRATCH/sampler.sh" "$SCRATCH/gate-sampler.log"
+<scratch>/gate-wrap-sampled.sh: line 24: 94634 Terminated: 15          bash "$SCRATCH/sampler.sh" "$SCRATCH/gate-sampler.log"
 ISOLATION: data/audit.db* and data/runtime.db* (and committed demo/control) byte-identical before/after: PASS
 sentinels removed
 gate exit code: 0

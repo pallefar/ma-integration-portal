@@ -1,0 +1,77 @@
+HOST: load1=11.85 cpus=11 at 2026-10-10T21:05:49Z (threshold 12)
+
+> te-ma-integration-portal@1.0.0 smoke
+> node scripts/smoke/run.js
+
+tools: playwright 1.62.1 (~/.npm/_npx/e41f203b7505f1fb/node_modules/playwright, via PLAYWRIGHT_PATH); axe-core 4.11.1 (~/cv/node_modules/axe-core, via AXE_CORE_PATH)
+isolated real-deal server up (temp MA_DATA_DIR, MA_MODE=real)
+
+page           width  axe critical  axe serious  page errors  failed req  landmarks
+-------------  -----  ------------  -----------  -----------  ----------  ---------
+login          1440   0             1            0            0           ok       
+login          390    0             1            0            0           ok       
+dashboard      1440   2             3            0            0           ok       
+dashboard      390    2             2            0            0           ok       
+execution      1440   2             2            0            0           ok       
+execution      390    2             2            0            0           ok       
+due-diligence  1440   1             2            0            0           ok       
+due-diligence  390    1             2            0            0           ok       
+org            1440   1             2            0            0           ok       
+org            390    1             2            0            0           ok       
+admin-users    1440   1             2            0            0           ok       
+admin-users    390    1             2            0            0           ok       
+
+  [login@1440] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [login@1440] axe serious: color-contrast (3 nodes)
+  [login@390] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [login@390] axe serious: color-contrast (3 nodes)
+  [dashboard@1440] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [dashboard@1440] axe serious: color-contrast (4 nodes)
+  [dashboard@1440] axe serious: label-title-only (1 node)
+  [dashboard@1440] axe critical: label (1 node)
+  [dashboard@1440] axe serious: link-in-text-block (1 node)
+  [dashboard@1440] axe critical: select-name (2 nodes)
+  [dashboard@390] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [dashboard@390] axe serious: color-contrast (4 nodes)
+  [dashboard@390] axe serious: label-title-only (1 node)
+  [dashboard@390] axe critical: label (1 node)
+  [dashboard@390] axe critical: select-name (2 nodes)
+  [execution@1440] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [execution@1440] axe serious: color-contrast (18 nodes)
+  [execution@1440] axe serious: label-title-only (1 node)
+  [execution@1440] axe critical: label (1 node)
+  [execution@1440] axe critical: select-name (3 nodes)
+  [execution@390] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [execution@390] axe serious: color-contrast (18 nodes)
+  [execution@390] axe serious: label-title-only (1 node)
+  [execution@390] axe critical: label (1 node)
+  [execution@390] axe critical: select-name (3 nodes)
+  [due-diligence@1440] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [due-diligence@1440] axe serious: color-contrast (52 nodes)
+  [due-diligence@1440] axe serious: label-title-only (1 node)
+  [due-diligence@1440] axe critical: select-name (1 node)
+  [due-diligence@390] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [due-diligence@390] axe serious: color-contrast (52 nodes)
+  [due-diligence@390] axe serious: label-title-only (1 node)
+  [due-diligence@390] axe critical: select-name (1 node)
+  [org@1440] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [org@1440] axe serious: color-contrast (11 nodes)
+  [org@1440] axe serious: label-title-only (1 node)
+  [org@1440] axe critical: select-name (5 nodes)
+  [org@390] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [org@390] axe serious: color-contrast (11 nodes)
+  [org@390] axe serious: label-title-only (1 node)
+  [org@390] axe critical: select-name (5 nodes)
+  [admin-users@1440] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [admin-users@1440] axe serious: color-contrast (20 nodes)
+  [admin-users@1440] axe serious: label-title-only (1 node)
+  [admin-users@1440] axe critical: select-name (1 node)
+  [admin-users@390] note: allowed console.error (known, see pages.js KNOWN_CONSOLE): Connecting to 'https://fonts.googleapis.com/css2?family=Inter:wght@300...
+  [admin-users@390] axe serious: color-contrast (20 nodes)
+  [admin-users@390] axe serious: label-title-only (1 node)
+  [admin-users@390] axe critical: select-name (1 node)
+
+12 page x width visit(s); 0 with errors; axe critical+serious total 37 (informational).
+isolation: committed data/*.db sha256 unchanged; git status data/ + public/sent_emails/ unchanged.
+HOST: load at end: 13.04 39.06 79.63 at 2026-10-10T21:06:19Z
+EXIT=0

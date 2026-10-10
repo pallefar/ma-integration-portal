@@ -1,0 +1,53 @@
+=== 1. the soak's check 10 (hash chain verifies after multi-process appends) - from soak.log
+  [PASS] audit partition hash chain verifies after multi-process appends: rows=9268 head=fdccc4a55a8f...
+soak: PASS — acknowledged-write invariant held under sustained real load.
+
+=== 2. node scripts/perf/legacy-audit-migration.js --rows 20000 (synthetic v0 tree; prints its own audit-verify --all)
+legacy-audit-migration: generating 20000 synthetic legacy rows in <tmp>/gsd-12-13-rehearsal-FyLbce (projected ~22 MB)
+REHEARSAL rows=20000 file_mb=21.1 duration_ms=2241 peak_wal_mb=2.5 peak_scratch_mb=81.8 tree_peak_mb=83.2 free_delta_mb=80.1 verify=OK boot_baseline_ms=231 migration_ms=2010 scratch_ratio=3.88
+MOVED present_deal_partitions=800 present_rows=15252 (expected 15252) legacy_rows=3703 (expected 3703) control_rows=1045 (expected 1045) accounting=OK
+VERIFY files_ok=802 non_ok=0 exit=0
+EXTRAPOLATED 5GB (linear in file size, NOT measured): migration_ms~488784 (~8.1 min) peak_scratch_gb~19.4 peak_wal_gb~0.6 runner_free_space_rule_gb=15.1
+rehearsal exit=0
+
+=== 3. store-driven scratch deal: archive, seal via scripts/audit-admin.js, audit-verify --deal / --all / --jsonl
+scratch deal deal_mv2wfwkhf657958e: 12 audited writes through db/store.js
+deal archived (control plane)
+PASS - seal with a mismatched --confirm is a usage error (exit 2) :: exit 2
+$ audit-admin.js seal <deal> --confirm <deal>
+[security] audit directory: <scratch>/audit
+SEALED deal_mv2wfwkhf657958e rows=13 head=dcc2a5b0d4a3ed0516d5d48b411b2d575e9392683cab713b6defc57e425aacf3 sha256=9e8c598e56a00f2771270af8ed4ab2d817f67f7b429e48af3187b071383656ee
+exit=0
+PASS - audit-admin seal exit 0 with a sha256 :: exit 0
+$ audit-verify.js --deal <deal>
+OK <scratch>/audit/deal_mv2wfwkhf657958e.db rows=13 head=dcc2a5b0d4a3ed0516d5d48b411b2d575e9392683cab713b6defc57e425aacf3 sealed=yes sealed-sha=match
+exit=0
+PASS - audit-verify --deal exit 0 and sealed-sha=match :: exit 0
+$ audit-verify.js --all
+OK <scratch>/audit/deal_mv2wfwkhf657958e.db rows=13 head=dcc2a5b0d4a3ed0516d5d48b411b2d575e9392683cab713b6defc57e425aacf3 sealed=yes sealed-sha=match
+OK <scratch>/audit.db rows=1 head=e2ce562b884225dd3289b3c4004d09fccd7dcefa83b5503662b31e80fc517174 sealed=no
+exit=0
+PASS - audit-verify --all exit 0 (control log + partition) :: exit 0
+PASS - audit-verify --all reports sealed-sha=match for the sealed partition
+$ audit-admin.js export <deal> --out <file>
+[security] audit directory: <scratch>/audit
+EXPORTED deal_mv2wfwkhf657958e -> <scratch>/export.jsonl rows=13 sha256=81c5c3549033035b3ff993b387b739916d5381c79d85751654a466426c599af5 sealedSha256=9e8c598e56a00f2771270af8ed4ab2d817f67f7b429e48af3187b071383656ee
+exit=0
+PASS - audit-admin export exit 0 :: exit 0
+$ audit-verify.js --jsonl <file>
+OK <scratch>/export.jsonl jsonl partition=deal_mv2wfwkhf657958e rows=13 head=dcc2a5b0d4a3ed0516d5d48b411b2d575e9392683cab713b6defc57e425aacf3 sha256=81c5c3549033035b3ff993b387b739916d5381c79d85751654a466426c599af5
+exit=0
+PASS - audit-verify --jsonl of the export exit 0 :: exit 0
+$ audit-admin.js purge <deal> --confirm <deal>
+[security] audit directory: <scratch>/audit
+REFUSED retention-never: No retention period is configured, so the audit trail is never purged.
+exit=1
+PASS - purge is refused (retention never elapses by default): exit 1, retention-never :: exit 1
+PASS - the sealed partition file still exists after the refusal
+$ audit-verify.js --jsonl <tampered copy>
+FAIL <scratch>/export-tampered.jsonl line=2 row-hash-mismatch
+exit=1
+PASS - a one-byte edit of an exported row fails verification (exit 1) :: exit 1
+VERIFY PASS
+scratch-deal exit=0
+EXIT=0
