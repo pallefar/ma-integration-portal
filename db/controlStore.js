@@ -29,7 +29,8 @@ const { DD_AREA_IDS } = require('./accessPolicy');
 // Duplicated here (not imported from server.js) to avoid a circular
 // require — server.js already requires this module at load time, so this
 // module cannot require server.js back. db/dbFiles.js's DEAL_ID_RE
-// (`/^deal_[a-z0-9]+$/i`) accepts exactly this shape.
+// (`/^deal_[a-z0-9]+$/`, case-sensitive since 12-REVIEW CR-01) accepts
+// exactly this shape.
 function newId(prefix) {
   return prefix + '_' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
 }

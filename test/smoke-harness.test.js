@@ -46,13 +46,15 @@ test('page registry: the first IL pages + admin Users, each at 1440 and 390', ()
   assert.strictEqual(new Set(pages.map((p) => p.name)).size, pages.length, 'page names are unique');
 });
 
-test('release exclusion: .gitattributes export-ignores scripts/smoke/', () => {
+test('release exclusion: .gitattributes export-ignores scripts/smoke/ and scripts/perf/', () => {
   const attrs = fs.readFileSync(path.join(REPO_ROOT, '.gitattributes'), 'utf8');
   assert.match(attrs, /^scripts\/smoke\/\s+export-ignore\s*$/m);
+  assert.match(attrs, /^scripts\/perf\/\s+export-ignore\s*$/m, 'IN-B05: the perf harness is never shipped');
   // Ask git itself (reads the working-tree .gitattributes); skip if git is absent.
-  const r = spawnSync('git', ['check-attr', 'export-ignore', '--', 'scripts/smoke/'], { cwd: REPO_ROOT, encoding: 'utf8' });
+  const r = spawnSync('git', ['check-attr', 'export-ignore', '--', 'scripts/smoke/', 'scripts/perf/'], { cwd: REPO_ROOT, encoding: 'utf8' });
   if (r.error || r.status !== 0) return;
-  assert.match(r.stdout, /export-ignore: set/, 'git must resolve export-ignore for scripts/smoke/: ' + r.stdout);
+  assert.match(r.stdout, /scripts\/smoke\/: export-ignore: set/, 'git must resolve export-ignore for scripts/smoke/: ' + r.stdout);
+  assert.match(r.stdout, /scripts\/perf\/: export-ignore: set/, 'git must resolve export-ignore for scripts/perf/: ' + r.stdout);
   // ...and prove the effect: an archive of scripts/ (what a release zip is built
   // from) carries none of scripts/smoke/. --worktree-attributes so the check is
   // about THIS tree's .gitattributes even before it is committed.
@@ -62,6 +64,7 @@ test('release exclusion: .gitattributes export-ignores scripts/smoke/', () => {
   const names = tarNames(ar.stdout);
   assert.ok(names.some((n) => n.indexOf('scripts/') === 0), 'archive of scripts/ is non-empty');
   assert.deepStrictEqual(names.filter((n) => n.indexOf('scripts/smoke') === 0), [], 'scripts/smoke/ must not be in a release archive');
+  assert.deepStrictEqual(names.filter((n) => n.indexOf('scripts/perf') === 0), [], 'scripts/perf/ must not be in a release archive');
 });
 
 // Minimal ustar name reader (512-byte headers): enough to list entry names

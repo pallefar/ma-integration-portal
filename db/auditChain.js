@@ -70,8 +70,25 @@ function textOrNull(v) {
   return v === undefined || v === null ? null : String(v);
 }
 
+/**
+ * IN-03 (12-REVIEW): `legacy_id` is an INTEGER (a source row's original id) or
+ * null. Anything else THROWS (code AUDIT_INVALID_LEGACY_ID) — `Number('abc')`
+ * is NaN and JSON.stringify(NaN) is `null`, so hashing it would give a row with
+ * a text legacy_id the same canonical form (and hash) as a NULL one.
+ */
 function legacyOrNull(v) {
-  return v === undefined || v === null ? null : Number(v);
+  if (v === undefined || v === null) return null;
+  const n = typeof v === 'number' ? v : (typeof v === 'string' && /^-?\d+$/.test(v) ? Number(v) : NaN);
+  if (!Number.isSafeInteger(n)) {
+    const err = new Error('db/auditChain.js: legacy_id must be an integer or null');
+    err.code = 'AUDIT_INVALID_LEGACY_ID';
+    throw err;
+  }
+  return n;
+}
+
+function isInvalidLegacyId(e) {
+  return !!e && e.code === 'AUDIT_INVALID_LEGACY_ID';
 }
 
 /**
@@ -179,8 +196,15 @@ function verifyChain(conn, partitionId) {
     }
     if (row.prev_hash !== prev) {
       problems.push({ id: row.id, reason: 'prev-link-broken' });
-    } else if (rowHash(row, row.prev_hash) !== row.row_hash) {
-      problems.push({ id: row.id, reason: 'row-hash-mismatch' });
+    } else {
+      let h = null;
+      try { h = rowHash(row, row.prev_hash); } catch (e) {
+        if (!isInvalidLegacyId(e)) throw e;
+        problems.push({ id: row.id, reason: 'invalid-legacy-id' });
+        prev = row.row_hash;
+        continue;
+      }
+      if (h !== row.row_hash) problems.push({ id: row.id, reason: 'row-hash-mismatch' });
     }
     prev = row.row_hash;
   }
@@ -202,6 +226,7 @@ module.exports = {
   genesisHash,
   canonicalRow,
   rowHash,
+  isInvalidLegacyId,
   appendChained,
   verifyChain,
 };

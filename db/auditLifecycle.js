@@ -440,7 +440,8 @@ async function exportPartitionJsonl(partitionId, write, opts) {
 
 const LIFECYCLE_ACTIONS = Object.freeze([
   'audit-partition-sealed', 'audit-partition-seal-refused', 'audit-partition-exported',
-  'audit-partition-export-refused', 'audit-partition-purged', 'audit-partition-purge-refused',
+  'audit-partition-export-refused', 'audit-partition-export-started', 'audit-partition-export-aborted',
+  'audit-partition-purged', 'audit-partition-purge-refused',
   'audit-partition-purge-failed', 'audit-partition-tamper-detected',
 ]);
 
@@ -486,8 +487,11 @@ function lifecycleStatus(partitionId, deps) {
  * Export a sealed partition AND record `audit-partition-exported` after the
  * last byte. Refusals (`no-partition`, `not-sealed`, `modified-after-seal`) are
  * decided BEFORE `deps.onReady()` / the first `write`, so a caller can still
- * answer with a status code. An aborted stream (`deps.shouldAbort`) records
- * nothing.
+ * answer with a status code. Every attempt that passes the refusals records
+ * `audit-partition-export-started` before the first byte; an aborted stream
+ * (`deps.shouldAbort`) or a thrown write/stream error records
+ * `audit-partition-export-aborted` with the bytes sent (WR-03) — never an
+ * `-exported` hash for a partial file.
  *
  * @param {string} partitionId
  * @param {object} deps  findEvents, recordEvent, write, [onReady], [shouldAbort], [now]
@@ -507,11 +511,36 @@ async function exportPartition(partitionId, deps) {
     deps.recordEvent({ action: 'audit-partition-tamper-detected', after: { sealedSha256: sealedEvent.sha256, currentSha256: status.fileSha256 } });
     return refuse('modified-after-seal');
   }
-  if (typeof deps.onReady === 'function') deps.onReady();
-  const result = await exportPartitionJsonl(partitionId, deps.write, {
-    now: deps.now, sealedSha256: sealedEvent.sha256, shouldAbort: deps.shouldAbort,
+  // [security] WR-03 (12-REVIEW): the ATTEMPT is a control event too — recorded
+  // before the first byte leaves, so a stream that is dropped at 99% (client
+  // disconnect, write/stream error) still leaves `-export-started` plus
+  // `-export-aborted` (with the bytes sent) in audit.db. A completed export is
+  // closed by `audit-partition-exported` (the completion event purge keys on).
+  deps.recordEvent({
+    action: 'audit-partition-export-started',
+    after: { sealedSha256: sealedEvent.sha256, rows: status.rows },
   });
-  if (result.aborted) return { outcome: 'aborted' };
+  let bytesSent = 0;
+  const countingWrite = (chunk) => {
+    bytesSent += Buffer.byteLength(chunk, 'utf8');
+    return deps.write(chunk);
+  };
+  let result;
+  try {
+    if (typeof deps.onReady === 'function') deps.onReady();
+    result = await exportPartitionJsonl(partitionId, countingWrite, {
+      now: deps.now, sealedSha256: sealedEvent.sha256, shouldAbort: deps.shouldAbort,
+    });
+  } catch (e) {
+    try {
+      deps.recordEvent({ action: 'audit-partition-export-aborted', after: { reason: 'stream-error', bytes: bytesSent } });
+    } catch (recordErr) { /* the original stream error below still surfaces */ }
+    throw e;
+  }
+  if (result.aborted) {
+    deps.recordEvent({ action: 'audit-partition-export-aborted', after: { reason: 'client-disconnected', bytes: bytesSent } });
+    return { outcome: 'aborted' };
+  }
   // Recorded only after the complete stream; the caller ends the response AFTER
   // this returns, so an export is never delivered without its event.
   deps.recordEvent({

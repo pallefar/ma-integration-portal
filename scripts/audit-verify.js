@@ -44,7 +44,8 @@ const dbFiles = require('../db/dbFiles');
 const auditChain = require('../db/auditChain');
 const auditLifecycle = require('../db/auditLifecycle');
 
-const PARTITION_FILE_RE = /^(deal_[a-z0-9]+|legacy)\.db$/i;
+// CR-01 (12-REVIEW): case-sensitive, like dbFiles.DEAL_ID_RE.
+const PARTITION_FILE_RE = /^(deal_[a-z0-9]+|legacy)\.db$/;
 
 /** The partition id a file's chain is bound to: audit.db -> control, X.db -> X. */
 function partitionIdFor(file) {
@@ -178,7 +179,12 @@ function verifyJsonl(file) {
     }
     if (!Number.isInteger(row.id) || row.id <= lastId) return fail(i + 1, 'id-order');
     if (row.prev_hash !== prev) return fail(i + 1, 'prev-link-broken');
-    if (auditChain.rowHash(row, row.prev_hash) !== row.row_hash) return fail(i + 1, 'row-hash-mismatch');
+    let h;
+    try { h = auditChain.rowHash(row, row.prev_hash); } catch (e) {
+      if (auditChain.isInvalidLegacyId(e)) return fail(i + 1, 'invalid-legacy-id');
+      throw e;
+    }
+    if (h !== row.row_hash) return fail(i + 1, 'row-hash-mismatch');
     prev = row.row_hash;
     lastId = row.id;
     rows += 1;
@@ -214,6 +220,11 @@ function main(argv, io) {
       const id = args.shift();
       let p;
       try { p = dbFiles.auditPartitionPath(id); } catch (e) { err('audit-verify: --deal needs a valid deal id'); usage(err); return 2; }
+      // [security] CR-01 (12-REVIEW): resolve by FILE IDENTITY — the id must
+      // exactly equal a partition file basename in an exact-case listing; a
+      // case-insensitive filesystem would otherwise open the same file under a
+      // variant spelling and bind the chain to the wrong genesis id.
+      if (!dbFiles.auditPartitionListed(id)) { err('audit-verify: no audit partition with exactly that id on this host'); return 2; }
       files.push(p);
     } else if (a === '--jsonl') {
       const jf = args.shift();

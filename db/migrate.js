@@ -11,13 +11,17 @@
 //   control  db/control-schema.sql   (data/control.db)
 //   runtime  db/runtime-schema.sql   (data/runtime.db)
 //   deal     db/schema.sql           (data/demo.db and every deals/<id>.db)
-//   audit    db/audit-schema.sql     (data/audit.db — migrations arrive with the
-//                                     audit partition work; none yet)
+//   audit    db/audit-schema.sql     (data/audit.db — migration #1
+//                                     001-partition-legacy: per-deal partitions,
+//                                     sealed legacy.db, chained control log)
+//   audit-partition db/audit-partition-schema.sql (data/audit/<dealId>.db and
+//                                     legacy.db — baseline only)
 // A schema file outside this list (a test-only custom schema) is left alone:
 // no family, no version, no checks.
 //
 // LAYOUT. db/migrations/<family>/NNN-<slug>.js, ids contiguous from 1. A module
-// exports `{ id, slug, up(conn, ctx), requiredTables?, backup? }` and is
+// exports `{ id, slug, up(conn, ctx), requiredTables?, backup?, precheck? }`
+// (`precheck(conn, ctx)`: read-only, runs before the backup, throws to refuse) and is
 // validated at load: `id` equals the NNN prefix, `slug` equals the file slug.
 // A family whose directory does not exist yet has latest version 0.
 //
@@ -142,6 +146,7 @@ function loadMigrations(family) {
       slug: m[2],
       name: `${m[1]}-${m[2]}`,
       up: mod.up,
+      precheck: typeof mod.precheck === 'function' ? mod.precheck : null,
       backup: mod.backup === true,
       requiredTables: Array.isArray(mod.requiredTables) ? mod.requiredTables.slice() : [],
     });
@@ -262,6 +267,9 @@ function runMigrations(conn, { family, file, fresh, committed, freeBytes } = {})
   for (const mig of migrations) {
     if (mig.id <= current) continue;
     try {
+      // An optional read-only precondition runs BEFORE the backup, so a
+      // migration that must fail closed (12-REVIEW WR-02) writes nothing at all.
+      if (mig.precheck && currentVersion(conn) < mig.id) mig.precheck(conn, { family, file, id: mig.id, name: mig.name });
       if (mig.backup && currentVersion(conn) < mig.id) takeBackup(conn, file, mig, { family, freeBytes });
       const apply = conn.transaction(() => {
         const v = currentVersion(conn); // re-read under the write lock

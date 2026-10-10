@@ -140,9 +140,20 @@ async function run(argv, opts) {
   const lifecycle = require('../db/auditLifecycle');
 
   const { command, id } = parsed;
-  if (id !== null && !(dbFiles.DEAL_ID_RE.test(id) || id === 'legacy')) {
-    err(`Invalid partition id — expected a deal id (deal_...) or "legacy".`);
-    return 2;
+  if (id !== null) {
+    // [security] CR-01 (12-REVIEW): the same FILE-IDENTITY rule as the routes
+    // (db/dbFiles.js resolveAuditPartitionId) — the id must exactly equal a
+    // registered deal id or an exact-case partition file basename, so a case
+    // variant of a live deal's id can never reach its partition file.
+    const r = dbFiles.resolveAuditPartitionId(id, (x) => readDealState(dbFiles, x) !== 'absent');
+    if (!r.ok && r.reason === 'malformed') {
+      err(`Invalid partition id — expected a deal id (deal_...) or "legacy".`);
+      return 2;
+    }
+    if (!r.ok) {
+      err('Unknown partition id — no registered deal and no audit partition has exactly that id.');
+      return 2;
+    }
   }
   if ((command === 'seal' || command === 'purge') && parsed.confirm !== id) {
     err(`${command} needs --confirm <partitionId> exactly equal to the partition id.`);

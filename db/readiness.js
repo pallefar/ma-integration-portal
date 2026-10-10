@@ -23,6 +23,9 @@ const REASONS = Object.freeze({
   INTEGRITY_FAILED: 'integrity-check-failed',
   INSUFFICIENT_DISK: 'insufficient-disk-for-migration',
   COMMITTED_NEEDS_REGEN: 'committed-file-needs-regeneration',
+  // 12-REVIEW WR-02: audit migration #1 needs the deal registry to classify
+  // rows and could not read it — fail closed, nothing moved or sealed.
+  DEAL_REGISTRY_UNREADABLE: 'deal-registry-unreadable',
 });
 
 class DbNotReadyError extends Error {
@@ -73,20 +76,32 @@ function isReady() {
   return failures.size === 0;
 }
 
+// [security] IN-01 (12-REVIEW): the snapshot is served UNAUTHENTICATED by
+// /healthz, so it carries fixed tokens only — no per-family file count (the
+// number of deal files / partitions is the number of acquisitions on the host)
+// and no repeated failure entries (one per failing deal file would count them
+// too): identical exposed failures collapse to one.
 function snapshot() {
   const out = {};
   for (const v of versions.values()) {
     const cur = out[v.family];
     if (!cur) {
-      out[v.family] = { version: v.version, files: 1 };
+      out[v.family] = { version: v.version };
       if (v.implied) out[v.family].implied = true;
     } else {
-      cur.files += 1;
       if (v.version < cur.version) cur.version = v.version; // the family is only as new as its oldest file
       if (v.implied) cur.implied = true;
     }
   }
-  return { ready: isReady(), failures: [...failures.values()], versions: out };
+  const seen = new Set();
+  const exposed = [];
+  for (const f of failures.values()) {
+    const k = JSON.stringify([f.family, f.file, f.migration || null, f.reason]);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    exposed.push(f);
+  }
+  return { ready: isReady(), failures: exposed, versions: out };
 }
 
 function _resetForTests() {

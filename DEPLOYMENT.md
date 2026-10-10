@@ -463,6 +463,15 @@ All three live inside the data directory (`data/real` or `MA_DATA_DIR`), files
 The Admin console **Audit** tab and `GET /api/admin/audit` read all of them
 together; each row is tagged with its partition.
 
+**Durability.** `audit.db` and every partition are flushed to disk on every
+commit (SQLite `synchronous = FULL`, plus `fullfsync` on macOS), and a deal
+write's audit row is committed before the deal write itself — so after a power
+loss or OS crash an audit row can be present for a write that did not survive,
+but a surviving deal write never lacks its audit row. Measured cost on the dev
+host (`scripts/perf/write-latency.js`, 5,000 RAID / 1,000 tasks): median
+`POST /api/raid` 21.7 ms, `POST /api/integration-tasks` 9.2 ms against the
+40 ms budget.
+
 ### 2. Tamper evidence
 
 Every row of `audit.db` and of every partition is linked to the one before it by a
@@ -639,6 +648,12 @@ warning at boot.
   AI-Insight wizard — and is **deferred to a follow-up task** (vendoring the
   weights or gating the feature to demo mode). Real-deal hosts that must stay
   fully offline should not use the AI-Insight feature until this is resolved.
+- **A RAID entry or task with a malformed clearance area is hidden from everyone,
+  admin included (fail-closed, accepted).** The app only ever writes a valid
+  clearance area; a value that is not one (only possible by editing the deal file
+  directly) makes the row invisible in every list, export and report rather than
+  risk showing it to someone uncleared. If an admin reports "a row I can't see",
+  check that row's `clearanceArea` in the deal database first.
 - **Client-side XSS sink audit is partial.** The milestone security review
   traced the highest-risk stored-string→`innerHTML` sinks and fixed the
   confirmed ones; the full sink class across the legacy frontend is not

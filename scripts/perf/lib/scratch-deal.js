@@ -19,20 +19,20 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const Database = require('better-sqlite3');
 const { killAllInstrumentedServers, assertEnoughDisk } = require('./instrumented-server.js');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const COMMITTED = { demo: path.join(REPO_ROOT, 'data', 'demo.db'), control: path.join(REPO_ROOT, 'data', 'control.db') };
 
 async function backupReadOnly(src, dest) {
-  // A read-only open of a WAL database can create -shm/-wal sidecars next to
-  // the committed file; remember which already existed and remove only ours.
-  const sidecars = ['-shm', '-wal'].map((ext) => src + ext);
-  const existed = sidecars.map((p) => fs.existsSync(p));
-  const db = new Database(src, { readonly: true, fileMustExist: true });
+  // [security] IN-B04 (12-REVIEW-B): the committed file is read through the one
+  // guard-aware helper (db/dbFiles.js openReadOnlySnapshot): SQLite read-only,
+  // never created, and any -shm/-wal sidecar the read-only WAL open created
+  // next to the committed file is removed on close. Required lazily: the
+  // calling script points every MA_* path at its scratch dir first.
+  const { openReadOnlySnapshot } = require('../../../db/dbFiles.js');
+  const db = openReadOnlySnapshot(src);
   try { await db.backup(dest); } finally { db.close(); }
-  sidecars.forEach((p, i) => { if (!existed[i]) { try { fs.unlinkSync(p); } catch (e) { /* not created */ } } });
 }
 
 function createScratch({ prefix, adminToken = 'gsd-perf-scratch-token' } = {}) {

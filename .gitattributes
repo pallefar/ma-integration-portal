@@ -3,3 +3,6 @@
 
 # D-12-08: the browser smoke harness is developer tooling, never shipped.
 scripts/smoke/ export-ignore
+# 12-REVIEW-B IN-B05: the perf harness is developer tooling too (spawns
+# servers, reads the committed demo/control files) — never shipped.
+scripts/perf/ export-ignore

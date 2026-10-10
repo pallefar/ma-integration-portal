@@ -15,8 +15,7 @@
 // FULL current inventory, by test/deal-seed.test.js.
 
 const fs = require('fs');
-const Database = require('better-sqlite3');
-const { dealDbPath, openDbFile, DEAL_SCHEMA_PATH, DEMO_DB_PATH } = require('./dbFiles');
+const { dealDbPath, openDbFile, openReadOnlySnapshot, DEAL_SCHEMA_PATH, DEMO_DB_PATH } = require('./dbFiles');
 
 // The row-shaped template collections D-06 names (checklist templates,
 // assessment templates, the sending->receiving process catalog) plus D-13's
@@ -56,8 +55,10 @@ function createDealDatabase(dealId, { name, targetCompany, templateSourcePath = 
   }
 
   // Read-only pass over the template source — this module never writes to
-  // templateSourcePath.
-  const source = new Database(templateSourcePath, { readonly: true, fileMustExist: true });
+  // templateSourcePath. [security] IN-B04 (12-REVIEW-B): opened through the
+  // single guard-aware helper (SQLite read-only, test-isolation guard, any
+  // sidecar the open created is removed on close).
+  const source = openReadOnlySnapshot(templateSourcePath);
   let templateRows;
   let templateI18n;
   try {

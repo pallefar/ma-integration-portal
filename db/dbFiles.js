@@ -12,6 +12,7 @@
 //
 // openDbFile() reproduces db/store.js's initDb() pragma contract exactly
 // (journal_mode WAL, synchronous NORMAL, foreign_keys ON, busy_timeout 1000)
+// — except the audit families, which use synchronous FULL (12-REVIEW WR-01) —
 // so every new file is opened under the same concurrency-safety guarantees
 // Phase 1 already established for data/ma-portal.db — this is one storage-
 // layer contract, not two.
@@ -136,7 +137,19 @@ const DEAL_SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 // `..` segment, or an id from an untrusted source) must never reach
 // path.join() below, which is the only thing standing between a caller-
 // supplied string and an arbitrary filesystem write (T-03-03).
-const DEAL_ID_RE = /^deal_[a-z0-9]+$/i;
+//
+// [security] CR-01 (12-REVIEW): CASE-SENSITIVE on purpose. The host
+// filesystem is case-insensitive on macOS/APFS and Windows, so a `/i` regex let
+// `dEaL_Mv2…` resolve to the same partition FILE as the active `deal_mv2…`
+// while matching no registry row (SQLite `WHERE id = ?` is case-sensitive) —
+// which skipped the `deal-active` refusal and sealed a live deal's trail. Only
+// the exact minted (lowercase) spelling is ever a deal id.
+const DEAL_ID_RE = /^deal_[a-z0-9]+$/;
+
+// The case-INSENSITIVE shape, used only to classify a near-miss spelling
+// (`DEAL_…`, `Legacy`) as "unknown id" (uniform 404) rather than "malformed"
+// (400). Never used to build a path.
+const DEAL_ID_SHAPE_ANY_CASE_RE = /^(deal_[a-z0-9]+|legacy)$/i;
 
 /**
  * D-12-04: the on-disk path of one audit partition. Accepts exactly a deal id
@@ -149,6 +162,37 @@ function auditPartitionPath(partitionId) {
     throw new Error(`db/dbFiles.js: auditPartitionPath() rejected invalid partition id: ${JSON.stringify(partitionId)}`);
   }
   return path.join(AUDIT_DIR, `${partitionId}.db`);
+}
+
+/**
+ * [security] CR-01 (12-REVIEW): true only when AUDIT_DIR holds a file whose
+ * name is BYTE-IDENTICAL to `<partitionId>.db` in a directory listing. Never
+ * trusts `fs.existsSync`/`stat`/open, which on a case-insensitive filesystem
+ * answer "yes" for any case variant of an existing file. Throws (via
+ * auditPartitionPath) for a malformed id.
+ */
+function auditPartitionListed(partitionId) {
+  const name = path.basename(auditPartitionPath(partitionId));
+  let names;
+  try { names = fs.readdirSync(AUDIT_DIR); } catch (e) { return false; }
+  return names.includes(name);
+}
+
+/**
+ * [security] CR-01 (12-REVIEW): resolve a caller-supplied partition id by FILE
+ * IDENTITY. Valid only when the string exactly equals a registered deal id
+ * (`isRegistered(id)` — the caller's exact-match registry lookup) or exactly
+ * equals an existing partition file basename in an exact-case listing.
+ *   { ok: true, id }                    — use `id` (the caller's exact string)
+ *   { ok: false, reason: 'malformed' }  — not an id shape at all (400)
+ *   { ok: false, reason: 'unknown' }    — any other spelling (uniform 404)
+ */
+function resolveAuditPartitionId(raw, isRegistered) {
+  if (typeof raw !== 'string' || !DEAL_ID_SHAPE_ANY_CASE_RE.test(raw)) return { ok: false, reason: 'malformed' };
+  if (!(DEAL_ID_RE.test(raw) || raw === 'legacy')) return { ok: false, reason: 'unknown' };
+  if (raw !== 'legacy' && typeof isRegistered === 'function' && isRegistered(raw) === true) return { ok: true, id: raw };
+  if (auditPartitionListed(raw)) return { ok: true, id: raw };
+  return { ok: false, reason: 'unknown' };
 }
 
 /**
@@ -336,12 +380,22 @@ function isInsideDir(child, dir) {
  * data/deals/, data/real/, ...). Pure apart from read-only realpath lookups;
  * never opens or creates a file. `env` is injectable for tests.
  */
-function assertTestIsolation(dbFilePath, env) {
+function assertTestIsolation(dbFilePath, env, opts) {
   const e = env || process.env;
   if (typeof e.NODE_TEST_CONTEXT !== 'string' || e.NODE_TEST_CONTEXT === '') return;
   if (typeof dbFilePath !== 'string' || dbFilePath === '') return;
-  const dataDirs = new Set([path.resolve(COMMITTED_DATA_DIR), nearestExistingRealpath(COMMITTED_DATA_DIR)]);
-  const candidates = [path.resolve(dbFilePath), nearestExistingRealpath(dbFilePath)];
+  // IN-B02 (12-REVIEW-B): path.relative() and JS realpath are case-preserving,
+  // so on a case-INSENSITIVE filesystem (macOS/APFS, Windows/NTFS) a
+  // `<repo>/DATA/runtime.db` spelling opens the committed file yet compared as
+  // outside data/. There, every identity is compared case-folded (and the
+  // native realpath, which returns the on-disk case, is added).
+  const platform = (opts && opts.platform) || process.platform;
+  const fold = (platform === 'darwin' || platform === 'win32') ? (p) => p.toLowerCase() : (p) => p;
+  const nativeReal = (p) => { try { return fs.realpathSync.native(p); } catch (err) { return null; } };
+  const dataDirs = new Set([path.resolve(COMMITTED_DATA_DIR), nearestExistingRealpath(COMMITTED_DATA_DIR), nativeReal(COMMITTED_DATA_DIR)]
+    .filter(Boolean).map(fold));
+  const candidates = [path.resolve(dbFilePath), nearestExistingRealpath(dbFilePath), nativeReal(dbFilePath)]
+    .filter(Boolean).map(fold);
   const inside = candidates.some((c) => [...dataDirs].some((d) => isInsideDir(c, d)));
   if (!inside) return;
   // The ONE sanctioned exception: Phase-10 suites (accounts-writable-gate,
@@ -394,6 +448,17 @@ function familyForSchema(schemaPath) {
 // path.resolve(dbFilePath) -> the DbNotReadyError that file failed with. A
 // failed migration/quick_check is sticky per path until the process restarts.
 const notReadyPaths = new Map();
+
+// [security] WR-02 (12-REVIEW): every file openDbFile() CREATED in this process
+// (it did not exist when the open began). The boot opens control.db before
+// audit.db, so audit migration #1 uses this to tell "the deal registry was
+// absent when this instance started" from "a registry that lists no deals".
+const createdPaths = new Set();
+
+/** True when openDbFile() created `p` (it was absent) during this process. */
+function createdThisProcess(p) {
+  return typeof p === 'string' && p !== '' && createdPaths.has(path.resolve(p));
+}
 
 function safeSize(p) {
   try { return fs.statSync(p).size; } catch (e) { return 0; }
@@ -475,6 +540,7 @@ function openDbFile(dbFilePath, schemaPath) {
     // failure here is always fatal.
     fs.closeSync(fs.openSync(dbFilePath, 'a', 0o600));
     chmodPrivateFile(dbFilePath);
+    createdPaths.add(path.resolve(dbFilePath));
   }
   const preExistingSidecars = new Set(SIDECAR_SUFFIXES.filter((s) => fs.existsSync(dbFilePath + s)));
   tightenSidecars(dbFilePath, preExistingSidecars);
@@ -484,7 +550,21 @@ function openDbFile(dbFilePath, schemaPath) {
   const conn = new Database(dbFilePath);
   try {
     conn.pragma('journal_mode = WAL');
-    conn.pragma('synchronous = NORMAL');
+    // [security] WR-01 (12-REVIEW): the audit families (audit.db and every
+    // per-deal partition) fsync on EVERY commit (`synchronous = FULL`). In WAL
+    // mode NORMAL fsyncs only at checkpoint, so after an OS crash / power loss
+    // the kernel could persist the deal file's later commit while losing the
+    // partition append made just before it — a committed MNPI row with no
+    // audit row. With FULL the audit commit is durable before the deal's
+    // COMMIT begins (the append is the last statement inside the deal's
+    // BEGIN IMMEDIATE, on its own connection), so the audit can never lag the
+    // deal write. Deal/control/runtime files keep NORMAL (measured:
+    // scripts/perf/write-latency.js stays inside the 40 ms median budget).
+    // On macOS a plain fsync() does not flush the drive's write cache; SQLite
+    // only issues F_FULLFSYNC with `fullfsync = ON` (a no-op elsewhere).
+    const auditFamily = family === 'audit' || family === 'audit-partition';
+    conn.pragma(auditFamily ? 'synchronous = FULL' : 'synchronous = NORMAL');
+    if (auditFamily) conn.pragma('fullfsync = ON');
     conn.pragma('foreign_keys = ON');
     conn.pragma('busy_timeout = 1000'); // D-03/D-05/CONC-01 (Phase 8): see file header
 
@@ -535,6 +615,30 @@ function openDbFileReadOnly(dbFilePath) {
   return conn;
 }
 
+/**
+ * [security] IN-B04 (12-REVIEW-B): the ONE sanctioned way to read a database
+ * file that must never be written and is not opened through openDbFile() — the
+ * deal-seed TEMPLATE (data/demo.db by default) and the perf harness's copy of
+ * the committed demo/control files. Read-only at the SQLite level (any write
+ * throws SQLITE_READONLY), `fileMustExist` (never creates the file), the
+ * test-isolation guard applies, and a -wal/-shm sidecar that the read-only WAL
+ * open created beside the file is removed again on close() — so the committed
+ * tree is left exactly as it was. Returns the connection; call its close().
+ */
+function openReadOnlySnapshot(dbFilePath) {
+  assertTestIsolation(dbFilePath);
+  const sidecars = SIDECAR_SUFFIXES.map((s) => dbFilePath + s);
+  const existed = sidecars.map((p) => fs.existsSync(p));
+  const conn = new Database(dbFilePath, { readonly: true, fileMustExist: true });
+  const close = conn.close.bind(conn);
+  conn.close = () => {
+    try { close(); } finally {
+      sidecars.forEach((p, i) => { if (!existed[i]) { try { fs.unlinkSync(p); } catch (e) { /* not created */ } } });
+    }
+  };
+  return conn;
+}
+
 module.exports = {
   resolveModeConfig,
   MODE,
@@ -557,6 +661,8 @@ module.exports = {
   DEAL_ID_RE,
   dealDbPath,
   auditPartitionPath,
+  auditPartitionListed,
+  resolveAuditPartitionId,
   isCommittedDbPath,
   isCommittedControlDbActive,
   ensurePrivateDir,
@@ -564,6 +670,8 @@ module.exports = {
   assertTestIsolation,
   openDbFile,
   openDbFileReadOnly,
+  openReadOnlySnapshot,
+  createdThisProcess,
   // D-12-03: test-only reset of the sticky not-ready cache.
   _clearNotReadyForTests: () => notReadyPaths.clear(),
 };

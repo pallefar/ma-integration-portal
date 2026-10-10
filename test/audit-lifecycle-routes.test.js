@@ -198,9 +198,18 @@ test('routes (b): status reports exists/rows/sealed/retention and flips after th
   assert.strictEqual(post.json.purgeBlockedBy, 'no-sealed-export');
   assert.ok(post.json.events.some((e) => e.action === 'audit-partition-sealed'));
 
+  // CR-01 (12-REVIEW): an id that is neither a registered deal nor an
+  // exact-case partition file is the uniform 404 (was 200 `exists:false`) —
+  // ids are resolved by file identity, never by the caller's spelling.
   const unknown = await statusOf('deal_nopartition1');
-  assert.strictEqual(unknown.status, 200);
-  assert.strictEqual(unknown.json.exists, false);
+  assert.strictEqual(unknown.status, 404);
+  assert.deepStrictEqual(unknown.json, { error: 'Not found' });
+  // A registered deal with no partition file yet still reports exists:false.
+  const fresh = newDealId();
+  createDealFixture({ controlConn, runtimeConn, dealId: fresh, members: [{ username: 'karen', role: 'hrbp' }] });
+  const freshStatus = await statusOf(fresh);
+  assert.strictEqual(freshStatus.status, 200);
+  assert.strictEqual(freshStatus.json.exists, false);
   assert.strictEqual((await statusOf('not_a_deal')).status, 400);
 });
 
@@ -439,4 +448,57 @@ test('routes (g, structural): purge is only reachable from its definition, the p
 
   // The retention clock seam is ignored in real mode.
   assert.match(serverSrc, /!dbFiles\.IS_REAL_MODE && typeof app\.auditClock === 'function'/);
+});
+
+test('routes (h): CR-01 — a case variant of an ACTIVE deal id answers the uniform 404 everywhere, changes nothing, records nothing', async () => {
+  // Minted ids are lowercase and the deal-id rule is case-sensitive.
+  assert.match('deal_' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex'), dbFiles.DEAL_ID_RE);
+  assert.ok(!dbFiles.DEAL_ID_RE.test('DEAL_abc') && !dbFiles.DEAL_ID_RE.test('deal_ABC'), 'DEAL_ID_RE is case-sensitive');
+
+  const id = makeDealWithPartition('h', 2);
+  const file = partitionFile(id);
+  const sha = () => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  const shaBefore = sha();
+  const modeBefore = fs.statSync(file).mode & 0o777;
+  const variants = [
+    'D' + id.slice(1),
+    'DEAL_' + id.slice(5),
+    'deal_' + id.slice(5).toUpperCase(),
+    id.split('').map((c, i) => (i % 2 ? c.toUpperCase() : c)).join(''),
+  ].filter((v) => v !== id);
+  assert.ok(variants.length >= 3);
+  for (const v of variants) {
+    for (const r of [await statusOf(v), await seal(v), await exportJsonl(v), await purge(v)]) {
+      assert.strictEqual(r.status, 404, `${v}: ${r.status} ${r.text}`);
+      assert.deepStrictEqual(r.json, { error: 'Not found' });
+    }
+    assert.strictEqual(auditHook.findControlEvents({ dealId: v }).length, 0, `no event filed under ${v}`);
+  }
+  // The real deal is untouched and still active.
+  assert.strictEqual(sha(), shaBefore, 'partition bytes unchanged');
+  assert.strictEqual(fs.statSync(file).mode & 0o777, modeBefore, 'partition mode unchanged (not sealed)');
+  for (const action of ['audit-partition-sealed', 'audit-partition-exported', 'audit-partition-purged']) {
+    assert.strictEqual(events(id, action).length, 0, `${action}: nothing recorded for the real id`);
+  }
+  const st = await statusOf(id);
+  assert.strictEqual(st.status, 200);
+  assert.strictEqual(st.json.sealed, false);
+  assert.strictEqual(st.json.dealState, 'active');
+  assert.strictEqual((await seal(id)).json.reason, 'deal-active', 'the exact id still meets the deal-active refusal');
+
+  // Unknown-but-well-formed ids are the same uniform 404; a non-id is still 400.
+  assert.strictEqual((await statusOf('deal_nosuchdeal0')).status, 404);
+  assert.strictEqual((await statusOf('LEGACY')).status, 404);
+  assert.strictEqual((await statusOf('not_a_deal')).status, 400);
+
+  // The CLIs apply the same file-identity rule.
+  const adminCli = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'audit-admin.js'), 'seal', variants[0], '--confirm', variants[0]], {
+    env: { ...process.env }, encoding: 'utf8',
+  });
+  assert.strictEqual(adminCli.status, 2, adminCli.stdout + adminCli.stderr);
+  assert.match(adminCli.stderr, /Unknown partition id/);
+  const verify = verifyCli(['--deal', variants[0]]);
+  assert.strictEqual(verify.status, 2, verify.stdout + verify.stderr);
+  assert.strictEqual(sha(), shaBefore, 'the CLIs changed nothing');
+  assert.strictEqual(auditHook.findControlEvents({ dealId: variants[0] }).length, 0);
 });

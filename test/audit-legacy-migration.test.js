@@ -233,16 +233,43 @@ test('B-1: a booted child that receives NO request already has audit.db at versi
   assert.ok(fs.existsSync(`${paths.MA_AUDIT_DB_PATH}.pre-v1.bak`), 'backup taken at boot');
 });
 
-test('with no control.db at all every deal row goes to the sealed legacy partition', async () => {
+// WR-02 (12-REVIEW): this test previously asserted the FAIL-OPEN behaviour
+// (no control.db -> every live deal's rows sealed into legacy.db for ever). The
+// expectation is inverted: an unreadable registry with movable rows present is
+// a fixed-reason not-ready and NOTHING is written, moved or sealed.
+function assertRegistryRefusal(r, paths, dir) {
+  assert.strictEqual(r.exitCode, 0, `the process keeps listening: ${r.stderr}`);
+  const health = r.results[0];
+  assert.strictEqual(health.status, 503, JSON.stringify(health.body));
+  assert.strictEqual(health.body.status, 'not-ready');
+  assert.ok(health.body.readiness.failures.some((f) => f.family === 'audit' && f.file === 'audit.db'
+    && f.migration === '001-partition-legacy' && f.reason === 'deal-registry-unreadable'), JSON.stringify(health.body));
+  assert.ok(!JSON.stringify(health.body).includes(dir), 'no path in the unauthenticated payload');
+  const file = paths.MA_AUDIT_DB_PATH;
+  assert.strictEqual(userVersion(file), 0, 'audit.db still version 0');
+  assert.strictEqual(auditRows(file).length, 12, 'audit.db still holds its 12 original rows');
+  assert.strictEqual(fs.existsSync(`${file}.pre-v1.bak`), false, 'no backup written: the refusal precedes it');
+  const auditDir = path.join(dir, 'audit');
+  const listing = fs.existsSync(auditDir) ? fs.readdirSync(auditDir) : [];
+  assert.deepStrictEqual(listing, [], 'no partition created, nothing sealed into legacy.db');
+}
+
+test('WR-02: with no control.db at all the migration FAILS CLOSED (deal-registry-unreadable), nothing moved or sealed', async () => {
   const dir = tmp('nocontrol');
   const paths = buildLegacyTree(dir);
   fs.rmSync(paths.MA_CONTROL_DB_PATH);
+  // The boot creates a fresh, EMPTY control.db before audit.db — the migration
+  // must not read that as "every deal was deleted".
   const r = await bootProbe({ dir, probes: [{ path: '/healthz' }] });
-  assert.strictEqual(r.exitCode, 0, r.stderr);
-  // The boot creates a fresh control.db from its schema (no deals): both deals are "deleted".
-  const listing = fs.readdirSync(path.join(dir, 'audit')).sort();
-  assert.deepStrictEqual(listing.filter((n) => n.endsWith('.db')), ['legacy.db']);
-  assert.strictEqual(auditRows(path.join(dir, 'audit', 'legacy.db')).length, 8 + 1, '8 deal rows + the seal row');
+  assertRegistryRefusal(r, paths, dir);
+});
+
+test('WR-02: an unreadable control.db (not a database) fails closed the same way', async () => {
+  const dir = tmp('badcontrol');
+  const paths = buildLegacyTree(dir);
+  fs.writeFileSync(paths.MA_CONTROL_DB_PATH, crypto.randomBytes(8192));
+  const r = await bootProbe({ dir, probes: [{ path: '/healthz' }] });
+  assertRegistryRefusal(r, paths, dir);
 });
 
 // --- crash + rerun (T-12-120, T-12-128) -----------------------------------------

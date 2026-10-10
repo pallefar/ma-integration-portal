@@ -365,7 +365,7 @@ test('committed-implied: a version-0 baseline file is REPORTED as version 1 with
     assert.strictEqual(conn.pragma('user_version', { simple: true }), 0, 'user_version was not written');
   } finally { conn.close(); }
   assert.strictEqual(sha(), before, 'the file is byte-identical');
-  assert.deepStrictEqual(readiness.snapshot().versions.control, { version: 1, files: 1, implied: true });
+  assert.deepStrictEqual(readiness.snapshot().versions.control, { version: 1, implied: true }); // 12-REVIEW IN-01: no file count on the wire
 
   readiness._resetForTests();
   useMigrationsDir(BACKUP_DIR); // latest = 2
@@ -391,7 +391,7 @@ test('whole app: booting against the committed data/control.db reports it implie
   });
   assert.strictEqual(r.exitCode, 0, r.stderr);
   assert.strictEqual(r.results[0].status, 200, JSON.stringify(r.results[0].body));
-  assert.deepStrictEqual(r.results[0].body.readiness.versions.control, { version: 1, files: 1, implied: true });
+  assert.deepStrictEqual(r.results[0].body.readiness.versions.control, { version: 1, implied: true }); // 12-REVIEW IN-01: no file count on the wire
   assert.strictEqual(sha(), before, 'data/control.db is byte-identical after a boot');
   const c = new Database(committed, { readonly: true });
   assert.strictEqual(c.pragma('user_version', { simple: true }), 0);

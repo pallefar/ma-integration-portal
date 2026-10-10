@@ -441,3 +441,59 @@ test('partitions (j): chmodPrivateFile is tightening-only (0400 stays 0400, 0644
   assert.strictEqual(fs.statSync(sealed).mode & 0o777, 0o400, 'a sealed 0400 file is never re-opened writable');
   assert.strictEqual(fs.statSync(loose).mode & 0o777, 0o600);
 });
+
+test('partitions (l): IN-03 — a non-integer legacy_id is refused on append and flagged by the verifier (no NULL-hash collision)', () => {
+  const file = path.join(fs.mkdtempSync(path.join(TMP_DIR, 'legacyid-')), 'deal_legacyid.db');
+  const conn = dbFiles.openDbFile(file, dbFiles.AUDIT_PARTITION_SCHEMA_PATH);
+  try {
+    const base = {
+      ts: '2026-01-01T00:00:00.000Z', actor_username: 'karen', actor_role: 'hrbp', db_kind: 'deal',
+      action: 'insert', collection: 'raid', row_id: 'r1', deal_id: 'deal_legacyid',
+    };
+    assert.throws(() => auditChain.appendChained(conn, [{ ...base, legacy_id: 'abc' }], { partitionId: 'deal_legacyid' }),
+      (e) => e.code === 'AUDIT_INVALID_LEGACY_ID');
+    assert.throws(() => auditChain.canonicalRow({ ...base, legacy_id: 1.5 }), (e) => e.code === 'AUDIT_INVALID_LEGACY_ID');
+    assert.strictEqual(conn.prepare('SELECT COUNT(*) AS n FROM audit_log').get().n, 0, 'nothing appended');
+    assert.strictEqual(auditChain.canonicalRow({ ...base, legacy_id: 7 }), auditChain.canonicalRow({ ...base, legacy_id: '7' }));
+    assert.notStrictEqual(auditChain.canonicalRow({ ...base, legacy_id: 7 }), auditChain.canonicalRow({ ...base, legacy_id: null }));
+
+    auditChain.appendChained(conn, [{ ...base, legacy_id: 1 }], { partitionId: 'deal_legacyid' });
+    // A data-dir writer raw-inserts a TEXT legacy_id whose row_hash is the
+    // NULL-legacy hash — before IN-03 this verified clean (one hash, two rows).
+    const head = conn.prepare('SELECT row_hash FROM audit_log ORDER BY id DESC LIMIT 1').get().row_hash;
+    const forged = { ...base, row_id: 'r2', legacy_id: null };
+    const hash = auditChain.rowHash(forged, head);
+    conn.prepare(`INSERT INTO audit_log (ts, actor_username, actor_role, session_id, deal_id, db_kind, action, collection, row_id,
+      before_json, after_json, request_method, request_path, ip, legacy_id, prev_hash, row_hash)
+      VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 'abc', ?, ?)`)
+      .run(base.ts, base.actor_username, base.actor_role, base.deal_id, base.db_kind, base.action, base.collection, 'r2', head, hash);
+    const verdict = auditChain.verifyChain(conn, 'deal_legacyid');
+    assert.strictEqual(verdict.ok, false);
+    assert.deepStrictEqual(verdict.problems.map((p) => p.reason), ['invalid-legacy-id']);
+  } finally {
+    conn.close();
+  }
+});
+
+test('partitions (k): WR-01 — audit.db and partitions commit with synchronous=FULL (+fullfsync); deal files keep NORMAL', () => {
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'sync-'));
+  const open = (name, schema) => dbFiles.openDbFile(path.join(dir, name), schema);
+  const audit = open('a-audit.db', dbFiles.AUDIT_SCHEMA_PATH);
+  const part = open('a-part.db', dbFiles.AUDIT_PARTITION_SCHEMA_PATH);
+  const deal = open('a-deal.db', dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    assert.strictEqual(audit.pragma('synchronous', { simple: true }), 2, 'audit.db: FULL');
+    assert.strictEqual(part.pragma('synchronous', { simple: true }), 2, 'partition: FULL');
+    assert.strictEqual(audit.pragma('fullfsync', { simple: true }), 1);
+    assert.strictEqual(part.pragma('fullfsync', { simple: true }), 1);
+    assert.strictEqual(deal.pragma('synchronous', { simple: true }), 1, 'deal file: NORMAL (unchanged)');
+    // The live partition connection the hook appends through carries it too.
+    const dealId = 'deal_sync' + crypto.randomBytes(3).toString('hex');
+    assert.strictEqual(auditHook.getAuditConnection().pragma('synchronous', { simple: true }), 2);
+    const live = auditHook.getPartitionConnection(dealId);
+    assert.strictEqual(live.pragma('synchronous', { simple: true }), 2);
+    auditHook.closePartitionConnection(dealId);
+  } finally {
+    for (const c of [audit, part, deal]) { try { c.close(); } catch (e) { /* ignore */ } }
+  }
+});

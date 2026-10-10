@@ -213,3 +213,37 @@ test('deal-seed', async (t) => {
     assert.ok(contentBefore.equals(contentAfter), 'existing deal database must be byte-identical after a rejected overwrite attempt');
   });
 });
+
+test('IN-B04: template / committed-file reads go through one guard-aware read-only helper that never writes', () => {
+  const dbFiles = require('../db/dbFiles.js');
+  // A WAL-mode source with no sidecars on disk (as the committed files are).
+  const src = tempPath('ro-snapshot') + '.db';
+  buildSyntheticDemoSource(src);
+  const w = new Database(src);
+  w.pragma('journal_mode = WAL');
+  w.pragma('wal_checkpoint(TRUNCATE)');
+  w.close();
+  for (const s of ['-wal', '-shm']) { try { fs.unlinkSync(src + s); } catch (e) { /* none */ } }
+  const before = crypto.createHash('sha256').update(fs.readFileSync(src)).digest('hex');
+  try {
+    const conn = dbFiles.openReadOnlySnapshot(src);
+    assert.ok(conn.prepare('SELECT COUNT(*) AS n FROM sqlite_master').get().n > 0);
+    assert.throws(() => conn.exec('CREATE TABLE never_written (x)'), /readonly/i, 'the helper connection cannot write');
+    conn.close();
+    assert.strictEqual(fs.existsSync(src + '-wal') || fs.existsSync(src + '-shm'), false, 'no sidecar left beside the file');
+    assert.strictEqual(crypto.createHash('sha256').update(fs.readFileSync(src)).digest('hex'), before, 'bytes unchanged');
+    assert.throws(() => dbFiles.openReadOnlySnapshot(src + '.missing'), 'never creates a file');
+    assert.strictEqual(fs.existsSync(src + '.missing'), false);
+    // The test-isolation guard applies (this file runs under node --test).
+    assert.throws(() => dbFiles.openReadOnlySnapshot(path.join(__dirname, '..', 'data', 'demo.db')), /\[test-isolation\]/);
+  } finally {
+    cleanupDbFile(src);
+  }
+  // Both former direct opens now use it; no other direct readonly open of a template remains.
+  const seedSrc = fs.readFileSync(path.join(__dirname, '..', 'db', 'dealSeed.js'), 'utf8');
+  const perfSrc = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'perf', 'lib', 'scratch-deal.js'), 'utf8');
+  for (const [name, s] of [['db/dealSeed.js', seedSrc], ['scripts/perf/lib/scratch-deal.js', perfSrc]]) {
+    assert.match(s, /openReadOnlySnapshot\(/, `${name} uses the helper`);
+    assert.ok(!/new Database\(/.test(s), `${name} opens no database directly`);
+  }
+});
