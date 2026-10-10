@@ -1,0 +1,92 @@
+HOST: load1=6.00 cpus=11 at 2026-10-10T20:03:12Z (threshold 9 sustained x4)
+sentinels created
+=== isolation snapshot BEFORE (sha256  bytes  file) ===
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/audit.db
+absent  data/audit.db-wal
+absent  data/audit.db-shm
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/runtime.db
+absent  data/runtime.db-wal
+absent  data/runtime.db-shm
+63d552c4c4d8e301752d5f47b7f82b4fd391ee7d32534e7ea0b808cdcba805a8  1310720 B  data/demo.db
+e83f049e9f018d84e363031a9b1c29613e0ad682d6585b6cee13f783c4854a72  36864 B  data/control.db
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  0 B  data/control.db-wal
+controlmode(data/control.db) before: 644
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 1/20: pass=1445 fail=0 (19557 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 2/20: pass=1445 fail=0 (20572 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 3/20: pass=1445 fail=0 (20855 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 4/20: pass=1445 fail=0 (22143 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 5/20: pass=1445 fail=0 (20764 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 6/20: pass=1445 fail=0 (60836 ms)
+not ok 642 - HTTP: nine wrong passwords for alice do not block bob; alice stays 429 even with the right password
+not ok 936 - CR-01 live: ROLE_READ_POLICY x variants — a refused role is refused under every spelling, an allowed role is never refused by the gate
+not ok 1080 - reports-pack route (GET /api/reports/pack)
+not ok 1109 - whole app: version-0 runtime.db and demo.db migrate at boot (data intact)
+not ok 1150 - soak harness: a real 2-process smoke run passes every D-15 check (exit 0)
+# tests 1445
+# suites 0
+# pass 1439
+# fail 5
+# cancelled 1
+# skipped 0
+# todo 0
+run 7/20: pass=1439 fail=5 (402313 ms)
+test-gate: run 7 not green: exit code 1, fail=5, cancelled=1
+GATE FAIL at run 7
+controlmode(data/control.db) after: 600  [committed file mode is 644 in git; a suite open tightens it - bytes are what the guard compares]
+=== isolation snapshot AFTER ===
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/audit.db
+absent  data/audit.db-wal
+absent  data/audit.db-shm
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/runtime.db
+absent  data/runtime.db-wal
+absent  data/runtime.db-shm
+63d552c4c4d8e301752d5f47b7f82b4fd391ee7d32534e7ea0b808cdcba805a8  1310720 B  data/demo.db
+e83f049e9f018d84e363031a9b1c29613e0ad682d6585b6cee13f783c4854a72  36864 B  data/control.db
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  0 B  data/control.db-wal
+ISOLATION: data/audit.db* and data/runtime.db* (and committed demo/control) byte-identical before/after: PASS
+sentinels removed
+gate exit code: 1
+HOST: load at end: 105.73 52.50 32.56 at 2026-10-10T20:12:39Z
+EXIT=1
