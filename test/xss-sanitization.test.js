@@ -10,11 +10,11 @@
 // an entity-encoded variant is stored inert as text (never decoded into an
 // executable construct by the write path).
 //
-// Also documents ONE genuine residual limitation the ported regex sanitizer
-// does NOT neutralize (03-RESEARCH.md Assumptions Log A1 — a robust
-// allowlist parser was deliberately not adopted this phase; T-03-36 accepts
-// this class of risk explicitly rather than pretending the regex is proven
-// safe against every obfuscation).
+// 13-01 (SAFE-01): the sanitizer is now a vendored allowlist parser
+// (lib/htmlPolicy.js + sanitize-html), so the residual limitation this suite
+// used to document (T-03-36, nested-tag reconstruction) is retired and its
+// case inverted; assertions that pinned the regex's literal output are
+// re-stated as structural inertness (test/helpers/html-inert.js).
 //
 // Boots the REAL requireable app against an isolated temp control/runtime/
 // demo trio, the same pattern every write-validation test in this repo uses.
@@ -67,6 +67,7 @@ fixtureUsers.forEach((user, i) => {
 
 const app = require('../server.js');
 const { sanitizeHtml } = require('../lib/sanitizeHtml.js');
+const { inertViolations } = require('./helpers/html-inert.js');
 
 function cookieHeader(token) { return `ma_session=${token}`; }
 // D-11-02 (Phase 11): page/CMS writes are admin-only now, so every CMS write in
@@ -100,11 +101,11 @@ test('xss-sanitization (a): a page body round-trips with script/handler/js-href 
     const page = await getRes.json();
     const stored = page.body.en;
 
-    assert.ok(!/<script/i.test(stored), 'script tag must be removed');
-    assert.ok(!/onerror\s*=/i.test(stored), 'inline event-handler attribute must be removed');
-    assert.ok(!/javascript:/i.test(stored), 'javascript: scheme href must be neutralized');
-    assert.ok(/<p>Welcome<\/p>/.test(stored), 'benign <p> markup must survive');
-    assert.ok(/<b>bold text<\/b>/.test(stored), 'benign <b> markup must survive');
+    // 13-01 (SAFE-01): structural inertness (parse + allowlist walk) replaces
+    // the regex-on-output assertions of the regex-sanitizer era.
+    assert.deepStrictEqual(inertViolations(stored), [], 'script tag, event handler and javascript: href must all be neutralized');
+    assert.ok(stored.includes('<p>Welcome</p>'), 'benign <p> markup must survive');
+    assert.ok(stored.includes('<b>bold text</b>'), 'benign <b> markup must survive');
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
     server.close();
@@ -182,8 +183,8 @@ test('xss-sanitization (d): a mixed-case script tag and a whitespace-split event
       body: JSON.stringify({ slug: mixedSlug, body: { en: mixedCase } }),
     });
     const mixedPage = await (await fetch(`http://127.0.0.1:${port}/api/pages?slug=${mixedSlug}`, { headers: { Cookie: cookieHeader(token) } })).json();
-    assert.ok(!/<script/i.test(mixedPage.body.en), 'a mixed-case <ScRiPt> tag must be neutralized');
-    assert.ok(/<p>after<\/p>/.test(mixedPage.body.en), 'benign markup after it must survive');
+    assert.deepStrictEqual(inertViolations(mixedPage.body.en), [], 'a mixed-case <ScRiPt> tag must be neutralized');
+    assert.ok(mixedPage.body.en.includes('<p>after</p>'), 'benign markup after it must survive');
 
     // Whitespace (including a newline) split across the attribute name/=/value
     // — HTML-legal syntax (whitespace around `=` is permitted by the spec),
@@ -196,7 +197,7 @@ test('xss-sanitization (d): a mixed-case script tag and a whitespace-split event
       body: JSON.stringify({ slug: attrSlug, body: { en: attrSplit } }),
     });
     const attrPage = await (await fetch(`http://127.0.0.1:${port}/api/pages?slug=${attrSlug}`, { headers: { Cookie: cookieHeader(token) } })).json();
-    assert.ok(!/onclick/i.test(attrPage.body.en), 'a whitespace-split onclick= attribute (HTML-legal syntax) must still be neutralized');
+    assert.deepStrictEqual(inertViolations(attrPage.body.en), [], 'a whitespace-split onclick= attribute (HTML-legal syntax) must still be neutralized');
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
     server.close();
@@ -220,7 +221,7 @@ test('xss-sanitization (e): an entity-encoded variant is stored inert as text, n
     // stored value stays exactly the encoded text it was submitted as, so
     // it can only ever render as inert text, never as markup.
     assert.strictEqual(page.body.en, encoded, 'an entity-encoded payload must not be decoded by the write path');
-    assert.ok(!/<script/i.test(page.body.en), 'no literal <script> tag may appear in the stored value');
+    assert.deepStrictEqual(inertViolations(page.body.en), [], 'no live <script> element may appear in the stored value');
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
     server.close();
@@ -228,25 +229,18 @@ test('xss-sanitization (e): an entity-encoded variant is stored inert as text, n
 });
 
 // ---------------------------------------------------------------------------
-// RESIDUAL LIMITATION (documented, NOT hidden — T-03-36 / 03-RESEARCH.md
-// Assumptions Log A1): the ported regex sanitizer strips known dangerous
-// substrings in a SINGLE pass, not iteratively to a fixed point, and is not
-// a real HTML tokenizer. A payload engineered so that stripping the INNER
-// match reconstructs a dangerous tag from the surrounding fragments survives
-// intact. This is the SAME limitation the pre-existing client-side
-// public/js/page-layout.js sanitize() this module was ported from already
-// has — not a regression introduced by this phase, and not silently
-// asserted "safe" here. The CSP (script-src 'self') and the unchanged
-// render-time textContent/sanitize() discipline remain the backstop for
-// this class of payload, per T-03-36's "accept" disposition.
+// The Phase 3 "KNOWN RESIDUAL LIMITATION" (T-03-36 / 03-RESEARCH.md
+// Assumptions Log A1) is RETIRED by 13-01 (SAFE-01 / D-13-01 / R1-03): the
+// regex sanitizer stripped substrings in a single pass, so a payload built so
+// that stripping the inner match reconstructed a dangerous tag survived. The
+// replacement is a real allowlist parser that re-serializes, so the same
+// payload can only survive as inert text. This case is the inversion of the
+// old gap-documenting assertion.
 // ---------------------------------------------------------------------------
-test('xss-sanitization: KNOWN RESIDUAL LIMITATION — a nested-tag reconstruction payload is NOT neutralized by the single-pass regex (documented, not silently passed)', () => {
+test('xss-sanitization: a nested-tag reconstruction payload is neutralized by the parser (T-03-36 residual limitation retired)', () => {
   const payload = '<scr<script>ipt>alert(1)</scr</script>ipt>';
   const result = sanitizeHtml(payload);
-  // This assertion documents the GAP rather than hiding it: stripping the
-  // inner <script>/</script> match leaves the surrounding "<scr" + "ipt>"
-  // fragments adjacent, reconstructing a literal <script> tag. A real
-  // allowlist HTML parser (deliberately not adopted this phase per
-  // Assumptions Log A1) would not have this failure mode.
-  assert.ok(/<script>/i.test(result), 'KNOWN GAP: the single-pass regex does not neutralize this nested-reconstruction payload — see T-03-36 (accepted risk) and this file\'s header comment');
+  assert.deepStrictEqual(inertViolations(result), [], `must be structurally inert, got ${JSON.stringify(result)}`);
+  assert.ok(!result.toLowerCase().includes('<script'), 'no literal <script open tag may be reconstructed');
+  assert.strictEqual(sanitizeHtml(result), result, 'and the output is idempotent');
 });

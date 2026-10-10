@@ -1,0 +1,343 @@
+{
+ "source": "data/demo.db (read-only extraction)",
+ "tagged": [
+  {
+   "kind": "pages.body",
+   "rowId": "page_playbook",
+   "locator": "body.en",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_playbook",
+   "locator": "body.de",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_playbook",
+   "locator": "body.zh",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_playbook",
+   "locator": "body.cs",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_capability",
+   "locator": "body.en",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_capability",
+   "locator": "body.de",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_capability",
+   "locator": "body.zh",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_capability",
+   "locator": "body.cs",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_excellence",
+   "locator": "body.en",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_excellence",
+   "locator": "body.de",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_excellence",
+   "locator": "body.zh",
+   "value": ""
+  },
+  {
+   "kind": "pages.body",
+   "rowId": "page_excellence",
+   "locator": "body.cs",
+   "value": ""
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[0].body.en",
+   "value": "<p>Understand the 4 core TE pillars: Integrity, Accountability, Teamwork, and Innovation.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[0].body.de",
+   "value": "<p>Verstehen Sie die 4 TE-Grundpfeiler: Integrität, Rechenschaftspflicht, Teamarbeit und Innovation.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[0].body.zh",
+   "value": "<p>了解 TE 的 4 大核心支柱：诚信、担当、合作和创新。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[0].body.cs",
+   "value": "<p>Pochopte 4 základní pilíře TE: Integrita, Odpovědnost, Týmová práce a Inovace.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[1].body.en",
+   "value": "<p>Learn about company-wide newsletters, MS Teams etiquette, and recurring IMO town halls.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[1].body.de",
+   "value": "<p>Erfahren Sie mehr über unternehmensweite Newsletter, MS Teams-Etikette und IMO Town Halls.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[1].body.zh",
+   "value": "<p>了解公司范围的简报、MS Teams 礼仪和定期 IMO 全员大会。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[1].body.cs",
+   "value": "<p>Dozvíte se o celopodnikových newsletterech, etiketě MS Teams a pravidelných IMO town hallech.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[2].body.en",
+   "value": "<p>Watch key clips from the CEO town hall and find answers to common merger questions.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[2].body.de",
+   "value": "<p>Sehen Sie sich Clips aus dem CEO Town Hall an und finden Sie Antworten auf häufige Fragen.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[2].body.zh",
+   "value": "<p>观看首席执行官全员大会的关键剪辑，并寻找常见合并问题的答案。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[0].lessons[2].body.cs",
+   "value": "<p>Sledujte klíčové klipy z town hallu s generálním ředitelem a najděte odpovědi na běžné dotazy.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[0].body.en",
+   "value": "<p>Set up your secure TE Single Sign-On and activate standard network credentials.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[0].body.de",
+   "value": "<p>Richten Sie Ihr sicheres TE Single Sign-On ein und aktivieren Sie Standardnetzwerke.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[0].body.zh",
+   "value": "<p>设置您安全的 TE 单点登录并激活标准网络凭据。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[0].body.cs",
+   "value": "<p>Nastavte si zabezpečené přihlášení TE Single Sign-On a aktivujte standardní síťové přihlašovací údaje.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[1].body.en",
+   "value": "<p>Explore healthcare migration plans and select retirement contribution profiles.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[1].body.de",
+   "value": "<p>Erkunden Sie Krankenversicherungspläne und wählen Sie Profile für die Altersvorsorge.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[1].body.zh",
+   "value": "<p>探索医疗保健迁移计划并选择退休金缴纳配置。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[1].body.cs",
+   "value": "<p>Prozkoumejte plány migrace zdravotní péče a vyberte profily příspěvků na penzi.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[2].body.en",
+   "value": "<p>Complete basic compliance certificates and understand IP protection protocols.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[2].body.de",
+   "value": "<p>Schließen Sie Compliance-Zertifikate ab und verstehen Sie IP-Schutzprotokolle.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[2].body.zh",
+   "value": "<p>完成基础合规证书并了解知识产权保护协议。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[1].lessons[2].body.cs",
+   "value": "<p>Dokončete základní certifikáty o shodě a pochopte protokoly na ochranu duševního vlastnictví.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[0].body.en",
+   "value": "<p>Learn about the commercial rationale for the acquisition and combined catalog highlights.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[0].body.de",
+   "value": "<p>Erfahren Sie mehr über die kommerziellen Gründe für die Übernahme und Katalog-Highlights.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[0].body.zh",
+   "value": "<p>了解收购的商业合理性以及合并目录的亮点。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[0].body.cs",
+   "value": "<p>Přečtěte si o komerčních důvodech akvizice a hlavních bodech kombinovaného katalogu.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[1].body.en",
+   "value": "<p>Synchronize patent filing procedures and adapt co-development safety checklists.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[1].body.de",
+   "value": "<p>Synchronisieren Sie Patentanmeldeverfahren und passen Sie Sicherheitschecklisten an.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[1].body.zh",
+   "value": "<p>同步专利申请程序并调整共同开发安全清单。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[1].body.cs",
+   "value": "<p>Synchronizujte postupy přihlašování patentů a přizpůsobte bezpečnostní seznamy pro společný vývoj.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[2].body.en",
+   "value": "<p>Map regional sales boundaries and learn client transfer procedures.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[2].body.de",
+   "value": "<p>Ordnen Sie regionale Vertriebsgrenzen zu und lernen Sie Kundenübertragungsverfahren.</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[2].body.zh",
+   "value": "<p>规划区域销售边界并学习客户转移程序。</p>"
+  },
+  {
+   "kind": "courses.lesson.body",
+   "rowId": "course_academy",
+   "locator": "modules[2].lessons[2].body.cs",
+   "value": "<p>Zmapujte regionální hranice prodeje a osvojte si postupy převodu klientů.</p>"
+  }
+ ],
+ "untagged": [
+  {
+   "kind": "banners.title",
+   "rowId": "banner_1783577313438",
+   "locator": "title.en",
+   "value": "Welcome to the Integration Portal"
+  },
+  {
+   "kind": "banners.title",
+   "rowId": "banner_1783577313438",
+   "locator": "title.de",
+   "value": "Willkommen im Integrationsportal"
+  },
+  {
+   "kind": "banners.title",
+   "rowId": "banner_1783577313438",
+   "locator": "title.zh",
+   "value": "欢迎使用整合门户"
+  },
+  {
+   "kind": "banners.title",
+   "rowId": "banner_1783577313438",
+   "locator": "title.cs",
+   "value": "Vítejte v integračním portálu"
+  },
+  {
+   "kind": "banners.message",
+   "rowId": "banner_1783577313438",
+   "locator": "message.en",
+   "value": "Explore each role to see the Day 1–100 journey. This banner is managed in Admin → Banners."
+  },
+  {
+   "kind": "banners.message",
+   "rowId": "banner_1783577313438",
+   "locator": "message.de",
+   "value": "Erkunden Sie jede Rolle, um die Reise von Tag 1 bis 100 zu sehen. Dieses Banner wird unter Admin → Banner verwaltet."
+  },
+  {
+   "kind": "banners.message",
+   "rowId": "banner_1783577313438",
+   "locator": "message.zh",
+   "value": "探索每个角色，查看第 1 到第 100 天的旅程。此横幅在“管理 → 横幅”中管理。"
+  },
+  {
+   "kind": "banners.message",
+   "rowId": "banner_1783577313438",
+   "locator": "message.cs",
+   "value": "Prozkoumejte jednotlivé role a projděte si cestu od 1. do 100. dne. Tento banner se spravuje v Administrace → Bannery."
+  }
+ ]
+}
