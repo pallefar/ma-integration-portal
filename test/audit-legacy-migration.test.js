@@ -380,3 +380,57 @@ test('a fresh install creates audit.db at version 1 directly (no backup, no migr
   c.close();
   for (const col of ['legacy_id', 'prev_hash', 'row_hash']) assert.ok(cols.includes(col), col);
 });
+
+// --- audit-verify --all on a migrated tree -------------------------------------------
+
+test('audit-verify --all: audit.db (control), the deal partition and the sealed legacy partition all verify, exit 0', async () => {
+  const dir = tmp('verifyall');
+  const paths = buildLegacyTree(dir);
+  const boot = await bootProbe({ dir, probes: [{ path: '/healthz' }] });
+  assert.strictEqual(boot.results[0].status, 200, boot.stderr);
+
+  const env = cleanEnv({ ...paths, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT || 'child' });
+  const verify = spawnSync(process.execPath, ['scripts/audit-verify.js', '--all'], { cwd: REPO, env, encoding: 'utf8' });
+  assert.strictEqual(verify.status, 0, verify.stdout + verify.stderr);
+  const lines = verify.stdout.trim().split('\n');
+  assert.strictEqual(lines.length, 3, verify.stdout);
+  assert.ok(lines.every((l) => l.startsWith('OK ')), verify.stdout);
+  assert.match(verify.stdout, /legacy\.db rows=4 head=[0-9a-f]{64} sealed=yes sealed-sha=match/);
+  assert.match(verify.stdout, new RegExp(`${DEAL_A}\\.db rows=5 .*sealed=no`));
+  assert.match(verify.stdout, /audit\.db rows=6 .*sealed=no/);
+
+  // A flipped byte in the sealed legacy file is caught (chain and/or seal event).
+  const legacyFile = path.join(dir, 'audit', 'legacy.db');
+  fs.chmodSync(legacyFile, 0o600);
+  const fd = fs.openSync(legacyFile, 'r+');
+  const buf = Buffer.alloc(1);
+  fs.readSync(fd, buf, 0, 1, 3000);
+  buf[0] ^= 0xff;
+  fs.writeSync(fd, buf, 0, 1, 3000);
+  fs.closeSync(fd);
+  fs.chmodSync(legacyFile, 0o400);
+  const tampered = spawnSync(process.execPath, ['scripts/audit-verify.js', '--all'], { cwd: REPO, env, encoding: 'utf8' });
+  assert.notStrictEqual(tampered.status, 0, 'a flipped byte must not verify');
+});
+
+// --- the synthetic-volume rehearsal's guards (PD-31, checker W-2) -------------------
+
+test('rehearsal guards: --rows above the cap and an MA_* path outside the temp tree are refused with exit 2 before anything is written', () => {
+  const script = path.join(REPO, 'scripts', 'perf', 'legacy-audit-migration.js');
+  const before = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('gsd-12-13-rehearsal-')).sort();
+  const over = spawnSync(process.execPath, [script, '--rows', '300001'], { cwd: REPO, encoding: 'utf8' });
+  assert.strictEqual(over.status, 2, over.stdout + over.stderr);
+  assert.match(over.stderr, /exceeds the cap of 300000/);
+
+  const bad = spawnSync(process.execPath, [script, '--rows', '100'], {
+    cwd: REPO, encoding: 'utf8', env: { ...process.env, MA_AUDIT_DIR: path.join(REPO, 'data', 'audit') },
+  });
+  assert.strictEqual(bad.status, 2, bad.stdout + bad.stderr);
+  assert.match(bad.stderr, /refusing to spawn — MA_AUDIT_DIR/);
+
+  const { buildLegacyAuditTree } = require('../scripts/perf/lib/legacy-audit-volume');
+  assert.throws(() => buildLegacyAuditTree({ dir: os.tmpdir(), rows: 300001 }), (e) => e.code === 'ROWS_CAP');
+
+  const after = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('gsd-12-13-rehearsal-')).sort();
+  assert.deepStrictEqual(after.filter((n) => !before.includes(n)), [], 'no temp tree is left behind');
+});

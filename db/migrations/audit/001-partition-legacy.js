@@ -138,21 +138,30 @@ function toEntry(row) {
   return entry;
 }
 
+const COUNT_SQL = 'SELECT COUNT(legacy_id) AS n, COUNT(DISTINCT legacy_id) AS d FROM audit_log';
+
 /**
  * Import the rows `makeIterator(watermark)` yields (source rows with original id
- * greater than the watermark, id order) into partition `partitionId`.
+ * greater than the watermark, id order) into partition `partitionId`, then
+ * ASSERT that the partition holds each of the `expected` source rows exactly
+ * once (COUNT(legacy_id) = COUNT(DISTINCT legacy_id) = expected) — a loss or a
+ * duplicate fails the migration instead of shipping. The assertion reads the
+ * connection already open (or the read-only probe when nothing was appended),
+ * so no extra open — and no stray -shm/-wal sidecar — is made per partition.
  * Returns `{ imported, watermark }`.
  */
-function importPartition(partitionId, makeIterator) {
+function importPartition(partitionId, makeIterator, expected) {
   const file = dbFiles.auditPartitionPath(partitionId);
   let watermark = 0;
   let sealed = false;
+  let probeCounts = { n: 0, d: 0 };
   if (fs.existsSync(file)) {
     // W-4: a possibly sealed 0400 file is only ever probed read-only here.
     const ro = dbFiles.openDbFileReadOnly(file);
     try {
       const m = ro.prepare('SELECT MAX(legacy_id) AS m FROM audit_log').get();
       const last = ro.prepare('SELECT action FROM audit_log ORDER BY id DESC LIMIT 1').get();
+      probeCounts = ro.prepare(COUNT_SQL).get();
       watermark = m && m.m ? Number(m.m) : 0;
       sealed = !!last && last.action === auditChain.SEAL_ACTION;
     } catch (e) {
@@ -181,27 +190,19 @@ function importPartition(partitionId, makeIterator) {
       if (batch.length >= BATCH_ROWS) flush();
     }
     flush();
+    let counts = probeCounts;
     if (rw) {
       const verdict = auditChain.verifyChain(rw, partitionId);
       if (!verdict.ok) throw new Error(`audit partition chain failed verification after import (${verdict.reason})`);
+      counts = rw.prepare(COUNT_SQL).get();
+    }
+    if (counts.n !== expected || counts.d !== expected) {
+      throw new Error(`audit partition holds ${counts.n} imported rows (${counts.d} distinct), expected ${expected}`);
     }
   } finally {
     if (rw) { try { rw.close(); } catch (e) { /* ignore */ } }
   }
   return { imported, watermark };
-}
-
-/** Assert partition holds each of `expected` source rows exactly once (read-only). */
-function assertPartitionComplete(partitionId, expected) {
-  const ro = dbFiles.openDbFileReadOnly(dbFiles.auditPartitionPath(partitionId));
-  try {
-    const r = ro.prepare('SELECT COUNT(legacy_id) AS n, COUNT(DISTINCT legacy_id) AS d FROM audit_log').get();
-    if (r.n !== expected || r.d !== expected) {
-      throw new Error(`audit partition holds ${r.n} imported rows (${r.d} distinct), expected ${expected}`);
-    }
-  } finally {
-    try { ro.close(); } catch (e) { /* ignore */ }
-  }
 }
 
 function up(conn) {
@@ -230,8 +231,7 @@ function up(conn) {
     "SELECT * FROM audit_log WHERE db_kind = 'deal' AND deal_id = ? AND id > ? ORDER BY id"
   );
   for (const dealId of ownDeals) {
-    importPartition(dealId, (watermark) => dealRows.iterate(dealId, watermark));
-    assertPartitionComplete(dealId, perDeal.get(dealId));
+    importPartition(dealId, (watermark) => dealRows.iterate(dealId, watermark), perDeal.get(dealId));
     moved[dealId] = perDeal.get(dealId);
   }
 
@@ -244,8 +244,7 @@ function up(conn) {
       for (const row of legacySelect.iterate(watermark)) {
         if (!ownSet.has(row.deal_id)) yield row;
       }
-    });
-    assertPartitionComplete('legacy', legacyExpected);
+    }, legacyExpected);
     legacyRows = legacyExpected;
   }
 
