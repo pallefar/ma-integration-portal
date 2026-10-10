@@ -14,6 +14,8 @@ const dbFiles = require('./db/dbFiles');
 // change-password verify/hash only through it (self-describing scrypt hashes,
 // legacy hashes still verify).
 const passwords = require('./lib/passwords');
+const { createThrottle } = require('./lib/loginThrottle');
+const { createLockdown, lockdownMiddleware } = require('./lib/credentialLockdown');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -117,6 +119,32 @@ if (process.env.TRUST_PROXY) {
   console.warn(`[security] TRUST_PROXY=${raw} — req.ip now resolves via X-Forwarded-For per this setting. Ensure it matches your ACTUAL reverse-proxy hop count/address, or a client can spoof its own IP.`);
 }
 
+// [security] D-10-06 / T-10-55: with TRUST_PROXY unset, a reverse proxy's own
+// address is every user's "source" — so the per-source sign-in limit would be
+// shared by the whole team. The signal is a https PUBLIC_BASE_URL at boot, or
+// (at runtime, once per process) a request that carries forwarded headers: with
+// TRUST_PROXY unset Express's req.secure can never become true through a proxy,
+// so the forwarded headers are the observable evidence. One warning per
+// process, shared by both triggers.
+const SHARED_SOURCE_WARNING =
+  '[security] PUBLIC_BASE_URL is https but TRUST_PROXY is unset — behind a reverse proxy every user arrives ' +
+  "from the proxy's address, so the per-source sign-in limit is shared by the whole team. " +
+  "Set TRUST_PROXY to the proxy hop count.";
+let _sharedSourceWarned = false;
+function warnSharedSourceOnce() {
+  if (_sharedSourceWarned) return;
+  _sharedSourceWarned = true;
+  console.warn(SHARED_SOURCE_WARNING);
+}
+if (!process.env.TRUST_PROXY && /^https:\/\//i.test(PUBLIC_BASE_URL)) warnSharedSourceOnce();
+app.use((req, res, next) => {
+  if (!_sharedSourceWarned && !process.env.TRUST_PROXY &&
+      (req.headers['x-forwarded-for'] || req.headers['x-forwarded-proto'])) {
+    warnSharedSourceOnce();
+  }
+  next();
+});
+
 app.use(compression());
 
 // --- Security response headers -----------------------------------------------
@@ -149,12 +177,43 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   // HSTS is only meaningful behind TLS (terminated by the reverse proxy in the
   // internal deployment); enable it explicitly so the plain-HTTP local demo is
-  // unaffected.
+  // unaffected. [security] D-10-06: the subdomain directive is OPT-IN
+  // (HSTS_INCLUDE_SUBDOMAINS=1) — on a shared corporate parent domain it would
+  // pin every sibling host to https for a year, which is the operator's call.
+  // The session cookie's Secure attribute is NOT tied to this flag (see
+  // isSecureCookieContext below).
   if (process.env.ENABLE_HSTS === '1') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    let hsts = 'max-age=31536000';
+    if (process.env.HSTS_INCLUDE_SUBDOMAINS === '1') hsts += '; includeSubDomains';
+    res.setHeader('Strict-Transport-Security', hsts);
   }
   next();
 });
+
+// [security] D-10-08b / T-10-34 (plan 10-05): demo-credential lockdown. In
+// real-deal mode, if any enabled account still verifies a published demo
+// password (a hand-copied committed control.db, or an account edited into that
+// state), the server serves only the login page + its assets, /api/auth/* and
+// /healthz until every offender has changed its password. The scan runs HERE,
+// synchronously, before the app can serve its first request; the middleware is
+// mounted before the body parsers, '/' and express.static so nothing is
+// reachable around it. The static allowlist lives only in
+// lib/credentialLockdown.js (LOCKDOWN_STATIC_ALLOWLIST).
+const credentialLockdown = createLockdown({ enabled: dbFiles.IS_REAL_MODE });
+if (dbFiles.IS_REAL_MODE) {
+  credentialLockdown.scanAccounts(
+    controlStore.listUsers(), passwords.verifyPasswordSync, passwords.KNOWN_DEMO_PASSWORDS
+  );
+  if (credentialLockdown.isActive()) {
+    console.warn(
+      '[security] CREDENTIAL LOCKDOWN — these accounts still accept a published demo password: ' +
+      credentialLockdown.offenders().join(', ') + '. The server serves only the login page, /api/auth/* and /healthz ' +
+      'until each has changed its password: sign in as each account and change the password, or start from a fresh ' +
+      'data directory (empty MA_DATA_DIR) and run scripts/bootstrap-admin.js.'
+    );
+  }
+}
+app.use(lockdownMiddleware(credentialLockdown));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -206,8 +265,12 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // warning, so the running demo is unaffected until you set the env var. The admin
 // browser UI sends the secret via the X-Admin-Token header (fetch bridge in transitions.js).
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
-if (!ADMIN_TOKEN) {
-  console.warn('[security] ADMIN_TOKEN not set — write/admin API endpoints are OPEN. Set ADMIN_TOKEN in production to require authentication.');
+// [security] D-10-06 / T-10-37: the old boot line claimed the write/admin API
+// was OPEN when ADMIN_TOKEN was unset — false since Phase 2 (a session is
+// mandatory). The only truthful thing to say is when the token IS set: it is a
+// shared break-glass secret that acts as the attributed 'admin-token' admin.
+if (ADMIN_TOKEN) {
+  console.warn("[security] ADMIN_TOKEN is set — any request carrying this X-Admin-Token acts as the attributed 'admin-token' admin identity. Prefer per-person accounts (scripts/bootstrap-admin.js, admin console Users tab).");
 }
 // WR-03: DEMO_OPEN=1 is strictly more consequential than an unset ADMIN_TOKEN
 // — it disables the ENTIRE mandatory session gate for every /api/* route,
@@ -260,6 +323,12 @@ function isOpenMode(req) {
 // cannot require a session to exist first. /auth/mode (D-10-01/D-10-08) is the
 // unauthenticated mode probe the login page reads before any session exists.
 const PUBLIC_API_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me', '/auth/mode']);
+
+// [security] D-10-05: the ONLY gated /api path a session with
+// mustChangePassword may use (full '/api/...' form, as the consolidated gate
+// reconstructs it). The public auth paths above (me/logout/mode/login) never
+// reach the gate at all; everything else answers 403 {mustChangePassword:true}.
+const MUST_CHANGE_ALLOWED_PATHS = new Set(['/api/auth/change-password']);
 
 // Extracts the raw opaque session token from the `ma_session` cookie (replaces
 // the previous HMAC payload decode — the token itself carries no data; it is
@@ -672,6 +741,21 @@ app.use('/api', (req, res, next) => {
     // reconstructs the full path both lookups expect.
     const fullPath = req.baseUrl + req.path;
 
+    // [security] D-10-05 / T-10-27 forced rotation: a session whose account
+    // still carries mustChangePassword (temporary password, admin reset, first
+    // bootstrap, a demo password detected at login) may do NOTHING except
+    // replace it. The client redirect (plan 10-06) is UX; THIS gate is the
+    // control — so a temp password can never become a permanent working
+    // credential. /auth/me, /auth/logout, /auth/login and /auth/mode are public
+    // paths that returned at the top of this gate and never reach it. Placed
+    // before the demo-only and role checks so no other refusal can mask it.
+    if (req.portalUser.mustChangePassword === true && !MUST_CHANGE_ALLOWED_PATHS.has(fullPath)) {
+      return res.status(403).json({
+        error: 'You must change your password before continuing.',
+        mustChangePassword: true,
+      });
+    }
+
     if (isDemoOnlyPath(fullPath, req.method) && !req.isDemo) {
       return res.status(403).json({ error: 'This showcase-only feature is unavailable inside a real deal.' });
     }
@@ -732,16 +816,79 @@ function isAdminOrIlRequest(req) {
   return !!(req.portalUser && req.portalUser.sessionId !== null && ['admin', 'hrbp'].includes(req.portalUser.role));
 }
 
-// Tiny in-memory login throttle: scrypt is deliberately expensive, so cap
-// attempts per source before doing any hashing work.
-const _loginAttempts = new Map();
-function loginThrottled(ip) {
-  const now = Date.now();
-  const slot = _loginAttempts.get(ip);
-  if (!slot || now > slot.reset) { _loginAttempts.set(ip, { count: 1, reset: now + 60000 }); return false; }
-  slot.count++;
-  return slot.count > 8;
+// [security] D-10-06 sign-in throttling (plan 10-05). Two independent,
+// in-memory, bounded instances (lib/loginThrottle.js — its header comment holds
+// the recovery paragraph DEPLOYMENT.md copies):
+//   accountThrottle — keyed on the SUBMITTED account name ('u:<name>' for login,
+//     'cp:<name>' for change-password), 5 free failures then exponential
+//     backoff to 15 minutes. One user's typos cannot lock out a team behind a
+//     proxy (R1-08), and the key exists whether or not the name does (T-10-30).
+//   sourceThrottle — keyed on the source address ('ip:<req.ip>'), a much higher
+//     ceiling (50 failures / 15 min): the guard against one host spraying many
+//     names, deliberately not the primary control.
+// scrypt is deliberately expensive, so both are consulted BEFORE any hashing.
+const THROTTLE_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_MAX_BACKOFF_MS = 5 * 60 * 1000;
+const accountThrottle = createThrottle({
+  windowMs: THROTTLE_WINDOW_MS, freeFailures: 5, baseDelayMs: 1000,
+  maxDelayMs: THROTTLE_WINDOW_MS, maxEntries: 10000,
+});
+const sourceThrottle = createThrottle({
+  windowMs: THROTTLE_WINDOW_MS, freeFailures: 50, baseDelayMs: 1000,
+  maxDelayMs: THROTTLE_WINDOW_MS, maxEntries: 10000,
+});
+// T-10-55: a known admin username must not be lockable for a quarter of an
+// hour by one failed attempt per backoff window — admin-role backoff is capped
+// at 5 minutes. Anything else (other roles, unknown name, disabled account) gets
+// the instance default, so the cap is not an enumeration oracle beyond T-10-56
+// (accepted: needs a long logged failure run, the 429 body stays identical).
+function throttleOptionsFor(account) {
+  if (account && account.role === 'admin' && account.disabled !== true) {
+    return { maxDelayMs: ADMIN_MAX_BACKOFF_MS };
+  }
+  return {};
 }
+// The submitted name goes into an operator-visible log line: strip anything a
+// client could use to forge log structure, and bound the length.
+function logSafe(value) {
+  return String(value).replace(/[^\x20-\x7e]/g, '?').slice(0, 80);
+}
+function noteBackoff(result, key, req) {
+  if (result && result.engaged) {
+    console.warn(`[security] sign-in backoff engaged for ${logSafe(key)} from ${logSafe(req.ip || req.socket.remoteAddress || '?')}`);
+  }
+}
+const THROTTLED_BODY = Object.freeze({ error: 'Too many sign-in attempts. Wait a moment and try again.' });
+function sendThrottled(res, ...verdicts) {
+  const ms = Math.max(...verdicts.map((v) => v.retryAfterMs || 0));
+  res.set('Retry-After', String(Math.max(1, Math.ceil(ms / 1000))));
+  return res.status(429).json(THROTTLED_BODY);
+}
+
+// [security] D-10-06 / T-10-32: the session cookie is Secure whenever the
+// request itself is https (Express's req.secure, which honours TRUST_PROXY and
+// X-Forwarded-Proto) or the deployment's PUBLIC_BASE_URL is https — independent
+// of ENABLE_HSTS, which is only a header-policy switch. Every session-cookie header for
+// the session goes through these helpers.
+function isSecureCookieContext({ secure, publicBaseUrl } = {}) {
+  return secure === true || /^https:\/\//i.test(String(publicBaseUrl || ''));
+}
+function sessionCookieAttributes(req) {
+  const secure = isSecureCookieContext({ secure: req && req.secure, publicBaseUrl: PUBLIC_BASE_URL });
+  return secure ? '; Secure' : '';
+}
+// SameSite=Strict (was Lax, D-08) — this app has no cross-site inbound-link
+// flow that depends on Lax's top-level-navigation carve-out, and every write is
+// already same-origin JSON fetch() (no classic <form> posts, no CORS headers
+// ever set), so Strict closes the CSRF gap with no functional impact.
+function sessionCookieHeader(req, token) {
+  return 'ma_session=' + token + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' +
+    Math.floor(SESSION_TTL_MS / 1000) + sessionCookieAttributes(req);
+}
+function clearedSessionCookieHeader(req) {
+  return 'ma_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0' + sessionCookieAttributes(req);
+}
+
 // D-10-05: async handler — scrypt now runs on the libuv threadpool
 // (passwords.verifyPassword) instead of blocking the event loop. Any thrown
 // error (including an isBusyError() from the control/runtime stores) is
@@ -751,25 +898,62 @@ app.post('/api/auth/login', async (req, res, next) => {
     const { username, password } = req.body || {};
     // D-01: login is now ALWAYS available (no more "disabled unless PORTAL_AUTH=1") —
     // it is the sole path into a mandatory-by-default app.
-    if (loginThrottled(req.ip || req.socket.remoteAddress || '?')) {
-      return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
-    }
     // ISO-01 (Task 2 cutover): accounts moved OUT of the request-bound
     // readDb()/writeDb() model into control.db, reached only through
     // db/controlStore.js — a deal-bound request can never read/write the
-    // account store through its own connection (T-03-16).
-    const user = controlStore.findUser(String(username || '').trim().toLowerCase());
+    // account store through its own connection (T-03-16). The lookup is a PK
+    // read (no scrypt) and runs BEFORE the throttle check only so the account
+    // key can carry the role's backoff ceiling (throttleOptionsFor).
+    const submitted = String(username || '').trim().toLowerCase();
+    const user = controlStore.findUser(submitted);
+    const accountKey = 'u:' + submitted;
+    const sourceKey = 'ip:' + (req.ip || req.socket.remoteAddress || '?');
+    const accountVerdict = accountThrottle.check(accountKey, throttleOptionsFor(user));
+    const sourceVerdict = sourceThrottle.check(sourceKey);
+    if (!accountVerdict.allowed || !sourceVerdict.allowed) {
+      return sendThrottled(res, accountVerdict, sourceVerdict);
+    }
     // Always run one scrypt derivation (dummyVerify for unknown/disabled
     // accounts) so response time never reveals whether the username exists
     // or is enabled (T-10-08).
-    let ok = false;
+    let verdict = { ok: false, needsRehash: false };
     if (user && user.disabled !== true) {
-      ok = (await passwords.verifyPassword(password || '', user)).ok;
+      verdict = await passwords.verifyPassword(password || '', user);
     } else {
       await passwords.dummyVerify(password || '');
     }
-    if (!ok) {
+    if (!verdict.ok) {
+      noteBackoff(accountThrottle.fail(accountKey), accountKey, req);
+      noteBackoff(sourceThrottle.fail(sourceKey), sourceKey, req);
       return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
+    }
+    // A correct password ends the account's backoff episode; the source window
+    // keeps sliding on its own.
+    accountThrottle.clear(accountKey);
+    // [security] D-10-08b login-time detection (real mode only): a sign-in
+    // that succeeded with a PUBLISHED demo password puts the account in the
+    // lockdown offender set and forces rotation, whatever the boot scan saw —
+    // the 403 gate then fences the session to change-password.
+    if (dbFiles.IS_REAL_MODE && passwords.isKnownDemoPassword(password)) {
+      credentialLockdown.noteDemoLogin(user.username);
+      controlStore.updateUser(user.username, { mustChangePassword: true });
+      user.mustChangePassword = true;
+    }
+    // [security] D-10-05 lazy rehash: a legacy / low-cost hash is replaced with
+    // the current-cost format on the first successful sign-in, BEFORE the
+    // session exists. Never against the committed control.db (D-10-01: a
+    // credential hash must not land in a git-tracked file). A busy lock is the
+    // central 503 (nothing persisted, the client retries); any other failure
+    // must not block a correct sign-in.
+    if (verdict.needsRehash && !dbFiles.isCommittedControlDbActive()) {
+      try {
+        controlStore.updateUser(user.username, {
+          hash: await passwords.hashPassword(password), salt: null,
+        });
+      } catch (rehashErr) {
+        if (isBusyError(rehashErr)) throw rehashErr;
+        console.error('[security] password rehash failed for ' + logSafe(user.username) + ': ' + logSafe(rehashErr && (rehashErr.code || rehashErr.name)));
+      }
     }
     // Opportunistic cleanup, not a security mechanism — piggyback on the
     // low-frequency login path rather than adding an interval timer (this
@@ -782,15 +966,7 @@ app.post('/api/auth/login', async (req, res, next) => {
       userAgent: req.get('user-agent'), ip: req.ip,
     });
     sessions.recordLogin(getRuntimeConnection(), user.username, req.ip); // D-10-03: runtime.db only
-    // SameSite=Strict (was Lax, D-08) — this app has no cross-site inbound-link
-    // flow that depends on Lax's top-level-navigation carve-out, and every
-    // write is already same-origin JSON fetch() (no classic <form> posts, no
-    // CORS headers ever set), so Strict closes the CSRF gap with no functional
-    // impact.
-    const cookie = ['ma_session=' + token, 'Path=/', 'HttpOnly', 'SameSite=Strict',
-      'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
-    if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
-    res.setHeader('Set-Cookie', cookie.join('; '));
+    res.setHeader('Set-Cookie', sessionCookieHeader(req, token));
     // D-10-03: the response user object is the publicAccount() allowlist
     // projection — a secret field added to the account blob later can never
     // ride out through login by accident.
@@ -812,7 +988,7 @@ app.post('/api/auth/logout', (req, res) => {
   // not a wait for the cookie to expire.
   const token = readSessionCookie(req);
   if (token) sessions.deleteSession(getRuntimeConnection(), token);
-  res.setHeader('Set-Cookie', 'ma_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+  res.setHeader('Set-Cookie', clearedSessionCookieHeader(req));
   res.json({ success: true });
 });
 
@@ -876,9 +1052,9 @@ app.post('/api/auth/change-password', async (req, res, next) => {
     // Keyed by username (a session already proves who the caller claims to be)
     // rather than IP, so one throttled user cannot lock out others behind the
     // same proxy/NAT.
-    if (loginThrottled('change-password:' + req.portalUser.username)) {
-      return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
-    }
+    const cpKey = 'cp:' + req.portalUser.username;
+    const cpVerdict = accountThrottle.check(cpKey);
+    if (!cpVerdict.allowed) return sendThrottled(res, cpVerdict);
     // [security] D-10-01/T-10-09: a credential hash must never be written into
     // the committed data/control.db (a git-tracked file). Outside real mode
     // that file is the active control database unless MA_CONTROL_DB_PATH
@@ -899,13 +1075,20 @@ app.post('/api/auth/change-password', async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found.' });
     const verdict = await passwords.verifyPassword(currentPassword || '', user);
     if (!verdict.ok) {
+      noteBackoff(accountThrottle.fail(cpKey), cpKey, req);
       return res.status(401).json({ error: 'Current password is incorrect.' });
     }
+    // The caller proved the current password: end this key's failure episode
+    // (a too-short NEW password below is a validation error, not a guess).
+    accountThrottle.clear(cpKey);
     const problem = passwords.checkNewPassword(newPassword, { realMode: dbFiles.IS_REAL_MODE });
     if (problem) return res.status(400).json({ error: problem });
     controlStore.updateUser(user.username, {
       hash: await passwords.hashPassword(newPassword), salt: null, mustChangePassword: false,
     });
+    // D-10-08b: this account no longer accepts a published password — it
+    // leaves the lockdown offender set (the lockdown lifts when none remain).
+    credentialLockdown.clear(user.username);
     // D-08: a password change is a control-plane security event — the actor
     // and the subject are the SAME user here (self-service), which is exactly
     // why it must still be recorded: a session that changed its own password
@@ -926,10 +1109,7 @@ app.post('/api/auth/change-password', async (req, res, next) => {
       username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
       userAgent: req.get('user-agent'), ip: req.ip,
     });
-    const cookie = ['ma_session=' + newToken, 'Path=/', 'HttpOnly', 'SameSite=Strict',
-      'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
-    if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
-    res.setHeader('Set-Cookie', cookie.join('; '));
+    res.setHeader('Set-Cookie', sessionCookieHeader(req, newToken));
     res.json({ success: true });
   } catch (err) {
     if (isBusyError(err)) return next(err); // central 503 + Retry-After
@@ -972,7 +1152,7 @@ app.delete('/api/auth/sessions/:id', (req, res, next) => {
     if (!ended.deleted) return res.status(404).json({ error: 'Session not found.' });
     if (req.portalUser.sessionId !== null && ended.tokenHash === req.portalUser.sessionId) {
       // The caller ended the session it is using — same cookie clearing as logout.
-      res.setHeader('Set-Cookie', 'ma_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+      res.setHeader('Set-Cookie', clearedSessionCookieHeader(req));
       return res.json({ success: true, endedCurrent: true });
     }
     auditHook.recordSecurityEvent({
@@ -7763,3 +7943,12 @@ module.exports.orgSummaryFor = orgSummaryFor;
 // sabotaged module loader in a child process) even on a host where the
 // binding actually exists, without needing a real linux-arm64 machine.
 module.exports.getReportPack = getReportPack;
+// [security] D-10-06 (plan 10-05): exposed for the same pure-function
+// unit-check rationale — tests drive the admin backoff-ceiling decision and the
+// Secure-cookie decision directly, without an HTTP round-trip per case.
+module.exports.throttleOptionsFor = throttleOptionsFor;
+module.exports.isSecureCookieContext = isSecureCookieContext;
+module.exports.ADMIN_MAX_BACKOFF_MS = ADMIN_MAX_BACKOFF_MS;
+// [security] D-10-08b (plan 10-05): exposed so tests (and a future health
+// probe) can read the lockdown state without an HTTP round-trip.
+module.exports.isCredentialLockdownActive = () => credentialLockdown.isActive();
