@@ -15,7 +15,15 @@
 //
 // Usage:
 //   PLAYWRIGHT_PATH=/path/to/node_modules/playwright \
-//     node scripts/uat/phase9-walk.js [--scenario name]... [--out dir] [--headed]
+//     node scripts/uat/phase9-walk.js [--scenario name]... [--out dir] [--headed] [--demo-open]
+//
+// --demo-open (plan 09-16): boots the child with DEMO_OPEN=1, performs no
+// deal setup, and opens every tab with a signed-in session that has NO deal
+// binding (the demo.db lane DEMO_OPEN exempts; scenarios exercise the
+// cookie-less anonymous lane through ctx.api(null, ...)). Only scenarios a module lists in its
+// `__demo` export (an array of scenario names) run in this mode; a normal run
+// skips exactly those scenarios. Keys starting with `__` are metadata, never
+// scenarios.
 //
 // Exit codes: 0 all PASS, 1 at least one FAIL, 2 Playwright not resolvable.
 
@@ -35,12 +43,13 @@ const DEMO_PASSWORD = 'TEdemo!2026';
 
 // ---------------------------------------------------------------- argv
 function parseArgs(argv) {
-  const out = { scenarios: [], outDir: null, headed: false };
+  const out = { scenarios: [], outDir: null, headed: false, demoOpen: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--scenario') out.scenarios.push(argv[++i]);
     else if (a === '--out') out.outDir = argv[++i];
     else if (a === '--headed') out.headed = true;
+    else if (a === '--demo-open') out.demoOpen = true;
   }
   return out;
 }
@@ -94,7 +103,7 @@ function record(scenario, step, status, detail) {
 }
 
 // ---------------------------------------------------------------- server
-async function startServer(port, dataDir) {
+async function startServer(port, dataDir, demoOpen) {
   const env = Object.assign({}, process.env, {
     PORT: String(port),
     MA_DEMO_DB_PATH: path.join(dataDir, 'demo.db'),
@@ -105,6 +114,7 @@ async function startServer(port, dataDir) {
   });
   delete env.DEMO_OPEN;
   delete env.ADMIN_TOKEN;
+  if (demoOpen) env.DEMO_OPEN = '1'; // anonymous demo showcase lane (plan 09-16)
   const child = spawn(process.execPath, ['server.js'], { cwd: REPO_ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let stderr = '';
   child.stderr.on('data', (d) => { stderr += d.toString(); });
@@ -211,6 +221,9 @@ async function fitCheck(page) {
       dialogInside: !!rect && rect.left >= 0 && rect.top >= 0 && rect.right <= vw && rect.bottom <= vh,
       rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
       viewport: { w: vw, h: vh },
+      // Diagnostic only: the first few elements reaching past the right edge.
+      overflowing: Array.from(document.querySelectorAll('body *')).filter((e) => e.getBoundingClientRect().right > vw + 1 && e.getBoundingClientRect().width > 0)
+        .slice(0, 3).map((e) => (e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\s+/).join('.') : '') + ' right=' + Math.round(e.getBoundingClientRect().right))),
     };
   });
 }
@@ -227,14 +240,21 @@ async function fitCheck(page) {
 
   // Load scenario modules in name order.
   const registry = {};
+  const demoNames = new Set();
   fs.readdirSync(SCENARIO_DIR).filter((n) => n.endsWith('.js')).sort().forEach((n) => {
     const mod = require(path.join(SCENARIO_DIR, n));
-    Object.keys(mod).forEach((name) => { registry[name] = mod[name]; });
+    Object.keys(mod).forEach((name) => {
+      if (name.indexOf('__') === 0) return; // metadata, not a scenario
+      registry[name] = mod[name];
+    });
+    (Array.isArray(mod.__demo) ? mod.__demo : []).forEach((name) => demoNames.add(name));
   });
-  const wanted = args.scenarios.length ? args.scenarios : Object.keys(registry);
-  const unknown = wanted.filter((n) => !registry[n]);
+  // Demo runs execute only demo scenarios; normal runs skip them.
+  const eligible = Object.keys(registry).filter((n) => (args.demoOpen ? demoNames.has(n) : !demoNames.has(n)));
+  const wanted = args.scenarios.length ? args.scenarios : eligible;
+  const unknown = wanted.filter((n) => !registry[n] || !eligible.includes(n));
   if (unknown.length) {
-    console.error('unknown scenario(s): ' + unknown.join(', ') + ' (known: ' + Object.keys(registry).join(', ') + ')');
+    console.error('unknown scenario(s): ' + unknown.join(', ') + ' (known for this mode: ' + eligible.join(', ') + ')');
     process.exit(1);
   }
 
@@ -247,19 +267,27 @@ async function fitCheck(page) {
   let browser = null;
   try {
     const port = await freePort();
-    server = await startServer(port, tmpData);
+    server = await startServer(port, tmpData, args.demoOpen);
     const { base } = server;
     const { api, login } = makeApi(base);
 
     // Shared setup: karen (Integration Lead) + pmo, one real deal, pmo granted legal.
-    const seeder = await login('karen');
-    const created = await api(seeder.cookie, 'POST', '/api/deals', { name: 'Phase 9 walk deal', targetCompany: 'Walk Sensors GmbH', members: ['karen', 'pmo'] });
-    if (created.status !== 201 && created.status !== 200) throw new Error('deal create failed: ' + created.status + ' ' + JSON.stringify(created.json));
-    const deal = created.json.deal;
-    const sel = await api(seeder.cookie, 'POST', '/api/deals/select', { dealId: deal.id });
-    if (sel.status !== 200) throw new Error('deal select failed: ' + sel.status);
-    const grant = await api(seeder.cookie, 'POST', `/api/deals/${deal.id}/grants`, { username: 'pmo', ddAreas: ['legal'] });
-    record('setup', `deal ${deal.id} created, pmo granted legal`, grant.status === 200 ? 'PASS' : 'FAIL', grant.status);
+    // --demo-open performs none of this: no session, no deal (the showcase lane).
+    let seeder = null;
+    let deal = null;
+    if (args.demoOpen) {
+      const me = await api(null, 'GET', '/api/auth/me');
+      record('setup', 'demo-open instance reachable anonymously (DEMO_OPEN=1)', me.status === 200 ? 'PASS' : 'FAIL', me.status);
+    } else {
+      seeder = await login('karen');
+      const created = await api(seeder.cookie, 'POST', '/api/deals', { name: 'Phase 9 walk deal', targetCompany: 'Walk Sensors GmbH', members: ['karen', 'pmo'] });
+      if (created.status !== 201 && created.status !== 200) throw new Error('deal create failed: ' + created.status + ' ' + JSON.stringify(created.json));
+      deal = created.json.deal;
+      const sel = await api(seeder.cookie, 'POST', '/api/deals/select', { dealId: deal.id });
+      if (sel.status !== 200) throw new Error('deal select failed: ' + sel.status);
+      const grant = await api(seeder.cookie, 'POST', `/api/deals/${deal.id}/grants`, { username: 'pmo', ddAreas: ['legal'] });
+      record('setup', `deal ${deal.id} created, pmo granted legal`, grant.status === 200 ? 'PASS' : 'FAIL', grant.status);
+    }
 
     browser = await chromium.launch({ headless: !args.headed });
 
@@ -268,10 +296,19 @@ async function fitCheck(page) {
       const o = opts || {};
       const user = o.user || 'karen';
       const viewport = o.viewport || { width: 1440, height: 900 };
-      const sess = await login(user);
-      const s = await api(sess.cookie, 'POST', '/api/deals/select', { dealId: deal.id });
-      if (s.status !== 200) throw new Error(`select failed for ${user}: ${s.status}`);
       const ctx = await browser.newContext({ viewport });
+      // --demo-open: a signed-in session with NO deal binding — the lane
+      // DEMO_OPEN=1 exempts (it resolves to demo.db). A cookie-less browser
+      // tab cannot be used: the header deal switcher fetches /api/deals, a
+      // control-plane path that is never open, and its 401 authRequired
+      // bounces the tab login.html -> / -> login.html (pre-existing since
+      // Phase 3, see deferred-items.md). Anonymous API behaviour is covered
+      // by the scenario itself through ctx.api(null, ...).
+      const sess = await login(user);
+      if (!args.demoOpen) {
+        const s = await api(sess.cookie, 'POST', '/api/deals/select', { dealId: deal.id });
+        if (s.status !== 200) { await ctx.close(); throw new Error(`select failed for ${user}: ${s.status}`); }
+      }
       await ctx.addCookies([{ name: 'ma_session', value: sess.token, url: base, httpOnly: true }]);
       const page = await ctx.newPage();
       page.requests = [];      // every non-GET /api/ call

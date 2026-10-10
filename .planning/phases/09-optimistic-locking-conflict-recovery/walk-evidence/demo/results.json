@@ -1,0 +1,208 @@
+[
+  {
+    "scenario": "setup",
+    "step": "demo-open instance reachable anonymously (DEMO_OPEN=1)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "anonymous RAID create 201",
+    "status": "PASS",
+    "detail": {
+      "status": 201,
+      "body": {
+        "success": true,
+        "entry": {
+          "id": "raid_mv28klxbcbf71077",
+          "type": "risk",
+          "title": "demo anon entry",
+          "severity": "high",
+          "owner": "demo",
+          "workstreamId": "ws_imo",
+          "status": "open",
+          "notes": "",
+          "source": "",
+          "createdAt": "2026-10-10T10:13:13.343Z"
+        }
+      }
+    }
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "anonymous version-less RAID update 200, no versionRequired",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "entry": {
+          "id": "raid_mv28klxbcbf71077",
+          "type": "risk",
+          "title": "demo anon entry",
+          "severity": "high",
+          "owner": "demo",
+          "workstreamId": "ws_imo",
+          "status": "mitigating",
+          "notes": "",
+          "source": "",
+          "createdAt": "2026-10-10T10:13:13.343Z",
+          "version": 1,
+          "updatedAt": "2026-10-10T10:13:13.355Z"
+        }
+      }
+    }
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "anonymous task read 200 with demo tasks",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "anonymous version-less task update 200, no versionRequired",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "task": {
+          "id": "task_seed_i01",
+          "title": "Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.",
+          "titleKey": "exec.item_i01",
+          "workstreamId": "ws_imo",
+          "phase": "pre",
+          "owner": "David Miller",
+          "due": "2026-04-30",
+          "status": "doing",
+          "source": "template:ctpl_day1_100:i01",
+          "createdAt": "2026-04-20T09:00:00.000Z",
+          "version": 1,
+          "updatedAt": "2026-10-10T10:13:13.370Z"
+        }
+      }
+    }
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "/execution.html loaded (not bounced to login)",
+    "status": "PASS",
+    "detail": "http://127.0.0.1:65403/execution.html"
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "no page error on load",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "demo task list is populated",
+    "status": "PASS",
+    "detail": 34
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "task status flip sent",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "task status flip 200 success:true",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "task": {
+          "id": "task_seed_i01",
+          "title": "Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.",
+          "titleKey": "exec.item_i01",
+          "workstreamId": "ws_imo",
+          "phase": "pre",
+          "owner": "David Miller",
+          "due": "2026-04-30",
+          "status": "blocked",
+          "source": "template:ctpl_day1_100:i01",
+          "createdAt": "2026-04-20T09:00:00.000Z",
+          "version": 2,
+          "updatedAt": "2026-10-10T10:13:14.590Z",
+          "updatedBy": "karen"
+        }
+      }
+    }
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "no conflict dialog after the task flip",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "RAID status flip sent",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "RAID status flip 200",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "entry": {
+          "id": "raid_seed_1",
+          "type": "risk",
+          "title": "Key sensing R&D engineers approached by competitors",
+          "severity": "high",
+          "probability": "medium",
+          "owner": "Karen Peterson",
+          "workstreamId": "ws_hr",
+          "status": "mitigating",
+          "notes": "Retention packages approved; 1-on-1s in progress.",
+          "createdAt": "2026-05-05T09:00:00.000Z",
+          "version": 1,
+          "updatedAt": "2026-10-10T10:13:15.659Z",
+          "updatedBy": "karen"
+        }
+      }
+    }
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "no conflict dialog after the RAID flip",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "no captured response carries versionRequired",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "no captured write answered 409",
+    "status": "PASS",
+    "detail": [
+      200,
+      200
+    ]
+  },
+  {
+    "scenario": "demo-smoke",
+    "step": "no page error during the smoke",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "data-integrity",
+    "step": "committed data/demo.db* and data/control.db* unchanged",
+    "status": "PASS",
+    "detail": "2 file(s) identical"
+  }
+]
