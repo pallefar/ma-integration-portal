@@ -264,8 +264,16 @@ registerSchema('DELETE', '/api/slides/:id', EmptyBodySchema);
 // "no content received" check already treats an all-whitespace string as
 // empty, so this schema's refine() mirrors that exactly without mutating
 // the stored bytes.
+//
+// SAFE-03 / D-13-04 (a) (13-03, PD-16): `type` is the browser's declared MIME
+// type and `encoding` says how `content` is carried ('utf8' text — the HTML
+// contract, the default — or 'base64' for the binary slide types). The route's
+// own checkUpload() (lib/slideUpload.js) owns the allowlist, magic bytes, the
+// 10 MB limit and the library quota; the schema only bounds the shapes.
 const SlideUploadSchema = z.object({
   filename: z.string().max(300).optional(),
+  type: z.string().max(100).optional(),
+  encoding: z.enum(['utf8', 'base64']).optional(),
   content: z.string().min(1, 'No slide file content received.').max(LARGE_BLOB_MAX)
     .refine((s) => s.trim().length > 0, { message: 'No slide file content received.' }),
 });

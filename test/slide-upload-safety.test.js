@@ -259,3 +259,138 @@ test('slide-upload-safety (d): DEFAULT directory (MA_SLIDES_UPLOAD_DIR unset) â€
   }
   assert.deepStrictEqual(listing(defaultDir), before, 'public/uploads/slides listing is identical before/after');
 });
+
+// ================================================================== Task 2 ===
+const PNG_BYTES = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(24, 7)]);
+const JPEG_BYTES = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(24, 9)]);
+const WEBP_BYTES = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0x1c, 0, 0, 0]), Buffer.from('WEBP'), Buffer.alloc(20, 3)]);
+const PDF_BYTES = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+
+const TYPE_REFUSED = { error: 'This file type is not allowed for slides.', code: 'slide-type-refused' };
+const TOO_LARGE = { error: 'Slide file is larger than 10 MB.', code: 'slide-too-large' };
+const QUOTA_FULL = { error: 'The slide library is full.', code: 'slide-quota-exceeded' };
+
+test('slide-upload-safety (e): every disallowed type is refused 415 with the fixed body and writes nothing', async () => {
+  clearDir(SLIDES_TMP);
+  const token = adminToken('slide-admin-e');
+  const cases = [
+    ['svg (declared svg)', { filename: 'x.svg', type: 'image/svg+xml', content: '<svg xmlns="http://www.w3.org/2000/svg"/>' }],
+    ['svg (declared html)', { filename: 'x.svg', type: 'text/html', content: '<svg/>' }],
+    ['SVG uppercase', { filename: 'X.SVG', content: '<svg/>' }],
+    ['double extension ending .svg', { filename: 'evil.html.svg', content: '<svg/>' }],
+    ['exe', { filename: 'run.exe', content: 'MZ' }],
+    ['extension-less', { filename: 'noext', content: 'hello' }],
+    ['png declared text/html', { filename: 'a.png', type: 'text/html', encoding: 'base64', content: PNG_BYTES.toString('base64') }],
+    ['png whose bytes are not PNG', { filename: 'a.png', type: 'image/png', encoding: 'base64', content: Buffer.from('not a png at all').toString('base64') }],
+    ['png sent as utf8 text', { filename: 'a.png', type: 'image/png', content: 'plain text' }],
+    ['jpeg bytes under .png', { filename: 'a.png', type: 'image/png', encoding: 'base64', content: JPEG_BYTES.toString('base64') }],
+    ['pdf whose bytes are not PDF', { filename: 'a.pdf', type: 'application/pdf', encoding: 'base64', content: Buffer.from('<html></html>').toString('base64') }],
+    ['html whose bytes are a PNG', { filename: 'a.html', encoding: 'base64', content: PNG_BYTES.toString('base64') }],
+    ['html whose bytes are a PDF', { filename: 'a.html', content: '%PDF-1.4 sneaky' }],
+    ['html declared image/png', { filename: 'a.html', type: 'image/png', content: '<p>x</p>' }],
+    ['invalid base64', { filename: 'a.png', type: 'image/png', encoding: 'base64', content: '***not*base64***' }],
+  ];
+  await withServer(async (base) => {
+    for (const [label, body] of cases) {
+      const before = listing(SLIDES_TMP);
+      const r = await upload(base, token, body);
+      assert.strictEqual(r.status, 415, `${label}: ${JSON.stringify(r.body)}`);
+      assert.deepStrictEqual(r.body, TYPE_REFUSED, `${label}: fixed refusal body`);
+      assert.deepStrictEqual(listing(SLIDES_TMP), before, `${label}: a refusal writes nothing`);
+    }
+    // an unknown encoding is a schema error (400), still side-effect free
+    const before = listing(SLIDES_TMP);
+    const r = await upload(base, token, { filename: 'a.html', encoding: 'rot13', content: '<p>x</p>' });
+    assert.strictEqual(r.status, 400);
+    assert.deepStrictEqual(listing(SLIDES_TMP), before);
+  });
+  assert.deepStrictEqual(listing(SLIDES_TMP), [], 'no refused upload created any library content');
+});
+
+test('slide-upload-safety (f): > 10 MB decoded is refused 413 (utf8 and base64), exactly 10 MB is accepted by the checker; nothing written', async () => {
+  const token = adminToken('slide-admin-f');
+  const LIMIT = 10 * 1024 * 1024;
+  await withServer(async (base) => {
+    const before = listing(SLIDES_TMP);
+    const html = await upload(base, token, { filename: 'big.html', content: 'a'.repeat(LIMIT + 1) });
+    assert.strictEqual(html.status, 413);
+    assert.deepStrictEqual(html.body, TOO_LARGE);
+    const png = await upload(base, token, {
+      filename: 'big.png', type: 'image/png', encoding: 'base64',
+      content: Buffer.concat([PNG_BYTES, Buffer.alloc(LIMIT)]).toString('base64'),
+    });
+    assert.strictEqual(png.status, 413);
+    assert.deepStrictEqual(png.body, TOO_LARGE);
+    assert.deepStrictEqual(listing(SLIDES_TMP), before, 'an oversize refusal writes nothing');
+  });
+  const big = { quotaBytes: 1024 * 1024 * 1024, dir: SLIDES_TMP };
+  assert.strictEqual(slideUpload.checkUpload({ filename: 'edge.html', content: 'a'.repeat(LIMIT) }, big).ok, true, 'exactly 10 MB passes');
+  const over = slideUpload.checkUpload({ filename: 'edge.html', content: 'a'.repeat(LIMIT + 1) }, big);
+  assert.strictEqual(over.ok, false);
+  assert.strictEqual(over.status, 413);
+});
+
+test('slide-upload-safety (g): a library over MA_SLIDE_QUOTA_MB is refused 413 with the fixed body and the directory is unchanged', async () => {
+  clearDir(SLIDES_TMP);
+  const token = adminToken('slide-admin-g');
+  try {
+    await withServer(async (base) => {
+      assert.strictEqual(slideUpload.quotaBytes(), 1024 * 1024, 'the suite boots with MA_SLIDE_QUOTA_MB=1');
+      const first = await upload(base, token, { filename: 'fill.html', content: 'a'.repeat(900 * 1024) });
+      assert.strictEqual(first.status, 200, JSON.stringify(first.body));
+      const before = listing(SLIDES_TMP);
+      const second = await upload(base, token, { filename: 'one-more.html', content: 'b'.repeat(200 * 1024) });
+      assert.strictEqual(second.status, 413);
+      assert.deepStrictEqual(second.body, QUOTA_FULL);
+      assert.deepStrictEqual(listing(SLIDES_TMP), before, 'a quota refusal writes nothing');
+      // a small slide that still fits is accepted (the quota is a sum, not a lock)
+      const small = await upload(base, token, { filename: 'small.html', content: '<p>ok</p>' });
+      assert.strictEqual(small.status, 200);
+    });
+  } finally {
+    clearDir(SLIDES_TMP);
+  }
+  // unit level: the sum counts existing files + this file, boundary inclusive
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'quota-'));
+  fs.writeFileSync(path.join(dir, 'a.html'), Buffer.alloc(100));
+  fs.writeFileSync(path.join(dir, '.dot'), Buffer.alloc(5000));
+  assert.strictEqual(slideUpload.libraryBytes(dir), 100, 'dotfiles are not counted');
+  assert.strictEqual(slideUpload.checkUpload({ filename: 'b.html', content: 'x'.repeat(20) }, { dir, quotaBytes: 120 }).ok, true);
+  assert.strictEqual(slideUpload.checkUpload({ filename: 'b.html', content: 'x'.repeat(21) }, { dir, quotaBytes: 120 }).status, 413);
+});
+
+test('slide-upload-safety (h): valid PNG/JPEG/WebP/PDF are stored byte-for-byte; images get the sandbox CSP, the PDF keeps the app CSP; all nosniff', async () => {
+  clearDir(SLIDES_TMP);
+  const token = adminToken('slide-admin-h');
+  const valid = [
+    ['pic.png', 'image/png', PNG_BYTES, true],
+    ['pic.JPG', 'image/jpeg', JPEG_BYTES, true],
+    ['pic.jpeg', 'image/jpeg', JPEG_BYTES, true],
+    ['pic.webp', 'image/webp', WEBP_BYTES, true],
+    ['deck.pdf', 'application/pdf', PDF_BYTES, false],
+    ['nodeclared.png', '', PNG_BYTES, true],
+  ];
+  try {
+    await withServer(async (base) => {
+      for (const [filename, type, bytes, sandboxed] of valid) {
+        const up = await upload(base, token, { filename, type, encoding: 'base64', content: bytes.toString('base64') });
+        assert.strictEqual(up.status, 200, `${filename}: ${JSON.stringify(up.body)}`);
+        const stored = fs.readFileSync(path.join(SLIDES_TMP, path.basename(up.body.url)));
+        assert.ok(stored.equals(bytes), `${filename}: stored bytes equal the decoded input`);
+        const res = await fetch(base + up.body.url);
+        assert.strictEqual(res.status, 200, filename);
+        assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff', filename);
+        assert.strictEqual(res.headers.get('cache-control'), 'private, no-cache', filename);
+        assert.strictEqual(res.headers.get('content-security-policy-report-only'), null, filename);
+        const csp = res.headers.get('content-security-policy');
+        if (sandboxed) assert.strictEqual(csp, EXACT_CSP, `${filename}: images carry the sandbox CSP`);
+        else assert.ok(csp && !/\bsandbox\b/.test(csp), `${filename}: a PDF is not served with the sandbox CSP (PD-17)`);
+        assert.strictEqual((await res.arrayBuffer()).byteLength, bytes.length, filename);
+      }
+      const exts = new Set(fs.readdirSync(SLIDES_TMP).map((f) => path.extname(f).toLowerCase()));
+      assert.deepStrictEqual([...exts].sort(), ['.jpeg', '.jpg', '.pdf', '.png', '.webp']);
+    });
+  } finally {
+    clearDir(SLIDES_TMP);
+  }
+});
