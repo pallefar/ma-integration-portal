@@ -1267,11 +1267,34 @@
 // gets { authEnabled:false } and nothing changes). The server-verified role
 // overrides the client-side demo role, and a logout link joins the sidebar.
 (function () {
-  if (window.location.pathname.includes('login.html')) return;
-  fetch('/api/auth/me').then(r => r.json()).then(me => {
+  // [security] D-11-01/D-11-02 (Phase 11, plan 11-07): the client half of the
+  // read/write policy. The server computes an `access` map (booleans only) on
+  // GET /api/auth/me from lib/readPolicy.js and ROLE_WRITE_POLICY — this file
+  // carries NO copy of the role table. `window.maCan(key)` is false ONLY when
+  // the map says `false` for that key, so an absent map (demo-open, the demo
+  // store, a failed probe, a page that never ran the handshake) shows every
+  // control exactly as the showcase always has. `window.maAccessReady` settles
+  // once the probe has been processed (also on failure and when auth is off), so
+  // a page waits on it before deciding to hide a control or skip a request that
+  // would only 403. Hiding is advisory UX; the server gate remains the control.
+  window.__portalAccess = null;
+  window.maCan = function (key) {
+    var a = window.__portalAccess;
+    return !a || a[key] !== false;
+  };
+  // Convenience for call sites: resolves to maCan(key) once the probe settled.
+  window.maCanReady = function (key) {
+    return window.maAccessReady.then(function () { return window.maCan(key); });
+  };
+  if (window.location.pathname.includes('login.html')) {
+    window.maAccessReady = Promise.resolve();
+    return;
+  }
+  window.maAccessReady = fetch('/api/auth/me').then(r => r.json()).then(me => {
     if (!me || !me.authEnabled) return;
     if (!me.user) { window.location.href = '/login.html'; return; }
     window.__portalUser = me.user;
+    window.__portalAccess = (me.access && typeof me.access === 'object') ? me.access : null;
     if (me.user.role) localStorage.setItem('active_demo_role', me.user.role);
     // D-10-05 (client half): an account that must rotate its password cannot
     // use any other page — send it to the standalone change screen and stop

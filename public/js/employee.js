@@ -27,6 +27,23 @@ document.addEventListener('DOMContentLoaded', () => {
     doomUnlockXp: 220
   };
 
+  // [security] D-11-01/D-11-02 (Phase 11, plan 11-07): capability check against
+  // the server-computed `access` map (window.maCan / window.maAccessReady in
+  // transitions.js; no role table is copied here). Resolves true when the page
+  // has no map (demo-open, demo store) so the showcase renders exactly as before;
+  // resolves false only when the server said this role is refused the route.
+  // Hiding a control is UX only — the consolidated gate stays the control.
+  function canReady(key) {
+    return typeof window.maCanReady === 'function' ? window.maCanReady(key) : Promise.resolve(true);
+  }
+  // Hide the card (or the element itself) that holds a section the caller may not read.
+  function hideSection(el) {
+    if (!el) return;
+    const target = (el.closest && el.closest('.card')) || el;
+    target.hidden = true;
+    target.style.display = 'none';
+  }
+
   // --- 2. MULTI-LANGUAGE TRANSLATION MATRIX ---
   const TRANSLATIONS = {
     en: {
@@ -2695,11 +2712,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const lang = localStorage.getItem('employeeLanguage') || 'en';
     const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
 
-    fetch('/api/employees')
-      .then(res => res.json())
+    // D-11-01 (plan 11-07): the leaderboard is the named roster (GET /api/employees),
+    // staff-only in a real deal. An employee gets no leaderboard and no request.
+    canReady('roster')
+      .then(ok => {
+        if (!ok) { hideSection(leaderboardContainer); return null; }
+        return fetch('/api/employees').then(res => res.json());
+      })
       .then(employees => {
+        if (!employees) return;
         leaderboardContainer.innerHTML = '';
-        
+
         employees.sort((a, b) => (b.points || 0) - (a.points || 0));
 
         employees.forEach((emp, index) => {
