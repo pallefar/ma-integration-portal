@@ -64,3 +64,62 @@ test('package.json exposes the gate as `test:gate`', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'));
   assert.strictEqual(pkg.scripts['test:gate'], 'node scripts/test-gate.js');
 });
+
+// --- .github/workflows/test.yml, checked as text ----------------------------
+
+function workflowText() {
+  assert.ok(fs.existsSync(WORKFLOW), '.github/workflows/test.yml exists');
+  return fs.readFileSync(WORKFLOW, 'utf8');
+}
+
+// Strip full-line and trailing YAML comments so assertions judge only the
+// executable definition, never the explanatory prose.
+function workflowCode() {
+  return workflowText()
+    .split('\n')
+    .map((l) => l.replace(/(^|\s)#.*$/, ''))
+    .join('\n');
+}
+
+test('workflow triggers on push and pull_request', () => {
+  const y = workflowCode();
+  assert.ok(/^on:\s*$/m.test(y), 'has an `on:` block');
+  assert.ok(/^\s+push:/m.test(y), 'push trigger');
+  assert.ok(/^\s+pull_request:/m.test(y), 'pull_request trigger');
+});
+
+test('workflow token is read-only', () => {
+  const y = workflowCode();
+  assert.ok(/^permissions:\s*\n\s+contents:\s*read\s*$/m.test(y), 'top-level permissions: contents: read');
+  assert.ok(!/:\s*write\s*$/m.test(y), 'no write permission is granted anywhere');
+  assert.ok(!/\bsecrets\./.test(y), 'no secrets are referenced');
+});
+
+test('workflow matrix covers ubuntu-24.04 and windows on Node 22', () => {
+  const y = workflowCode();
+  assert.ok(/ubuntu-24\.04/.test(y), 'ubuntu-24.04 pinned (glibc >= 2.38 for the committed better-sqlite3 prebuild)');
+  assert.ok(!/ubuntu-latest/.test(y), 'ubuntu is pinned, not -latest');
+  assert.ok(/windows-/.test(y), 'a windows- runner');
+  assert.ok(/node-version:\s*['"]?22['"]?\s*$/m.test(y), 'node-version 22');
+  assert.ok(/fail-fast:\s*false/.test(y), 'one OS failing does not hide the other');
+});
+
+test('workflow runs `node --test` and pins its actions by major tag', () => {
+  const y = workflowCode();
+  assert.ok(/^\s*-?\s*run:\s*node --test\s*$/m.test(y), 'a step running `node --test`');
+  const uses = y.match(/^\s*-?\s*uses:\s*\S+/gm) || [];
+  assert.ok(uses.length >= 2, 'checkout + setup-node');
+  for (const u of uses) {
+    assert.ok(/@v\d+\s*$/.test(u), 'action pinned by major tag: ' + u.trim());
+  }
+  assert.ok(/actions\/checkout@v4/.test(y) && /actions\/setup-node@v4/.test(y), 'checkout@v4 and setup-node@v4');
+});
+
+test('workflow has no dependency-install step (zero-install: node_modules is committed)', () => {
+  const y = workflowCode();
+  assert.ok(
+    !/\b(npm|pnpm|yarn)\s+(ci|install|i|add)\b/.test(y),
+    'no npm/pnpm/yarn install step'
+  );
+  assert.ok(!/\bcache:\s*['"]?(npm|pnpm|yarn)/.test(y), 'no package-manager cache (nothing is installed)');
+});

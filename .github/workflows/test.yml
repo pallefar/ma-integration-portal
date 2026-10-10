@@ -1,0 +1,48 @@
+# D-12-06 / DATA-06 / PR-12 (Phase 12, plan 15): run the suite on every push and
+# pull request, on Linux and Windows, with no TE-IT dependency.
+#
+# Zero-install: node_modules/ is committed (CLAUDE.md), so there is deliberately
+# NO dependency-install step here — the suite runs against exactly the tree that
+# ships. test/ci-workflow.test.js asserts that, as text.
+#
+# Hardening (T-12-03): the token is read-only, no secrets are used, and the two
+# third-party actions are from the `actions` org, pinned by MAJOR tag (no network
+# was available to resolve commit SHAs when this was written; SHA pinning is
+# Phase 21 release engineering).
+#
+# ubuntu-24.04 is pinned rather than -latest because the committed better-sqlite3
+# linux prebuild needs glibc >= 2.38.
+#
+# Status: this file is verified as text only. Its first real execution happens on
+# the first push (CERT-05); Windows/ubuntu results are not claimed by Phase 12.
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-test:
+    name: node --test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Node version
+        run: node --version
+      - name: Run the suite
+        run: node --test
