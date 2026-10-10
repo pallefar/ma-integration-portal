@@ -301,3 +301,132 @@ test('file-modes (B): the same chmod failure in real-deal mode refuses to boot w
   assert.match(res.stderr, /\[security\] could not restrict/);
   assert.doesNotMatch(res.stdout, /HEALTHZ/);
 });
+
+// --- C. whole-app proof: real-mode boot + a deal created through the API ----
+//
+// Runs in a CHILD process so real-mode module state (db/dbFiles.js resolves the
+// mode once, at require time) cannot clash with the unit section above. The
+// child sets umask 022 itself before requiring server.js, boots the app,
+// creates an admin, signs in, creates a deal over HTTP, selects it and writes
+// to it (so the deal database is opened through the resolver with live
+// sidecars), then reports the mode of everything under the data directory.
+
+const REAL_BOOT_SCRIPT = `
+  process.umask(0o022);
+  const fs = require('fs');
+  const path = require('path');
+  const app = require('./server.js');
+  const controlStore = require('./db/controlStore');
+  const passwords = require('./lib/passwords');
+  const dataDir = process.env.MA_DATA_DIR;
+  const PASSWORD = 'correct-horse-battery-staple';
+
+  function walk(dir, out) {
+    for (const name of fs.readdirSync(dir)) {
+      const p = path.join(dir, name);
+      const st = fs.statSync(p);
+      out[path.relative(dataDir, p)] = { mode: st.mode & 0o777, dir: st.isDirectory() };
+      if (st.isDirectory()) walk(p, out);
+    }
+    return out;
+  }
+
+  (async () => {
+    const result = {};
+    const server = await new Promise((resolve, reject) => {
+      const s = app.listen(0, '127.0.0.1');
+      s.once('listening', () => resolve(s));
+      s.once('error', reject);
+    });
+    try {
+      const base = 'http://127.0.0.1:' + server.address().port;
+      controlStore.createAccount({
+        username: 'admin', name: 'Administrator', role: 'admin',
+        hash: await passwords.hashPassword(PASSWORD),
+        disabled: false, mustChangePassword: false,
+        createdAt: new Date().toISOString(), createdBy: 'file-modes-test',
+      });
+      const login = await fetch(base + '/api/auth/login', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'admin', password: PASSWORD }),
+      });
+      result.loginStatus = login.status;
+      const setCookie = login.headers.getSetCookie ? login.headers.getSetCookie() : [login.headers.get('set-cookie')];
+      const cookie = setCookie.map((c) => String(c).split(';')[0]).find((c) => c.startsWith('ma_session='));
+      const headers = { 'content-type': 'application/json', cookie };
+      const created = await fetch(base + '/api/deals', {
+        method: 'POST', headers, body: JSON.stringify({ name: 'Project Modes', targetCompany: 'Modes Target Inc' }),
+      });
+      result.createStatus = created.status;
+      const body = await created.json();
+      result.dealId = body && body.deal && body.deal.id;
+      const select = await fetch(base + '/api/deals/select', {
+        method: 'POST', headers, body: JSON.stringify({ dealId: result.dealId }),
+      });
+      result.selectStatus = select.status;
+      const write = await fetch(base + '/api/departments', {
+        method: 'POST', headers, body: JSON.stringify({ name: 'Modes Dept' }),
+      });
+      result.writeStatus = write.status;
+      result.umask = process.umask();
+      result.files = walk(dataDir, {});
+      result.files['.'] = { mode: fs.statSync(dataDir).mode & 0o777, dir: true };
+    } catch (e) {
+      result.error = String(e && e.stack || e);
+    }
+    process.stdout.write('RESULT ' + JSON.stringify(result) + '\\n');
+    server.close();
+    process.exit(0);
+  })();
+`;
+
+function committedState(file) {
+  let buf;
+  try { buf = fs.readFileSync(file); } catch (e) { return 'empty'; }
+  return buf.length === 0 ? 'empty' : crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+test('file-modes (C): a real-mode instance under umask 022 holds only 0700 directories and 0600 files, including a freshly created deal', { skip: SKIP }, () => {
+  const committed = ['control.db', 'control.db-wal', 'demo.db', 'demo.db-wal'].map((n) => path.join(REPO, 'data', n));
+  const before = committed.map(committedState);
+
+  const parent = tmp('real-whole-app');
+  const dataDir = path.join(parent, 'real-data'); // does not exist yet
+  const res = spawnSync(process.execPath, ['-e', REAL_BOOT_SCRIPT], {
+    cwd: REPO, encoding: 'utf8', timeout: 90000, input: '',
+    env: cleanEnv({ MA_MODE: 'real', MA_DATA_DIR: dataDir }),
+  });
+  assert.strictEqual(res.status, 0, res.stderr);
+  const line = res.stdout.split('\n').find((l) => l.startsWith('RESULT '));
+  assert.ok(line, 'child must report a RESULT line: ' + res.stdout + res.stderr);
+  const out = JSON.parse(line.slice('RESULT '.length));
+  assert.ok(!out.error, out.error);
+  assert.strictEqual(out.umask, 0o022, 'the child must have run under umask 022');
+  assert.strictEqual(out.loginStatus, 200);
+  assert.strictEqual(out.createStatus, 200, 'POST /api/deals must succeed on a real-mode instance');
+  assert.match(out.dealId, /^deal_[a-z0-9]+$/i);
+  assert.strictEqual(out.selectStatus, 200);
+  assert.strictEqual(out.writeStatus, 200);
+
+  const dealRel = path.join('deals', `${out.dealId}.db`);
+  for (const required of ['control.db', 'demo.db', 'runtime.db', 'audit.db', dealRel]) {
+    assert.ok(out.files[required], `${required} must exist under the data directory`);
+  }
+  assert.ok(out.files['deals'] && out.files['deals'].dir, 'the deals directory must exist');
+  assert.ok(out.files[dealRel + '-wal'],
+    'the deal database must have a live -wal sidecar (opened through the resolver) so its mode is proven');
+
+  const offenders = [];
+  for (const [rel, info] of Object.entries(out.files)) {
+    if (info.dir) {
+      if (info.mode !== 0o700) offenders.push(`dir ${rel} is ${oct(info.mode)}`);
+    } else if (info.mode !== 0o600) {
+      offenders.push(`file ${rel} is ${oct(info.mode)}`);
+    }
+    if (info.mode & 0o077) offenders.push(`${rel} grants group/other bits (${oct(info.mode)})`);
+  }
+  assert.deepStrictEqual(offenders, [], 'every directory must be 0700 and every file 0600: ' + JSON.stringify(out.files));
+
+  assert.deepStrictEqual(committed.map(committedState), before,
+    'a real-mode instance must never write the committed data/control.db or data/demo.db');
+});
