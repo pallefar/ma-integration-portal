@@ -1185,6 +1185,11 @@ app.get('/api/auth/me', (req, res) => {
   // HR helpdesk ticket (POST /api/communications/send)? Taken from the SAME
   // write table the gate enforces, so the portal hides a form that could only
   // be refused (an employee has never been on DEFAULT_WRITE_ROLES).
+  // `timeTravel` (Phase 11 review IN-C01): the demo Day pill / Time Machine
+  // posts to a DEMO_ONLY_PREFIXES route, which the gate refuses for any request
+  // that does not resolve to the demo store (a deal-bound session) and, on the
+  // demo store, for a role ROLE_WRITE_POLICY does not list — so it is reachable
+  // exactly when the session has no deal binding AND the role may write it.
   const role = user && user.role;
   res.json({
     authEnabled: true,
@@ -1196,6 +1201,7 @@ app.get('/api/auth/me', (req, res) => {
       {
         configWrite: roleAllowedForWrite(role, '/api/settings', 'POST'),
         helpdesk: roleAllowedForWrite(role, '/api/communications/send', 'POST'),
+        timeTravel: !sess.dealId && roleAllowedForWrite(role, '/api/settings/time-travel', 'POST'),
       }
     ),
   });

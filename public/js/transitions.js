@@ -1311,6 +1311,15 @@
   window.maCanReady = function (key) {
     return window.maAccessReady.then(function () { return window.maCan(key); });
   };
+  // Hide `el` (hidden + display:none, never merely disabled) once the probe
+  // settled, when the map refuses `key`. Absent map => untouched.
+  window.maHideUnless = function (key, el) {
+    return window.maCanReady(key).then(function (ok) {
+      if (ok || !el) return;
+      el.hidden = true;
+      el.style.display = 'none';
+    });
+  };
   if (window.location.pathname.includes('login.html')) {
     window.maAccessReady = Promise.resolve();
     return;
@@ -2412,6 +2421,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Time machine (Day pill) leads the tools cluster
     headerToolsContainer.insertBefore(timeMachineContainer, headerToolsContainer.firstElementChild);
+    // [security] IN-C01 (Phase 11 review): the Day pill posts to the demo-only
+    // POST /api/settings/time-travel, which the server refuses in a real-deal
+    // session (and for a role the write table does not list). The pill is not
+    // offered when the server's access map says `timeTravel` is false; with no
+    // map (demo-open) it stays exactly as before.
+    window.maHideUnless('timeTravel', timeMachineContainer);
 
     // Phase 6: load the inline content editor once (app-wide)
     if (!document.getElementById('inline-edit-js')) {
@@ -2844,6 +2859,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dayButtons = timeMachineContainer.querySelectorAll('.time-item-btn');
     dayButtons.forEach(btn => {
       btn.addEventListener('click', async () => {
+        if (!window.maCan('timeTravel')) return; // IN-C01: demo-only POST, refused here
         const day = parseInt(btn.getAttribute('data-day'));
         timeMachineContainer.classList.remove('open');
         timeDropdown.classList.remove('show');

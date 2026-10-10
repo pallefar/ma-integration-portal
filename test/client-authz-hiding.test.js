@@ -1458,6 +1458,48 @@ test('WR-C03 (vm): assessments.js does not request the instance list for a role 
   }
 });
 
+// ---------------------------------------------- IN-C01: Day pill / Time Machine
+test('IN-C01 (server): `timeTravel` is true only on the demo store for a role the write table lists — never in a real deal', async () => {
+  const fx = createDealFixture({ controlConn, runtimeConn, dealId: 'deal_ahtime', members: MEMBERS });
+  await withServer(async (base) => {
+    for (const m of MEMBERS) {
+      assert.strictEqual((await me(base, fx.cookie(m.username))).json.access.timeTravel, false, `real deal ${m.role}`);
+    }
+    for (const role of ['admin', 'hrbp', 'pmo', 'employee']) {
+      const cookie = demoSession({ controlConn, runtimeConn, username: 'ah-tt-' + role, role });
+      assert.strictEqual((await me(base, cookie)).json.access.timeTravel, role !== 'employee', `demo store ${role}`);
+    }
+    // the key agrees with the gate: a deal-bound admin's time-travel POST is refused (demo-only)
+    const res = await fetch(`${base}/api/settings/time-travel`, {
+      method: 'POST',
+      headers: { cookie: fx.cookie('ah-admin'), 'content-type': 'application/json' },
+      body: JSON.stringify({ day: 30 }),
+    });
+    assert.strictEqual(res.status, 403);
+  });
+});
+
+test('IN-C01 (vm): maHideUnless hides the element for a refused key and leaves it for demo-open', async () => {
+  const refused = await bootWindow(Object.assign({}, ME_ADMIN, { access: Object.assign({}, ME_ADMIN.access, { timeTravel: false }) }));
+  const pill = fakeEl();
+  await refused.maHideUnless('timeTravel', pill);
+  assert.strictEqual(pill.hidden, true);
+  assert.strictEqual(pill.style.display, 'none');
+  const open = await bootWindow(ME_OPEN);
+  const pill2 = fakeEl();
+  await open.maHideUnless('timeTravel', pill2);
+  assert.strictEqual(pill2.hidden, false);
+  assert.strictEqual(pill2.style.display, undefined);
+});
+
+test('IN-C01 (source): the Day pill is gated right where it is mounted, and a day click never posts without timeTravel', () => {
+  assert.ok(/headerToolsContainer\.insertBefore\(timeMachineContainer, headerToolsContainer\.firstElementChild\);[\s\S]{0,600}?window\.maHideUnless\('timeTravel', timeMachineContainer\);/.test(TRANSITIONS_SRC));
+  const at = TRANSITIONS_SRC.indexOf("dayButtons.forEach(btn => {");
+  assert.ok(at > 0);
+  const handler = TRANSITIONS_SRC.slice(at, TRANSITIONS_SRC.indexOf('triggerWormhole(day);', at));
+  assert.ok(handler.includes("if (!window.maCan('timeTravel')) return;"));
+});
+
 test('WR-C02 (source): the submit handler is wired to submitHelpdeskTicket and the old .finally(success) is gone', () => {
   assert.ok(EMPLOYEE_SRC.includes("hrForm.addEventListener('submit', submitHelpdeskTicket);"));
   const body = extractBlock(EMPLOYEE_SRC, 'function submitHelpdeskTicket(');
