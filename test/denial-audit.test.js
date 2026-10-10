@@ -247,5 +247,255 @@ test('live: no existing audit row is ever updated or deleted (AUD-02 triggers in
   assert.throws(() => conn.prepare('DELETE FROM audit_log WHERE id = 1').run(), /append-only/);
 });
 
-// (silence "unused" lint-by-eye: the fixture + conns are used by the Task 2 rows below)
-void createDealFixture; void controlConn; void runtimeConn;
+// ---------------------------------------------------------------------------
+// 3. LIVE — every gate / resolver / clearance refusal reason (Task 2)
+// ---------------------------------------------------------------------------
+
+const sessionsDb = require('../db/sessions.js');
+const { lockdownMiddleware, createLockdown } = require('../lib/credentialLockdown');
+
+function call(base, method, urlPath, cookie, body) {
+  const headers = {};
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  return fetch(base + urlPath, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+}
+async function withServer(fn) {
+  const server = await listenLocal(app);
+  try {
+    await fn(`http://127.0.0.1:${server.address().port}`);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+function realDeal(id, members) {
+  return createDealFixture({ controlConn, runtimeConn, dealId: id, members });
+}
+const rowsFor = (actor, subject, reason) => denialRows(
+  'actor_username = ? AND row_id = ?' + (reason ? ' AND after_json LIKE ?' : ''),
+  reason ? [actor, subject, `%"reason":"${reason}"%`] : [actor, subject]
+);
+function insertAccount(data) {
+  controlConn.prepare(
+    `INSERT OR IGNORE INTO users (id, project_id, seq, data)
+     VALUES (?, NULL, COALESCE((SELECT MAX(seq) FROM users), -1) + 1, ?)`
+  ).run(data.username, JSON.stringify(data));
+}
+
+test('live role-read: employee in a real deal GET /api/raid x3 -> 403 x3 -> ONE role-read row naming actor, template, deal', async () => {
+  const fx = realDeal('deal_dareadone', [
+    { username: 'da-read-emp', role: 'employee' },
+    { username: 'da-read-admin', role: 'admin' },
+  ]);
+  await withServer(async (base) => {
+    let firstBody;
+    for (let i = 0; i < 3; i += 1) {
+      const res = await call(base, 'GET', '/api/raid', fx.cookie('da-read-emp'));
+      assert.strictEqual(res.status, 403);
+      const text = await res.text();
+      firstBody = firstBody || text;
+      assert.strictEqual(text, firstBody);
+      assert.deepStrictEqual(JSON.parse(text), { error: 'Your role cannot view this information.' }, 'response unchanged by 11-04');
+    }
+    const rows = rowsFor('da-read-emp', 'GET /api/raid', 'role-read');
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].actor_role, 'employee');
+    assert.strictEqual(rows[0].deal_id, 'deal_dareadone');
+    assert.strictEqual(rows[0].request_method, 'GET');
+    assert.strictEqual(detail(rows[0]).status, 403);
+    assert.strictEqual(detail(rows[0]).count, 1);
+    // an ALLOWED role is not a denial: no row for the admin
+    const ok = await call(base, 'GET', '/api/raid', fx.cookie('da-read-admin'));
+    assert.strictEqual(ok.status, 200);
+    await ok.text();
+    assert.strictEqual(denialRows('actor_username = ?', ['da-read-admin']).length, 0);
+  });
+});
+
+test('live role-write: pmo POST /api/settings -> 403 -> one role-write row; body unchanged', async () => {
+  const fx = realDeal('deal_dawriteone', [{ username: 'da-write-pmo', role: 'pmo' }]);
+  await withServer(async (base) => {
+    for (let i = 0; i < 2; i += 1) {
+      const res = await call(base, 'POST', '/api/settings', fx.cookie('da-write-pmo'), { demoMode: false });
+      assert.strictEqual(res.status, 403);
+      assert.deepStrictEqual(await res.json(), { error: 'Your role cannot perform this action.' });
+    }
+    const rows = rowsFor('da-write-pmo', 'POST /api/settings', 'role-write');
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(detail(rows[0]).count, 1);
+  });
+});
+
+test('live demo-only: admin in a real deal POST /api/settings/time-travel -> 403 -> one demo-only row', async () => {
+  const fx = realDeal('deal_dademoone', [{ username: 'da-demo-admin', role: 'admin' }]);
+  await withServer(async (base) => {
+    const res = await call(base, 'POST', '/api/settings/time-travel', fx.cookie('da-demo-admin'), { day: 3 });
+    assert.strictEqual(res.status, 403);
+    assert.deepStrictEqual(await res.json(), { error: 'This showcase-only feature is unavailable inside a real deal.' });
+    const rows = rowsFor('da-demo-admin', 'POST /api/settings/time-travel', 'demo-only');
+    assert.strictEqual(rows.length, 1);
+  });
+});
+
+test('live must-change-password: a forced-rotation session is refused everywhere but recorded once', async () => {
+  insertAccount({ username: 'da-rotate', name: 'da-rotate', role: 'pmo', mustChangePassword: true });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'da-rotate', role: 'pmo', ttlMs: 60 * 60 * 1000 });
+  await withServer(async (base) => {
+    for (let i = 0; i < 3; i += 1) {
+      const res = await call(base, 'GET', '/api/menus', `ma_session=${token}`);
+      assert.strictEqual(res.status, 403);
+      const body = await res.json();
+      assert.strictEqual(body.mustChangePassword, true);
+    }
+    const rows = rowsFor('da-rotate', 'GET /api/menus', 'must-change-password');
+    assert.strictEqual(rows.length, 1);
+  });
+});
+
+test('live deal-access: a session bound to a deal it is not a member of -> resolver 403 -> one deal-access row (resolver stays audit-free)', async () => {
+  insertAccount({ username: 'da-ghost', name: 'da-ghost', role: 'pmo' });
+  const token = sessionsDb.createSession(runtimeConn, { username: 'da-ghost', role: 'pmo', ttlMs: 60 * 60 * 1000 });
+  sessionsDb.bindSessionDeal(runtimeConn, token, 'deal_nosuchdealaa');
+  await withServer(async (base) => {
+    for (let i = 0; i < 3; i += 1) {
+      const res = await call(base, 'GET', '/api/raid', `ma_session=${token}`);
+      assert.strictEqual(res.status, 403);
+      assert.deepStrictEqual(await res.json(), { error: 'You are not a member of that deal.' });
+    }
+    const rows = rowsFor('da-ghost', 'GET /api/raid', 'deal-access');
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].deal_id, 'deal_nosuchdealaa', 'the deal the session was bound to is recorded');
+  });
+  const resolverSrc = fs.readFileSync(path.join(__dirname, '..', 'db', 'resolver.js'), 'utf8');
+  assert.ok(!/require\([^)]*(auditHook|denialAudit)/.test(resolverSrc), 'db/resolver.js must not require the audit modules');
+  assert.ok(!/recordSecurityEvent\(/.test(resolverSrc), 'db/resolver.js must not write audit rows itself');
+  assert.ok((resolverSrc.match(/onDenied/g) || []).length >= 2, 'the resolver exposes the optional onDenied hook');
+});
+
+test('live variants: /api/Synergies, /api/synergies/ and /api//synergies are recorded under the SAME canonical route/template', async () => {
+  const fx = realDeal('deal_davariant', [{ username: 'da-var-emp', role: 'employee' }]);
+  await withServer(async (base) => {
+    for (const spelling of ['/api/synergies', '/api/Synergies', '/api/synergies/', '/api//synergies']) {
+      const res = await call(base, 'GET', spelling, fx.cookie('da-var-emp'));
+      assert.strictEqual(res.status, 403, spelling);
+      await res.text();
+    }
+    const rows = denialRows('actor_username = ?', ['da-var-emp']);
+    assert.strictEqual(rows.length, 1, 'four spellings of one route are ONE key');
+    assert.strictEqual(rows[0].row_id, 'GET /api/synergies');
+    assert.strictEqual(detail(rows[0]).path, '/api/synergies', 'the canonical path, not the client spelling');
+    app.denialAuditor.flushAll();
+    const after = denialRows('actor_username = ?', ['da-var-emp']);
+    assert.strictEqual(after.length, 2);
+    assert.strictEqual(detail(after[1]).count, 3, 'the 3 variant denials are counted, none lost');
+  });
+});
+
+test('live clearance-404: uncleared member DELETE /api/raid/<hr id> -> 404 byte-identical to a missing id -> one clearance-404 row on /api/raid/:id; missing ids are NOT recorded', async () => {
+  const fx = realDeal('deal_daclear', [
+    { username: 'da-clr-admin', role: 'admin' },
+    { username: 'da-clr-none', role: 'pmo' }, // deal member with NO clearance grant
+  ]);
+  await withServer(async (base) => {
+    const raidIds = [];
+    for (const n of [1, 2]) {
+      const f = await call(base, 'POST', '/api/dd/findings', fx.cookie('da-clr-admin'), {
+        area: 'hr', title: `DA-HR-SECRET finding ${n}`, severity: 'high', notes: 'DA-HR-SECRET-NOTES',
+      });
+      assert.ok(f.status === 200 || f.status === 201, `fixture: finding created, got ${f.status}`);
+      const { finding } = await f.json();
+      const c = await call(base, 'POST', `/api/dd/findings/${finding.id}/convert`, fx.cookie('da-clr-admin'), {
+        toRaid: true, version: Number.isSafeInteger(finding.version) ? finding.version : 0,
+      });
+      assert.strictEqual(c.status, 200);
+      const conv = await c.json();
+      assert.ok(conv.raid && conv.raid.id, 'fixture: converted RAID entry');
+      raidIds.push(conv.raid.id);
+    }
+
+    const cookie = fx.cookie('da-clr-none');
+    const missing = await call(base, 'DELETE', '/api/raid/raid_does_not_exist', cookie);
+    assert.strictEqual(missing.status, 404);
+    const missingText = await missing.text();
+    assert.deepStrictEqual(JSON.parse(missingText), { error: 'Not found' });
+    // a genuinely missing id is not a clearance denial: nothing recorded yet
+    assert.strictEqual(rowsFor('da-clr-none', 'DELETE /api/raid/:id', 'clearance-404').length, 0);
+
+    for (const id of raidIds) {
+      const res = await call(base, 'DELETE', `/api/raid/${id}`, cookie);
+      assert.strictEqual(res.status, 404);
+      assert.strictEqual(await res.text(), missingText, 'invisible == missing: byte-identical response, unchanged by 11-04');
+    }
+    for (let i = 0; i < 3; i += 1) {
+      const res = await call(base, 'DELETE', `/api/raid/raid_missing_${i}`, cookie);
+      assert.strictEqual(res.status, 404);
+      await res.text();
+    }
+
+    const rows = rowsFor('da-clr-none', 'DELETE /api/raid/:id', 'clearance-404');
+    assert.strictEqual(rows.length, 1, 'two different invisible ids share ONE key (route template)');
+    assert.strictEqual(detail(rows[0]).status, 404);
+    assert.strictEqual(detail(rows[0]).count, 1);
+    assert.strictEqual(rows[0].deal_id, 'deal_daclear');
+    app.denialAuditor.flushAll();
+    const after = rowsFor('da-clr-none', 'DELETE /api/raid/:id', 'clearance-404');
+    assert.strictEqual(after.length, 2);
+    assert.strictEqual(detail(after[1]).count, 1, 'only the second INVISIBLE id was folded; the 4 missing ids were never counted');
+    // no field of the restricted record reached the audit row
+    for (const r of after) assert.ok(!/DA-HR-SECRET/.test(JSON.stringify(r)), 'audit rows carry no record content');
+  });
+});
+
+test('live: a refused probe cannot flood audit.db — 60 denials across 3 templates produce one row per key', async () => {
+  const fx = realDeal('deal_dabound', [{ username: 'da-bound-emp', role: 'employee' }]);
+  await withServer(async (base) => {
+    for (let i = 0; i < 20; i += 1) {
+      for (const p of ['/api/raid', '/api/org/positions', '/api/employees']) {
+        const res = await call(base, 'GET', p, fx.cookie('da-bound-emp'));
+        assert.strictEqual(res.status, 403);
+        await res.text();
+      }
+    }
+    const rows = denialRows('actor_username = ?', ['da-bound-emp']);
+    assert.strictEqual(rows.length, 3, 'one row per (actor, route, reason) key inside the window');
+    const subjects = rows.map((r) => r.row_id).sort();
+    assert.deepStrictEqual(subjects, ['GET /api/employees', 'GET /api/org/positions', 'GET /api/raid']);
+    app.denialAuditor.flushAll();
+    const after = denialRows('actor_username = ?', ['da-bound-emp']);
+    assert.strictEqual(after.reduce((n, r) => n + detail(r).count, 0), 60, 'total counted equals the probe count');
+  });
+});
+
+test('structural: the inline grants 403 and the clearance-404 branch go through the auditor; the gate has no raw 401/403 left', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok((src.match(/denyAt\(req, res/g) || []).length >= 6, 'gate + grants refusals use denyAt');
+  assert.match(src, /denyAt\(req, res, 403, 'role-inline'/);
+  assert.match(src, /'clearance-404'/);
+  assert.match(src, /err\.reason === 'clearance'/);
+  // the consolidated gate body: from the `app.use('/api', (req, res, next)` to the validation call
+  const start = src.indexOf("app.use('/api', (req, res, next) => {");
+  const end = src.indexOf('validators.validationMiddleware(req, res, next);\n  }, onResolverDenied);');
+  assert.ok(start > 0 && end > start, 'gate body located');
+  const gate = src.slice(start, end);
+  const rawRefusals = gate.split('\n').filter((l) => /res\.status\((401|403)\)/.test(l) && !/^\s*\/\//.test(l));
+  assert.deepStrictEqual(rawRefusals, [], 'every 401/403 inside the consolidated gate is a denyAt()');
+});
+
+test('lockdown: a credential-lockdown refusal reports through onDenied (anonymous, 403); allowlisted paths report nothing', () => {
+  const lockdown = createLockdown({ enabled: true });
+  lockdown.noteDemoLogin('someone');
+  const seen = [];
+  const mw = lockdownMiddleware(lockdown, (req, status) => seen.push([req.path, status]));
+  const fakeRes = () => {
+    const r = { set() { return r; }, status() { return r; }, json() { return r; }, type() { return r; }, send() { return r; } };
+    return r;
+  };
+  let nexted = 0;
+  const run = (method, p) => mw({ method, path: p }, fakeRes(), () => { nexted += 1; });
+  run('GET', '/api/raid');
+  run('GET', '/index.html');
+  run('POST', '/api/auth/login');
+  run('GET', '/login.html');
+  assert.deepStrictEqual(seen, [['/api/raid', 403], ['/index.html', 403]]);
+  assert.strictEqual(nexted, 2, 'login + login page pass through untouched');
+});
