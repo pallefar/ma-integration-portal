@@ -1563,6 +1563,39 @@ test('IN-C02 (vm): demo-open loads and renders the kiosk roster exactly as befor
   assert.strictEqual(String(h.xp.textContent), '30');
 });
 
+// ------------------------------- WR-C07: sender-side note in the composers
+function inboxNoteAnchor() {
+  const inserted = [];
+  const parent = {
+    querySelector: (sel) => (sel === '.ma-employee-inbox-note' ? inserted.find((n) => n.className === 'ma-employee-inbox-note') || null : null),
+    insertBefore: (n) => { inserted.push(n); return n; },
+  };
+  return { anchor: { parentNode: parent, nextSibling: null }, inserted };
+}
+
+test('WR-C07 (vm): a real-deal composer shows "Employees can\'t read in-app messages yet." once, as text; demo store and demo-open show nothing', async () => {
+  const bound = await bootWindow(Object.assign({}, ME_HRBP, { dealId: 'deal_x' }));
+  const a = inboxNoteAnchor();
+  await bound.maAddEmployeeInboxNote(a.anchor);
+  await bound.maAddEmployeeInboxNote(a.anchor);
+  assert.strictEqual(a.inserted.length, 1, 'one note, never duplicated');
+  assert.strictEqual(a.inserted[0].textContent, "Employees can't read in-app messages yet.");
+  assert.ok(!a.inserted[0].innerHTML, 'textContent only');
+  assert.ok(!/maAddEmployeeInboxNote[\s\S]{0,900}innerHTML/.test(handshakeSource().slice(handshakeSource().indexOf('window.maAddEmployeeInboxNote'))), 'no HTML sink in the note helper');
+  for (const meBody of [Object.assign({}, ME_HRBP, { dealId: null }), ME_OPEN]) {
+    const w = await bootWindow(meBody);
+    const b = inboxNoteAnchor();
+    await w.maAddEmployeeInboxNote(b.anchor);
+    assert.strictEqual(b.inserted.length, 0);
+  }
+});
+
+test('WR-C07 (source): the three recipient pickers (IL desk, PMO desk, admin dispatcher) carry the note', () => {
+  assert.ok(readPublic('js', 'dashboard.js').includes('window.maAddEmployeeInboxNote(hrbpRecipientType);'));
+  assert.ok(PMO_SRC.includes('window.maAddEmployeeInboxNote(pmoRecipientType);'));
+  assert.ok(ADMIN_SRC.includes('window.maAddEmployeeInboxNote(recipientTypeSelect);'));
+});
+
 test('WR-C02 (source): the submit handler is wired to submitHelpdeskTicket and the old .finally(success) is gone', () => {
   assert.ok(EMPLOYEE_SRC.includes("hrForm.addEventListener('submit', submitHelpdeskTicket);"));
   const body = extractBlock(EMPLOYEE_SRC, 'function submitHelpdeskTicket(');

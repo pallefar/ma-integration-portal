@@ -1331,11 +1331,14 @@
   const forgetVerifiedRole = function () {
     try { localStorage.removeItem(AUTH_FLAG); } catch (e) { /* storage unavailable */ }
   };
+  // WR-C07: the deal this session is bound to (null on the demo store / demo-open).
+  window.__portalDealId = null;
   window.maAccessReady = fetch('/api/auth/me').then(r => r.json()).then(me => {
     if (!me || !me.authEnabled) { forgetVerifiedRole(); return; }
     if (!me.user) { forgetVerifiedRole(); window.location.href = '/login.html'; return; }
     window.__portalUser = me.user;
     window.__portalAccess = (me.access && typeof me.access === 'object') ? me.access : null;
+    window.__portalDealId = me.dealId || null; // WR-C07: bound to a real deal?
     if (me.user.role) {
       localStorage.setItem('active_demo_role', me.user.role);
       localStorage.setItem(AUTH_FLAG, '1');
@@ -1384,6 +1387,28 @@
     };
     addLogout();
   }).catch(() => { /* auth probe is best-effort */ });
+
+  // WR-C07 (Phase 11 review; the employee "own messages" projection is deferred
+  // to Phase 22): D-11-01 refuses an employee every /api/communications read in
+  // a real deal, so a message addressed to employees there is logged but never
+  // seen in-app. One honest sender-side line under a composer's recipient
+  // picker, shown only for a session bound to a real deal (never on the demo
+  // store or in demo-open). textContent only; `data-i18n` lets a translation
+  // replace the English fallback.
+  window.maAddEmployeeInboxNote = function (anchor) {
+    if (!anchor || !anchor.parentNode) return Promise.resolve();
+    return window.maAccessReady.then(function () {
+      if (!window.__portalDealId) return;
+      if (anchor.parentNode.querySelector('.ma-employee-inbox-note')) return;
+      var note = document.createElement('p');
+      note.className = 'ma-employee-inbox-note';
+      note.setAttribute('data-i18n', 'comms.employee_inapp_unavailable');
+      note.textContent = "Employees can't read in-app messages yet.";
+      note.style.cssText = 'margin:0.35rem 0 0;font-size:0.75rem;color:var(--text-secondary);font-style:italic;';
+      anchor.parentNode.insertBefore(note, anchor.nextSibling);
+      if (typeof window.applyPortalI18n === 'function') window.applyPortalI18n();
+    });
+  };
 })();
 
 /**

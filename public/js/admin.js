@@ -1629,6 +1629,8 @@ document.addEventListener('DOMContentLoaded', () => {
         specificRecipientContainer.style.display = 'none';
       }
     });
+    // WR-C07: real-deal employees cannot read in-app messages yet (Phase 22).
+    if (window.maAddEmployeeInboxNote) window.maAddEmployeeInboxNote(recipientTypeSelect);
   }
 
   // Load Recipient options
