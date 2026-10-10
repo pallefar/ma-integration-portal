@@ -14,6 +14,7 @@
 const dbFiles = require('./dbFiles');
 const controlStore = require('./controlStore');
 const { getOrOpenConnection, runWithDb } = require('./store');
+const { pathForms } = require('../lib/requestPath');
 
 // The deal-management control-plane surface (list/select/create/archive/
 // delete a deal, edit its membership — Plan 04) is deliberately resolved to
@@ -85,8 +86,16 @@ class DealAccessError extends Error {
  */
 function resolveDatabase(req) {
   const fullPath = (req.baseUrl || '') + (req.path || '');
+  // [security] CR-01 (Phase 10 review): a control-plane path is never open
+  // under DEMO_OPEN=1 — so a spelling variant (`/api/admin/download-zip/`,
+  // `/api/Admin/users`) must NOT be classified as a demo path. The gate hands
+  // over every canonical spelling (lib/requestPath.js); ANY control-plane form
+  // makes the request control-plane (most restrictive).
+  const forms = Array.isArray(req.gatePathForms) && req.gatePathForms.length
+    ? req.gatePathForms
+    : pathForms(fullPath).forms.concat(fullPath);
 
-  if (isControlPlanePath(fullPath)) {
+  if (forms.some(isControlPlanePath)) {
     return { kind: 'control', dealId: null, dbPath: dbFiles.CONTROL_DB_PATH, schemaPath: dbFiles.CONTROL_SCHEMA_PATH };
   }
 
