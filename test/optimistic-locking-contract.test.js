@@ -437,7 +437,7 @@ test('optimistic-locking-contract (5): a stale-version integration-task update r
     const { task } = await createRes.json();
     assert.strictEqual(task.version, undefined, 'a freshly created task carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.task.version, 1);
@@ -495,7 +495,7 @@ test('optimistic-locking-contract (7): a status-only stale integration-task upda
     const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'kanban fixture', workstreamId: 'ws_imo' });
     const { task } = await createRes.json();
 
-    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'stamped' });
+    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'stamped', version: 0 });
     assert.strictEqual((await firstEditRes.json()).task.version, 1);
 
     const staleFlipRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, status: 'doing', version: 0 });
@@ -554,7 +554,7 @@ test('optimistic-locking-contract (9): a stale-version synergy-initiative update
     const { initiative } = await createRes.json();
     assert.strictEqual(initiative.version, undefined, 'a freshly created initiative carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.initiative.version, 1);
@@ -659,7 +659,7 @@ test('optimistic-locking-contract (12): a stale-version POST to the stage sub-ro
 
     // Stamp version:1 via an ordinary edit (idea -> validated has no gate,
     // but this stamps the version cleanly without touching stage yet).
-    const stampRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).initiative.version, 1);
 
     const staleStageRes = await postJSON(base, `/api/synergies/${initiative.id}/stage`, token, { targetStage: 'validated', version: 0 });
@@ -688,7 +688,7 @@ test('optimistic-locking-contract (13): a stale-version query-channel DELETE to 
     const createRes = await postJSON(base, '/api/synergies', token, { title: 'cost-entry stale fixture', category: 'cost', targetM: 1 });
     const { initiative } = await createRes.json();
 
-    const addRes = await postJSON(base, `/api/synergies/${initiative.id}/cost-entries`, token, { date: '2026-01-15', amountM: 0.5 });
+    const addRes = await postJSON(base, `/api/synergies/${initiative.id}/cost-entries`, token, { date: '2026-01-15', amountM: 0.5, version: 0 });
     assert.strictEqual(addRes.status, 200);
     const addBody = await addRes.json();
     assert.strictEqual(addBody.initiative.version, 1, 'the first write to an unstamped initiative must stamp version:1');
@@ -726,7 +726,7 @@ test('optimistic-locking-contract (14): a current-version query-channel DELETE t
     const createRes = await postJSON(base, '/api/synergies', token, { title: 'cost-entry current fixture', category: 'cost', targetM: 1 });
     const { initiative } = await createRes.json();
 
-    const addRes = await postJSON(base, `/api/synergies/${initiative.id}/cost-entries`, token, { date: '2026-02-20', amountM: 0.75 });
+    const addRes = await postJSON(base, `/api/synergies/${initiative.id}/cost-entries`, token, { date: '2026-02-20', amountM: 0.75, version: 0 });
     const addBody = await addRes.json();
     assert.strictEqual(addBody.initiative.version, 1);
     const entry = addBody.initiative.costEntries[0];
@@ -761,9 +761,11 @@ test('optimistic-locking-contract (15, negative control): the pre-existing unrec
     // test/reports-export.test.js's patchSynergyRow()).
     patchSynergyRow(deal.id, initiative.id, { stage: 'legacy_unknown' });
 
-    // No `version` in the body — this must reach the CR-02 branch, not the
-    // conflictIfStale() precheck (which is a no-op when no version is sent).
-    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, token, { targetStage: 'validated' });
+    // `version: 0` (the stored version of a never-edited record) — the
+    // precondition is explicit, matches, and so passes conflictIfStale() and
+    // reaches the CR-02 branch. (A precondition-less request would be refused
+    // 400 versionRequired before it got there.)
+    const res = await postJSON(base, `/api/synergies/${initiative.id}/stage`, token, { targetStage: 'validated', version: 0 });
     assert.strictEqual(res.status, 409, 'an unrecognized current stage must still 409');
     const body = await res.json();
     assert.notStrictEqual(body.conflict, true, 'the pre-existing unrecognized-stage 409 must never carry the conflict:true marker');
@@ -833,7 +835,7 @@ test('optimistic-locking-contract (17): a stale-version DD-finding update return
     const { finding } = await createRes.json();
     assert.strictEqual(finding.version, undefined, 'a freshly created finding carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.finding.version, 1);
@@ -869,7 +871,7 @@ test('optimistic-locking-contract (18): a stale-version DD request-item update r
     const { item } = await createRes.json();
     assert.strictEqual(item.version, undefined, 'a freshly created item carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.item.version, 1);
@@ -956,7 +958,7 @@ test('optimistic-locking-contract (21): the DD request-item 409 body\'s currentR
     // every projected shape (including the conflict body) must match exactly.
     assert.ok('overdue' in item, 'the 200-response item must already carry the publicDdItem()-added overdue key');
 
-    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped' });
+    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped', version: 0 });
     const stamped = (await firstEditRes.json()).item;
 
     const staleRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stale attempt', version: 0 });
@@ -1010,7 +1012,7 @@ test('optimistic-locking-contract (23): a stale-version convert returns 409 with
     const { finding } = await createRes.json();
 
     // Stamp version:1 via an ordinary edit (does not touch linkedTaskIds/linkedRaidIds).
-    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).finding.version, 1);
 
     const staleConvertRes = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, token, { toTask: true, toRaid: true, version: 0 });
@@ -1048,7 +1050,7 @@ test('optimistic-locking-contract (24): a current-version convert succeeds, crea
     const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'operations', title: 'Convert current fixture', severity: 'critical', owner: 'Karen' });
     const { finding } = await createRes.json();
 
-    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).finding.version, 1);
 
     const convertRes = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, token, { toTask: true, toRaid: true, version: 1 });
@@ -1114,7 +1116,7 @@ test('optimistic-locking-contract (26): a stale-version org-position update retu
     const { position } = await createRes.json();
     assert.strictEqual(position.version, undefined, 'a freshly created position carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.position.version, 1);
@@ -1150,7 +1152,7 @@ test('optimistic-locking-contract (27): a stale-version org flight-risk update r
     const { entry } = await createRes.json();
     assert.strictEqual(entry.version, undefined, 'a freshly created flight-risk entry carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.entry.version, 1);
@@ -1234,7 +1236,7 @@ test('optimistic-locking-contract (30): an org-position update that is both stal
     const createRes = await postJSON(base, '/api/org/positions', token, { title: 'Combined fixture', level: 'Manager' });
     const { position } = await createRes.json();
 
-    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).position.version, 1);
 
     // Self-parent (reportsToId === own id) is positionGraphFailure()'s
@@ -1321,7 +1323,7 @@ test('optimistic-locking-contract (33): a stale-version flight-risk convert retu
     const { entry } = await createRes.json();
 
     // Stamp version:1 via an ordinary edit (does not touch linkedTaskIds/linkedRaidIds).
-    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).entry.version, 1);
 
     const staleConvertRes = await postJSON(base, `/api/org/flight-risk/${entry.id}/convert`, token, { toTask: true, toRaid: true, version: 0 });
@@ -1360,7 +1362,7 @@ test('optimistic-locking-contract (34): a current-version flight-risk convert su
     const createRes = await postJSON(base, '/api/org/flight-risk', token, { employeeId: employee.id, riskLevel: 'critical', owner: 'admin' });
     const { entry } = await createRes.json();
 
-    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).entry.version, 1);
 
     const convertRes = await postJSON(base, `/api/org/flight-risk/${entry.id}/convert`, token, { toTask: true, toRaid: true, version: 1 });
@@ -1474,7 +1476,7 @@ test('optimistic-locking-contract (37): DELETE /api/integration-tasks/:id — st
 
     const createRes = await postJSON(base, '/api/integration-tasks', token, { title: 'Delete fixture task', workstreamId: 'ws_imo', phase: 'd30' });
     const { task } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'stamped', version: 0 });
     assert.strictEqual(stampRes.status, 200);
     assert.strictEqual((await stampRes.json()).task.version, 1);
 
@@ -1507,7 +1509,7 @@ test('optimistic-locking-contract (38): DELETE /api/synergies/:id — stale dele
 
     const createRes = await postJSON(base, '/api/synergies', token, { title: 'Delete fixture initiative', category: 'revenue', targetM: 2 });
     const { initiative } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).initiative.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/synergies/${initiative.id}`, token, 0);
@@ -1539,7 +1541,7 @@ test('optimistic-locking-contract (39): DELETE /api/org/positions/:id — stale 
 
     const createRes = await postJSON(base, '/api/org/positions', token, { title: 'Delete fixture position', level: 'Manager' });
     const { position } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).position.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/org/positions/${position.id}`, token, 0);
@@ -1572,7 +1574,7 @@ test('optimistic-locking-contract (40): DELETE /api/org/flight-risk/:id — stal
 
     const createRes = await postJSON(base, '/api/org/flight-risk', token, { employeeId: employee.id, riskLevel: 'medium', owner: 'admin' });
     const { entry } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).entry.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/org/flight-risk/${entry.id}`, token, 0);
@@ -1604,7 +1606,7 @@ test('optimistic-locking-contract (41): DELETE /api/dd/request-items/:id — sta
 
     const createRes = await postJSON(base, '/api/dd/request-items', token, { area: 'financial', text: 'Delete fixture item' });
     const { item } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).item.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/dd/request-items/${item.id}`, token, 0);
@@ -1643,7 +1645,7 @@ test('optimistic-locking-contract (42): DELETE /api/dd/findings/:id — stale de
 
     const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'it', title: 'Delete fixture finding', severity: 'low' });
     const { finding } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).finding.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/dd/findings/${finding.id}`, token, 0);
@@ -1812,7 +1814,7 @@ test('optimistic-locking-contract (Part 3, dual-lane 2): in custom (demoMode:fal
     assert.ok(dealTableRow(deal.id, 'customIntegrationTasks', task.id), 'the created task must be stored in customIntegrationTasks when demoMode is false');
     assert.strictEqual(dealTableRow(deal.id, 'integrationTasks', task.id), undefined, 'the created task must NOT be stored in the demo integrationTasks table');
 
-    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/integration-tasks', token, { id: task.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     assert.strictEqual((await firstEditRes.json()).task.version, 1);
 
@@ -1844,7 +1846,7 @@ test('optimistic-locking-contract (Part 3, dual-lane 3): in custom (demoMode:fal
     assert.ok(dealTableRow(deal.id, 'customSynergyInitiatives', initiative.id), 'the created initiative must be stored in customSynergyInitiatives when demoMode is false');
     assert.strictEqual(dealTableRow(deal.id, 'synergyInitiatives', initiative.id), undefined, 'the created initiative must NOT be stored in the demo synergyInitiatives table');
 
-    const firstEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/synergies', token, { id: initiative.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     assert.strictEqual((await firstEditRes.json()).initiative.version, 1);
 
