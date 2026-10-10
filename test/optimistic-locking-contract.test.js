@@ -294,10 +294,11 @@ test('optimistic-locking-contract (1): a stale-version RAID update returns 409 w
     const { entry } = await createRes.json();
     assert.strictEqual(entry.version, undefined, 'a freshly created record carries no version field yet (D-09 lazy adoption)');
 
-    // First edit: no version supplied yet (client never held one) — succeeds
-    // and stamps version:1 (D-09's "first successful write" for a legacy/
-    // unstamped row, which a brand-new INSERT also is per this plan's Task 1).
-    const firstEditRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'First real edit' });
+    // First edit: the client held a never-edited record, so it sends
+    // version 0 (D-09: version-less IS version 0; a request with NO
+    // precondition at all is refused in a deal — CONC-02 gap closure, R7 F-1)
+    // — succeeds and stamps version:1.
+    const firstEditRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.entry.version, 1, 'the first successful edit of an unstamped record must stamp version:1');
@@ -363,7 +364,7 @@ test('optimistic-locking-contract (2): a current-version RAID update returns 200
 // version:1 stamped; nothing stamps records that are only read.
 // ---------------------------------------------------------------------------
 
-test('optimistic-locking-contract (3): a RAID record with no version field is writable and gets version:1 stamped; a record that is only read never gets stamped', async () => {
+test('optimistic-locking-contract (3): a RAID record with no version field accepts version 0 and gets version:1 stamped; a record that is only read never gets stamped', async () => {
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -380,9 +381,9 @@ test('optimistic-locking-contract (3): a RAID record with no version field is wr
     const readOnly = (await readOnlyRes.json()).find((r) => r.id === entry.id);
     assert.strictEqual(readOnly.version, undefined, 'a record that is only read must not gain a version field');
 
-    // A write (no version supplied, since none was ever held) succeeds and
-    // stamps version:1.
-    const writeRes = await postJSON(base, '/api/raid', token, { id: entry.id, owner: 'karen' });
+    // A write carrying version 0 (the version a client holding a
+    // never-edited record sends — D-09) succeeds and stamps version:1.
+    const writeRes = await postJSON(base, '/api/raid', token, { id: entry.id, owner: 'karen', version: 0 });
     assert.strictEqual(writeRes.status, 200);
     const writeBody = await writeRes.json();
     assert.strictEqual(writeBody.entry.version, 1, 'the first write to an unstamped record must stamp version:1');
@@ -1431,7 +1432,7 @@ test('optimistic-locking-contract (36): DELETE /api/raid/:id — stale delete 40
     const { entry } = await createRes.json();
     // Stamp version:1 via an ordinary edit (POST /api/raid handles both
     // create — no id — and edit — id present — per test 1's own fixture shape).
-    const stampRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'stamped', version: 0 });
     assert.strictEqual(stampRes.status, 200);
     assert.strictEqual((await stampRes.json()).entry.version, 1);
 
@@ -1666,7 +1667,7 @@ test('optimistic-locking-contract (42): DELETE /api/dd/findings/:id — stale de
   }
 });
 
-test('optimistic-locking-contract (43): DELETE with no expectedVersion still deletes — the route-level precheck is a no-op when the client supplies nothing, matching every other route\'s conflictIfStale() contract', async () => {
+test('optimistic-locking-contract (43): DELETE with no expectedVersion — refused 400 versionRequired in a deal (the record survives), still deletes in the demo store (D-09)', async () => {
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -1676,11 +1677,20 @@ test('optimistic-locking-contract (43): DELETE with no expectedVersion still del
 
     const createRes = await postJSON(base, '/api/raid', token, { title: 'No-version delete fixture', type: 'issue', severity: 'low' });
     const { entry } = await createRes.json();
-    // No version stamp at all — deleting a freshly created, never-edited record.
+    // No precondition at all — a delete that cannot be judged stale is
+    // refused in a real deal (CONC-02 gap closure, GD-1a, R7 F-1).
     const delRes = await fetch(`${base}/api/raid/${entry.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(token) } });
-    assert.strictEqual(delRes.status, 200, 'a delete with no expectedVersion at all must still succeed — the storage-layer WHERE clause still guards the cross-process case');
+    assert.strictEqual(delRes.status, 400, 'a delete with no expectedVersion at all must be refused in a deal');
+    assert.strictEqual((await delRes.json()).versionRequired, true);
     const reread = (await (await getJSON(base, '/api/raid', token)).json()).find((r) => r.id === entry.id);
-    assert.strictEqual(reread, undefined);
+    assert.ok(reread, 'the refused delete must leave the record in place');
+
+    // Demo store (session with no deal binding) stays lenient (D-09).
+    const demoToken = newSession('admin', 'admin');
+    const demoCreate = await postJSON(base, '/api/raid', demoToken, { title: 'Demo no-version delete fixture', type: 'issue', severity: 'low' });
+    const demoEntry = (await demoCreate.json()).entry;
+    const demoDel = await fetch(`${base}/api/raid/${demoEntry.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(demoToken) } });
+    assert.strictEqual(demoDel.status, 200, 'the demo store still accepts a delete with no expectedVersion');
   } finally {
     server.close();
   }
@@ -1770,7 +1780,7 @@ test('optimistic-locking-contract (Part 3, dual-lane 1): in custom (demoMode:fal
     assert.ok(dealTableRow(deal.id, 'customRaidEntries', entry.id), 'the created entry must be stored in customRaidEntries when demoMode is false');
     assert.strictEqual(dealTableRow(deal.id, 'raidEntries', entry.id), undefined, 'the created entry must NOT be stored in the demo raidEntries table');
 
-    const firstEditRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     assert.strictEqual((await firstEditRes.json()).entry.version, 1);
 

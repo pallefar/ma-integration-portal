@@ -1114,13 +1114,13 @@
         var next = RAID_STATUS_ORDER[(RAID_STATUS_ORDER.indexOf(item.status) + 1) % RAID_STATUS_ORDER.length];
         // CONC-02/D-02 (Phase 9): a single-field kanban status flip goes
         // through the SAME version check as a full edit — no exemptions.
-        // Send the version this page already holds in memory for this
-        // record; send nothing when the held record has no version (the
-        // server treats an absent version as "no precondition supplied",
-        // and the WHERE-clause layer in db/store.js still covers the
-        // cross-process case for it).
-        var body = { id: id, status: next };
-        if (item.version !== undefined) body.version = item.version;
+        // Always send the version this page holds in memory for this
+        // record: window.maVersionOf() yields the held version, or 0 for a
+        // never-edited record (D-09 — version-less IS version 0). Sending 0
+        // is what lets the server catch the FIRST concurrent edit of a
+        // never-edited record (R7 F-1); the server refuses a write with no
+        // precondition in a real deal.
+        var body = { id: id, status: next, version: window.maVersionOf(item) };
         fetch('/api/raid', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(function (r) { return r.json(); })
           .then(function (res) {
@@ -1139,11 +1139,12 @@
         if (!window.confirm('Delete this entry?')) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this entry, taken from the same in-memory list the row
-        // was rendered from — never a re-fetch. Omitted entirely when the
-        // held record has no version yet (D-09 lazy adoption).
+        // was rendered from — never a re-fetch. Always sent: window.maVersionOf()
+        // yields 0 for a never-edited record (D-09 — version-less IS version
+        // 0), so a stale delete of it is still caught (R7 F-1); a delete with
+        // no precondition is refused in a real deal.
         var entry = state.raid.find(function (r) { return r.id === id; });
-        var delUrl = '/api/raid/' + encodeURIComponent(id);
-        if (entry && entry.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(entry.version);
+        var delUrl = '/api/raid/' + encodeURIComponent(id) + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(entry));
         fetch(delUrl, { method: 'DELETE' })
           .then(function (r) { return r.json(); })
           .then(function (res) {

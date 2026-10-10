@@ -1,0 +1,189 @@
+[
+  {
+    "scenario": "setup",
+    "step": "deal deal_mv25s6f3727b8a47 created, pmo granted legal",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "A request carries version 0",
+    "status": "PASS",
+    "detail": {
+      "id": "raid_mv25s6oq56ce9bbb",
+      "status": "mitigating",
+      "version": 0
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "A response 200",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "B request carries version 0",
+    "status": "PASS",
+    "detail": {
+      "id": "raid_mv25s6oq56ce9bbb",
+      "status": "mitigating",
+      "version": 0
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "B response 409 conflict:true",
+    "status": "PASS",
+    "detail": {
+      "status": 409,
+      "conflict": true
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "one overlay",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "status row present",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "status",
+        "mine": "mitigating",
+        "theirs": "mitigating"
+      }
+    ]
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "A's write survived (no silent clobber)",
+    "status": "PASS",
+    "detail": {
+      "status": "mitigating",
+      "version": 1
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "dialog opens at 390",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "fit at 390",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 243.703125,
+        "right": 358,
+        "bottom": 600.28125
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      }
+    }
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "DELETE carries expectedVersion=0",
+    "status": "PASS",
+    "detail": "/api/raid/raid_mv25sbhe06412ada?expectedVersion=0"
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "DELETE response 409 conflict:true",
+    "status": "PASS",
+    "detail": 409
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "409 stale-delete dialog",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "buttons": [
+        {
+          "text": "Cancel",
+          "cls": "btn btn-secondary conflict-btn-discard",
+          "disabled": false
+        },
+        {
+          "text": "Delete anyway",
+          "cls": "btn btn-danger conflict-btn-delete",
+          "disabled": false
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "dialog closes on Cancel",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "entry survives Cancel",
+    "status": "PASS",
+    "detail": {
+      "id": "raid_mv25sbhe06412ada",
+      "version": 1
+    }
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "update with no version refused 400 versionRequired",
+    "status": "PASS",
+    "detail": {
+      "status": 400,
+      "body": {
+        "error": "This save did not include the version of the record it was based on. Reload the page and try again.",
+        "versionRequired": true
+      }
+    }
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "refusal body has exactly {error, versionRequired}",
+    "status": "PASS",
+    "detail": [
+      "error",
+      "versionRequired"
+    ]
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "delete with no expectedVersion refused 400 versionRequired",
+    "status": "PASS",
+    "detail": {
+      "status": 400,
+      "body": {
+        "error": "This save did not include the version of the record it was based on. Reload the page and try again.",
+        "versionRequired": true
+      }
+    }
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "entry intact after both refusals",
+    "status": "PASS",
+    "detail": {
+      "notes": ""
+    }
+  },
+  {
+    "scenario": "data-integrity",
+    "step": "committed data/demo.db* and data/control.db* unchanged",
+    "status": "PASS",
+    "detail": "2 file(s) identical"
+  }
+]

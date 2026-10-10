@@ -38,6 +38,10 @@ const { createDealDatabase } = require('../db/dealSeed.js');
 const auditHook = require('../db/auditHook.js');
 
 const app = require('../server.js');
+// This suite's subject is not the version contract: supply the precondition a
+// real client sends on existing-record writes (test/helpers/held-version.js,
+// CONC-02 gap closure GD-3).
+require('./helpers/held-version.js').installHeldVersionFetch();
 
 const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
 const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
@@ -340,7 +344,9 @@ test('dd-findings (j): an existing RAID entry created before this change still r
 
     const updateRes = await fetch(`${base}/api/raid`, {
       method: 'POST', headers: { Cookie: cookieHeader(karenToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: entry.id, status: 'mitigating' }),
+      // version 0: the version a client holding a never-edited entry sends
+      // (D-09; CONC-02 gap closure — a precondition-less RAID write is refused).
+      body: JSON.stringify({ id: entry.id, status: 'mitigating', version: 0 }),
     });
     assert.strictEqual(updateRes.status, 200);
     const { entry: updated } = await updateRes.json();
