@@ -2205,8 +2205,29 @@ app.get('/api/rag/search', (req, res) => {
   }
 });
 
+// [security] D-12-05 / DATA-05 / R2-03 (Phase 12, plan 12-04): pdf-parse
+// (pdfjs-dist) is CPU-bound — a large or crafted PDF held the event loop for
+// seconds, for every user, from any signed-in staff upload. The parse now runs
+// in a persistent worker thread (lib/workers/pdf-text-worker.js) behind a
+// ONE-in-flight guard: a second concurrent upload is REFUSED 429 + Retry-After,
+// never queued. The worker gets the PDF bytes and returns text only; the AI
+// review, the ragUploads write and the RAG retrain stay on the main thread.
+// Shared with the steerco pack route far below (D-12-05).
+const { createIsolatedTask } = require('./lib/isolatedTask');
+const ragPdfTask = createIsolatedTask({
+  name: 'rag-pdf',
+  workerFile: path.join(__dirname, 'lib', 'workers', 'pdf-text-worker.js'),
+});
+
 // POST AI Model RAG PDF Training Upload & AI Insight Review
 app.post('/api/rag/upload', async (req, res, next) => {
+  // tryAcquire() is synchronous and precedes the base64 decode, so a refused
+  // request costs nothing beyond the body the JSON parser already read.
+  const lease = ragPdfTask.tryAcquire();
+  if (!lease) {
+    res.set('Retry-After', '5');
+    return res.status(429).json({ success: false, error: 'Another PDF is being processed. Try again in a few seconds.' });
+  }
   try {
     // VAL-01: presence is now owned exclusively by validators/settings.js's RagUploadSchema.
     const { fileName, fileData } = req.body;
@@ -2217,10 +2238,14 @@ app.post('/api/rag/upload', async (req, res, next) => {
     const base64Data = fileData.replace(/^data:application\/pdf;base64,/, "");
     const pdfBuffer = Buffer.from(base64Data, 'base64');
 
-    // Parse plain text from PDF (pdf-parse v2 class API)
-    const { PDFParse } = require('pdf-parse');
-    const pdfParser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
-    const parsedPdf = await pdfParser.getText();
+    // Parse plain text from PDF (pdf-parse v2) — in the worker, off the loop.
+    // The bytes are copied once into a fresh ArrayBuffer and TRANSFERRED.
+    const pdfBytes = new Uint8Array(pdfBuffer);
+    const parsedPdf = await lease.run({ data: pdfBytes.buffer }, [pdfBytes.buffer]);
+    // The CPU-bound part is done: free the slot before the (network-bound) AI
+    // review so a slow model call does not block the next upload's parse. The
+    // finally below releases again on every error path (idempotent).
+    lease.release();
     const pdfText = parsedPdf.text || '';
 
     if (pdfText.trim().length === 0) {
@@ -2269,6 +2294,8 @@ app.post('/api/rag/upload', async (req, res, next) => {
     if (isBusyError(e)) return next(e);
     console.error('Error handling RAG PDF upload:', e);
     res.status(500).json({ success: false, error: 'Failed to process and train RAG model.' });
+  } finally {
+    lease.release();
   }
 });
 
@@ -7425,7 +7452,6 @@ function getReportPack() {
 // memory. Data assembly, the clearance filtering, the audit event and the
 // response stay on the main thread; the worker gets the already-filtered
 // model and returns bytes only (Phase 8 D-03: it never opens SQLite).
-const { createIsolatedTask } = require('./lib/isolatedTask');
 const packTask = createIsolatedTask({
   name: 'report-pack',
   workerFile: path.join(__dirname, 'lib', 'workers', 'report-pack-worker.js'),

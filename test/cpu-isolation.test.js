@@ -243,6 +243,162 @@ test('reports-pack isolation (GET /api/reports/pack)', async (t) => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. POST /api/rag/upload — pdf-parse in a worker, same guard (PD-14, W-9)
+// ---------------------------------------------------------------------------
+// Same minimal-but-valid single-page PDF test/rag-upload.test.js uses.
+const MINIMAL_PDF = [
+  '%PDF-1.4',
+  '1 0 obj', '<< /Type /Catalog /Pages 2 0 R >>', 'endobj',
+  '2 0 obj', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', 'endobj',
+  '3 0 obj', '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>', 'endobj',
+  '4 0 obj', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'endobj',
+  '5 0 obj', '<< /Length 61 >>', 'stream',
+  'BT /F1 24 Tf 100 700 Td (Integration Guidelines Test PDF) Tj ET',
+  'endstream', 'endobj',
+  'xref', '0 6', '0000000000 65535 f', 'trailer', '<< /Size 6 /Root 1 0 R >>', 'startxref', '0', '%%EOF',
+].join('\n');
+const dataUrl = (buf) => `data:application/pdf;base64,${Buffer.from(buf).toString('base64')}`;
+
+test('PD-14 probe: pdf-parse loads and extracts text INSIDE a worker_thread (thread mode ships for rag-pdf)', async () => {
+  const task = createIsolatedTask({ name: 'rag-pdf-probe', workerFile: path.join(ROOT, 'lib', 'workers', 'pdf-text-worker.js') });
+  try {
+    assert.strictEqual(task.mode, 'thread');
+    const bytes = new Uint8Array(Buffer.from(MINIMAL_PDF, 'utf8'));
+    const lease = task.tryAcquire();
+    try {
+      const out = await lease.run({ data: bytes.buffer }, [bytes.buffer]);
+      assert.match(out.text, /Integration Guidelines Test PDF/);
+    } finally { lease.release(); }
+  } finally { task.close(); }
+});
+
+test('PD-14 probe: the pack renderer runs INSIDE a worker_thread (thread mode ships for report-pack)', async () => {
+  const task = createIsolatedTask({ name: 'pack-probe', workerFile: path.join(ROOT, 'lib', 'workers', 'report-pack-worker.js') });
+  try {
+    assert.strictEqual(task.mode, 'thread');
+    const lease = task.tryAcquire();
+    try {
+      const out = await lease.run({
+        model: {
+          deal: { name: 'Probe' }, language: 'en', generatedAt: '2026-01-01 00:00', generatedBy: 'probe',
+          i18n: { strings: { en: {} } },
+          rollup: { grossRealizedM: 0, unphasedRealizedM: 0, costIncurredM: 0, netBenefitM: 0, dealTargetM: 0, staleCount: 0 },
+          workstreams: [], tasks: [], raid: [], synergies: [], staleThresholdDays: 30,
+        },
+      });
+      assert.strictEqual(Buffer.from(out.pdf).toString('binary', 0, 5), '%PDF-');
+    } finally { lease.release(); }
+  } finally { task.close(); }
+});
+
+test('rag upload isolation (POST /api/rag/upload)', async (t) => {
+  const server = await listenLocal(app);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  t.after(() => server.close());
+  const fx = createDealFixture({
+    controlConn, runtimeConn, dealId: 'deal_cpuisorag', members: [{ username: 'admin', role: 'admin' }],
+  });
+  const cookie = fx.cookie('admin');
+  const upload = (name, fileData) => fetch(`${base}/api/rag/upload`, {
+    method: 'POST',
+    headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName: name, fileData }),
+  });
+
+  await t.test('(a) a valid PDF behaves exactly as before (text extracted in the worker, row persisted)', async () => {
+    const res = await upload('worker-policy.pdf', dataUrl(MINIMAL_PDF));
+    const body = await res.json();
+    assert.strictEqual(res.status, 200, JSON.stringify(body));
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.upload.fileName, 'worker-policy.pdf');
+  });
+
+  await t.test('(b) a second CONCURRENT upload is refused 429 + Retry-After with the fixed body; the slot is then free', async () => {
+    const [r1, r2] = await Promise.all([
+      upload('first.pdf', dataUrl(MINIMAL_PDF)),
+      upload('second.pdf', dataUrl(MINIMAL_PDF)),
+    ]);
+    const statuses = [r1.status, r2.status].sort();
+    assert.deepStrictEqual(statuses, [200, 429], `expected exactly one 200 and one 429, got ${statuses}`);
+    const refused = r1.status === 429 ? r1 : r2;
+    assert.strictEqual(refused.headers.get('retry-after'), '5');
+    assert.deepStrictEqual(await refused.json(), { success: false, error: 'Another PDF is being processed. Try again in a few seconds.' });
+    (r1.status === 200 ? r1 : r2).arrayBuffer().catch(() => {});
+
+    const again = await upload('third.pdf', dataUrl(MINIMAL_PDF));
+    assert.strictEqual(again.status, 200, 'the guard must be released after the first upload completes');
+  });
+
+  await t.test('(c) bytes that are not a PDF fail inside the worker as the same generic 500 and release the slot', async () => {
+    const res = await upload('garbage.pdf', dataUrl('this is definitely not a pdf'));
+    assert.strictEqual(res.status, 500);
+    const body = await res.json();
+    assert.deepStrictEqual(body, { success: false, error: 'Failed to process and train RAG model.' });
+    const next = await upload('after-garbage.pdf', dataUrl(MINIMAL_PDF));
+    assert.strictEqual(next.status, 200, 'a failed parse must not leak the slot or wedge the worker');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2c. The permanent "unavailable on this host" 503 carries retryable:false
+// ---------------------------------------------------------------------------
+test('GET /api/reports/pack on a host without the canvas binding -> 503 { error, retryable:false } (PD-15)', () => {
+  const { spawnSync } = require('child_process');
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-cpu-isolation-503-'));
+  try {
+    const probe = [
+      "const Module = require('module');",
+      'const originalLoad = Module._load;',
+      'Module._load = function (request) {',
+      "  if (request === '@napi-rs/canvas') {",
+      "    const err = new Error(\"Cannot find module './skia.linux-arm64-gnu.node'\");",
+      "    err.code = 'MODULE_NOT_FOUND';",
+      '    throw err;',
+      '  }',
+      '  return originalLoad.apply(this, arguments);',
+      '};',
+      "const store = require('./db/store.js');",
+      "const dbFiles = require('./db/dbFiles.js');",
+      "const sessionsDb = require('./db/sessions.js');",
+      "const { ensureUser } = require('./test/helpers/seed-identity.js');",
+      "const app = require('./server.js');",
+      'const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);',
+      'const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);',
+      "ensureUser(controlConn, { username: 'admin', role: 'admin' });",
+      "const token = sessionsDb.createSession(runtimeConn, { username: 'admin', role: 'admin', ttlMs: 3600000 });",
+      "const server = app.listen(0, '127.0.0.1');",
+      "server.once('listening', async () => {",
+      '  const { port } = server.address();',
+      "  const res = await fetch('http://127.0.0.1:' + port + '/api/reports/pack', { headers: { Cookie: 'ma_session=' + token } });",
+      "  console.log('RESULT=' + JSON.stringify({ status: res.status, retryAfter: res.headers.get('retry-after'), body: await res.json() }));",
+      '  server.close();',
+      '  process.exit(0);',
+      '});',
+    ].join('\n');
+    const env = Object.assign({}, process.env, {
+      MA_CONTROL_DB_PATH: path.join(probeDir, 'control.db'),
+      MA_RUNTIME_DB_PATH: path.join(probeDir, 'runtime.db'),
+      MA_DEMO_DB_PATH: path.join(probeDir, 'demo.db'),
+      MA_DEALS_DIR: path.join(probeDir, 'deals'),
+      MA_AUDIT_DB_PATH: path.join(probeDir, 'audit.db'),
+      ADMIN_TOKEN: 'gsd-cpu-isolation-503-token',
+    });
+    const result = spawnSync(process.execPath, ['-e', probe], { cwd: ROOT, encoding: 'utf8', env });
+    assert.strictEqual(result.status, 0, `probe exited non-zero: stdout=${result.stdout} stderr=${result.stderr}`);
+    const m = /RESULT=(.*)/.exec(result.stdout);
+    assert.ok(m, `expected a RESULT line, got: ${result.stdout} / ${result.stderr}`);
+    const out = JSON.parse(m[1]);
+    assert.strictEqual(out.status, 503);
+    assert.deepStrictEqual(out.body, {
+      error: 'PDF pack generation is unavailable on this host platform',
+      retryable: false,
+    });
+  } finally {
+    fs.rmSync(probeDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // 3. Source assertions (T-12-32, T-12-35, portability seam)
 // ---------------------------------------------------------------------------
 function stripComments(src) {

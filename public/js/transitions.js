@@ -1017,23 +1017,43 @@
   // `ctx` (09-11): CONFLICT_REAPPLY_CONTEXT when this request is a conflict
   // dialog's own reapply — passed through the 503 retry recursion so the
   // reapply keeps its identity across a busy retry.
+  // D-12-05 / R1 minor (Phase 12, plan 12-04): a 503 whose JSON body carries
+  // `retryable: false` is a PERMANENT condition (e.g. the steerco-pack renderer
+  // is unavailable on this host platform), not write contention — retrying it
+  // is pointless and the give-up toast's "your change was not saved" is wrong
+  // for a read. Keyed on the BODY MARKER, never the status alone (the same
+  // discipline as the 409 `conflict` marker below). Only inspected when the
+  // response is clonable and its body parses as JSON; anything else is treated
+  // as plain contention, so the Phase 8 behaviour is unchanged.
+  const isPermanentUnavailable = (res) => {
+    if (typeof res.clone !== 'function') return Promise.resolve(false);
+    try {
+      return res.clone().json().then((body) => !!(body && body.retryable === false), () => false);
+    } catch (e) {
+      return Promise.resolve(false);
+    }
+  };
+
   const attemptFetch = (input, init, url, method, attempt, ctx) => origFetch(input, init).then((res) => {
     if (res.status === 503 && isApi(url)) {
-      if (attempt < BUSY_RETRY_MAX_RETRIES && isRetryableBody(input, init)) {
-        const wait = parseRetryAfterMs(res) + Math.floor(Math.random() * BUSY_RETRY_JITTER_MAX_MS);
-        return delay(wait).then(() => attemptFetch(input, init, url, method, attempt + 1, ctx));
-      }
-      // Retries exhausted (or the body can't be safely re-sent): tell the user
-      // plainly and leave the page/form exactly as it is so they can just save
-      // again — nothing is discarded, cleared, or re-navigated (D-08).
-      // IN-05 (09-REVIEW round 2) / UI-SPEC A11: a conflict dialog's own
-      // reapply ("Apply my changes anyway" / "Delete anyway") gets NO toast —
-      // the dialog stays open and says so in its own banner ("the server is
-      // busy", runConflictReapply), so the user sees one message pointing at
-      // one control. The in-app delete confirm's first DELETE (ctx carries
-      // confirmSession) closes the dialog on a 503, so it keeps the toast.
-      if (!(ctx && ctx.reapply && !ctx.confirmSession)) showBusyGiveUpToast();
-      return res;
+      return isPermanentUnavailable(res).then((permanent) => {
+        if (permanent) return res; // one fetch, no retry, no busy toast
+        if (attempt < BUSY_RETRY_MAX_RETRIES && isRetryableBody(input, init)) {
+          const wait = parseRetryAfterMs(res) + Math.floor(Math.random() * BUSY_RETRY_JITTER_MAX_MS);
+          return delay(wait).then(() => attemptFetch(input, init, url, method, attempt + 1, ctx));
+        }
+        // Retries exhausted (or the body can't be safely re-sent): tell the user
+        // plainly and leave the page/form exactly as it is so they can just save
+        // again — nothing is discarded, cleared, or re-navigated (D-08).
+        // IN-05 (09-REVIEW round 2) / UI-SPEC A11: a conflict dialog's own
+        // reapply ("Apply my changes anyway" / "Delete anyway") gets NO toast —
+        // the dialog stays open and says so in its own banner ("the server is
+        // busy", runConflictReapply), so the user sees one message pointing at
+        // one control. The in-app delete confirm's first DELETE (ctx carries
+        // confirmSession) closes the dialog on a 503, so it keeps the toast.
+        if (!(ctx && ctx.reapply && !ctx.confirmSession)) showBusyGiveUpToast();
+        return res;
+      });
     }
     // CONC-02/D-05/Pitfall 1 (Phase 9): a same-origin /api 409 is checked
     // for the `conflict: true` body marker, never the status code alone —

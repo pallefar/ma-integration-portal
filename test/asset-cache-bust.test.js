@@ -48,7 +48,9 @@ const FROZEN = {
   // 1791628622 = the stamp on all 18 pages before Phase 10 changed transitions.js
   // (10-06: 403 mustChangePassword branch, handshake redirect, account-menu loader).
   // 1791800001 = the 11-07 stamp, replaced by the Phase-11 review fixes (WR-C01/WR-C04).
-  '/js/transitions.js': { v21: [1784900002], before: [1784900002, 1791628622, 1791800001] },
+  // 1791800101 = the Phase-11 review stamp, replaced by 12-04 (the permanent-503
+  // `retryable: false` marker in the busy-retry wrapper).
+  '/js/transitions.js': { v21: [1784900002], before: [1784900002, 1791628622, 1791800001, 1791800101] },
   '/js/execution.js': { v21: [1786250900], before: [1786433369, 1791628622] },
   '/js/org.js': { v21: [1784900011], before: [1786433369, 1791625638] },
   '/js/due-diligence.js': { v21: [1784800006], before: [1786427686, 1791628622] },

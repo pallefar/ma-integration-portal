@@ -203,3 +203,56 @@ test('client-busy-retry: an absurd Retry-After is clamped to 60s — the retry n
   assert.ok(scheduledDelays[0] >= 60000 && scheduledDelays[0] <= 60300,
     `expected the scheduled wait to be clamped into [60000, 60300]ms, got ${scheduledDelays[0]}ms`);
 });
+
+// D-12-05 / PD-15 (Phase 12, plan 12-04): a 503 whose JSON body carries
+// `retryable: false` is a PERMANENT condition (the steerco-pack renderer is
+// unavailable on this host platform), not write contention. The wrapper must
+// return it at once — one fetch, no retry wait, no "not saved" toast. A plain
+// contention 503 (no marker, or no clonable body) keeps the Phase 8 behaviour
+// exercised by every case above, unedited.
+function cloneableResponse(status, bodyPromiseFactory, headers) {
+  return {
+    status,
+    headers: headers || new Headers({ 'Retry-After': '0' }),
+    clone() { return { json: bodyPromiseFactory }; },
+  };
+}
+
+test('client-busy-retry: a 503 carrying the retryable:false marker is returned at once — 1 fetch, no retry, no toast', async () => {
+  const permanent = cloneableResponse(503, () => Promise.resolve({
+    error: 'PDF pack generation is unavailable on this host platform', retryable: false,
+  }));
+  const fake = makeFakeFetch([permanent]);
+  const { sandbox, appended } = buildSandbox(fake.impl);
+
+  const res = await sandbox.window.fetch('/api/reports/pack?lang=en');
+
+  assert.strictEqual(fake.calls.length, 1, 'a permanent 503 must not be retried');
+  assert.strictEqual(res.status, 503, 'the caller must get the original 503');
+  assert.strictEqual(res, permanent, 'the ORIGINAL response object is returned');
+  assert.strictEqual(appended.length, 0, 'no busy/"not saved" toast for a permanent, non-contention 503');
+});
+
+test('client-busy-retry: a clonable 503 WITHOUT the marker is still retried exactly as before (marker absent -> unchanged)', async () => {
+  const contention = () => cloneableResponse(503, () => Promise.resolve({ error: 'The server is busy' }));
+  const fake = makeFakeFetch([contention(), contention(), contention()]);
+  const { sandbox, appended } = buildSandbox(fake.impl);
+
+  const res = await sandbox.window.fetch('/api/pulses', { method: 'POST', body: '{}' });
+
+  assert.strictEqual(fake.calls.length, 3, 'initial + 2 retries');
+  assert.strictEqual(res.status, 503);
+  assert.strictEqual(appended.length, 1, 'exactly one give-up toast once retries are exhausted');
+});
+
+test('client-busy-retry: a 503 whose body is not JSON is treated as contention (peek failure never blocks the retry)', async () => {
+  const garbled = () => cloneableResponse(503, () => Promise.reject(new SyntaxError('Unexpected token')));
+  const fake = makeFakeFetch([garbled(), { status: 200, headers: new Headers() }]);
+  const { sandbox, appended } = buildSandbox(fake.impl);
+
+  const res = await sandbox.window.fetch('/api/pulses', { method: 'POST', body: '{}' });
+
+  assert.strictEqual(fake.calls.length, 2);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(appended.length, 0);
+});
