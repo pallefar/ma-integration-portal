@@ -1197,14 +1197,30 @@
   const path = window.location.pathname;
   let activeRole = localStorage.getItem('active_demo_role') || 'admin';
 
-  // Detect role from path to update localStorage automatically
-  if (path.includes('admin.html')) activeRole = 'admin';
-  else if (path.includes('pmo.html')) activeRole = 'pmo';
-  else if (path.includes('dashboard.html')) activeRole = 'hrbp';
-  else if (path.includes('supporting.html')) activeRole = 'supporting';
-  else if (path.includes('employee.html')) activeRole = 'employee';
+  // [security] WR-C01 (Phase 11 review): deriving the role from the PATH below
+  // is a demo-persona convenience (open admin.html and you "are" the admin). On
+  // a login deployment it made this page check a tautology for admin.html,
+  // pmo.html, dashboard.html, supporting.html and employee.html — any role could
+  // open them, and their staff loaders fired requests the server refuses. The
+  // real-login handshake below records that this browser is talking to a
+  // login-enforcing server ('ma_auth_role_verified') and stores the SERVER-VERIFIED role in
+  // active_demo_role; once that flag is set the path no longer overrides it, so
+  // this synchronous check runs against the verified role before any page
+  // loader fires. The handshake re-checks with the verified role on every load
+  // (the authoritative client check — a first-ever visit has no stored role
+  // yet), and the server gate remains the control either way. Demo-open (auth
+  // off) clears the flag, so the showcase keeps its path-derived personas.
+  const authVerified = localStorage.getItem('ma_auth_role_verified') === '1';
+  if (!authVerified) {
+    // Detect role from path to update localStorage automatically
+    if (path.includes('admin.html')) activeRole = 'admin';
+    else if (path.includes('pmo.html')) activeRole = 'pmo';
+    else if (path.includes('dashboard.html')) activeRole = 'hrbp';
+    else if (path.includes('supporting.html')) activeRole = 'supporting';
+    else if (path.includes('employee.html')) activeRole = 'employee';
 
-  localStorage.setItem('active_demo_role', activeRole);
+    localStorage.setItem('active_demo_role', activeRole);
+  }
 
   // Define allowed roles for each page
   const pageAccess = {
@@ -1230,37 +1246,46 @@
     // convenience gate only — every write route the wizard calls is
     // independently role-checked server-side regardless of this map.
     'deal-wizard.html': ['admin', 'hrbp']
-    // IN-02 (04-REVIEW.md): 'due-diligence.html' has NO entry here —
-    // deliberately, not by oversight. DD area access is per-deal-member
-    // clearance (deal.memberGrants[username].ddAreas), not role-based, so a
-    // pmo/employee deal member legitimately granted an area must be able to
-    // reach this page; a role-based restriction here would block them. The
-    // real gate is server-side: every /api/dd/* route runs
-    // db/accessPolicy.js's filterByAreaGrant()/assertAreaGrant() regardless
-    // of which role loaded this page, so an uncleared visitor sees an empty
-    // workspace, never someone else's DD content.
-    //
-    // IN-02 (06-REVIEW.md): 'org.html' has NO entry here either, for the
-    // IDENTICAL reason — org-design/talent-retention access is gated by the
-    // per-deal-member `hr` area clearance (accessPolicy.hasAreaGrant(deal,
-    // user, 'hr')), not role, matching due-diligence.html's precedent
-    // exactly. Every /api/org/* write and restricted-read route independently
-    // re-checks that grant server-side (server.js), so this is a client
-    // convenience omission, never the actual control.
+    // 'due-diligence.html' and 'org.html' have NO role entry here — their gate
+    // is a CAPABILITY, not a role (pageCapability below). History: IN-02
+    // (04-REVIEW.md, 06-REVIEW.md) left them ungated because DD-area / `hr`
+    // clearance is per deal member, so "a pmo/employee member granted an area
+    // must reach the page". Since Phase 11 (D-11-01) the read policy refuses
+    // `employee` every /api/dd and /api/org route regardless of grants, so that
+    // reason only still holds for pmo — WR-C04 (Phase 11 review). The handshake
+    // now redirects when the server's access map says `dd` / `org` is refused
+    // (an employee), and keeps the page for every role it allows (pmo with or
+    // without clearance: the server filters per area, so an uncleared member
+    // sees an empty workspace, never another area's content).
   };
+  // [security] WR-C04: pages gated on a server-computed capability key
+  // (window.maCan) instead of a role list.
+  const pageCapability = { 'due-diligence.html': 'dd', 'org.html': 'org' };
 
-  let isAllowed = true;
-  for (const [page, roles] of Object.entries(pageAccess)) {
-    if (path.includes(page) && !roles.includes(activeRole)) {
-      isAllowed = false;
-      break;
+  function roleAllowedOnPage(p, role) {
+    for (const [page, roles] of Object.entries(pageAccess)) {
+      if (p.includes(page) && !roles.includes(role)) return false;
     }
+    return true;
   }
-
-  if (!isAllowed) {
-    sessionStorage.setItem('access_denied_message', `🔒 Access Denied: The requested page is restricted for your selected role (${activeRole.toUpperCase()}).`);
+  function denyPage(role) {
+    sessionStorage.setItem('access_denied_message', `🔒 Access Denied: The requested page is restricted for your selected role (${String(role || '').toUpperCase()}).`);
     window.location.href = '/';
   }
+  // [security] WR-C01/WR-C04: the handshake below calls these with the
+  // SERVER-VERIFIED role once /api/auth/me has answered (explicit globals —
+  // they carry no role table of their own beyond this page map).
+  window.maPageAllowed = function (role) {
+    const p = window.location.pathname;
+    if (!roleAllowedOnPage(p, role)) return false;
+    for (const [page, key] of Object.entries(pageCapability)) {
+      if (p.includes(page) && typeof window.maCan === 'function' && !window.maCan(key)) return false;
+    }
+    return true;
+  };
+  window.maDenyPage = denyPage;
+
+  if (!roleAllowedOnPage(path, activeRole)) denyPage(activeRole);
 })();
 
 // Real-login handshake (only active on PORTAL_AUTH=1 deployments; the open demo
@@ -1286,22 +1311,56 @@
   window.maCanReady = function (key) {
     return window.maAccessReady.then(function () { return window.maCan(key); });
   };
+  // Hide `el` (hidden + display:none, never merely disabled) once the probe
+  // settled, when the map refuses `key`. Absent map => untouched.
+  window.maHideUnless = function (key, el) {
+    return window.maCanReady(key).then(function (ok) {
+      if (ok || !el) return;
+      el.hidden = true;
+      el.style.display = 'none';
+    });
+  };
   if (window.location.pathname.includes('login.html')) {
     window.maAccessReady = Promise.resolve();
     return;
   }
+  // WR-C01: 'ma_auth_role_verified' tells the synchronous page check above that
+  // active_demo_role holds a server-verified role (see its comment). Cleared
+  // whenever the server says auth is off or there is no session.
+  const AUTH_FLAG = 'ma_auth_role_verified';
+  const forgetVerifiedRole = function () {
+    try { localStorage.removeItem(AUTH_FLAG); } catch (e) { /* storage unavailable */ }
+  };
+  // WR-C07: the deal this session is bound to (null on the demo store / demo-open).
+  window.__portalDealId = null;
   window.maAccessReady = fetch('/api/auth/me').then(r => r.json()).then(me => {
-    if (!me || !me.authEnabled) return;
-    if (!me.user) { window.location.href = '/login.html'; return; }
+    if (!me || !me.authEnabled) { forgetVerifiedRole(); return; }
+    if (!me.user) { forgetVerifiedRole(); window.location.href = '/login.html'; return; }
     window.__portalUser = me.user;
     window.__portalAccess = (me.access && typeof me.access === 'object') ? me.access : null;
-    if (me.user.role) localStorage.setItem('active_demo_role', me.user.role);
+    window.__portalDealId = me.dealId || null; // WR-C07: bound to a real deal?
+    if (me.user.role) {
+      localStorage.setItem('active_demo_role', me.user.role);
+      localStorage.setItem(AUTH_FLAG, '1');
+    }
     // D-10-05 (client half): an account that must rotate its password cannot
     // use any other page — send it to the standalone change screen and stop
     // (no header menu, no logout link here). UX only; the server gate is the
     // control.
     if (me.user.mustChangePassword === true && !window.location.pathname.includes('change-password.html')) {
       window.location.href = '/change-password.html';
+      return;
+    }
+    // [security] WR-C01 / WR-C04 (Phase 11 review): the page gate, now with the
+    // SERVER-VERIFIED role and the server's capability map — never the
+    // path-derived demo persona. A role this page is not for (employee on
+    // admin.html / pmo.html, pmo on admin.html) or a refused capability
+    // (employee on due-diligence.html / org.html) is sent home with the usual
+    // access-denied toast. The page loaders wait on maAccessReady before their
+    // first request, so a redirected page sends none. UX only: every route
+    // stays refused server-side whatever this decides.
+    if (me.user.role && typeof window.maPageAllowed === 'function' && !window.maPageAllowed(me.user.role)) {
+      if (typeof window.maDenyPage === 'function') window.maDenyPage(me.user.role);
       return;
     }
     // D-10-07: header-menu "Change password" / "My sessions" (any role). Loaded
@@ -1321,12 +1380,35 @@
       a.textContent = '⎋ ' + (me.user.name || me.user.username) + ' — Logout';
       a.style.cssText = 'display:block;margin-top:0.4rem;font-size:0.72rem;color:inherit;text-decoration:underline;cursor:pointer;';
       a.addEventListener('click', () => {
+        forgetVerifiedRole();
         fetch('/api/auth/logout', { method: 'POST' }).then(() => { window.location.href = '/login.html'; });
       });
       foot.appendChild(a);
     };
     addLogout();
   }).catch(() => { /* auth probe is best-effort */ });
+
+  // WR-C07 (Phase 11 review; the employee "own messages" projection is deferred
+  // to Phase 22): D-11-01 refuses an employee every /api/communications read in
+  // a real deal, so a message addressed to employees there is logged but never
+  // seen in-app. One honest sender-side line under a composer's recipient
+  // picker, shown only for a session bound to a real deal (never on the demo
+  // store or in demo-open). textContent only; `data-i18n` lets a translation
+  // replace the English fallback.
+  window.maAddEmployeeInboxNote = function (anchor) {
+    if (!anchor || !anchor.parentNode) return Promise.resolve();
+    return window.maAccessReady.then(function () {
+      if (!window.__portalDealId) return;
+      if (anchor.parentNode.querySelector('.ma-employee-inbox-note')) return;
+      var note = document.createElement('p');
+      note.className = 'ma-employee-inbox-note';
+      note.setAttribute('data-i18n', 'comms.employee_inapp_unavailable');
+      note.textContent = "Employees can't read in-app messages yet.";
+      note.style.cssText = 'margin:0.35rem 0 0;font-size:0.75rem;color:var(--text-secondary);font-style:italic;';
+      anchor.parentNode.insertBefore(note, anchor.nextSibling);
+      if (typeof window.applyPortalI18n === 'function') window.applyPortalI18n();
+    });
+  };
 })();
 
 /**
@@ -2364,6 +2446,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Time machine (Day pill) leads the tools cluster
     headerToolsContainer.insertBefore(timeMachineContainer, headerToolsContainer.firstElementChild);
+    // [security] IN-C01 (Phase 11 review): the Day pill posts to the demo-only
+    // POST /api/settings/time-travel, which the server refuses in a real-deal
+    // session (and for a role the write table does not list). The pill is not
+    // offered when the server's access map says `timeTravel` is false; with no
+    // map (demo-open) it stays exactly as before.
+    window.maHideUnless('timeTravel', timeMachineContainer);
 
     // Phase 6: load the inline content editor once (app-wide)
     if (!document.getElementById('inline-edit-js')) {
@@ -2796,6 +2884,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dayButtons = timeMachineContainer.querySelectorAll('.time-item-btn');
     dayButtons.forEach(btn => {
       btn.addEventListener('click', async () => {
+        if (!window.maCan('timeTravel')) return; // IN-C01: demo-only POST, refused here
         const day = parseInt(btn.getAttribute('data-day'));
         timeMachineContainer.classList.remove('open');
         timeDropdown.classList.remove('show');

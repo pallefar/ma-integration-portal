@@ -772,6 +772,8 @@ document.addEventListener('DOMContentLoaded', () => {
         pmoRecipientSpecificContainer.style.display = 'none';
       }
     });
+    // WR-C07: real-deal employees cannot read in-app messages yet (Phase 22).
+    if (window.maAddEmployeeInboxNote) window.maAddEmployeeInboxNote(pmoRecipientType);
   }
 
   function loadPmoRecipientOptions() {
@@ -888,7 +890,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // [security] WR-C01 (Phase 11 review): defence in depth behind the page gate —
+  // a role the access map refuses `communications` (an employee who reached
+  // pmo.html before the handshake sent it home) loses the ledger card and sends
+  // no request. No map (demo-open) => loads exactly as before.
   function loadPmoCommunications() {
+    if (!pmoCommLedgerContainer) return;
+    canReady('communications').then(ok => {
+      if (ok) fetchPmoCommunications();
+      else hideCardOf(pmoCommLedgerContainer);
+    });
+  }
+  function fetchPmoCommunications() {
     if (!pmoCommLedgerContainer) return;
 
     fetch('/api/communications')

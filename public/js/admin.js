@@ -518,8 +518,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 250);
   }
 
+  // [security] WR-C01 (Phase 11 review): defence in depth behind the page gate.
+  // admin.html is for admin and hrbp, but a role the server refuses a staff
+  // read (an employee or pmo who reached the page before the handshake sent
+  // them home) must not fire that request: each staff loader waits on the
+  // server-computed access map (window.maCanReady in transitions.js — no role
+  // table here) and runs only when its key is allowed. With no map (demo-open)
+  // every loader runs exactly as before. UX only; the gate is the control.
+  function whenReadable(key, fn) {
+    if (typeof window.maCanReady !== 'function') { fn(); return; }
+    window.maCanReady(key).then((ok) => { if (ok) fn(); });
+  }
+
   // Load Assessments History Archive
   function loadAssessmentsHistory() {
+    whenReadable('assessmentsList', fetchAssessmentsHistory);
+  }
+  function fetchAssessmentsHistory() {
     fetch('/api/assessments')
       .then(res => res.json())
       .then(assessments => {
@@ -764,8 +779,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Load Acquired Employees Roster
+  // Load Acquired Employees Roster (WR-C01: only when `roster` is readable)
   function loadEmployees() {
+    whenReadable('roster', fetchEmployeesRoster);
+  }
+  function fetchEmployeesRoster() {
     fetch('/api/employees')
       .then(res => res.json())
       .then(employees => {
@@ -960,8 +978,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCancelAlertEdit = document.getElementById('btn-cancel-alert-edit');
   const alertsIndexContainer = document.getElementById('alerts-index-list');
 
-  // Load Integration Leaders List
+  // Load Integration Leaders List (WR-C01: only when `hrbps` is readable)
   function loadHrbps() {
+    whenReadable('hrbps', fetchHrbpsList);
+  }
+  function fetchHrbpsList() {
     fetch('/api/hrbps')
       .then(res => res.json())
       .then(hrbps => {
@@ -1608,16 +1629,21 @@ document.addEventListener('DOMContentLoaded', () => {
         specificRecipientContainer.style.display = 'none';
       }
     });
+    // WR-C07: real-deal employees cannot read in-app messages yet (Phase 22).
+    if (window.maAddEmployeeInboxNote) window.maAddEmployeeInboxNote(recipientTypeSelect);
   }
 
   // Load Recipient options
   function loadRecipientDropdownOptions() {
     if (!specificRecipientSelect) return;
     specificRecipientSelect.innerHTML = '<option value="">Loading recipients...</option>';
-    
+
+    // WR-C01: each directory is requested only when the access map allows it
+    // (same rule as pmo.js loadPmoRecipientOptions); a refused one is empty.
+    const readable = (key) => (typeof window.maCanReady === 'function' ? window.maCanReady(key) : Promise.resolve(true));
     Promise.all([
-      fetch('/api/employees').then(res => res.json()).catch(() => []),
-      fetch('/api/hrbps').then(res => res.json()).catch(() => [])
+      readable('roster').then(ok => (ok ? fetch('/api/employees').then(res => res.json()).catch(() => []) : [])),
+      readable('hrbps').then(ok => (ok ? fetch('/api/hrbps').then(res => res.json()).catch(() => []) : []))
     ]).then(([employees, hrbps]) => {
       specificRecipientSelect.innerHTML = '';
       
@@ -1727,10 +1753,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Load communications ledger
+  // Load communications ledger (WR-C01: only when `communications` is readable)
   function loadCommunications() {
+    whenReadable('communications', fetchCommunicationsLedger);
+  }
+  function fetchCommunicationsLedger() {
     if (!commLedgerContainer) return;
-    
+
     fetch('/api/communications')
       .then(res => res.json())
       .then(comms => {
@@ -2921,8 +2950,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const stillActive = document.querySelector('.admin-tab-btn.active');
     if (projectsBtn && (!stillActive || stillActive.hidden === true)) projectsBtn.click();
   }
+  // IN-C03 (Phase 11 review): admin.html ships the configuration/content rail
+  // tabs (and the all-config Localization group) hidden — `[data-config-only]`
+  // with inline display:none — so they never flash for a role that may not use
+  // them. They are revealed once the map grants configWrite, or immediately
+  // when there is no map helper at all. Demo-open: the map is absent, maCanReady
+  // resolves true, so they appear as soon as the probe settles.
+  function revealConfigTabs() {
+    document.querySelectorAll('[data-config-only]').forEach((el) => {
+      el.hidden = false;
+      el.style.display = '';
+    });
+  }
   if (typeof window.maCanReady === 'function') {
     window.maCanReady('configWrite').then((ok) => { if (!ok) applyConfigWriteGate(); });
+    window.maCanReady('configWrite').then((ok) => { if (ok) revealConfigTabs(); });
+  } else {
+    revealConfigTabs();
   }
 
   // --- Initial runs ---

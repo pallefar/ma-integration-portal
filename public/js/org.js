@@ -1548,7 +1548,18 @@
   document.addEventListener('DOMContentLoaded', function () {
     renderLoading();
     renderRiskRegisterLoading();
-    load().then(function () {
+    // [security] WR-C04 (Phase 11 review): the page is gated on the server-
+    // computed `org` capability (window.maCanReady, transitions.js). A role the
+    // read policy refuses every /api/org route (an employee in a real deal)
+    // sends NO request here — transitions.js's handshake redirects it home.
+    // pmo keeps the page (positions are filtered per `hr` clearance server-
+    // side). No map (demo-open, demo store) => loads exactly as before.
+    var orgReady = typeof window.maCanReady === 'function' ? window.maCanReady('org') : Promise.resolve(true);
+    orgReady.then(function (allowed) {
+      if (!allowed) return null;
+      return load();
+    }).then(function (loaded) {
+      if (loaded === null) return;
       renderSearch();
       renderStateSwitch();
       renderTree();

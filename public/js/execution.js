@@ -1345,6 +1345,15 @@
     }
   }
 
-  load().then(function () { wireControls(); wireExtraControls(); render(); renderSynergy(); renderRaid(); })
-    .catch(function (e) { console.error('Execution hub load failed:', e); });
+  // [security] WR-C01 (Phase 11 review): execution.html is a staff page; on a
+  // first-ever visit the synchronous page check has no verified role yet, so
+  // the hub waits for the server-computed access map before its first request.
+  // A role refused the task lane (an employee in a real deal) sends nothing —
+  // transitions.js's handshake redirects it home. No map (demo-open, demo
+  // store) => loads exactly as before.
+  var execReady = typeof window.maCanReady === 'function' ? window.maCanReady('tasks') : Promise.resolve(true);
+  execReady.then(function (allowed) {
+    if (!allowed) return;
+    return load().then(function () { wireControls(); wireExtraControls(); render(); renderSynergy(); renderRaid(); });
+  }).catch(function (e) { console.error('Execution hub load failed:', e); });
 })();
