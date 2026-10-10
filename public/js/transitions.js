@@ -477,11 +477,21 @@
   //   (each a banner; the session stays pending so the user can try again or
   //   leave.)
   // inFlight is the double-click guard (HP8): a second click sends nothing.
-  function runConflictReapply(session, btn, inFlightLabel) {
+  // WR-03 (09-REVIEW round 2) / UI-SPEC A9: inFlight is ALSO the exit lock.
+  // The reapply is irrevocable once sent, so while it is on the wire the
+  // session's exit control (`exitBtn` — Discard / Cancel) is disabled and
+  // Escape / overlay clicks are ignored (activateConflictSession). Before
+  // this, an exit mid-flight settled the page with the stale 409; the page
+  // re-read at once and could render "theirs" BEFORE the reapply committed
+  // "mine" — page and server silently diverged. Now the page always learns
+  // how the reapply ended: a 2xx settles with that Response; any failure
+  // re-renders the dialog with every control enabled again (rerender).
+  function runConflictReapply(session, btn, inFlightLabel, exitBtn) {
     if (session.settled || session.inFlight) return;
     session.inFlight = true;
     btn.disabled = true;
     btn.textContent = inFlightLabel;
+    if (exitBtn) exitBtn.disabled = true;
     const fresh = withFreshVersion(session.input, session.init, session.url, session.method,
       session.body && session.body.currentVersion);
     const freshUrl = (typeof fresh.input === 'string') ? fresh.input : session.url;
@@ -679,10 +689,15 @@
       cancelBtn.textContent = CONFLICT_CANCEL_LABEL;
       // Cancel: the record is kept, nothing is sent — the held promise
       // settles with the original 409 (the page then re-reads, GD-5).
-      cancelBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
+      // WR-03 / A9: ignored while "Delete anyway" is on the wire.
+      cancelBtn.addEventListener('click', () => {
+        if (session.inFlight) return;
+        settleConflictSession(session, session.originalRes);
+      });
 
-      // E3-loading: "Delete anyway" enters a disabled "Deleting…" state
-      // during the resubmit; "Cancel" stays enabled throughout. This dialog
+      // E3-loading (amended A9): "Delete anyway" enters a disabled "Deleting…"
+      // state during the resubmit and "Cancel" is disabled with it — the
+      // resubmit is irrevocable, so the page must learn its outcome. This dialog
       // itself IS the destructive confirmation — no window.confirm() is ever
       // stacked on top of it (D-08, asserted by the grep gate in the test).
       // E3-error (404 / network / 5xx) and a third-writer 409 are all handled
@@ -691,7 +706,7 @@
       deleteBtn.type = 'button';
       deleteBtn.className = 'btn btn-danger conflict-btn-delete';
       deleteBtn.textContent = CONFLICT_DELETE_LABEL;
-      deleteBtn.addEventListener('click', () => runConflictReapply(session, deleteBtn, CONFLICT_DELETING_LABEL));
+      deleteBtn.addEventListener('click', () => runConflictReapply(session, deleteBtn, CONFLICT_DELETING_LABEL, cancelBtn));
 
       actions.appendChild(cancelBtn);
       actions.appendChild(deleteBtn);
@@ -776,18 +791,24 @@
       discardBtn.textContent = CONFLICT_DISCARD_LABEL;
       // Discard: nothing is sent — the held promise settles with the original
       // 409 and the page keeps/re-reads the server's ("theirs") state.
-      discardBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
+      // WR-03 / A9: ignored while the reapply is on the wire.
+      discardBtn.addEventListener('click', () => {
+        if (session.inFlight) return;
+        settleConflictSession(session, session.originalRes);
+      });
 
-      // E2-loading: clicking APPLY disables only this button and swaps its
-      // label; DISCARD (above) stays enabled the whole time so the user can
-      // change their mind mid-flight. The reapply (and every failure/third-
+      // E2-loading (amended A9 — WR-03): clicking APPLY disables it, swaps its
+      // label, and disables DISCARD alongside it for the duration of the
+      // request. An exit mid-flight used to settle the page with the stale 409
+      // while the irrevocable reapply was still committing. Both controls are
+      // re-enabled by the re-render after any failure. The reapply (and every failure/third-
       // writer outcome, E2-error) lives in runConflictReapply — the "mine"
       // column is provably untouched, only the banner + button state change.
       const applyBtn = document.createElement('button');
       applyBtn.type = 'button';
       applyBtn.className = 'btn btn-primary conflict-btn-apply';
       applyBtn.textContent = CONFLICT_APPLY_LABEL;
-      applyBtn.addEventListener('click', () => runConflictReapply(session, applyBtn, CONFLICT_APPLYING_LABEL));
+      applyBtn.addEventListener('click', () => runConflictReapply(session, applyBtn, CONFLICT_APPLYING_LABEL, discardBtn));
 
       actions.appendChild(discardBtn);
       actions.appendChild(applyBtn);
@@ -823,7 +844,10 @@
     // 09-14: while the in-app confirm's first DELETE is on the wire it cannot
     // be cancelled (the request is already sent; the page must learn the
     // outcome) — Escape and an overlay click are ignored until it answers.
-    const exitLocked = () => session.confirmState && session.inFlight;
+    // WR-03 (09-REVIEW round 2) / UI-SPEC A9: the same rule now holds for
+    // EVERY variant — an Apply / Delete anyway reapply is just as irrevocable,
+    // so any in-flight request of the session locks every exit.
+    const exitLocked = () => session.inFlight;
     session.onKeydown = (e) => {
       if (e.key === 'Escape' && !exitLocked()) settleConflictSession(session, session.originalRes);
     };

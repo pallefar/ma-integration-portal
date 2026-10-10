@@ -1301,3 +1301,89 @@ test('CF11: the native window.confirm is never called by any CF case', () => {
   const noComments = WRAPPER_SRC.replace(/\/\/.*$/gm, '');
   assert.ok(!/window\.confirm|[^.\w]confirm\(/.test(noComments), 'no native confirm call in the wrapper region');
 });
+
+// ---- WR-03 (09-REVIEW round 2) / UI-SPEC A9: every exit is locked while a
+// reapply is on the wire. An exit mid-flight used to settle the page with the
+// stale 409 while the irrevocable reapply was still committing, so the page's
+// re-read could render "theirs" while the server ended up holding "mine". ----
+
+// A deferred fake Response: the test decides when (and how) it lands.
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+test('WR03a: Apply in flight -> Escape, overlay click and Discard all send nothing and settle nothing; the reapply 200 then resolves the held promise', async () => {
+  const reapply = deferred();
+  const ok = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : reapply.promise));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+
+  const discard = document.querySelectorAll('.conflict-btn-discard')[0];
+  assert.strictEqual(discard.disabled, true, 'Discard must be disabled while the reapply is on the wire');
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-apply')[0].disabled, true);
+  document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  const overlay = document.querySelectorAll('.conflict-modal-overlay')[0];
+  overlay.dispatchEvent({ type: 'click', target: overlay });
+  discard.click(); // the stub dispatches even on a disabled button — the handler guard must hold
+  await flushAll();
+
+  assert.strictEqual(outcome.settled, false, 'no exit may settle the session while the reapply is in flight');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'the dialog stays open');
+  assert.strictEqual(fake.calls.length, 2, 'nothing further is sent');
+
+  reapply.resolve(ok);
+  assert.strictEqual(await p, ok, 'the page learns the reapply outcome (the 200), never the stale 409');
+  assert.strictEqual(outcome.count, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('WR03b: a failed reapply re-enables both controls and the exits — Escape then settles with the original 409', async () => {
+  const first = makeResponse({ status: 409, body: conflictOf() });
+  const fake = makeRoutedFetch((i) => (i === 0 ? first : makeResponse({ status: 500, body: {} })));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-discard')[0].disabled, false, 'Discard re-enabled after the failure');
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-apply')[0].disabled, false, 'Apply re-enabled after the failure');
+  document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  assert.strictEqual(await p, first);
+});
+
+test('WR03c: Delete anyway in flight -> Cancel is disabled and every exit is ignored; the DELETE 200 resolves the held promise', async () => {
+  const resend = deferred();
+  const okDel = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf({ conflictKind: 'version' }) }) : resend.promise));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  await flushAll();
+
+  const cancel = document.querySelectorAll('.conflict-btn-discard')[0];
+  assert.strictEqual(cancel.disabled, true, 'Cancel must be disabled while Delete anyway is on the wire');
+  cancel.click();
+  document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  const overlay = document.querySelectorAll('.conflict-modal-overlay')[0];
+  overlay.dispatchEvent({ type: 'click', target: overlay });
+  await flushAll();
+  assert.strictEqual(outcome.settled, false);
+
+  resend.resolve(okDel);
+  assert.strictEqual(await p, okDel);
+  assert.strictEqual(fake.calls.length, 2);
+});
