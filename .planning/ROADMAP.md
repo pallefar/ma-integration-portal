@@ -130,7 +130,31 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
   4. Eight wrong passwords from one user do not lock out a colleague behind the same proxy; temporary passwords force a change at first login; stored hashes upgrade transparently; any user changes their password and ends their own sessions from the UI.
   5. New database files are `0600` in a `0700` directory under any umask.
 
-**Plans**: TBD — plan as two waves: (A) mode contract + data dir + bootstrap + demo-credential lockdown; (B) user CRUD, sessions, throttle/hash, UI.
+**Plans**: 9 plans (5 waves; server.js-touching plans 10-01 → 10-03 → 10-05 are one per wave)
+**Wave 1**
+
+- [ ] 10-01-PLAN.md — W1 tracer: MA_MODE=real mode contract, own data dir seeded without demo accounts, bootstrap-admin CLI, new scrypt hash format, committed-file guards
+- [ ] 10-02-PLAN.md — W1: existing suites seed their session identities (COLLAB-02 precondition, test-only)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 10-03-PLAN.md — W2: admin user CRUD + last-admin guard + per-request role/disabled re-read (COLLAB-02) + My-sessions API
+- [ ] 10-04-PLAN.md — W2: MNPI files 0600 / dirs 0700 under any umask (OPS-08)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 10-05-PLAN.md — W3: forced rotation gate, lazy rehash, per-account/per-source throttle, Secure cookie/HSTS, demo-credential lockdown
+- [ ] 10-06-PLAN.md — W3: mode-aware login page, change-password screen, header-menu Change password / My sessions, WINDOWS #4 loop fix, Playwright runner
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 10-07-PLAN.md — W4: admin console Users tab
+- [ ] 10-08-PLAN.md — W4: compression 1.8.2, real-deal launchers set MA_MODE=real, DEPLOYMENT/README rewrite
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 10-09-PLAN.md — W5: Playwright acceptance evidence at 1440/390, regressions, validation sign-off
+
 **UI hint**: yes
 
 ### Phase 11: Authorization & Clean-Room Closure

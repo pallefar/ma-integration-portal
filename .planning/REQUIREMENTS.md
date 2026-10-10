@@ -121,7 +121,7 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 - [ ] **DEPLOY-02**: A shipped container image and config contract (env vars, readiness endpoint, named `data/` volume, non-root, `.dockerignore` mirroring the MNPI boundary, `replicas: 1`, the glibc ≥ 2.38 base and arm64/musl pack-503 caveat documented) lets TE IT run the portal; the image carries no real data and never inherits `DEMO_OPEN=1`.
 - [ ] **DEPLOY-03**: Both deployment shapes pass one shared conformance script — liveness, readiness red until migrated, drain-on-SIGTERM exit 0, migration on boot.
 - [ ] **REL-01**: A scripted, checksummed release build produces the three turnkey zips excluding planning/test/legacy artifacts; the version is single-sourced (package.json, `/healthz`, tags); README, DEPLOYMENT, DEMO-RUNBOOK and the boot banner describe the app as it is.
-- [ ] **REL-02**: Shipped dependencies carry no known HIGH or critical advisory at release (audited at every phase close, bumped, re-committed; `compression` bumped in Phase 10).
+- [ ] **REL-02**: Shipped dependencies carry no known HIGH or critical advisory at release (audited at every phase close, bumped, re-committed; the `compression` ≥ 1.8.2 bump is gated by the supply-chain age check until 2026-10-11T11:17Z and lands no later than Phase 21 — Phase 10 plan 10-08 records DEFERRED-REL-02 if the gate has not cleared).
 
 ### Collaboration (COLLAB) & Setup Wizard (WIZ)
 
