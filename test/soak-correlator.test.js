@@ -29,6 +29,17 @@ const { spawn } = require('child_process');
 
 const SOAK_PATH = path.join(__dirname, '..', 'scripts', 'soak.js');
 
+// 12-14 (orchestrator decision 3): the soak harness forks server grandchildren.
+// SIGKILLing only the harness (the old 80 s watchdog) orphans them with the
+// test's stdout pipes open, and the test file then hangs until the outer
+// timeout (seen once under host load 100+, evidence/gate-attempt1-run11-hang.log).
+// The harness is spawned `detached` (its own process group) and the whole
+// GROUP is killed - on the watchdog AND unconditionally in `finally`.
+function killProcessGroup(child) {
+  if (!child || !child.pid) return;
+  try { process.kill(-child.pid, 'SIGKILL'); } catch (e) { /* group already gone */ }
+}
+
 // Code only: drop whole-line // comments so prose that mentions
 // `employeeName` cannot satisfy (or trip) a code-shape assertion.
 function soakCode() {
@@ -79,6 +90,7 @@ test('soak harness: a real 2-process smoke run passes every D-15 check (exit 0)'
   // pointing TMPDIR at a private directory keeps (and lets us verify cleanup
   // of) everything it writes.
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-soak-correlator-'));
+  let soakChild = null;
   try {
     const env = {
       ...process.env,
@@ -88,12 +100,13 @@ test('soak harness: a real 2-process smoke run passes every D-15 check (exit 0)'
       SOAK_WRITE_INTERVAL_MS: '400',
     };
     const { code, out } = await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [SOAK_PATH], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(process.execPath, [SOAK_PATH], { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+      soakChild = child;
       let buf = '';
       child.stdout.on('data', (d) => { buf += d; });
       child.stderr.on('data', (d) => { buf += d; });
       child.on('error', reject);
-      const killer = setTimeout(() => { try { child.kill('SIGKILL'); } catch (e) { /* ignore */ } }, 80000);
+      const killer = setTimeout(() => { killProcessGroup(child); }, 80000);
       child.on('exit', (c) => { clearTimeout(killer); resolve({ code: c, out: buf }); });
     });
     const verdict = out.split('\n').filter((l) => /\[(PASS|FAIL)\]|soak: (PASS|FAIL)/.test(l)).join('\n');
@@ -103,6 +116,38 @@ test('soak harness: a real 2-process smoke run passes every D-15 check (exit 0)'
     // The harness removes its own scratch dir on exit; nothing may be left.
     assert.deepStrictEqual(fs.readdirSync(scratch).filter((n) => n.startsWith('gsd-soak-')), []);
   } finally {
+    killProcessGroup(soakChild); // no orphaned server grandchild may outlive the test
     fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('soak harness test: killing the harness kills its whole process group (no orphaned grandchild holds the pipes)', { timeout: 30000 }, async () => {
+  const script = "const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'});"
+    + "console.log('GRANDCHILD '+c.pid);setInterval(()=>{},1000);";
+  const child = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  let grandchild = null;
+  try {
+    grandchild = await new Promise((resolve, reject) => {
+      let buf = '';
+      const timer = setTimeout(() => reject(new Error('grandchild pid never reported')), 10000);
+      child.stdout.on('data', (d) => {
+        buf += d;
+        const m = /GRANDCHILD (\d+)/.exec(buf);
+        if (m) { clearTimeout(timer); resolve(Number(m[1])); }
+      });
+      child.on('error', reject);
+    });
+    assert.doesNotThrow(() => process.kill(grandchild, 0), 'grandchild must be alive before the kill');
+    const exited = new Promise((resolve) => child.once('exit', resolve));
+    killProcessGroup(child);
+    await exited;
+    let alive = true;
+    for (let i = 0; i < 50 && alive; i++) {
+      try { process.kill(grandchild, 0); await new Promise((r) => setTimeout(r, 100)); } catch (e) { alive = false; }
+    }
+    assert.strictEqual(alive, false, 'the grandchild must die with its process group');
+  } finally {
+    killProcessGroup(child);
+    if (grandchild) { try { process.kill(grandchild, 'SIGKILL'); } catch (e) { /* gone */ } }
   }
 });

@@ -1,38 +1,38 @@
-HOST: load1=6.92 cpus=11 at 2026-10-10T20:59:57Z (threshold 12)
+HOST: load1=6.23 load5=11.60 cpus=11 at 2026-10-10T21:49:49Z (quiet = load1<30 and load5<1.5x30; waited 10s)
 
 > te-ma-integration-portal@1.0.0 soak
 > node scripts/soak.js
 
 soak: resolved config — processes=3 durationMs=120000 writeIntervalMs=100
-soak: created deal deal_mv2vobic073a310c in scratch dir <tmp>/gsd-soak-jPR4H1
-[server 0:4215] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
-[server 2:4217] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
-[server 1:4216] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
-[server 1:4216] [readiness] deal sweep: 1 opened, 0 not ready, 1 ms
-[server 0:4215] [readiness] deal sweep: 1 opened, 0 not ready, 1 ms
-[server 2:4217] [readiness] deal sweep: 1 opened, 0 not ready, 1 ms
-[server 2:4217] TE Connectivity M&A Portal server running on port 4217 (http://localhost:4217)
-[server 1:4216] TE Connectivity M&A Portal server running on port 4216 (http://localhost:4216)
-[server 0:4215] TE Connectivity M&A Portal server running on port 4215 (http://localhost:4215)
+soak: created deal deal_mv2xggeq19401109 in scratch dir <tmp>/gsd-soak-WyZm0w
+[server 1:4213] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
+[server 0:4212] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
+[server 2:4214] RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration playbook snippets (including 0 custom trained chunks).
+[server 2:4214] [readiness] deal sweep: 1 opened, 0 not ready, 2 ms
+[server 1:4213] [readiness] deal sweep: 1 opened, 0 not ready, 2 ms
+[server 2:4214] TE Connectivity M&A Portal server running on port 4214 (http://localhost:4214)
+[server 1:4213] TE Connectivity M&A Portal server running on port 4213 (http://localhost:4213)
+[server 0:4212] [readiness] deal sweep: 1 opened, 0 not ready, 1 ms
+[server 0:4212] TE Connectivity M&A Portal server running on port 4212 (http://localhost:4212)
 soak: all 3 server processes ready
-soak: created shared conflict-probe RAID entry raid_mv2vobse88c4624f at baseline version 1
+soak: created shared conflict-probe RAID entry raid_mv2xggk5aa269f51 at baseline version 1
 soak: driving load for ~120s across 3 processes...
-[server 0:4215] SIGTERM received — shutting down gracefully...
-[server 1:4216] SIGTERM received — shutting down gracefully...
-[server 2:4217] SIGTERM received — shutting down gracefully...
-soak: load phase complete — acknowledged=8403 refused=0 unexpected=0 | conflict-lane: acknowledged=863 conflict409=1783 refused503=0
+[server 1:4213] SIGTERM received — shutting down gracefully...
+[server 2:4214] SIGTERM received — shutting down gracefully...
+[server 0:4212] SIGTERM received — shutting down gracefully...
+soak: load phase complete — acknowledged=10451 refused=0 unexpected=0 | conflict-lane: acknowledged=1003 conflict409=2085 refused503=0
 soak: D-15 verdict —
   [PASS] no unexpected outcomes (not a 2xx, not a clean 503): none
-  [PASS] every acknowledged write present in the final database and exact: acknowledged=8403 missing=0 mismatched=0
+  [PASS] every acknowledged write present in the final database and exact: acknowledged=10451 missing=0 mismatched=0
   [PASS] no cleanly-refused write left anything committed (CR-01 fix: committed-but-unaudited is now a genuine violation, not an accepted trade-off): refused=0 committedButUnaudited(genuine violation post-CR-01)=0 committedAndAudited(genuine violation)=0
   [PASS] PRAGMA integrity_check ok on every touched file: deal=ok, control=ok, audit=ok
-  [PASS] audit trail matches acknowledged writes one-to-one (both directions): acknowledged=8403 auditRows=8403 missingFromAudit=0 duplicateInAudit=0 extraInAudit=0
-  [PASS] cleanly-refused count reported (bounded 503s are a pass, not a failure): refused=0/8403 (0.0%)
-  [PASS] conflict-probe RAID record version reconciles exactly with the number of acknowledged conflict-lane writes (no lost/duplicated commit): initialVersion=1 conflictAcknowledged=863 expectedFinalVersion=864 actualFinalVersion=864
-  [PASS] conflict-probe RAID record's final content matches the acknowledged write that reported the highest resulting version: expectedNotes=soak-conflict-w0-862 actualNotes=soak-conflict-w0-862
-  [PASS] 409 (conflict) outcome reconciles with the audit trail by membership — nothing acknowledged is missing, nothing conflicted ever committed (T-09-34): conflictAcknowledged=863 conflict409=1783 conflictRefused503=0 auditUpdateRows=864 missingFromAuditTrail=0 leakedConflictedIntoAudit=0
-  [PASS] conflict (409) outcome count reported alongside the bounded-503 count: conflict409=1783 conflictRefused503=0 conflictAcknowledged=863
-  [PASS] audit partition hash chain verifies after multi-process appends: rows=9268 head=fdccc4a55a8f...
+  [PASS] audit trail matches acknowledged writes one-to-one (both directions): acknowledged=10451 auditRows=10451 missingFromAudit=0 duplicateInAudit=0 extraInAudit=0
+  [PASS] cleanly-refused count reported (bounded 503s are a pass, not a failure): refused=0/10451 (0.0%)
+  [PASS] conflict-probe RAID record version reconciles exactly with the number of acknowledged conflict-lane writes (no lost/duplicated commit): initialVersion=1 conflictAcknowledged=1003 expectedFinalVersion=1004 actualFinalVersion=1004
+  [PASS] conflict-probe RAID record's final content matches the acknowledged write that reported the highest resulting version: expectedNotes=soak-conflict-w0-1002 actualNotes=soak-conflict-w0-1002
+  [PASS] 409 (conflict) outcome reconciles with the audit trail by membership — nothing acknowledged is missing, nothing conflicted ever committed (T-09-34): conflictAcknowledged=1003 conflict409=2085 conflictRefused503=0 auditUpdateRows=1004 missingFromAuditTrail=0 leakedConflictedIntoAudit=0
+  [PASS] conflict (409) outcome count reported alongside the bounded-503 count: conflict409=2085 conflictRefused503=0 conflictAcknowledged=1003
+  [PASS] audit partition hash chain verifies after multi-process appends: rows=11456 head=a3c75cb73d8c...
 soak: PASS — acknowledged-write invariant held under sustained real load.
-HOST: load at end: 18.05 68.08 101.25 at 2026-10-10T21:02:03Z
+HOST: load at end: 5.55 9.48 19.18 at 2026-10-10T21:51:55Z
 EXIT=0

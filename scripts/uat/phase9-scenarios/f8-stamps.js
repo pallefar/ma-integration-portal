@@ -5,30 +5,27 @@
 // stamp (T-09-57 / T-09-41). Scenario module loaded by
 // scripts/uat/phase9-walk.js.
 //
-// The expected stamp is not hard-coded here (it is bumped by every release
-// that changes an asset): the scenario requires, per asset, that
-//   (a) every request the browser made for it carries one numeric stamp,
-//   (b) that stamp equals the stamp in the page's HTML on disk,
-//   (c) it is strictly greater than the asset's pre-gap-closure floor below
-//       (its v2.1.0 value and its value just before the 09-15 bump), and
-//   (d) the response was 200 (a 304 would mean a cached copy was revalidated,
+// Phase 12 / 12-14 evidence refresh (orchestrator decision 2, D-12-07): the
+// stamp is no longer a hand-bumped number but `?v=<first 16 hex of
+// sha256(served bytes)>` (content-hash stamps, test/asset-cache-bust.test.js
+// and the contentHashStamps scenario). The three numeric assertions this
+// module made per asset - "one numeric stamp", "matches the page on disk as a
+// number", "> pre-gap-closure floor" - are superseded by the stronger contract
+// below. This is a DELIBERATE edit of this scenario module; the "requested" and
+// "200" assertions are unchanged. The scenario now requires, per asset, that
+//   (a) the browser requested it,
+//   (b) every request carries exactly one stamp matching /^[0-9a-f]{16}$/,
+//   (c) that stamp equals the stamp in the page's HTML AS SERVED (the checked-in
+//       HTML on disk still carries the legacy numeric stamps; the server
+//       rewrites them to content hashes at serve time),
+//   (d) that stamp equals the first 16 hex of sha256 of the bytes the server
+//       returns for that asset URL (fetched through the page's own session), and
+//   (e) the response was 200 (a 304 would mean a cached copy was revalidated,
 //       which a first load in a fresh context must never produce).
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-
-const PUBLIC = path.join(__dirname, '..', '..', '..', 'public');
-
-// asset URL path -> highest pre-gap-closure stamp (must be exceeded).
-const ASSETS = {
-  '/css/style.css': 1784600001,
-  '/js/transitions.js': 1784900002,
-  '/js/execution.js': 1786433369,
-  '/js/org.js': 1786433369,
-  '/js/due-diligence.js': 1786427686,
-};
+const crypto = require('crypto');
 
 // page -> assets that page must request under the new stamp.
 const PAGES = {
@@ -41,11 +38,10 @@ const PAGES = {
 };
 const ANONYMOUS = { '/login.html': true };
 
-function diskStamp(page, asset) {
-  const html = fs.readFileSync(path.join(PUBLIC, page.replace(/^\//, '')), 'utf8');
-  const re = new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=([0-9]+)');
+function stampInHtml(html, asset) {
+  const re = new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=([0-9a-f]+)');
   const m = re.exec(html);
-  return m ? Number(m[1]) : null;
+  return m ? m[1] : null;
 }
 
 module.exports = {
@@ -68,16 +64,24 @@ module.exports = {
       await page.goto(ctx.base + pagePath, { waitUntil: 'load' });
       await ctx.sleep(500);
 
+      const servedHtml = await (await page.request.get(ctx.base + pagePath)).text();
       for (const asset of PAGES[pagePath]) {
         const hits = seen.filter((s) => s.url.split('?')[0] === asset);
         const stamps = Array.from(new Set(hits.map((h) => (/[?&]v=([^&]*)/.exec(h.url) || [])[1])));
-        const disk = diskStamp(pagePath, asset);
+        const inPage = stampInHtml(servedHtml, asset);
         const label = `${pagePath} requests ${asset}`;
         ctx.check(label + ' (requested)', hits.length > 0, hits);
-        ctx.check(label + ' (one numeric stamp)', stamps.length === 1 && /^[0-9]+$/.test(stamps[0] || ''), stamps);
-        const stamp = Number(stamps[0]);
-        ctx.check(label + ' (stamp matches the page on disk)', disk !== null && stamp === disk, { requested: stamp, disk });
-        ctx.check(label + ' (stamp > pre-gap-closure ' + ASSETS[asset] + ')', stamp > ASSETS[asset], stamp);
+        const stamp = stamps[0] || '';
+        ctx.check(label + ' (one 16-hex content-hash stamp)', stamps.length === 1 && /^[0-9a-f]{16}$/.test(stamp), stamps);
+        ctx.check(label + ' (stamp matches the page as served)', inPage !== null && stamp === inPage, { requested: stamp, inPage });
+        let served = null;
+        if (hits.length > 0) {
+          const res = await page.request.get(ctx.base + hits[0].url);
+          served = res.status() === 200
+            ? crypto.createHash('sha256').update(await res.body()).digest('hex').slice(0, 16)
+            : 'status-' + res.status();
+        }
+        ctx.check(label + ' (stamp = first 16 hex of sha256 of the served bytes)', served !== null && stamp === served, { requested: stamp, served });
         ctx.check(label + ' (200)', hits.length > 0 && hits.every((h) => h.status === 200), hits.map((h) => h.status));
       }
       ctx.check(pagePath + ' loaded without a page error', page.pageErrors.length === 0, page.pageErrors);

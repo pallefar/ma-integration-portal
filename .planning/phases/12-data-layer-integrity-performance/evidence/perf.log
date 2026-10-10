@@ -1,4 +1,4 @@
-HOST: load1=9.07 cpus=11 at 2026-10-10T18:55:27Z (threshold 10)
+HOST: load1=4.87 load5=14.71 cpus=11 at 2026-10-10T21:47:05Z (quiet = load1<10 and load5<1.5x10; waited 590s)
 
 > te-ma-integration-portal@1.0.0 perf
 > node scripts/perf/run-all.js --assert
@@ -12,89 +12,94 @@ RAG Initialization Complete: Loaded and indexed 3 high-fidelity integration play
 baseline (PRD / R5-01 at volume): POST /api/raid 85.7 ms, POST /api/integration-tasks 96.6 ms, ~6,220 audit rows per create
 budget: median <= 40 ms, exactly 1 audit row per create, 0 per reorder
 
-POST /api/raid: median 14.3 ms  p95 18.0 ms  max 21.2 ms  (n=21)  audit rows per create 1.0
-POST /api/integration-tasks: median 2.5 ms  p95 4.0 ms  max 4.8 ms  (n=21)  audit rows per create 1.0
-reorder probe (reverse first 10 RAID rows via writeDb): 15.0 ms, audit rows 0, order persisted true
+POST /api/raid: median 13.4 ms  p95 15.2 ms  max 15.6 ms  (n=21)  audit rows per create 1.0
+POST /api/integration-tasks: median 5.0 ms  p95 5.8 ms  max 6.1 ms  (n=21)  audit rows per create 1.0
+reorder probe (reverse first 10 RAID rows via writeDb): 12.7 ms, audit rows 0, order persisted true
 audit.db after 48 creates + 1 reorder: 52 KB
 
 write-latency: PASS — budgets met
 
 ===== list-reads --runs 3 --assert =====
-list-reads: deal deal_mv2r88tg500404f9 seeded {"tasks":1000,"raid":5000,"positions":200} in lanes integrationTasks/raidEntries/orgPositions
+list-reads: deal deal_mv2xcygc83defc2a seeded {"tasks":1000,"raid":5000,"positions":200} in lanes integrationTasks/raidEntries/orgPositions
 R5 baseline (perf2.js, 10 users x 3 list reads): p50 322 ms, p95 483 ms | budget p95 <= 300 ms
 
-run 1: p50 130.9 ms, p95 145.0 ms, max 145.2 ms | non-200: 0 | bytes raid=1696528 integration-tasks=198724 positions=16136
-        event loop during the round: p50 6.4 p99 67.0 max 67.0 ms (heartbeat p99 66.9 max 66.9) | rss 189 MB | within budget
-run 2: p50 134.9 ms, p95 155.0 ms, max 155.1 ms | non-200: 0 | bytes raid=1696528 integration-tasks=198724 positions=16136
-        event loop during the round: p50 5.3 p99 49.0 max 49.0 ms (heartbeat p99 49.0 max 49.0) | rss 203 MB | within budget
-run 3: p50 149.0 ms, p95 158.1 ms, max 158.7 ms | non-200: 0 | bytes raid=1696528 integration-tasks=198724 positions=16136
-        event loop during the round: p50 6.1 p99 100.3 max 100.3 ms (heartbeat p99 100.3 max 100.3) | rss 203 MB | within budget
+run 1: p50 106.1 ms, p95 115.2 ms, max 115.5 ms | non-200: 0 | bytes raid=1696528 integration-tasks=198724 positions=16136
+        event loop during the round: p50 6.5 p99 66.1 max 66.1 ms (heartbeat p99 66.1 max 66.1) | rss 201 MB | within budget
+run 2: p50 97.2 ms, p95 108.4 ms, max 109.3 ms | non-200: 0 | bytes raid=1696528 integration-tasks=198724 positions=16136
+        event loop during the round: p50 6.3 p99 62.4 max 62.4 ms (heartbeat p99 62.4 max 62.4) | rss 217 MB | within budget
+run 3: p50 94.5 ms, p95 103.5 ms, max 103.6 ms | non-200: 0 | bytes raid=1696528 integration-tasks=198724 positions=16136
+        event loop during the round: p50 7.1 p99 61.9 max 61.9 ms (heartbeat p99 61.9 max 61.9) | rss 217 MB | within budget
 
-informational /api/raid                in-round p50 130.3 p95 132.0 ms
+informational /api/raid                in-round p50 100.7 p95 102.7 ms
 
-informational /api/integration-tasks   in-round p50 122.7 p95 123.0 ms
+informational /api/integration-tasks   in-round p50 96.0 p95 96.2 ms
 
-informational /api/org/positions       in-round p50 120.7 p95 121.2 ms
-informational /api/raid                single sequential median 14.3 ms (min 13.3) payload 1696528 B
-informational /api/integration-tasks   single sequential median 2.7 ms (min 2.3) payload 198724 B
-informational /api/org/positions       single sequential median 1.2 ms (min 0.9) payload 16136 B
-informational /api/raid?limit=50       single sequential median 7.4 ms (min 7.1) payload 16784 B
+informational /api/org/positions       in-round p50 92.2 p95 92.8 ms
+informational /api/raid                single sequential median 11.7 ms (min 11.1) payload 1696528 B
+informational /api/integration-tasks   single sequential median 2.1 ms (min 2.0) payload 198724 B
+informational /api/org/positions       single sequential median 0.9 ms (min 0.8) payload 16136 B
+informational /api/raid?limit=50       single sequential median 6.0 ms (min 5.6) payload 16784 B
 
-informational, ?limit=50 on raid + integration-tasks (tasks route not converted until 12-09/12-10): paged: p50 87.6 ms, p95 88.1 ms, max 88.2 ms | non-200: 0 | bytes raid=16784 integration-tasks=9901 positions=16136
+informational, ?limit=50 on raid + integration-tasks (tasks route not converted until 12-09/12-10): paged: p50 74.0 ms, p95 74.4 ms, max 74.5 ms | non-200: 0 | bytes raid=16784 integration-tasks=9901 positions=16136
 
 WITHIN BUDGET: 3/3 runs had p95 <= 300 ms (tasks/org/employees are converted in later waves; 12-14 asserts the budget)
 
 ===== load-40 --runs 3 --assert =====
-load-40: deal deal_mv2r8a6bfc8e3176, 40 RAID seeded, 40 closed-loop clients x 45 s, 3 run(s)
+load-40: 3 runs, each on a FRESH scratch deal + server (the R2 profile shape: 40 RAID seeded, 40 clients x 45 s)
 
-run 1: 14335 requests in 45.1 s = 317.9 rps with 40 clients
-  GET /api/employees           n= 1416 p50    60.8 p95   123.9 p99   154.7 ms  codes {"200":1416}
-  GET /api/integration-tasks   n= 2096 p50    61.9 p95   125.0 p99   153.5 ms  codes {"200":2096}
-  GET /api/raid                n= 6461 p50   197.7 p95   394.0 p99   461.4 ms  codes {"200":6461}
-  GET /healthz                 n=  708 p50    60.8 p95   125.4 p99   143.5 ms  codes {"200":708}
-  POST /api/raid               n= 3654 p50    49.1 p95   100.4 p99   127.3 ms  codes {"201":3654}
-  event loop (5 ms resolution, idle reads ~5): p50 34.3 p95 68.8 p99 86.3 max 107.4 ms | heartbeat p99 86.3 max 107.3 | rss 430 MB
-  R2 baseline event-loop p99 1921 ms | budget p99 <= 100 ms | measured p99 86.3 ms -> WITHIN budget
-run 2: 6488 requests in 45.2 s = 143.7 rps with 40 clients
-  GET /api/employees           n=  672 p50   103.3 p95   172.2 p99   219.0 ms  codes {"200":672}
-  GET /api/integration-tasks   n=  910 p50   104.1 p95   177.9 p99   194.2 ms  codes {"200":910}
-  GET /api/raid                n= 2992 p50   484.7 p95   634.9 p99   756.2 ms  codes {"200":2992}
-  GET /healthz                 n=  318 p50   103.0 p95   187.1 p99   213.5 ms  codes {"200":318}
-  POST /api/raid               n= 1596 p50    86.9 p95   144.9 p99   169.2 ms  codes {"201":1596}
-  event loop (5 ms resolution, idle reads ~5): p50 53.6 p95 95.4 p99 112.2 max 183.0 ms | heartbeat p99 112.2 max 182.9 | rss 356 MB
-  R2 baseline event-loop p99 1921 ms | budget p99 <= 100 ms | measured p99 112.2 ms -> OVER budget
-run 3: 4805 requests in 45.2 s = 106.3 rps with 40 clients
-  GET /api/employees           n=  512 p50   122.5 p95   215.6 p99   280.0 ms  codes {"200":512}
-  GET /api/integration-tasks   n=  727 p50   121.7 p95   209.9 p99   240.8 ms  codes {"200":727}
-  GET /api/raid                n= 2150 p50   678.9 p95   904.2 p99   984.2 ms  codes {"200":2150}
-  GET /healthz                 n=  222 p50   122.1 p95   216.0 p99   260.7 ms  codes {"200":222}
-  POST /api/raid               n= 1194 p50   105.9 p95   175.5 p99   210.6 ms  codes {"201":1194}
-  event loop (5 ms resolution, idle reads ~5): p50 62.9 p95 113.8 p99 133.0 max 164.1 ms | heartbeat p99 133.0 max 164.1 | rss 488 MB
-  R2 baseline event-loop p99 1921 ms | budget p99 <= 100 ms | measured p99 133.0 ms -> OVER budget
+load-40 run 1: deal deal_mv2xczm32c21d62a, 40 RAID seeded, 40 closed-loop clients x 45 s
+run 1: 13590 requests in 45.1 s = 301.6 rps with 40 clients (fresh deal; host load 1/5/15 min 4.9/14.5/24.2 -> 7.6/13.8/23.5 at 2026-10-10T21:47:53.645Z)
+  GET /api/employees           n= 1425 p50    65.6 p95   135.9 p99   158.4 ms  codes {"200":1425}
+  GET /api/integration-tasks   n= 2066 p50    65.5 p95   132.9 p99   163.6 ms  codes {"200":2066}
+  GET /api/raid                n= 6083 p50   208.9 p95   401.8 p99   480.8 ms  codes {"200":6083}
+  GET /healthz                 n=  678 p50    62.6 p95   138.8 p99   162.1 ms  codes {"200":678}
+  POST /api/raid               n= 3338 p50    54.9 p95   111.3 p99   141.5 ms  codes {"201":3338}
+  event loop (5 ms resolution, idle reads ~5): p50 37.1 p95 74.1 p99 93.9 max 112.9 ms | heartbeat p99 93.8 max 112.8 | rss 340 MB
+  R2 baseline event-loop p99 1921 ms | budget p99 <= 100 ms | measured p99 93.9 ms -> WITHIN budget
 
-OVER BUDGET: 1/3 runs had event-loop p99 <= 100 ms (tasks/employees/org reads are converted in later waves; 12-14 asserts the budget)
+load-40 run 2: deal deal_mv2xdyu18a36c9e3, 40 RAID seeded, 40 closed-loop clients x 45 s
+run 2: 13463 requests in 45.1 s = 298.4 rps with 40 clients (fresh deal; host load 1/5/15 min 7.6/13.8/23.5 -> 9.1/13.3/22.8 at 2026-10-10T21:48:39.410Z)
+  GET /api/employees           n= 1380 p50    68.1 p95   124.6 p99   158.5 ms  codes {"200":1380}
+  GET /api/integration-tasks   n= 1939 p50    67.6 p95   129.2 p99   155.8 ms  codes {"200":1939}
+  GET /api/raid                n= 6131 p50   209.5 p95   402.7 p99   479.3 ms  codes {"200":6131}
+  GET /healthz                 n=  681 p50    67.9 p95   132.6 p99   154.9 ms  codes {"200":681}
+  POST /api/raid               n= 3332 p50    55.8 p95   107.0 p99   130.6 ms  codes {"201":3332}
+  event loop (5 ms resolution, idle reads ~5): p50 38.6 p95 72.9 p99 89.7 max 107.9 ms | heartbeat p99 89.7 max 107.9 | rss 300 MB
+  R2 baseline event-loop p99 1921 ms | budget p99 <= 100 ms | measured p99 89.7 ms -> WITHIN budget
+
+load-40 run 3: deal deal_mv2xey4p234a21a4, 40 RAID seeded, 40 closed-loop clients x 45 s
+run 3: 13506 requests in 45.1 s = 299.4 rps with 40 clients (fresh deal; host load 1/5/15 min 9.1/13.3/22.8 -> 6.9/12.2/21.8 at 2026-10-10T21:49:25.167Z)
+  GET /api/employees           n= 1382 p50    68.2 p95   133.9 p99   175.8 ms  codes {"200":1382}
+  GET /api/integration-tasks   n= 2019 p50    66.2 p95   125.2 p99   154.9 ms  codes {"200":2019}
+  GET /api/raid                n= 6107 p50   203.0 p95   410.6 p99   466.8 ms  codes {"200":6107}
+  GET /healthz                 n=  678 p50    67.8 p95   131.3 p99   166.7 ms  codes {"200":678}
+  POST /api/raid               n= 3320 p50    55.1 p95   108.2 p99   132.1 ms  codes {"201":3320}
+  event loop (5 ms resolution, idle reads ~5): p50 38.3 p95 75.0 p99 90.8 max 115.7 ms | heartbeat p99 90.8 max 115.7 | rss 318 MB
+  R2 baseline event-loop p99 1921 ms | budget p99 <= 100 ms | measured p99 90.8 ms -> WITHIN budget
+
+WITHIN BUDGET: 3/3 runs had event-loop p99 <= 100 ms (each on a fresh deal)
 
 ===== pack-isolation --assert =====
-warm-up pack: 200, 474354 bytes
+warm-up pack: 200, 473586 bytes
 PRD baseline (R2-03, in-process render): event loop blocked 2397 ms per pack
 
-idle (1 s, pinger only): eld p50 6.3 p99 7.3 max 8.0 ms (heartbeat p99 7.2 max 7.3) | ping p99 5.8 ms
+idle (1 s, pinger only): eld p50 6.3 p99 6.7 max 10.1 ms (heartbeat p99 9.5 max 10.1) | ping p99 10.8 ms
 
-round 1: render 172.4 ms (A=200 %PDF-, B=429 Retry-After=5) | event loop p50 6.3 p95 6.8 p99 11.4 max 11.4 ms [histogram p99 11.4 max 11.4; heartbeat p99 11.4 max 11.4] | ping p99 2.6 max 2.6 ms (6 pings) | rss 266 MB
-round 2: render 130.7 ms (A=200 %PDF-, B=429 Retry-After=5) | event loop p50 6.3 p95 6.6 p99 6.8 max 6.8 ms [histogram p99 6.8 max 6.8; heartbeat p99 6.8 max 6.8] | ping p99 2.2 max 2.2 ms (4 pings) | rss 268 MB
-round 3: render 126.7 ms (A=200 %PDF-, B=429 Retry-After=5) | event loop p50 6.3 p95 6.3 p99 6.3 max 6.3 ms [histogram p99 6.3 max 6.3; heartbeat p99 6.3 max 6.3] | ping p99 1.2 max 1.2 ms (4 pings) | rss 271 MB
+round 1: render 165.6 ms (A=200 %PDF-, B=429 Retry-After=5) | event loop p50 6.3 p95 6.4 p99 9.6 max 9.6 ms [histogram p99 6.4 max 6.4; heartbeat p99 9.6 max 9.6] | ping p99 4.9 max 4.9 ms (6 pings) | rss 266 MB
+round 2: render 131.7 ms (A=200 %PDF-, B=429 Retry-After=5) | event loop p50 6.0 p95 6.3 p99 6.3 max 6.3 ms [histogram p99 6.3 max 6.3; heartbeat p99 6.3 max 6.3] | ping p99 1.9 max 1.9 ms (4 pings) | rss 269 MB
+round 3: render 123.8 ms (A=200 %PDF-, B=429 Retry-After=5) | event loop p50 6.3 p95 6.5 p99 6.9 max 6.9 ms [histogram p99 6.9 max 6.9; heartbeat p99 6.9 max 6.9] | ping p99 1.1 max 1.1 ms (4 pings) | rss 271 MB
 
-worst round: event loop p99 11.4 ms, max 11.4 ms (budget p99 <= 50 ms; baseline blocked 2397 ms)
+worst round: event loop p99 9.6 ms, max 9.6 ms (budget p99 <= 50 ms; baseline blocked 2397 ms)
 
 PASS: every round event-loop p99 <= 50 ms, second concurrent request refused 429 + Retry-After.
 
 ===== PERF SUMMARY =====
 script          budget                                            PRD baseline                                  measured / verdict
-write-latency   median <= 40 ms, 1 audit row per create           raid 85.7 ms / task 96.6 ms (R5-01)           POST /api/raid median 14.3 ms; POST /api/integration-tasks median 2.5 ms | exit 0 | PASS (1 s)
-list-reads      10 users x 3 list reads: p95 <= 300 ms            p50 322 ms, p95 483 ms (R5 perf2)             run 1 p95 145.0 ms; run 2 p95 155.0 ms; run 3 p95 158.1 ms | exit 0 | PASS (2 s)
-load-40         40 clients: event-loop p99 <= 100 ms              event-loop p99 1921 ms (R2)                   run 1 event-loop p99 86.3 ms; run 2 event-loop p99 112.2 ms OVER; run 3 event-loop p99 133.0 ms OVER | exit 1 | FAIL (136 s)
-pack-isolation  pack export: event-loop p99 <= 50 ms, 2nd pack 429event loop blocked 2397 ms per pack (R2-03)   worst round p99 11.4 ms | exit 0 | PASS (3 s)
+write-latency   median <= 40 ms, 1 audit row per create           raid 85.7 ms / task 96.6 ms (R5-01)           POST /api/raid median 13.4 ms; POST /api/integration-tasks median 5.0 ms | exit 0 | PASS (1 s)
+list-reads      10 users x 3 list reads: p95 <= 300 ms            p50 322 ms, p95 483 ms (R5 perf2)             run 1 p95 115.2 ms; run 2 p95 108.4 ms; run 3 p95 103.5 ms | exit 0 | PASS (1 s)
+load-40         40 clients: event-loop p99 <= 100 ms              event-loop p99 1921 ms (R2)                   run 1 event-loop p99 93.9 ms; run 2 event-loop p99 89.7 ms; run 3 event-loop p99 90.8 ms | exit 0 | PASS (137 s)
+pack-isolation  pack export: event-loop p99 <= 50 ms, 2nd pack 429event loop blocked 2397 ms per pack (R2-03)   worst round p99 9.6 ms | exit 0 | PASS (3 s)
 
-PERF FAIL load-40
-HOST: load at end: 9.51 13.67 17.82 at 2026-10-10T18:57:49Z
-EXIT=1
+PERF PASS
+HOST: load at end: 6.87 12.09 21.76 at 2026-10-10T21:49:28Z
+EXIT=0
