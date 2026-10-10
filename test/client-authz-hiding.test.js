@@ -564,19 +564,53 @@ test('amendment 2 (vm): admin and demo-open still get the wizard exactly as toda
   }
 });
 
+/**
+ * Removes // and block comments from JS source, leaving string / template
+ * literal contents intact (so a guard written only inside a comment, or a URL
+ * containing //, cannot fool a source row). WR-C06 (Phase 11 review).
+ */
+function stripComments(src) {
+  let out = '';
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (c === '/' && n === '/') { const e = src.indexOf('\n', i); if (e < 0) break; i = e - 1; continue; }
+    if (c === '/' && n === '*') { const e = src.indexOf('*/', i + 2); if (e < 0) break; i = e + 1; continue; }
+    if (c === '\'' || c === '"' || c === '`') {
+      let j = i + 1;
+      for (; j < src.length && src[j] !== c; j++) if (src[j] === '\\') j++;
+      out += src.slice(i, j + 1);
+      i = j;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * WR-C06: the guard must sit inside the SPECIFIC handler (anchored on its
+ * opening, which must be unique), before `needle`, in code — not in a comment
+ * and not anywhere earlier in the file.
+ */
+function guardedInHandler(src, opening, needle, guard) {
+  const first = src.indexOf(opening);
+  assert.ok(first >= 0, `could not find the handler opening ${opening}`);
+  assert.strictEqual(src.indexOf(opening, first + 1), -1, `the handler opening ${opening} must be unique`);
+  const body = stripComments(extractBlock(src, opening));
+  const at = body.indexOf(needle);
+  assert.ok(at > 0, `${needle} is not inside the ${opening} handler`);
+  return body.slice(0, at).includes(guard);
+}
+
 test('amendment 2 (source): every POST /api/settings in pmo.js is behind a configWrite guard; the roster upload follows the roster rule', () => {
-  const guardBefore = (needle) => {
-    const at = PMO_SRC.indexOf(needle);
-    assert.ok(at > 0, `could not find ${needle}`);
-    const handlerAt = Math.max(PMO_SRC.lastIndexOf('addEventListener(', at), 0);
-    return PMO_SRC.slice(handlerAt, at).includes("canNow('configWrite')");
-  };
+  const guardBefore = (opening, needle) => guardedInHandler(PMO_SRC, opening, needle, "canNow('configWrite')");
   // demo-mode switcher: the click handler is guarded and the control is hidden
-  assert.ok(guardBefore("body: JSON.stringify({ demoMode: nextDemoMode })"), 'switcher click is guarded');
+  assert.ok(guardBefore("switcherContainer.addEventListener('click'", 'body: JSON.stringify({ demoMode: nextDemoMode })'), 'switcher click is guarded');
   assert.ok(/canReady\('configWrite'\)\.then\(ok => \{ if \(!ok\) hideSection\(switcherContainer\); \}\)/.test(PMO_SRC), 'switcher is hidden');
   // custom-setup wizard step 1 and the finalize call (pmoCustomSetupComplete)
-  assert.ok(guardBefore('targetCompany: document.getElementById'), 'wizard specs submit is guarded');
-  assert.ok(guardBefore('body: JSON.stringify({ pmoCustomSetupComplete: true })'), 'finalize is guarded');
+  assert.ok(guardBefore("specsForm.addEventListener('submit'", 'targetCompany: document.getElementById'), 'wizard specs submit is guarded');
+  assert.ok(guardBefore("finalizeBtn.addEventListener('click'", 'body: JSON.stringify({ pmoCustomSetupComplete: true })'), 'finalize is guarded');
   assert.ok(/parsedRoster\.length > 0 && canNow\('roster'\)/.test(PMO_SRC), 'roster upload follows the roster rule');
 });
 
@@ -910,17 +944,12 @@ test('item 8 (vm): a console restored onto a hidden panel falls back to Projects
 test('item 8 (source): the gate runs only when the map says configWrite is false, and every config save is guarded', () => {
   assert.ok(/window\.maCanReady\('configWrite'\)\.then\(\(ok\) => \{ if \(!ok\) applyConfigWriteGate\(\); \}\)/.test(ADMIN_SRC),
     'applyConfigWriteGate is wired to the access map, and only runs when it is refused');
-  const guarded = (needle) => {
-    const at = ADMIN_SRC.indexOf(needle);
-    assert.ok(at > 0, `could not find ${needle}`);
-    const handlerAt = ADMIN_SRC.lastIndexOf('addEventListener(', at);
-    return ADMIN_SRC.slice(handlerAt, at).includes("window.maCan('configWrite')");
-  };
-  assert.ok(guarded("fetch('/api/settings', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(payload)"), 'settings save');
-  assert.ok(guarded('body: JSON.stringify({ demoMode: nextDemoMode })'), 'demo-mode switcher');
-  assert.ok(guarded('roleVisibility: {'), 'role visibility save');
-  assert.ok(guarded("fetch('/api/settings/new-ma'"), 'reset custom M&A');
-  assert.ok(guarded("fetch('/api/admin/migrate-db'"), 'database migration');
+  const guarded = (opening, needle) => guardedInHandler(ADMIN_SRC, opening, needle, "window.maCan('configWrite')");
+  assert.ok(guarded("settingsForm.addEventListener('submit'", "fetch('/api/settings', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(payload)"), 'settings save');
+  assert.ok(guarded("switcherContainer.addEventListener('click'", 'body: JSON.stringify({ demoMode: nextDemoMode })'), 'demo-mode switcher');
+  assert.ok(guarded("roleVisibilityForm.addEventListener('submit'", 'roleVisibility: {'), 'role visibility save');
+  assert.ok(guarded("btnResetCustomMa.addEventListener('click'", "fetch('/api/settings/new-ma'"), 'reset custom M&A');
+  assert.ok(guarded("dbMigrationForm.addEventListener('submit'", "fetch('/api/admin/migrate-db'"), 'database migration');
 });
 
 test('item 8 (vm): admin-cms.js builds the slides/courses/pages/menus/banners editors only with configWrite', async () => {
@@ -1627,6 +1656,47 @@ test('IN-C03 (vm): the hidden-by-default tabs are revealed for configWrite (and 
   (await run(ME_HRBP)).forEach((e) => assert.strictEqual(e.style.display, 'none'));
   assert.ok(/window\.maCanReady\('configWrite'\)\.then\(\(ok\) => \{ if \(ok\) revealConfigTabs\(\); \}\);/.test(ADMIN_SRC), 'wired to the map');
   assert.ok(/\} else \{\s*revealConfigTabs\(\);\s*\}/.test(ADMIN_SRC), 'no map helper at all => revealed at once');
+});
+
+// ------------------------------------ WR-C06: client/server capability-key drift
+/** Every capability-key literal the client code asks about, with where. */
+function clientCapabilityKeys() {
+  const PATTERNS = [
+    /\b(?:maCan|maCanReady|canReady|canNow|readable|whenReadable|maHideUnless)\(\s*'([A-Za-z]\w*)'/g,
+    /\baccess\.([A-Za-z]\w*)\s*===\s*false/g,
+  ];
+  const found = new Map();
+  const dir = path.join(PUBLIC, 'js');
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    for (const re of PATTERNS) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(src)) !== null) {
+        if (!found.has(m[1])) found.set(m[1], new Set());
+        found.get(m[1]).add(f);
+      }
+    }
+  }
+  return found;
+}
+
+test('WR-C06: every capability key the client asks about is a key the server actually serves on /api/auth/me', async () => {
+  const fx = createDealFixture({ controlConn, runtimeConn, dealId: 'deal_ahdrift', members: MEMBERS });
+  await withServer(async (base) => {
+    const served = new Set(Object.keys((await me(base, fx.cookie('ah-admin'))).json.access));
+    // the served map is exactly the read probes + the named write capabilities
+    assert.deepStrictEqual([...served].sort(), READ_KEYS.concat('configWrite', 'helpdesk', 'timeTravel').sort());
+    const used = clientCapabilityKeys();
+    assert.ok(used.size >= 12, `expected the client to use the access map widely (found ${used.size} keys)`);
+    for (const k of ['roster', 'configWrite', 'helpdesk', 'timeTravel', 'assessmentInstances', 'dd', 'org', 'tasks']) {
+      assert.ok(used.has(k), `sanity: the client uses ${k}`);
+    }
+    for (const [k, files] of used) {
+      assert.ok(served.has(k), `client key '${k}' (${[...files].join(', ')}) is not served by /api/auth/me — ` +
+        'a renamed/dropped probe would make maCan() return true and re-show a control that only 403s');
+    }
+  });
 });
 
 test('WR-C02 (source): the submit handler is wired to submitHelpdeskTicket and the old .finally(success) is gone', () => {
