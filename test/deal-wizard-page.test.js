@@ -20,7 +20,21 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
+// [security] D-12-06 / R5-04: requiring server.js opens the control/runtime/
+// demo/audit files; isolate them to a temp directory BEFORE any require of the
+// app so this suite can never resolve the developer's real <repo>/data paths.
+const ISOLATION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-deal-wizard-page-'));
+process.env.MA_CONTROL_DB_PATH = path.join(ISOLATION_DIR, 'control.db');
+process.env.MA_RUNTIME_DB_PATH = path.join(ISOLATION_DIR, 'runtime.db');
+process.env.MA_DEMO_DB_PATH = path.join(ISOLATION_DIR, 'demo.db');
+process.env.MA_DEALS_DIR = path.join(ISOLATION_DIR, 'deals');
+process.env.MA_AUDIT_DB_PATH = path.join(ISOLATION_DIR, 'audit.db');
+test.after(() => {
+  try { fs.rmSync(ISOLATION_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
 
 const ROOT = path.join(__dirname, '..');
 const WIZARD_HTML_PATH = path.join(ROOT, 'public', 'deal-wizard.html');

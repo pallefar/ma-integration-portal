@@ -11,8 +11,25 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// [security] D-12-06 / R5-04: isolate every database file BEFORE requiring the
+// app — requiring server.js opens the control/runtime/demo/audit files, and an
+// un-overridden default would resolve to the developer's real <repo>/data.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-write-validation-coverage-'));
+process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
+process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
+process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
+process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
+process.env.MA_AUDIT_DB_PATH = path.join(TMP_DIR, 'audit.db');
 
 const app = require('../server.js');
+
+test.after(() => {
+  try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
 const { findUnvalidatedWriteRoutes } = require('../validators/index.js');
 
 test('write-validation-coverage (VAL-01): every registered write route resolves to a schema', () => {

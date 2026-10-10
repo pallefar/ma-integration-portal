@@ -81,6 +81,11 @@ process.env.MA_DEMO_DB_PATH = A.demo;
 process.env.MA_AUDIT_DB_PATH = A.audit;
 process.env.MA_DEALS_DIR = A.deals;
 for (const key of ['MA_MODE', 'MA_DATA_DIR', 'MA_CONTROL_DB_PATH', 'DEMO_OPEN', 'ADMIN_TOKEN']) delete process.env[key];
+// [security] D-12-06: section A's whole point is the committed control.db being
+// the ACTIVE control database, so it explicitly opts in to the test-isolation
+// guard's one exemption (data/control.db only — runtime/audit/demo/deals stay
+// temp above). The committed main file and -wal are hashed before/after below.
+process.env.MA_TEST_ALLOW_COMMITTED_CONTROL_DB = '1';
 
 let app;
 function loadApp() {
