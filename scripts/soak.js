@@ -165,8 +165,9 @@ function createWorkerSessions(count, dealId) {
  * CREATES new rows — a load generator that never mutates an EXISTING record
  * can never produce a version conflict, so D-06's contract would have
  * nothing to prove itself against in this harness without a dedicated
- * conflict-inducing write target. Stamped to version:1 immediately (D-09's
- * own "first successful write" lazy-adoption convention) so every worker's
+ * conflict-inducing write target. Stamped to version:1 immediately by an
+ * explicit `version: 0` baseline write (D-09: version-less IS version 0; a
+ * precondition-less write is refused in a deal) so every worker's
  * conflict lane starts from a KNOWN baseline rather than the ambiguous
  * "no version field yet" state.
  */
@@ -181,7 +182,10 @@ async function createSharedConflictRecord(port, cookie) {
   const stampRes = await fetch(`http://127.0.0.1:${port}/api/raid`, {
     method: 'POST',
     headers: { Cookie: cookie, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: entry.id, notes: 'soak baseline stamp' }),
+    // version: 0 — the precondition a client holding a never-edited record
+    // sends (D-09). A write with NO precondition is refused 400 in a real
+    // deal (CONC-02 gap closure, plan 09-08), so the baseline must be explicit.
+    body: JSON.stringify({ id: entry.id, notes: 'soak baseline stamp', version: 0 }),
   });
   if (stampRes.status !== 200) throw new Error(`soak: failed to stamp the shared conflict-probe RAID entry's baseline version (status ${stampRes.status})`);
   const stamped = (await stampRes.json()).entry;

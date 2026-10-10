@@ -213,6 +213,86 @@ test('precondition (P6): DELETE /api/raid/:id?expectedVersion=0 on a never-edite
   });
 });
 
+// ---------------------------------------------------------------------------
+// H1/H2: the test-infrastructure helper (GD-3, T-09-40). This file never calls
+// installHeldVersionFetch() — it only exercises the pure function.
+// ---------------------------------------------------------------------------
+
+const heldVersionHelper = require('./helpers/held-version.js');
+
+function braceMatchPre(src, openIdx) {
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+test('precondition (H1, structural): the helper\'s VERSIONED_WRITE_ROUTES equals, in both directions, the set of server.js handlers that call conflictIfStale(', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const re = /app\.(post|put|patch|delete)\(\s*(['"])((?:[^'"\\]|\\.)*)\2\s*,\s*(async\s+)?\(\s*req\s*,\s*res(?:\s*,\s*next)?\s*\)\s*=>\s*\{/g;
+  const live = new Set();
+  let m;
+  while ((m = re.exec(src))) {
+    const openIdx = m.index + m[0].length - 1;
+    const closeIdx = braceMatchPre(src, openIdx);
+    if (closeIdx === -1) continue;
+    if (src.slice(openIdx, closeIdx + 1).includes('conflictIfStale(')) live.add(`${m[1].toUpperCase()} ${m[3]}`);
+  }
+  assert.ok(live.size > 0, 'the structural scan matched zero handlers — it must fail loudly rather than pass vacuously');
+  const table = new Set(heldVersionHelper.VERSIONED_WRITE_ROUTES.map((r) => `${r.method} ${r.route}`));
+  const missingFromTable = [...live].filter((k) => !table.has(k)).sort();
+  const staleInTable = [...table].filter((k) => !live.has(k)).sort();
+  assert.deepStrictEqual(missingFromTable, [], `server.js routes calling conflictIfStale( that test/helpers/held-version.js does not list:\n${missingFromTable.join('\n')}`);
+  assert.deepStrictEqual(staleInTable, [], `held-version.js lists routes that no longer call conflictIfStale(:\n${staleInTable.join('\n')}`);
+  assert.strictEqual(heldVersionHelper.VERSIONED_WRITE_ROUTES.length, 23);
+});
+
+test('precondition (H2): the helper fills only an ABSENT precondition, from the stored version, for a deal-bound session and an existing record', async () => {
+  await withServer(async (base) => {
+    const { token, entry } = await dealSessionWithEntry(base, 'deal_preh2');
+    const stamp = await postJSON(base, '/api/raid', token, { id: entry.id, title: 'stamped', version: 0 });
+    assert.strictEqual(stamp.status, 200);
+    const headers = { Cookie: cookieHeader(token), 'Content-Type': 'application/json' };
+    const { withHeldPrecondition, heldVersion } = heldVersionHelper;
+
+    assert.strictEqual(heldVersion('deal_preh2', entry.id), 1);
+    assert.strictEqual(heldVersion('deal_preh2', 'raid_does_not_exist'), undefined);
+
+    const filled = withHeldPrecondition(`${base}/api/raid`, { method: 'POST', headers, body: JSON.stringify({ id: entry.id, notes: 'x' }) });
+    assert.strictEqual(JSON.parse(filled.init.body).version, 1, 'a POST without version gains the stored version');
+
+    const delFilled = withHeldPrecondition(`${base}/api/raid/${entry.id}`, { method: 'DELETE', headers });
+    assert.strictEqual(delFilled.url, `${base}/api/raid/${entry.id}?expectedVersion=1`, 'a DELETE without expectedVersion gains it');
+
+    const viaHeadersObj = withHeldPrecondition(`${base}/api/raid`, { method: 'POST', headers: new Headers(headers), body: JSON.stringify({ id: entry.id }) });
+    assert.strictEqual(JSON.parse(viaHeadersObj.init.body).version, 1, 'a Headers instance is read too');
+
+    const explicitBody = JSON.stringify({ id: entry.id, notes: 'x', version: 0 });
+    const explicit = withHeldPrecondition(`${base}/api/raid`, { method: 'POST', headers, body: explicitBody });
+    assert.strictEqual(explicit.init.body, explicitBody, 'an explicit (stale) version is never touched');
+    const explicitDel = withHeldPrecondition(`${base}/api/raid/${entry.id}?expectedVersion=0`, { method: 'DELETE', headers });
+    assert.strictEqual(explicitDel.url, `${base}/api/raid/${entry.id}?expectedVersion=0`, 'an explicit expectedVersion is never touched');
+
+    const unknownBody = JSON.stringify({ id: 'raid_does_not_exist', notes: 'x' });
+    const unknown = withHeldPrecondition(`${base}/api/raid`, { method: 'POST', headers, body: unknownBody });
+    assert.strictEqual(unknown.init.body, unknownBody, 'an unknown id is left for the route to 404');
+
+    const createBody = JSON.stringify({ title: 'a create' });
+    assert.strictEqual(withHeldPrecondition(`${base}/api/raid`, { method: 'POST', headers, body: createBody }).init.body, createBody, 'a create (no id) is unchanged');
+
+    const demoToken = newSession('admin', 'admin'); // no deal binding -> demo store
+    const demoBody = JSON.stringify({ id: entry.id, notes: 'x' });
+    const demo = withHeldPrecondition(`${base}/api/raid`, { method: 'POST', headers: { Cookie: cookieHeader(demoToken) }, body: demoBody });
+    assert.strictEqual(demo.init.body, demoBody, 'a demo-store session is left alone');
+
+    const nonApi = withHeldPrecondition(`${base}/index.html`, { method: 'POST', headers, body: demoBody });
+    assert.strictEqual(nonApi.init.body, demoBody, 'a non-API URL is unchanged');
+  });
+});
+
 test('precondition (P7): in the demo store (unbound session) DELETE /api/raid/:id with no expectedVersion still succeeds', async () => {
   await withServer(async (base) => {
     const token = newSession('admin', 'admin'); // deliberately NOT bound to a deal

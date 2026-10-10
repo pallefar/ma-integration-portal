@@ -38,6 +38,10 @@ const { createDealDatabase } = require('../db/dealSeed.js');
 const auditHook = require('../db/auditHook.js');
 
 const app = require('../server.js');
+// This suite's subject is not the version contract: supply the precondition a
+// real client sends on existing-record writes (test/helpers/held-version.js,
+// CONC-02 gap closure GD-3).
+require('./helpers/held-version.js').installHeldVersionFetch();
 
 const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
 const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
