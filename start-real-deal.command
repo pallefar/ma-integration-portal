@@ -22,15 +22,24 @@ if [ ! -d "./node_modules" ]; then
   npm install --omit=dev
 fi
 
-# [security] First-run credential rotation. The demo ships a published default
-# admin password (public/login.html). A real-deal host MUST rotate it before the
-# first login — run this once, then restart with this launcher:
+# [security] Real-deal mode (D-10-01). MA_MODE=real makes the server use its OWN
+# gitignored data directory (data/real, or MA_DATA_DIR) seeded WITHOUT the
+# published demo accounts, and refuse to ever open the committed data/*.db files.
+# Without this line the server would run in dev mode on the committed control.db.
+export MA_MODE=real
+
+# [security] First-run bootstrap (D-10-02). A real-deal host starts with ZERO
+# accounts — there is no published password to rotate. Create the first admin
+# once, on this host, then start this launcher:
 echo ""
 echo "  ────────────────────────────────────────────────────────────────"
 echo "  REAL-DEAL MODE (authentication REQUIRED — fail-closed)."
-echo "  Before the first login, set a private admin password:"
-echo "      $NODE_CMD scripts/set-admin-password.js"
-echo "  Do NOT use the published demo password on a real-deal host."
+echo "  Real-deal data lives in data/real (or the folder in MA_DATA_DIR)."
+echo "  First run: create the first admin account with"
+echo "      \"$NODE_CMD\" scripts/bootstrap-admin.js"
+echo "  It asks for the password (12+ characters) or reads MA_BOOTSTRAP_PASSWORD;"
+echo "  never type it on the command line. You will be asked to change it"
+echo "  at your first sign-in."
 echo "  ────────────────────────────────────────────────────────────────"
 echo ""
 echo "  Starting the TE Connectivity M&A Integration Portal ..."
@@ -38,5 +47,6 @@ echo "  Opening http://localhost:3000 - keep this window open; close it to stop 
 
 ( sleep 3; (command -v open >/dev/null && open "http://localhost:3000") || (command -v xdg-open >/dev/null && xdg-open "http://localhost:3000") ) >/dev/null 2>&1 &
 
-# NOTE: DEMO_OPEN is deliberately NOT set here. Auth stays mandatory.
+# NOTE: DEMO_OPEN is deliberately NOT set here (and is refused together with
+# MA_MODE=real). Auth stays mandatory.
 exec "$NODE_CMD" server.js

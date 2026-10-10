@@ -29,12 +29,21 @@ if not exist "%~dp0node_modules" (
   call npm install --omit=dev
 )
 
+REM [security] Real-deal mode (D-10-01). MA_MODE=real makes the server use its OWN
+REM gitignored data directory (data\real, or MA_DATA_DIR) seeded WITHOUT the
+REM published demo accounts, and refuse to ever open the committed data\*.db
+REM files. Without this line the server would run in dev mode.
+set "MA_MODE=real"
+
 echo.
 echo   ----------------------------------------------------------------
 echo   REAL-DEAL MODE ^(authentication REQUIRED -- fail-closed^).
-echo   Before the first login, set a private admin password:
-echo       "%NODE_CMD%" scripts\set-admin-password.js
-echo   Do NOT use the published demo password on a real-deal host.
+echo   Real-deal data lives in data\real ^(or the folder in MA_DATA_DIR^).
+echo   First run: create the first admin account with
+echo       "%NODE_CMD%" scripts\bootstrap-admin.js
+echo   It asks for the password ^(12+ characters^) or reads
+echo   MA_BOOTSTRAP_PASSWORD; never type it on the command line.
+echo   You will be asked to change it at your first sign-in.
 echo   ----------------------------------------------------------------
 echo.
 echo   Starting the TE Connectivity M^&A Integration Portal ...
@@ -44,7 +53,8 @@ echo.
 
 start "" cmd /c "timeout /t 3 >nul & start http://localhost:3000"
 
-REM NOTE: DEMO_OPEN is deliberately NOT set here. Auth stays mandatory.
+REM NOTE: DEMO_OPEN is deliberately NOT set here (and is refused together with
+REM MA_MODE=real). Auth stays mandatory.
 "%NODE_CMD%" server.js
 
 echo.
