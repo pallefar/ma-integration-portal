@@ -11,8 +11,11 @@
 //   control  db/control-schema.sql   (data/control.db)
 //   runtime  db/runtime-schema.sql   (data/runtime.db)
 //   deal     db/schema.sql           (data/demo.db and every deals/<id>.db)
-//   audit    db/audit-schema.sql     (data/audit.db — migrations arrive with the
-//                                     audit partition work; none yet)
+//   audit    db/audit-schema.sql     (data/audit.db — migration #1
+//                                     001-partition-legacy: per-deal partitions,
+//                                     sealed legacy.db, chained control log)
+//   audit-partition db/audit-partition-schema.sql (data/audit/<dealId>.db and
+//                                     legacy.db — baseline only)
 // A schema file outside this list (a test-only custom schema) is left alone:
 // no family, no version, no checks.
 //
