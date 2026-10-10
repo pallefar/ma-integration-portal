@@ -177,12 +177,41 @@ function isIgnorableChmodError(e) {
   return process.platform === 'win32' && !!e && (e.code === 'EPERM' || e.code === 'ENOSYS');
 }
 
+// [security] R2-06 / OPS-08 / D-10-09 (Phase 10): MNPI database files and the
+// directories that hold them are private to the service user (0600 / 0700) no
+// matter what umask the process was started with. Observed before this change:
+// every database 0644 and deals/ 0755 under umask 022, i.e. readable by every
+// other local account on a shared host (session hashes in runtime.db, the AI
+// key, audit.db and every deal database).
+//
+// Why an explicit chmod after create: mkdir(2)/open(2) mode arguments are
+// masked by the umask, so asking for 0o700/0o600 is not enough — the bits must
+// be forced afterwards. Why sidecars come out private too: SQLite's unix VFS
+// creates -wal/-shm with the MAIN file's permission bits, so a main file that
+// is already 0600 BEFORE SQLite opens it yields 0600 sidecars; sidecars left
+// over from an earlier (0644) run are chmodded explicitly. Why ONLY directories
+// this call created are chmodded: an MA_*_PATH override may point into a shared
+// parent (a user's home, os.tmpdir(), the repo's own data/) whose permissions
+// are not ours to change; real mode's own data dir is handled — fatally — by
+// ensureRealDataDir() in db/realDataDir.js.
+//
+// Failure policy (PRD acceptance 6 — a dev/demo boot must never crash on a
+// pre-existing path it cannot tighten): a pre-existing path that refuses the
+// chmod with EPERM/EROFS (not owned by the service user, read-only filesystem)
+// logs ONE `[security]` warning per path and the boot continues, because dev/
+// demo run on committed/demo data, never MNPI. In real-deal mode (strict) the
+// same failure is fatal — the real data dir is owned by the service user, so a
+// failure means a misconfigured host and the app must fail closed. Any other
+// error code, and any failure on a path this call created, is always fatal.
+// win32 EPERM/ENOSYS stay ignored: POSIX modes do not apply there (Windows
+// relies on the user-profile ACL + disk encryption, T-10-25).
+const warnedChmodPaths = new Set();
+
 /**
  * D-10-01/D-10-09: create `dir` (and any missing ancestors) as 0700. Only the
  * directories THIS call created are chmod'ed — a pre-existing directory is
- * never touched, because an MA_*_PATH override may point into a shared parent
- * (a user's home, os.tmpdir()) whose permissions are not ours to change.
- * Returns the list of directories created.
+ * never touched (see the [security] block above). Returns the list of
+ * directories created.
  */
 function ensurePrivateDir(dir) {
   const target = path.resolve(dir);
@@ -202,11 +231,48 @@ function ensurePrivateDir(dir) {
   return missing;
 }
 
-/** D-10-09: restrict an existing file to its owner (0600). A missing file is a
- * no-op; EPERM/ENOSYS is ignored on win32 where POSIX modes do not apply. */
-function chmodPrivateFile(file) {
-  if (!fs.existsSync(file)) return;
-  try { fs.chmodSync(file, 0o600); } catch (e) { if (!isIgnorableChmodError(e)) throw e; }
+/**
+ * D-10-09: restrict an existing file to its owner (0600). A missing file is a
+ * no-op; an already-0600 file is left alone (no spurious EPERM for a file we
+ * cannot chmod but need not).
+ *
+ * Options: `preExisting` — the file was not created by this call, so an
+ * EPERM/EROFS is tolerated outside strict mode (one `[security]` warning);
+ * `strict` — defaults to IS_REAL_MODE and makes every failure fatal.
+ * fs.chmodSync is looked up on the fs object at call time so tests can stub it.
+ */
+function chmodPrivateFile(file, options) {
+  const opts = options || {};
+  const preExisting = opts.preExisting === true;
+  const strict = opts.strict === undefined ? IS_REAL_MODE : opts.strict === true;
+  let st;
+  try { st = fs.statSync(file); } catch (e) { return; } // missing: nothing to tighten
+  if (process.platform !== 'win32' && (st.mode & 0o777) === 0o600) return;
+  try {
+    fs.chmodSync(file, 0o600);
+  } catch (e) {
+    if (isIgnorableChmodError(e)) return;
+    const code = (e && e.code) || 'UNKNOWN';
+    if (preExisting && !strict && (code === 'EPERM' || code === 'EROFS')) {
+      const key = path.resolve(file);
+      if (!warnedChmodPaths.has(key)) {
+        warnedChmodPaths.add(key);
+        console.warn(`[security] could not tighten ${key} to 0600 (${code}) — dev/demo continues; real-deal mode refuses to start on this`);
+      }
+      return;
+    }
+    throw new Error(`[security] could not restrict ${path.resolve(file)} to 0600 (${code}) — refusing to continue with a database file other local accounts may read.`);
+  }
+}
+
+const SIDECAR_SUFFIXES = ['-wal', '-shm'];
+
+/** Tighten whichever -wal/-shm sidecars of `dbFilePath` exist right now;
+ * `preExistingSet` names the suffixes that already existed before this open. */
+function tightenSidecars(dbFilePath, preExistingSet) {
+  for (const suffix of SIDECAR_SUFFIXES) {
+    chmodPrivateFile(dbFilePath + suffix, { preExisting: preExistingSet.has(suffix) });
+  }
 }
 
 /**
@@ -218,6 +284,9 @@ function chmodPrivateFile(file) {
  *
  * [security] D-10-01: in real-deal mode this is the single choke point that
  * refuses a committed data/*.db — see the mode-contract block above.
+ * [security] D-10-09: it is also the single choke point that makes every
+ * database file 0600 (sidecars included) inside a 0700 directory — see the
+ * file-mode block above.
  */
 function openDbFile(dbFilePath, schemaPath) {
   if (IS_REAL_MODE && isCommittedDbPath(dbFilePath)) {
@@ -226,17 +295,35 @@ function openDbFile(dbFilePath, schemaPath) {
       'real acquisition data must never be written into a git-tracked file. Point MA_DATA_DIR / MA_*_PATH at a gitignored directory.'
     );
   }
-  const dir = path.dirname(dbFilePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  ensurePrivateDir(path.dirname(dbFilePath));
+
+  if (fs.existsSync(dbFilePath)) {
+    chmodPrivateFile(dbFilePath, { preExisting: true });
+  } else {
+    // Created 0600 BEFORE SQLite opens it so its -wal/-shm inherit 0600; the
+    // chmod then forces the bits a umask may have stripped. We created it, so a
+    // failure here is always fatal.
+    fs.closeSync(fs.openSync(dbFilePath, 'a', 0o600));
+    chmodPrivateFile(dbFilePath);
+  }
+  const preExistingSidecars = new Set(SIDECAR_SUFFIXES.filter((s) => fs.existsSync(dbFilePath + s)));
+  tightenSidecars(dbFilePath, preExistingSidecars);
 
   const conn = new Database(dbFilePath);
-  conn.pragma('journal_mode = WAL');
-  conn.pragma('synchronous = NORMAL');
-  conn.pragma('foreign_keys = ON');
-  conn.pragma('busy_timeout = 1000'); // D-03/D-05/CONC-01 (Phase 8): see file header
+  try {
+    conn.pragma('journal_mode = WAL');
+    conn.pragma('synchronous = NORMAL');
+    conn.pragma('foreign_keys = ON');
+    conn.pragma('busy_timeout = 1000'); // D-03/D-05/CONC-01 (Phase 8): see file header
 
-  const schema = fs.readFileSync(schemaPath, 'utf8');
-  conn.exec(schema);
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+    conn.exec(schema);
+
+    tightenSidecars(dbFilePath, preExistingSidecars);
+  } catch (e) {
+    try { conn.close(); } catch (closeErr) { /* surface the original error */ }
+    throw e;
+  }
 
   return conn;
 }
