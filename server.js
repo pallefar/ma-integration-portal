@@ -2276,8 +2276,29 @@ app.get('/api/rag/search', (req, res) => {
   }
 });
 
+// [security] D-12-05 / DATA-05 / R2-03 (Phase 12, plan 12-04): pdf-parse
+// (pdfjs-dist) is CPU-bound — a large or crafted PDF held the event loop for
+// seconds, for every user, from any signed-in staff upload. The parse now runs
+// in a persistent worker thread (lib/workers/pdf-text-worker.js) behind a
+// ONE-in-flight guard: a second concurrent upload is REFUSED 429 + Retry-After,
+// never queued. The worker gets the PDF bytes and returns text only; the AI
+// review, the ragUploads write and the RAG retrain stay on the main thread.
+// Shared with the steerco pack route far below (D-12-05).
+const { createIsolatedTask } = require('./lib/isolatedTask');
+const ragPdfTask = createIsolatedTask({
+  name: 'rag-pdf',
+  workerFile: path.join(__dirname, 'lib', 'workers', 'pdf-text-worker.js'),
+});
+
 // POST AI Model RAG PDF Training Upload & AI Insight Review
 app.post('/api/rag/upload', async (req, res, next) => {
+  // tryAcquire() is synchronous and precedes the base64 decode, so a refused
+  // request costs nothing beyond the body the JSON parser already read.
+  const lease = ragPdfTask.tryAcquire();
+  if (!lease) {
+    res.set('Retry-After', '5');
+    return res.status(429).json({ success: false, error: 'Another PDF is being processed. Try again in a few seconds.' });
+  }
   try {
     // VAL-01: presence is now owned exclusively by validators/settings.js's RagUploadSchema.
     const { fileName, fileData } = req.body;
@@ -2288,10 +2309,14 @@ app.post('/api/rag/upload', async (req, res, next) => {
     const base64Data = fileData.replace(/^data:application\/pdf;base64,/, "");
     const pdfBuffer = Buffer.from(base64Data, 'base64');
 
-    // Parse plain text from PDF (pdf-parse v2 class API)
-    const { PDFParse } = require('pdf-parse');
-    const pdfParser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
-    const parsedPdf = await pdfParser.getText();
+    // Parse plain text from PDF (pdf-parse v2) — in the worker, off the loop.
+    // The bytes are copied once into a fresh ArrayBuffer and TRANSFERRED.
+    const pdfBytes = new Uint8Array(pdfBuffer);
+    const parsedPdf = await lease.run({ data: pdfBytes.buffer }, [pdfBytes.buffer]);
+    // The CPU-bound part is done: free the slot before the (network-bound) AI
+    // review so a slow model call does not block the next upload's parse. The
+    // finally below releases again on every error path (idempotent).
+    lease.release();
     const pdfText = parsedPdf.text || '';
 
     if (pdfText.trim().length === 0) {
@@ -2340,6 +2365,8 @@ app.post('/api/rag/upload', async (req, res, next) => {
     if (isBusyError(e)) return next(e);
     console.error('Error handling RAG PDF upload:', e);
     res.status(500).json({ success: false, error: 'Failed to process and train RAG model.' });
+  } finally {
+    lease.release();
   }
 });
 
@@ -7486,10 +7513,30 @@ function getReportPack() {
   }
 }
 
+// [security] D-12-05 / DATA-05 / R2-03 (Phase 12, plan 12-04): the pack render
+// is 2-4 s of pure CPU and the route is reachable by any deal member — run on
+// the main thread it froze the whole portal for everyone per click (measured
+// 2,397 ms blocked). It now renders in a persistent worker thread
+// (lib/workers/report-pack-worker.js) behind a ONE-in-flight guard: a second
+// concurrent request is REFUSED 429 + Retry-After, never queued — an unbounded
+// queue of multi-second CPU jobs is the same denial of service with extra
+// memory. Data assembly, the clearance filtering, the audit event and the
+// response stay on the main thread; the worker gets the already-filtered
+// model and returns bytes only (Phase 8 D-03: it never opens SQLite).
+const packTask = createIsolatedTask({
+  name: 'report-pack',
+  workerFile: path.join(__dirname, 'lib', 'workers', 'report-pack-worker.js'),
+});
+const PACK_BUSY_RETRY_AFTER_SECONDS = 5;
+const PACK_BUSY_MESSAGE = 'A steering committee pack is already being generated. Try again in a few seconds.';
+
 app.get('/api/reports/pack', async (req, res, next) => {
   const packLib = getReportPack();
   if (!packLib) {
-    return res.status(503).json({ error: 'PDF pack generation is unavailable on this host platform' });
+    // `retryable: false` (PD-15): this is a fixed property of the host, not
+    // contention — the client's Phase 8 busy-retry must not re-fire it 3x and
+    // then tell the user a read "was not saved".
+    return res.status(503).json({ error: 'PDF pack generation is unavailable on this host platform', retryable: false });
   }
 
   // `.catch('en')` (zod's default-on-parse-failure combinator, available since
@@ -7501,6 +7548,14 @@ app.get('/api/reports/pack', async (req, res, next) => {
   // is also the ENTIRE query-parameter surface this route reads; no other
   // request-supplied value reaches the model (T-07-32).
   const language = z.enum(packLib.SUPPORTED_LANGUAGES).catch('en').parse(req.query.lang);
+
+  // One render at a time per process. tryAcquire() is synchronous and nothing
+  // awaits between it and the try below, so two requests can never both pass.
+  const lease = packTask.tryAcquire();
+  if (!lease) {
+    res.set('Retry-After', String(PACK_BUSY_RETRY_AFTER_SECONDS));
+    return res.status(429).json({ error: PACK_BUSY_MESSAGE });
+  }
 
   try {
     const db = readDb();
@@ -7568,7 +7623,12 @@ app.get('/api/reports/pack', async (req, res, next) => {
       staleThresholdDays: synergyStaleDays(db, dealSettingsFor(req)),
     };
 
-    const pdfBuffer = await packLib.buildPack(model);
+    // Rendered off the main event loop (see packTask above). The test hook
+    // makes the worker throw so the crash/respawn path is provable; it is
+    // ignored on a real-deal host (T-12-35).
+    const testThrow = process.env.MA_TEST_PACK_WORKER_THROW === '1' && process.env.MA_MODE !== 'real';
+    const rendered = await lease.run({ model, testThrow });
+    const pdfBuffer = Buffer.from(rendered.pdf);
 
     // D-07/D-09: filename discipline identical to the raw exports — the
     // deal's CODENAME, never deal.targetCompany.
@@ -7605,6 +7665,10 @@ app.get('/api/reports/pack', async (req, res, next) => {
     if (isBusyError(error)) return next(error);
     console.error('Error generating report pack:', error);
     res.status(500).json({ error: 'Failed to generate the steering committee pack.' });
+  } finally {
+    // Idempotent and per-lease: frees the one render slot on EVERY exit path
+    // (success, the empty-deal 409, a worker failure, a busy-forward).
+    lease.release();
   }
 });
 
