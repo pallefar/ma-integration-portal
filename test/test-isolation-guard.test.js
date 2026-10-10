@@ -100,6 +100,26 @@ test('test-isolation guard: a symlinked spelling of data/ is refused too', (t) =
   );
 });
 
+test('test-isolation guard: IN-B02 — a case-variant spelling of data/ is refused on case-insensitive platforms', () => {
+  const env = { NODE_TEST_CONTEXT: 'child' };
+  const variants = [
+    path.join(path.dirname(DATA_DIR), 'DATA', 'runtime.db'),
+    path.join(path.dirname(DATA_DIR), 'Data', 'deals', 'deal_x.db'),
+    path.join(path.dirname(DATA_DIR).toUpperCase(), 'data', 'audit.db'),
+  ];
+  for (const platform of ['darwin', 'win32']) {
+    for (const p of variants) {
+      assert.throws(() => dbFiles.assertTestIsolation(p, env, { platform }), /^Error: \[test-isolation\]/, `${platform}: must refuse ${p}`);
+    }
+    // A look-alike sibling stays allowed after folding.
+    assert.doesNotThrow(() => dbFiles.assertTestIsolation(path.join(path.dirname(DATA_DIR), 'DATA-other', 'x.db'), env, { platform }));
+  }
+  // On this host, the host platform's own rule applies to the case variant.
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    assert.throws(() => dbFiles.assertTestIsolation(variants[0], env), /\[test-isolation\]/);
+  }
+});
+
 test('test-isolation guard: the Phase-10 opt-in exempts exactly data/control.db and nothing else', () => {
   const optIn = { NODE_TEST_CONTEXT: 'child', MA_TEST_ALLOW_COMMITTED_CONTROL_DB: '1' };
   assert.doesNotThrow(() => dbFiles.assertTestIsolation(path.join(DATA_DIR, 'control.db'), optIn));

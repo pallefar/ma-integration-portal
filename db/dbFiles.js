@@ -380,12 +380,22 @@ function isInsideDir(child, dir) {
  * data/deals/, data/real/, ...). Pure apart from read-only realpath lookups;
  * never opens or creates a file. `env` is injectable for tests.
  */
-function assertTestIsolation(dbFilePath, env) {
+function assertTestIsolation(dbFilePath, env, opts) {
   const e = env || process.env;
   if (typeof e.NODE_TEST_CONTEXT !== 'string' || e.NODE_TEST_CONTEXT === '') return;
   if (typeof dbFilePath !== 'string' || dbFilePath === '') return;
-  const dataDirs = new Set([path.resolve(COMMITTED_DATA_DIR), nearestExistingRealpath(COMMITTED_DATA_DIR)]);
-  const candidates = [path.resolve(dbFilePath), nearestExistingRealpath(dbFilePath)];
+  // IN-B02 (12-REVIEW-B): path.relative() and JS realpath are case-preserving,
+  // so on a case-INSENSITIVE filesystem (macOS/APFS, Windows/NTFS) a
+  // `<repo>/DATA/runtime.db` spelling opens the committed file yet compared as
+  // outside data/. There, every identity is compared case-folded (and the
+  // native realpath, which returns the on-disk case, is added).
+  const platform = (opts && opts.platform) || process.platform;
+  const fold = (platform === 'darwin' || platform === 'win32') ? (p) => p.toLowerCase() : (p) => p;
+  const nativeReal = (p) => { try { return fs.realpathSync.native(p); } catch (err) { return null; } };
+  const dataDirs = new Set([path.resolve(COMMITTED_DATA_DIR), nearestExistingRealpath(COMMITTED_DATA_DIR), nativeReal(COMMITTED_DATA_DIR)]
+    .filter(Boolean).map(fold));
+  const candidates = [path.resolve(dbFilePath), nearestExistingRealpath(dbFilePath), nativeReal(dbFilePath)]
+    .filter(Boolean).map(fold);
   const inside = candidates.some((c) => [...dataDirs].some((d) => isInsideDir(c, d)));
   if (!inside) return;
   // The ONE sanctioned exception: Phase-10 suites (accounts-writable-gate,
