@@ -242,8 +242,10 @@ function fakeEl(extra) {
     appendChild(c) { el.children.push(c); return c; },
     addEventListener() {},
     setAttribute() {},
-    querySelector() { return null; },
+    querySelector() { return fakeEl(); },
     querySelectorAll() { return []; },
+    insertBefore(c) { el.children.unshift(c); return c; },
+    remove() {},
     closest() { return null; },
   };
   return Object.assign(el, extra || {});
@@ -316,7 +318,7 @@ function leaderboardHarness(win) {
       { id: 'e2', name: 'Bob', role: 'Eng', points: 90, badge: 'New Recruit', completedLessons: ['l1'] },
     ],
   });
-  const ex = loadBlocks(EMPLOYEE_SRC, ['function canReady(', 'function hideSection(', 'function loadLeaderboard('], {
+  const ex = loadBlocks(EMPLOYEE_SRC, ['function canReady(', 'function hideSection(', 'function hideCardOf(', 'function loadLeaderboard('], {
     window: win,
     fetch: fetchImpl,
     document: { getElementById: (id) => (id === 'academy-leaderboard-container' ? container : null), createElement: () => fakeEl() },
@@ -360,4 +362,447 @@ test('tracer (vm): a role the map allows (hrbp) still gets its leaderboard', asy
   await new Promise((r) => setImmediate(r));
   assert.strictEqual(h.fetchImpl.calls.length, 1);
   assert.strictEqual(h.container.children.length, 2);
+});
+
+// ---------------------------------------------------------------- shared helpers
+const tick = () => new Promise((r) => setImmediate(r));
+async function settle(win) {
+  await win.maAccessReady;
+  for (let i = 0; i < 6; i++) await tick();
+}
+const urls = (f) => f.calls.map((c) => c.url);
+
+// Access fixtures: what the server sends per persona.
+const ME_EMPLOYEE = { authEnabled: true, user: { role: 'employee' }, access: {
+  synergies: false, raid: false, tasks: false, roster: false, communications: false, org: false, dd: false,
+  reports: false, hrbps: false, projects: false, processes: false, assessmentsList: false, ai: false, rag: false,
+  configWrite: false } };
+const ME_PMO = { authEnabled: true, user: { role: 'pmo' }, access: Object.assign({}, ME_EMPLOYEE.access, {
+  synergies: true, raid: true, tasks: true, roster: true, communications: true, org: true, dd: true, reports: true,
+  projects: true, processes: true, assessmentsList: true, ai: true, rag: true }) };
+const ME_HRBP = { authEnabled: true, user: { role: 'hrbp' }, access: Object.assign({}, ME_PMO.access, { hrbps: true }) };
+const ME_ADMIN = { authEnabled: true, user: { role: 'admin' }, access: Object.assign({}, ME_HRBP.access, { configWrite: true }) };
+const ME_OPEN = { authEnabled: false, user: null };
+
+// --------------------------------------- item 2: employee communications inbox
+function notificationsHarness(win) {
+  const notifyArea = fakeEl();
+  const notifyList = fakeEl();
+  const inbox = fakeEl();
+  const inboxCard = fakeEl();
+  inbox.closest = (sel) => (sel === '.card' ? inboxCard : null);
+  const byId = {
+    'employee-notifications-area': notifyArea,
+    'employee-notifications-list': notifyList,
+    'employee-communications-inbox': inbox,
+  };
+  const fetchImpl = recordingFetch({
+    '/api/communications': [
+      { recipientType: 'all', recipientEmail: 'x', template: 'welcome', subject: 'Hi', sender: 'PMO', senderRole: 'PMO', body: 'b', timestamp: '2026-01-01T00:00:00Z', htmlEmailPath: '/e.html' },
+    ],
+  });
+  const ex = loadBlocks(EMPLOYEE_SRC, [
+    'function canReady(', 'function hideSection(', 'function hideCardOf(', 'function loadEmployeeNotifications(',
+  ], {
+    window: win,
+    fetch: fetchImpl,
+    document: { getElementById: (id) => byId[id] || null, createElement: () => fakeEl() },
+    localStorage: { getItem: () => null },
+    TRANSLATIONS: { en: {} },
+    escapeHtml: (s) => String(s),
+    getEmployeeTemplateColor: () => '#000',
+    getEmployeeTemplateLabel: () => 'L',
+  }, ['loadEmployeeNotifications']);
+  return { notifyArea, notifyList, inbox, inboxCard, fetchImpl, run: () => ex.loadEmployeeNotifications({ name: 'Alex Doe', email: 'a@b.c' }) };
+}
+
+test('item 2 (vm): access.communications === false hides the notification banner and the broadcast archive, no GET /api/communications', async () => {
+  const win = await bootWindow(ME_EMPLOYEE);
+  const h = notificationsHarness(win);
+  h.run();
+  await settle(win);
+  assert.deepStrictEqual(urls(h.fetchImpl), []);
+  assert.strictEqual(h.notifyArea.hidden, true);
+  assert.strictEqual(h.notifyArea.style.display, 'none');
+  assert.strictEqual(h.inboxCard.hidden, true, 'the card that holds the archive is hidden');
+  assert.strictEqual(h.inboxCard.style.display, 'none');
+});
+
+test('item 2 (vm): staff and demo-open still read and render the communications inbox', async () => {
+  for (const meBody of [ME_PMO, ME_OPEN]) {
+    const win = await bootWindow(meBody);
+    const h = notificationsHarness(win);
+    h.run();
+    await settle(win);
+    assert.deepStrictEqual(urls(h.fetchImpl), ['/api/communications']);
+    assert.strictEqual(h.inboxCard.hidden, false);
+    assert.ok(h.inbox.children.length >= 1, 'the archive renders the matched broadcast');
+  }
+});
+
+// ---------------------------------------- item 3: welcome-video edit control
+test('item 3 (source): the welcome-video editor stays out of the page and its save is inert without configWrite', () => {
+  assert.ok(/if \(editVideoPen\) editVideoPen\.style\.display = 'none';/.test(EMPLOYEE_SRC), 'the pen is hidden (Phase 4)');
+  const submitAt = EMPLOYEE_SRC.indexOf("videoEditForm.addEventListener('submit'");
+  assert.ok(submitAt > 0);
+  const postAt = EMPLOYEE_SRC.indexOf("fetch('/api/settings', {", submitAt);
+  assert.ok(postAt > submitAt);
+  const guardAt = EMPLOYEE_SRC.indexOf("window.maCan('configWrite')", submitAt);
+  assert.ok(guardAt > submitAt && guardAt < postAt, 'the configWrite guard precedes the POST /api/settings in the submit handler');
+});
+
+// ------------------------------------ items 4 + amendment 2: pmo.js controls
+const PMO_SRC = readPublic('js', 'pmo.js');
+const PMO_HELPERS = ['function canReady(', 'function canNow(', 'function hideSection(', 'function hideCardOf('];
+
+function pmoHrbpsHarness(win) {
+  const container = fakeEl();
+  const card = fakeEl();
+  container.closest = (sel) => (sel === '.card' ? card : null);
+  const fetchImpl = recordingFetch({
+    '/api/hrbps': [{ id: 'h1', name: 'Karen P', email: 'k@te.com', role: 'hrbp', supportingTeams: ['Munich'], assignedTracks: ['culture'] }],
+  });
+  const ex = loadBlocks(PMO_SRC, PMO_HELPERS.concat('function loadActiveHrbps('), {
+    window: win,
+    fetch: fetchImpl,
+    hrbpsListContainer: container,
+    document: { createElement: () => fakeEl() },
+    escapeHtml: (s) => String(s),
+    deleteHrbp() {},
+  }, ['loadActiveHrbps']);
+  return { container, card, fetchImpl, run: ex.loadActiveHrbps };
+}
+
+test('item 4 (vm): pmo without the Integration Leader directory loses the whole provisioning desk and sends no /api/hrbps request', async () => {
+  const win = await bootWindow(ME_PMO);
+  const h = pmoHrbpsHarness(win);
+  h.run();
+  await settle(win);
+  assert.deepStrictEqual(urls(h.fetchImpl), []);
+  assert.strictEqual(h.card.hidden, true);
+  assert.strictEqual(h.card.style.display, 'none');
+});
+
+test('item 4 (vm): hrbp, admin and demo-open still load the directory', async () => {
+  for (const meBody of [ME_HRBP, ME_ADMIN, ME_OPEN]) {
+    const win = await bootWindow(meBody);
+    const h = pmoHrbpsHarness(win);
+    h.run();
+    await settle(win);
+    assert.deepStrictEqual(urls(h.fetchImpl), ['/api/hrbps']);
+    assert.strictEqual(h.card.hidden, false);
+    assert.strictEqual(h.container.children.length, 1);
+  }
+});
+
+test('item 4 (vm): the broadcast recipient picker requests only the directories the map allows', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody);
+    const select = fakeEl();
+    const fetchImpl = recordingFetch({ '/api/employees': [], '/api/hrbps': [] });
+    const ex = loadBlocks(PMO_SRC, PMO_HELPERS.concat('function loadPmoRecipientOptions('), {
+      window: win,
+      fetch: fetchImpl,
+      pmoRecipientSelect: select,
+      document: { createElement: () => fakeEl() },
+    }, ['loadPmoRecipientOptions']);
+    ex.loadPmoRecipientOptions();
+    await settle(win);
+    return { urls: urls(fetchImpl), select };
+  };
+  assert.deepStrictEqual((await run(ME_PMO)).urls, ['/api/employees'], 'pmo: roster yes, directory no');
+  assert.deepStrictEqual((await run(ME_HRBP)).urls.sort(), ['/api/employees', '/api/hrbps']);
+  assert.deepStrictEqual((await run(ME_EMPLOYEE)).urls, []);
+  assert.deepStrictEqual((await run(ME_OPEN)).urls.sort(), ['/api/employees', '/api/hrbps']);
+});
+
+function pmoPageSettingsHarness(win, settings) {
+  const wizard = fakeEl();
+  const dash = fakeEl();
+  const calls = { wizard: 0, renderAll: 0 };
+  const fetchImpl = recordingFetch({ '/api/settings': settings });
+  const ex = loadBlocks(PMO_SRC, PMO_HELPERS.concat('function loadPageSettings('), {
+    window: win,
+    fetch: fetchImpl,
+    document: { getElementById: (id) => ({ 'pmo-onboarding-wizard': wizard, 'pmo-dashboard-content': dash }[id] || null) },
+    localStorage: { getItem: () => null, setItem() {} },
+    defaultTasks: {},
+    defaultBlockers: [],
+    switcherIndicator: null,
+    switcherText: null,
+    switcherContainer: null,
+    dayBadge: null,
+    initOnboardingWizard() { calls.wizard++; },
+    updateDashboardCompanyLabels() {},
+    renderAll() { calls.renderAll++; },
+    loadActiveHrbps() {},
+    loadPmoCommunications() {},
+  }, ['loadPageSettings']);
+  return { wizard, dash, calls, fetchImpl, run: ex.loadPageSettings };
+}
+
+test('amendment 2 (vm): a non-admin is routed to the dashboard, never to a custom-setup wizard it could only 403 on', async () => {
+  const win = await bootWindow(ME_PMO);
+  const h = pmoPageSettingsHarness(win, { demoMode: false, targetCompany: '' });
+  h.run();
+  await settle(win);
+  assert.strictEqual(h.calls.wizard, 0, 'wizard not initialised');
+  assert.strictEqual(h.wizard.style.display, 'none');
+  assert.strictEqual(h.dash.style.display, 'block');
+  assert.strictEqual(h.calls.renderAll, 1);
+});
+
+test('amendment 2 (vm): admin and demo-open still get the wizard exactly as today', async () => {
+  for (const meBody of [ME_ADMIN, ME_OPEN]) {
+    const win = await bootWindow(meBody);
+    const h = pmoPageSettingsHarness(win, { demoMode: false, targetCompany: '' });
+    h.run();
+    await settle(win);
+    assert.strictEqual(h.calls.wizard, 1);
+    assert.strictEqual(h.wizard.style.display, 'block');
+    assert.strictEqual(h.dash.style.display, 'none');
+  }
+});
+
+test('amendment 2 (source): every POST /api/settings in pmo.js is behind a configWrite guard; the roster upload follows the roster rule', () => {
+  const guardBefore = (needle) => {
+    const at = PMO_SRC.indexOf(needle);
+    assert.ok(at > 0, `could not find ${needle}`);
+    const handlerAt = Math.max(PMO_SRC.lastIndexOf('addEventListener(', at), 0);
+    return PMO_SRC.slice(handlerAt, at).includes("canNow('configWrite')");
+  };
+  // demo-mode switcher: the click handler is guarded and the control is hidden
+  assert.ok(guardBefore("body: JSON.stringify({ demoMode: nextDemoMode })"), 'switcher click is guarded');
+  assert.ok(/canReady\('configWrite'\)\.then\(ok => \{ if \(!ok\) hideSection\(switcherContainer\); \}\)/.test(PMO_SRC), 'switcher is hidden');
+  // custom-setup wizard step 1 and the finalize call (pmoCustomSetupComplete)
+  assert.ok(guardBefore('targetCompany: document.getElementById'), 'wizard specs submit is guarded');
+  assert.ok(guardBefore('body: JSON.stringify({ pmoCustomSetupComplete: true })'), 'finalize is guarded');
+  assert.ok(/parsedRoster\.length > 0 && canNow\('roster'\)/.test(PMO_SRC), 'roster upload follows the roster rule');
+});
+
+// ------------------------------------------- items 5, 6 + amendment 2/3: transitions.js
+const TR_HELPERS_NONE = [];
+
+function trGlobals(win, overrides) {
+  const calls = { fade: 0, injected: 0 };
+  const g = Object.assign({
+    window: win,
+    localStorage: { getItem: () => null, setItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {} },
+    document: { getElementById: () => fakeEl(), createElement: () => fakeEl(), querySelector: () => null },
+    setTimeout: (f) => { f(); return 0; },
+    fadeOutModal() { calls.fade++; },
+    injectAiInsightModal() { calls.injected++; },
+    triggerConfettiBlast() {},
+  }, overrides || {});
+  return { g, calls };
+}
+
+test('item 5 (vm): the profile-dropdown Integration Leader lookup is skipped for a role refused /api/hrbps', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody);
+    const fetchImpl = recordingFetch({
+      '/api/settings': { targetCompany: 'Target Co' },
+      '/api/hrbps': [{ name: 'Karen P', email: 'k@te.com', assignedTracks: ['culture'] }],
+    });
+    const { g } = trGlobals(win, {
+      fetch: fetchImpl,
+      localStorage: { getItem: (k) => (k === 'active_demo_role' ? 'hrbp' : null), setItem() {} },
+    });
+    const ex = loadBlocks(TRANSITIONS_SRC, ['function hbpInitials(', 'function loadActiveHRBP('], g, ['loadActiveHRBP']);
+    ex.loadActiveHRBP();
+    await settle(win);
+    return urls(fetchImpl).sort();
+  };
+  assert.deepStrictEqual(await run(ME_PMO), ['/api/settings'], 'pmo: no /api/hrbps');
+  assert.deepStrictEqual(await run(ME_EMPLOYEE), ['/api/settings']);
+  assert.deepStrictEqual(await run(ME_HRBP), ['/api/hrbps', '/api/settings']);
+  assert.deepStrictEqual(await run(ME_OPEN), ['/api/hrbps', '/api/settings']);
+});
+
+test('item 6 (vm): the AI-insight panel and its request are absent for a role refused /api/ai/insight', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody);
+    win.location.pathname = '/';
+    const main = fakeEl();
+    const inserted = [];
+    main.insertBefore = (c) => { inserted.push(c); return c; };
+    main.firstChild = null;
+    const fetchImpl = recordingFetch({ '/api/ai/insight': { success: true, insight: 'ok' } });
+    const { g } = trGlobals(win, {
+      fetch: fetchImpl,
+      document: {
+        getElementById: () => null,
+        createElement: () => fakeEl(),
+        querySelector: (sel) => (sel === '.main-content' || sel === 'main' ? main : fakeEl()),
+        head: { appendChild() {} },
+      },
+      makeBannerDismissible() {},
+    });
+    const ex = loadBlocks(TRANSITIONS_SRC, [
+      'function initializeAiInsightInsight(', 'function renderAiInsightCard(', 'function fetchSmolInsight(',
+    ], g, ['initializeAiInsightInsight']);
+    ex.initializeAiInsightInsight();
+    await settle(win);
+    return { urls: urls(fetchImpl), inserted: inserted.length };
+  };
+  const emp = await run(ME_EMPLOYEE);
+  assert.deepStrictEqual(emp.urls, [], 'no GET /api/ai/insight');
+  assert.strictEqual(emp.inserted, 0, 'no card injected');
+  for (const meBody of [ME_PMO, ME_OPEN]) {
+    const ok = await run(meBody);
+    assert.deepStrictEqual(ok.urls, ['/api/ai/insight?portal=pmo']);
+    assert.strictEqual(ok.inserted, 1);
+  }
+});
+
+test('item 6 / amendment 3 (vm): chatbot — no RAG snippet search and no roster call for a refused role, and no false "Roster is empty"', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody);
+    const fetchImpl = recordingFetch({
+      '/api/rag/search': { success: true, results: [{ chapter: 'C', title: 'T', text: 'x' }] },
+      '/api/employees': [{ points: 10, completedLessons: ['a'] }, { points: 130, completedLessons: [] }],
+    });
+    const { g } = trGlobals(win, { fetch: fetchImpl });
+    const ex = loadBlocks(TRANSITIONS_SRC, ['class GlobalAiInsight'], g, ['GlobalAiInsight']);
+    const insight = new ex.GlobalAiInsight(() => {});
+    const rag = await insight.tools.searchPlaybook('culture');
+    const prog = await insight.tools.getAcquisitionProgress();
+    return { urls: urls(fetchImpl), rag, prog };
+  };
+  const emp = await run(ME_EMPLOYEE);
+  assert.deepStrictEqual(emp.urls, [], 'no request for either tool');
+  assert.ok(!/Roster is empty/i.test(emp.prog), 'a neutral message, never a false "empty"');
+  assert.ok(/not available for your role/.test(emp.prog));
+  assert.ok(/not available for your role/.test(emp.rag), 'the chat still answers, just without snippets');
+  const staff = await run(ME_PMO);
+  assert.strictEqual(staff.urls.length, 2);
+  assert.ok(staff.urls.some((u) => u.startsWith('/api/rag/search?q=')));
+  assert.ok(/Roster has 2 employees/.test(staff.prog));
+  assert.ok(/Retrieved 1 playbook rules/.test(staff.rag));
+});
+
+test('amendment 2 (vm): the AI-model setup prompt and its {browserModel} POST need configWrite', async () => {
+  const prompt = async (meBody) => {
+    const win = await bootWindow(meBody);
+    win.location.pathname = '/index.html';
+    const fetchImpl = recordingFetch({ '/api/settings': { browserModel: 'none' } });
+    const { g, calls } = trGlobals(win, { fetch: fetchImpl });
+    const ex = loadBlocks(TRANSITIONS_SRC, ['function checkAndShowAiInsightModal('], g, ['checkAndShowAiInsightModal']);
+    ex.checkAndShowAiInsightModal();
+    await settle(win);
+    return { urls: urls(fetchImpl), injected: calls.injected };
+  };
+  const pmo = await prompt(ME_PMO);
+  assert.deepStrictEqual(pmo.urls, [], 'pmo: no settings probe');
+  assert.strictEqual(pmo.injected, 0, 'pmo: no prompt');
+  for (const meBody of [ME_ADMIN, ME_OPEN]) {
+    const ok = await prompt(meBody);
+    assert.deepStrictEqual(ok.urls, ['/api/settings']);
+    assert.strictEqual(ok.injected, 1, 'the prompt still appears for admin and in demo-open');
+  }
+
+  const save = async (meBody) => {
+    const win = await bootWindow(meBody);
+    const fetchImpl = recordingFetch({ '/api/settings': { success: true } });
+    const { g, calls } = trGlobals(win, { fetch: fetchImpl });
+    const ex = loadBlocks(TRANSITIONS_SRC, ['function saveSettingsAndComplete('], g, ['saveSettingsAndComplete']);
+    ex.saveSettingsAndComplete('lamini-78m', { querySelector: () => null });
+    await settle(win);
+    return { calls: fetchImpl.calls, fade: calls.fade };
+  };
+  const denied = await save(ME_PMO);
+  assert.deepStrictEqual(denied.calls, [], 'no POST /api/settings');
+  assert.strictEqual(denied.fade, 1, 'the modal still closes');
+  const allowed = await save(ME_ADMIN);
+  assert.deepStrictEqual(allowed.calls.map((c) => c.method + ' ' + c.url), ['POST /api/settings']);
+});
+
+// ------------------------------------------------------- item 7: deal-home.js
+function dealHomeHarness(win) {
+  const container = fakeEl();
+  const sandbox = {
+    window: win,
+    console,
+    Promise,
+    document: {
+      getElementById: (id) => (id === 'deal-home' ? container : null),
+      createElement: () => fakeEl(),
+      querySelector: () => fakeEl(),
+    },
+  };
+  const fetchImpl = recordingFetch({
+    '/api/deals': [{ id: 'd1', setup: { steps: {} } }],
+    '/api/assessment-status': { bySubject: {} },
+    '/api/dd/summary': { areas: [] },
+    '/api/synergies/rollup': { mine: { staleCount: 0 } },
+    '/api/org/summary': { open: null },
+  });
+  sandbox.fetch = fetchImpl;
+  vm.createContext(sandbox);
+  vm.runInContext(readPublic('js', 'deal-home.js'), sandbox);
+  return { container, fetchImpl, render: () => win.renderDealHome('d1') };
+}
+
+function titlesOf(node, out) {
+  out = out || [];
+  if (node && typeof node.className === 'string' && node.className.includes('deal-home-section-title')) out.push(node.textContent);
+  ((node && node.children) || []).forEach((c) => titlesOf(c, out));
+  return out;
+}
+
+test('item 7 (vm): deal home drops the DD, organisation and synergy panels (and their requests) for a refused role', async () => {
+  const win = await bootWindow(ME_EMPLOYEE);
+  const h = dealHomeHarness(win);
+  h.render();
+  await settle(win);
+  assert.deepStrictEqual(urls(h.fetchImpl).sort(), ['/api/assessment-status', '/api/deals']);
+  const titles = titlesOf(h.container);
+  assert.ok(titles.includes('Setup checklist'));
+  assert.ok(!titles.includes('Diligence progress'));
+  assert.ok(!titles.includes('Organisation'));
+});
+
+test('item 7 (vm): staff and demo-open keep every panel and all five requests', async () => {
+  for (const meBody of [ME_PMO, ME_OPEN]) {
+    const win = await bootWindow(meBody);
+    const h = dealHomeHarness(win);
+    h.render();
+    await settle(win);
+    assert.deepStrictEqual(urls(h.fetchImpl).sort(), [
+      '/api/assessment-status', '/api/dd/summary', '/api/deals', '/api/org/summary', '/api/synergies/rollup',
+    ]);
+    const titles = titlesOf(h.container);
+    for (const t of ['Setup checklist', 'Readiness assessments', 'Diligence progress', 'Organisation']) {
+      assert.ok(titles.includes(t), `${t} renders`);
+    }
+  }
+});
+
+// ------------------------------------------- leaders page (beyond the plan list)
+test('leaders.js: a role refused the roster gets a neutral line and no request; demo-open loads as before', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody);
+    const reports = fakeEl();
+    const fetchImpl = recordingFetch({ '/api/employees': [{ id: 'emp_3', name: 'Emma', isLeader: true, leaderRole: 'Local HR' }, { id: 'e9', name: 'Zed' }] });
+    const sandbox = {
+      window: win, console, Promise, fetch: fetchImpl,
+      localStorage: { getItem: () => null, setItem() {} },
+      document: {
+        getElementById: (id) => (id === 'direct-reports-roster' ? reports : fakeEl()),
+        addEventListener(ev, cb) { sandbox.__ready = cb; },
+        createElement: () => fakeEl(),
+        querySelectorAll: () => [],
+      },
+    };
+    vm.createContext(sandbox);
+    try { vm.runInContext(readPublic('js', 'leaders.js'), sandbox); sandbox.__ready(); } catch (e) { /* the rest of the page boot is not under test */ }
+    await settle(win);
+    return { urls: urls(fetchImpl), reports };
+  };
+  const emp = await run(ME_EMPLOYEE);
+  assert.deepStrictEqual(emp.urls, []);
+  assert.match(emp.reports.textContent, /not available for your role/);
+  const open = await run(ME_OPEN);
+  assert.deepStrictEqual(open.urls, ['/api/employees']);
 });

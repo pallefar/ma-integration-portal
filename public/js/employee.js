@@ -36,12 +36,16 @@ document.addEventListener('DOMContentLoaded', () => {
   function canReady(key) {
     return typeof window.maCanReady === 'function' ? window.maCanReady(key) : Promise.resolve(true);
   }
-  // Hide the card (or the element itself) that holds a section the caller may not read.
+  // Hide an element the caller may not use (never merely disabled).
   function hideSection(el) {
     if (!el) return;
-    const target = (el.closest && el.closest('.card')) || el;
-    target.hidden = true;
-    target.style.display = 'none';
+    el.hidden = true;
+    el.style.display = 'none';
+  }
+  // Hide the card that holds a section the caller may not read (or the element itself).
+  function hideCardOf(el) {
+    if (!el) return;
+    hideSection((el.closest && el.closest('.card')) || el);
   }
 
   // --- 2. MULTI-LANGUAGE TRANSLATION MATRIX ---
@@ -1871,7 +1875,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (videoEditForm) {
     videoEditForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      
+
+      // D-11-02 (plan 11-07): the welcome video is instance configuration
+      // (POST /api/settings, admin-only). The editor is already out of the page
+      // (the pen is hidden and unbound, Phase 4); this guard keeps the save
+      // itself inert — no request — for any role without configWrite.
+      if (typeof window.maCan === 'function' && !window.maCan('configWrite')) return;
+
       const type = videoModalType.value;
       const url = videoModalUrl.value.trim();
       
@@ -2716,7 +2726,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // staff-only in a real deal. An employee gets no leaderboard and no request.
     canReady('roster')
       .then(ok => {
-        if (!ok) { hideSection(leaderboardContainer); return null; }
+        if (!ok) { hideCardOf(leaderboardContainer); return null; }
         return fetch('/api/employees').then(res => res.json());
       })
       .then(employees => {
@@ -3254,9 +3264,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const employeeEmail = emp.email || `${emp.name.toLowerCase().replace(/\s+/g, '')}@te-legacy.com`;
 
-    fetch('/api/communications')
-      .then(res => res.json())
+    // D-11-01 (plan 11-07): the communications log (GET /api/communications) is
+    // staff-only in a real deal — it can name affected populations before the
+    // announcement. An employee gets neither the notification banner nor the
+    // broadcast-archive card, and no request is sent.
+    canReady('communications')
+      .then(ok => {
+        if (!ok) {
+          hideSection(notifyArea);
+          hideCardOf(document.getElementById('employee-communications-inbox'));
+          return null;
+        }
+        return fetch('/api/communications').then(res => res.json());
+      })
       .then(comms => {
+        if (!comms) return;
         notifyList.innerHTML = '';
         
         // Filter: c.recipientType === 'all' OR c.recipientEmail === employeeEmail

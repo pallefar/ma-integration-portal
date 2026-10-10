@@ -26,9 +26,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 1. Fetch Employees and resolve leader context
   function loadLeaderDashboard() {
-    fetch('/api/employees')
-      .then(res => res.json())
+    // [security] D-11-01 (Phase 11, plan 11-07): this dashboard is built on the
+    // named roster (GET /api/employees), staff-only in a real deal. The server's
+    // access map (window.maCanReady, transitions.js) says whether this role may
+    // read it; a refused role gets a neutral line and no request instead of a
+    // "failed to connect" error. With no map (demo-open, demo store) it loads as before.
+    const canRoster = typeof window.maCanReady === 'function' ? window.maCanReady('roster') : Promise.resolve(true);
+    canRoster
+      .then(ok => {
+        if (ok) return fetch('/api/employees').then(res => res.json());
+        if (reportsContainer) {
+          reportsContainer.textContent = 'The acquired-staff roster is not available for your role.';
+        }
+        return null;
+      })
       .then(employees => {
+        if (!employees) return;
         allEmployees = employees;
         
         // Find an active leader. If none is marked in localStorage, default to Emma Watson (emp_3)
