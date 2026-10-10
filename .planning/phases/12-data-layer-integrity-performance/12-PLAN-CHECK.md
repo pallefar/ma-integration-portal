@@ -1,3 +1,8 @@
+---
+status: superseded
+note: plan-checker report, not a plan; amendments applied to the plans
+---
+
 # Phase 12 — Plan Check (pre-execution)
 
 **Phase:** 12 Data-Layer Integrity & Performance
