@@ -41,6 +41,18 @@
 // file must never contain the literal SQL keyword that names that
 // cross-database link mechanism (verified by test/audit-log.test.js's own
 // source-grep acceptance criterion).
+//
+// PHASE 12 (D-12-04) — PER-DEAL PARTITIONS. Deal data deltas no longer go to
+// the one shared audit.db: appendWriteAudit() routes a `deal`-kind write to the
+// deal's own hash-chained partition file (data/audit/<dealId>.db, see
+// db/auditChain.js for the chain and db/dbFiles.js AUDIT_DIR for the location),
+// still as the final step inside the deal's `.immediate` transaction on the
+// partition's OWN connection — the Phase 8 CR-01 atomicity contract is
+// unchanged. audit.db keeps every recordSecurityEvent() row (lifecycle, grants,
+// reads, `access-denied`) with its deal_id. queryAudit()/countAudit() read both.
+// The "tamper-evidence deferred" remark above is superseded for deal data: a
+// partition's chain makes an edited, deleted or reordered row detectable
+// (scripts/audit-verify.js); chaining audit.db itself is plan 12-13.
 
 const fs = require('fs');
 const path = require('path');
