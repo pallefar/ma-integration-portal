@@ -97,9 +97,15 @@
   });
 
   signoutBtn.addEventListener('click', function () {
-    fetch('/api/auth/logout', { method: 'POST' })
-      .catch(function () { /* leave anyway */ })
-      .then(function () { window.location.href = '/login.html'; });
+    // [security] SAFE-07 / D-13-06 (b): the server logout runs inside
+    // clearOnLogout, which then clears client storage/caches (language key
+    // preserved). A missing module (script blocked) still signs out.
+    var leave = function () { window.location.href = '/login.html'; };
+    if (window.MAClientStorage && typeof window.MAClientStorage.clearOnLogout === 'function') {
+      window.MAClientStorage.clearOnLogout().then(leave, leave);
+    } else {
+      fetch('/api/auth/logout', { method: 'POST' }).then(leave, leave);
+    }
   });
 
   form.addEventListener('submit', function (e) {

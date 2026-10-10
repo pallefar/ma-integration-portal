@@ -118,11 +118,11 @@ function activeLockdown() {
   return lockdown;
 }
 
-test('allowlist: one frozen constant of exactly the seven public names', () => {
+test('allowlist: one frozen constant of exactly the eight public names', () => {
   assert.strictEqual(Object.isFrozen(LOCKDOWN_STATIC_ALLOWLIST), true);
   assert.deepStrictEqual([...LOCKDOWN_STATIC_ALLOWLIST].sort(), [
     '/change-password.html', '/css/style.css', '/favicon.ico', '/js/change-password.js',
-    '/js/login.js', '/login.html', '/te-logo.png',
+    '/js/client-storage.js', '/js/login.js', '/login.html', '/te-logo.png',
   ]);
   // server.js holds no second copy of the list (plan 10-09 imports this one).
   const src = fs.readFileSync(path.join(REPO, 'server.js'), 'utf8');
