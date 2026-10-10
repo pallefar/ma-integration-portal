@@ -242,8 +242,6 @@
         }).catch(function (e) { console.error('status update failed', e); });
       });
       row.querySelector('.ex-del').addEventListener('click', function () {
-        var msg = (window.__assessDict && null) || 'Delete this task?';
-        if (!window.confirm(msg)) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this record, taken from the same in-memory list the row
         // was rendered from — never a re-fetch. ALWAYS sent (D-09 / GD-1):
@@ -252,9 +250,12 @@
         var task = state.tasks.find(function (t) { return t.id === id; });
         var delUrl = '/api/integration-tasks/' + encodeURIComponent(id)
           + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(task));
-        fetch(delUrl, { method: 'DELETE' })
-          .then(function (r) { return r.json(); })
+        // R7 F-6 / GD-9 (09-14): the in-app confirm, i.e. the same dialog as
+        // the stale-delete variant; resolves null when the user cancelled.
+        window.maConfirmDelete('Delete this task?', delUrl)
+          .then(function (r) { return r ? r.json() : null; })
           .then(function (res) {
+            if (res === null) return; // cancelled — nothing was sent
             if (res && res.success) {
               state.tasks = state.tasks.filter(function (t) { return t.id !== id; });
               render();
@@ -1028,14 +1029,14 @@
           });
         });
       }
-      // UI-SPEC §4/Copywriting Contract: the delete button runs the
-      // window.confirm() cost-entry confirmation BEFORE issuing the
-      // request — mirrors the existing .ex-del confirm-then-delete idiom.
+      // UI-SPEC §4/Copywriting Contract (as amended by A8, 09-14): the delete
+      // button asks through the in-app confirm (window.maConfirmDelete — the
+      // same dialog that becomes the stale-delete variant on a conflict)
+      // BEFORE any request is issued; no browser-native confirm.
       card.querySelectorAll('.syn-cost-del').forEach(function (delBtn) {
         delBtn.addEventListener('click', function () {
           var row = delBtn.parentNode;
           var eid = row.getAttribute('data-cost-entry');
-          if (!window.confirm('Delete this cost entry?')) return;
           // CONC-02/D-02 (Phase 9): this route carries no JSON body — the
           // version precondition travels as a query parameter, resolved by
           // the server's shared parseExpectedVersion() dual-channel
@@ -1044,9 +1045,10 @@
           var existingItem = state.synergies.find(function (s) { return s.id === id; });
           var delUrl = '/api/synergies/' + encodeURIComponent(id) + '/cost-entries/' + encodeURIComponent(eid)
             + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(existingItem));
-          fetch(delUrl, { method: 'DELETE' })
-            .then(function (r) { return r.json(); })
+          window.maConfirmDelete('Delete this cost entry?', delUrl)
+            .then(function (r) { return r ? r.json() : null; })
             .then(function (res) {
+              if (res === null) return; // cancelled — nothing was sent
               if (res && res.success) {
                 var item = state.synergies.find(function (s) { return s.id === id; });
                 if (item) {
@@ -1078,7 +1080,6 @@
         });
       }
       card.querySelector('.ex-del').addEventListener('click', function () {
-        if (!window.confirm('Delete this initiative?')) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this initiative, taken from the same in-memory list the
         // card was rendered from — never a re-fetch. ALWAYS sent (0 when the
@@ -1086,9 +1087,11 @@
         var item = state.synergies.find(function (s) { return s.id === id; });
         var delUrl = '/api/synergies/' + encodeURIComponent(id)
           + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(item));
-        fetch(delUrl, { method: 'DELETE' })
-          .then(function (r) { return r.json(); })
+        // R7 F-6 / GD-9 (09-14): the in-app confirm; null when cancelled.
+        window.maConfirmDelete('Delete this initiative?', delUrl)
+          .then(function (r) { return r ? r.json() : null; })
           .then(function (res) {
+            if (res === null) return; // cancelled — nothing was sent
             if (res && res.success) {
               state.synergies = state.synergies.filter(function (s) { return s.id !== id; });
               renderSynergy(); applyI18n();
@@ -1168,7 +1171,6 @@
           });
       });
       row.querySelector('.ex-del').addEventListener('click', function () {
-        if (!window.confirm('Delete this entry?')) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this entry, taken from the same in-memory list the row
         // was rendered from — never a re-fetch. Always sent: window.maVersionOf()
@@ -1177,9 +1179,13 @@
         // no precondition is refused in a real deal.
         var entry = state.raid.find(function (r) { return r.id === id; });
         var delUrl = '/api/raid/' + encodeURIComponent(id) + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(entry));
-        fetch(delUrl, { method: 'DELETE' })
-          .then(function (r) { return r.json(); })
+        // R7 F-6 / GD-9 (09-14): the in-app confirm — the SAME dialog that
+        // becomes the stale-delete variant on a 409; no browser-native confirm.
+        // Resolves null when nothing was sent (Cancel/Escape).
+        window.maConfirmDelete('Delete this entry?', delUrl)
+          .then(function (r) { return r ? r.json() : null; })
           .then(function (res) {
+            if (res === null) return; // cancelled — nothing was sent
             if (res && res.success) {
               state.raid = state.raid.filter(function (x) { return x.id !== id; });
               renderRaid();
