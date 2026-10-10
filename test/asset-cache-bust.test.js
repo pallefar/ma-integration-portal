@@ -18,6 +18,8 @@
 //      gap-closure bump — so a bump can never be silently reverted.
 // It also fails on an HTML tag that references a tracked asset with NO stamp.
 //
+// Phase-10 assets that did not exist at v2.1.0 live in NEW_ASSETS (no floor).
+//
 // Content-hash automation (stamp derived from file content) is Phase 12
 // QUAL-01 and is deliberately NOT built here; this table is replaced by it.
 //
@@ -40,11 +42,31 @@ const PUBLIC = path.join(ROOT, 'public');
 const FROZEN = {
   // login.html carried its own older style.css stamp (1784500010) at v2.1.0.
   '/css/style.css': { v21: [1784600001, 1784500010], before: [1784600001, 1784500010] },
-  '/js/transitions.js': { v21: [1784900002], before: [1784900002] },
+  // 1791628622 = the stamp on all 18 pages before Phase 10 changed transitions.js
+  // (10-06: 403 mustChangePassword branch, handshake redirect, account-menu loader).
+  '/js/transitions.js': { v21: [1784900002], before: [1784900002, 1791628622] },
   '/js/execution.js': { v21: [1786250900], before: [1786433369] },
   '/js/org.js': { v21: [1784900011], before: [1786433369] },
   '/js/due-diligence.js': { v21: [1784800006], before: [1786427686] },
 };
+
+// Phase 10 (accounts & identity) assets. They did not exist at v2.1.0, so they
+// have no frozen floor to compare against (the FROZEN table above requires
+// non-empty v21/before arrays, and an empty array would make the floor
+// -Infinity). They are still held to rules 1-2 and the no-unstamped-HTML-
+// reference check: referenced at least once, one consistent numeric stamp.
+// account-menu.js / account.css / admin-users.* are referenced from a JS string
+// or an HTML tag; the collector scans both public/**/*.html and public/js/**.
+// If one of these changes again, bump its stamp everywhere it is referenced;
+// when the Phase 12 content-hash automation lands this list goes with FROZEN.
+const NEW_ASSETS = [
+  '/js/login.js',
+  '/js/change-password.js',
+  '/js/account-menu.js',
+  '/css/account.css',
+  '/js/admin-users.js',
+  '/css/admin-users.css',
+];
 
 function walk(dir, out) {
   fs.readdirSync(dir, { withFileTypes: true }).forEach((ent) => {
@@ -118,6 +140,26 @@ Object.keys(FROZEN).forEach((asset) => {
   });
 
   test(`${asset}: no HTML tag references it without a ?v= stamp`, () => {
+    const bare = unstampedHtmlRefs(asset);
+    assert.deepStrictEqual(bare, [], `${asset} referenced without a ?v= stamp in: ${bare.join(', ')}`);
+  });
+});
+
+NEW_ASSETS.forEach((asset) => {
+  test(`${asset} (phase-10 asset): referenced, with one consistent numeric stamp`, () => {
+    const refs = collect(asset);
+    assert.ok(refs.length > 0, `no reference to ${asset}?v=<stamp> found under public/`);
+    const stamps = Array.from(new Set(refs.map((r) => r.stamp)));
+    if (stamps.length !== 1) {
+      const by = {};
+      refs.forEach((r) => { (by[r.stamp] = by[r.stamp] || []).push(r.file); });
+      assert.fail(`${asset} is referenced with ${stamps.length} different stamps — every reference must carry the same one:\n` +
+        Object.keys(by).map((st) => `  ?v=${st}: ${by[st].join(', ')}`).join('\n'));
+    }
+    assert.match(stamps[0], /^[0-9]+$/, `${asset} stamp "${stamps[0]}" is not numeric (referenced in ${refs.map((r) => r.file).join(', ')})`);
+  });
+
+  test(`${asset} (phase-10 asset): no HTML tag references it without a ?v= stamp`, () => {
     const bare = unstampedHtmlRefs(asset);
     assert.deepStrictEqual(bare, [], `${asset} referenced without a ?v= stamp in: ${bare.join(', ')}`);
   });
