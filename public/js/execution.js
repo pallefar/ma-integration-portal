@@ -24,8 +24,29 @@
     // fully handled by the shared conflict dialog rendered by
     // transitions.js's fetch wrapper — this alert must not ALSO fire for
     // that case, or the user sees two contradictory messages for one save.
-    if (res && res.conflict === true) return;
+    // GD-5 (09-12): a settled conflict also re-reads the server state so the
+    // page shows what the user chose to keep — reloadAfterConflict() returns
+    // true exactly when `res.conflict === true`, preserving WR-01.
+    if (reloadAfterConflict(res)) return;
     window.alert((res && res.error) || 'That action could not be completed. Please try again.');
+  }
+
+  // GD-5 (09-12, T-09-49): the conflict dialog has settled WITHOUT applying
+  // this user's change (Discard, Escape, overlay-click, Close, Cancel, or a
+  // record that was withheld/deleted underneath them). Re-reading the server
+  // state is what makes "keep theirs" true on screen — otherwise the page
+  // keeps presenting the stale copy the user just declined to overwrite. The
+  // held promise (09-11) guarantees this runs only AFTER the dialog is gone,
+  // so it can never re-render underneath an open dialog. The re-read goes
+  // through the normal clearance-filtered GET routes (T-09-38): a record the
+  // caller is no longer cleared for simply disappears. Returns true when it
+  // handled a conflict (callers then skip their own failure alert, WR-01).
+  function reloadAfterConflict(res) {
+    if (!(res && res.conflict === true)) return false;
+    load().then(function () {
+      render(); renderSynergy(); renderRaid(); applyI18n();
+    }).catch(function (e) { console.error('re-read after conflict failed', e); });
+    return true;
   }
 
   var PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
@@ -195,13 +216,12 @@
         var next = STATUS_ORDER[(STATUS_ORDER.indexOf(task.status) + 1) % STATUS_ORDER.length];
         // CONC-02/D-02 (Phase 9): a single-field kanban status flip goes
         // through the SAME version check as a full edit — no exemptions.
-        // Send the version this page already holds in memory for this
-        // record; send nothing when the held record has no version (the
-        // server treats an absent version as "no precondition supplied",
-        // and the WHERE-clause layer in db/store.js still covers the
-        // cross-process case for it) — mirrors the RAID status-flip site.
-        var body = { id: id, status: next };
-        if (task.version !== undefined) body.version = task.version;
+        // The version this page already holds in memory for this record is
+        // ALWAYS sent: window.maVersionOf() yields it, or 0 for a never-
+        // edited record (D-09 / GD-1 — the strict server refuses an absent
+        // version in a real deal, so omission is never a valid state; R7
+        // F-1 was exactly a silent clobber on a never-edited task).
+        var body = { id: id, status: next, version: window.maVersionOf(task) };
         fetch('/api/integration-tasks', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -214,6 +234,10 @@
             task.status = res.task.status;
             task.version = res.task.version;
             render();
+          } else {
+            // GD-5: a conflict that settled without applying this change
+            // (Discard etc.) — show the server's state, not the stale copy.
+            reloadAfterConflict(res);
           }
         }).catch(function (e) { console.error('status update failed', e); });
       });
@@ -222,18 +246,20 @@
         if (!window.confirm(msg)) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this record, taken from the same in-memory list the row
-        // was rendered from — never a re-fetch. Omitted entirely when the
-        // held record has no version (D-09's lazy adoption — the
-        // storage-layer WHERE clause still guards the cross-process case).
+        // was rendered from — never a re-fetch. ALWAYS sent (D-09 / GD-1):
+        // window.maVersionOf() yields 0 for a never-edited record, and the
+        // strict server refuses a delete that carries no precondition.
         var task = state.tasks.find(function (t) { return t.id === id; });
-        var delUrl = '/api/integration-tasks/' + encodeURIComponent(id);
-        if (task && task.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(task.version);
+        var delUrl = '/api/integration-tasks/' + encodeURIComponent(id)
+          + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(task));
         fetch(delUrl, { method: 'DELETE' })
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (res && res.success) {
               state.tasks = state.tasks.filter(function (t) { return t.id !== id; });
               render();
+            } else {
+              reloadAfterConflict(res); // GD-5
             }
           }).catch(function (e) { console.error('delete failed', e); });
       });
@@ -415,10 +441,11 @@
     closeSynStageMenu();
     var body = { targetStage: targetStage };
     if (reason) body.reason = reason;
-    // CONC-02/D-02 (Phase 9): send the version this page already holds for
-    // this initiative; nothing sent when the held record has none.
+    // CONC-02/D-02 (Phase 9): ALWAYS send the version this page already holds
+    // for this initiative — window.maVersionOf() yields 0 for a never-edited
+    // record (D-09 / GD-1); the strict server refuses an absent precondition.
     var existingItem = state.synergies.find(function (s) { return s.id === id; });
-    if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
+    body.version = window.maVersionOf(existingItem);
     fetch('/api/synergies/' + encodeURIComponent(id) + '/stage', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(function (res) {
@@ -811,8 +838,9 @@
       // content edit can never be the same request.
       card.querySelector('.syn-confirm-btn').addEventListener('click', function () {
         var existingItem = state.synergies.find(function (s) { return s.id === id; });
+        // Always sent — maVersionOf() is 0 for a never-edited record (GD-1).
         var confirmBody = {};
-        if (existingItem && existingItem.version !== undefined) confirmBody.version = existingItem.version;
+        confirmBody.version = window.maVersionOf(existingItem);
         fetch('/api/synergies/' + encodeURIComponent(id) + '/confirm-current', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(confirmBody)
         }).then(function (r) { return r.json(); }).then(function (res) {
@@ -853,8 +881,8 @@
             curveShape: curveEl.value
           };
           // CONC-02/D-02 (Phase 9): `existing` above is the same held record —
-          // send its version; nothing sent when it has none.
-          if (existing && existing.version !== undefined) body.version = existing.version;
+          // always send its version (0 when never edited; GD-1).
+          body.version = window.maVersionOf(existing);
           fetch('/api/synergies/' + encodeURIComponent(id) + '/generate-phasing', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
           }).then(function (r) { return r.json(); }).then(function (res) {
@@ -863,7 +891,8 @@
               if (idx !== -1) state.synergies[idx] = res.initiative;
               renderSynergy(); applyI18n();
             } else {
-              if (!(res && res.conflict === true)) window.alert(res && res.error);
+              // GD-5 / WR-01: a settled conflict re-reads and never alerts.
+              if (!reloadAfterConflict(res)) window.alert(res && res.error);
             }
           });
         });
@@ -878,11 +907,10 @@
       if (headerRealizedInput) {
         headerRealizedInput.addEventListener('change', function (ev) {
           var val = parseFloat(ev.target.value) || 0;
-          // CONC-02/D-02 (Phase 9): send the version this page already holds
-          // for this initiative; nothing sent when the held record has none.
+          // CONC-02/D-02 (Phase 9): always send the version this page already
+          // holds for this initiative (0 when never edited; GD-1).
           var existingItem = state.synergies.find(function (s) { return s.id === id; });
-          var body = { id: id, realizedM: val };
-          if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
+          var body = { id: id, realizedM: val, version: window.maVersionOf(existingItem) };
           fetch('/api/synergies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             .then(function (r) { return r.json(); })
             .then(function (res) {
@@ -894,7 +922,9 @@
                 // Rule 1 fix: once an initiative has phasing rows, D-04
                 // refuses this direct write with 400 — this field must not
                 // fail silently (UI-SPEC's "never silently fail" contract).
-                if (!(res && res.conflict === true)) window.alert(res && res.error);
+                // GD-5 (R7 F-2b): a settled conflict re-reads so the header
+                // shows the server's realized value, and never alerts (WR-01).
+                if (!reloadAfterConflict(res)) window.alert(res && res.error);
               }
             });
         });
@@ -913,10 +943,10 @@
           var field = cell.classList.contains('syn-target-input') ? 'targetM' : 'realizedM';
           var body = {};
           body[field] = parseFloat(ev.target.value) || 0;
-          // CONC-02/D-02 (Phase 9): send the version this page already holds
-          // for this initiative; nothing sent when the held record has none.
+          // CONC-02/D-02 (Phase 9): always send the version this page already
+          // holds for this initiative (0 when never edited; GD-1).
           var existingItem = state.synergies.find(function (s) { return s.id === id; });
-          if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
+          body.version = window.maVersionOf(existingItem);
           fetch('/api/synergies/' + encodeURIComponent(id) + '/phasing/' + encodeURIComponent(month), {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
           }).then(function (r) { return r.json(); }).then(function (res) {
@@ -925,7 +955,8 @@
               if (idx !== -1) state.synergies[idx] = res.initiative;
               renderSynergy(); applyI18n();
             } else {
-              if (!(res && res.conflict === true)) window.alert(res && res.error);
+              // GD-5 / WR-01: a settled conflict re-reads and never alerts.
+              if (!reloadAfterConflict(res)) window.alert(res && res.error);
             }
           });
         });
@@ -944,11 +975,10 @@
           if (reason === null) return;
           reason = reason.trim();
           if (!reason) return;
-          // CONC-02/D-02 (Phase 9): send the version this page already holds
-          // for this initiative; nothing sent when the held record has none.
+          // CONC-02/D-02 (Phase 9): always send the version this page already
+          // holds for this initiative (0 when never edited; GD-1).
           var existingItem = state.synergies.find(function (s) { return s.id === id; });
-          var rebaselineBody = { reason: reason };
-          if (existingItem && existingItem.version !== undefined) rebaselineBody.version = existingItem.version;
+          var rebaselineBody = { reason: reason, version: window.maVersionOf(existingItem) };
           fetch('/api/synergies/' + encodeURIComponent(id) + '/rebaseline', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rebaselineBody)
           }).then(function (r) { return r.json(); }).then(function (res) {
@@ -981,10 +1011,10 @@
           var body = { date: date, amountM: parseFloat(amountRaw) || 0 };
           var note = noteEl.value.trim();
           if (note) body.note = note;
-          // CONC-02/D-02 (Phase 9): send the version this page already holds
-          // for this initiative; nothing sent when the held record has none.
+          // CONC-02/D-02 (Phase 9): always send the version this page already
+          // holds for this initiative (0 when never edited; GD-1).
           var existingItem = state.synergies.find(function (s) { return s.id === id; });
-          if (existingItem && existingItem.version !== undefined) body.version = existingItem.version;
+          body.version = window.maVersionOf(existingItem);
           fetch('/api/synergies/' + encodeURIComponent(id) + '/cost-entries', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
           }).then(function (r) { return r.json(); }).then(function (res) {
@@ -1009,13 +1039,11 @@
           // CONC-02/D-02 (Phase 9): this route carries no JSON body — the
           // version precondition travels as a query parameter, resolved by
           // the server's shared parseExpectedVersion() dual-channel
-          // contract. Send the version this page already holds for this
-          // initiative; nothing appended when the held record has none.
+          // contract. ALWAYS send the version this page already holds for
+          // this initiative (0 when never edited; GD-1).
           var existingItem = state.synergies.find(function (s) { return s.id === id; });
-          var delUrl = '/api/synergies/' + encodeURIComponent(id) + '/cost-entries/' + encodeURIComponent(eid);
-          if (existingItem && existingItem.version !== undefined) {
-            delUrl += '?expectedVersion=' + encodeURIComponent(existingItem.version);
-          }
+          var delUrl = '/api/synergies/' + encodeURIComponent(id) + '/cost-entries/' + encodeURIComponent(eid)
+            + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(existingItem));
           fetch(delUrl, { method: 'DELETE' })
             .then(function (r) { return r.json(); })
             .then(function (res) {
@@ -1053,17 +1081,19 @@
         if (!window.confirm('Delete this initiative?')) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this initiative, taken from the same in-memory list the
-        // card was rendered from — never a re-fetch. Omitted entirely when
-        // the held record has no version yet (D-09 lazy adoption).
+        // card was rendered from — never a re-fetch. ALWAYS sent (0 when the
+        // record was never edited; D-09 / GD-1).
         var item = state.synergies.find(function (s) { return s.id === id; });
-        var delUrl = '/api/synergies/' + encodeURIComponent(id);
-        if (item && item.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(item.version);
+        var delUrl = '/api/synergies/' + encodeURIComponent(id)
+          + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(item));
         fetch(delUrl, { method: 'DELETE' })
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (res && res.success) {
               state.synergies = state.synergies.filter(function (s) { return s.id !== id; });
               renderSynergy(); applyI18n();
+            } else {
+              reloadAfterConflict(res); // GD-5
             }
           });
       });
@@ -1132,6 +1162,8 @@
               item.status = res.entry.status;
               item.version = res.entry.version;
               renderRaid();
+            } else {
+              reloadAfterConflict(res); // GD-5: show the server's state
             }
           });
       });
@@ -1151,6 +1183,8 @@
             if (res && res.success) {
               state.raid = state.raid.filter(function (x) { return x.id !== id; });
               renderRaid();
+            } else {
+              reloadAfterConflict(res); // GD-5: a withheld/changed record
             }
           });
       });
