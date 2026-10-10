@@ -136,7 +136,19 @@ const DEAL_SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 // `..` segment, or an id from an untrusted source) must never reach
 // path.join() below, which is the only thing standing between a caller-
 // supplied string and an arbitrary filesystem write (T-03-03).
-const DEAL_ID_RE = /^deal_[a-z0-9]+$/i;
+//
+// [security] CR-01 (12-REVIEW): CASE-SENSITIVE on purpose. The host
+// filesystem is case-insensitive on macOS/APFS and Windows, so a `/i` regex let
+// `dEaL_Mv2…` resolve to the same partition FILE as the active `deal_mv2…`
+// while matching no registry row (SQLite `WHERE id = ?` is case-sensitive) —
+// which skipped the `deal-active` refusal and sealed a live deal's trail. Only
+// the exact minted (lowercase) spelling is ever a deal id.
+const DEAL_ID_RE = /^deal_[a-z0-9]+$/;
+
+// The case-INSENSITIVE shape, used only to classify a near-miss spelling
+// (`DEAL_…`, `Legacy`) as "unknown id" (uniform 404) rather than "malformed"
+// (400). Never used to build a path.
+const DEAL_ID_SHAPE_ANY_CASE_RE = /^(deal_[a-z0-9]+|legacy)$/i;
 
 /**
  * D-12-04: the on-disk path of one audit partition. Accepts exactly a deal id
@@ -149,6 +161,37 @@ function auditPartitionPath(partitionId) {
     throw new Error(`db/dbFiles.js: auditPartitionPath() rejected invalid partition id: ${JSON.stringify(partitionId)}`);
   }
   return path.join(AUDIT_DIR, `${partitionId}.db`);
+}
+
+/**
+ * [security] CR-01 (12-REVIEW): true only when AUDIT_DIR holds a file whose
+ * name is BYTE-IDENTICAL to `<partitionId>.db` in a directory listing. Never
+ * trusts `fs.existsSync`/`stat`/open, which on a case-insensitive filesystem
+ * answer "yes" for any case variant of an existing file. Throws (via
+ * auditPartitionPath) for a malformed id.
+ */
+function auditPartitionListed(partitionId) {
+  const name = path.basename(auditPartitionPath(partitionId));
+  let names;
+  try { names = fs.readdirSync(AUDIT_DIR); } catch (e) { return false; }
+  return names.includes(name);
+}
+
+/**
+ * [security] CR-01 (12-REVIEW): resolve a caller-supplied partition id by FILE
+ * IDENTITY. Valid only when the string exactly equals a registered deal id
+ * (`isRegistered(id)` — the caller's exact-match registry lookup) or exactly
+ * equals an existing partition file basename in an exact-case listing.
+ *   { ok: true, id }                    — use `id` (the caller's exact string)
+ *   { ok: false, reason: 'malformed' }  — not an id shape at all (400)
+ *   { ok: false, reason: 'unknown' }    — any other spelling (uniform 404)
+ */
+function resolveAuditPartitionId(raw, isRegistered) {
+  if (typeof raw !== 'string' || !DEAL_ID_SHAPE_ANY_CASE_RE.test(raw)) return { ok: false, reason: 'malformed' };
+  if (!(DEAL_ID_RE.test(raw) || raw === 'legacy')) return { ok: false, reason: 'unknown' };
+  if (raw !== 'legacy' && typeof isRegistered === 'function' && isRegistered(raw) === true) return { ok: true, id: raw };
+  if (auditPartitionListed(raw)) return { ok: true, id: raw };
+  return { ok: false, reason: 'unknown' };
 }
 
 /**
@@ -557,6 +600,8 @@ module.exports = {
   DEAL_ID_RE,
   dealDbPath,
   auditPartitionPath,
+  auditPartitionListed,
+  resolveAuditPartitionId,
   isCommittedDbPath,
   isCommittedControlDbActive,
   ensurePrivateDir,

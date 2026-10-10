@@ -2294,11 +2294,25 @@ app.get('/api/admin/audit', (req, res) => {
 // differently.
 const auditLifecycle = require('./db/auditLifecycle');
 
-/** A deal id or exactly `legacy` (db/dbFiles.js auditPartitionPath's own rule); 400 otherwise. */
+/**
+ * [security] CR-01 (12-REVIEW): the partition id is resolved by FILE IDENTITY,
+ * never by the caller's spelling. Valid only when it exactly equals a
+ * registered deal id or exactly equals a partition file basename in an
+ * exact-case listing of the audit directory (db/dbFiles.js
+ * resolveAuditPartitionId). A case variant of a live deal's id would otherwise
+ * open the SAME file on a case-insensitive filesystem while matching no
+ * registry row — skipping the `deal-active` refusal. Not an id shape at all →
+ * 400 (unchanged); every other spelling → the uniform 404, before any read,
+ * write or event.
+ */
 function auditPartitionIdOf(req, res) {
-  const id = req.params.id;
-  if (typeof id === 'string' && (dbFiles.DEAL_ID_RE.test(id) || id === 'legacy')) return id;
-  res.status(400).json({ error: 'Invalid deal id.' });
+  const r = dbFiles.resolveAuditPartitionId(req.params.id, (x) => {
+    const deal = controlStore.getDeal(x);
+    return !!deal && deal.id === x;
+  });
+  if (r.ok) return r.id;
+  if (r.reason === 'unknown') res.status(404).json({ error: 'Not found' });
+  else res.status(400).json({ error: 'Invalid deal id.' });
   return null;
 }
 

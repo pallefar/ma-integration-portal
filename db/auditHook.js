@@ -319,7 +319,8 @@ function recordSecurityEvent({ actor, action, dealId, subject, before, after, re
 }
 
 // D-12-04: partition file names a reader may open — a deal id or `legacy`.
-const PARTITION_FILE_RE = /^(deal_[a-z0-9]+|legacy)\.db$/i;
+// CR-01 (12-REVIEW): case-sensitive, like dbFiles.DEAL_ID_RE.
+const PARTITION_FILE_RE = /^(deal_[a-z0-9]+|legacy)\.db$/;
 const MAX_AUDIT_OFFSET = 100000; // a viewer can never force an unbounded merge window
 
 /**
@@ -344,7 +345,7 @@ function openReadSources(dealId) {
   for (const name of names) {
     const file = path.join(dbFiles.AUDIT_DIR, name);
     if (!fs.existsSync(file)) continue;
-    sources.push({ partition: name.replace(/\.db$/i, ''), conn: dbFiles.openDbFileReadOnly(file), owned: true });
+    sources.push({ partition: name.replace(/\.db$/, ''), conn: dbFiles.openDbFileReadOnly(file), owned: true });
   }
   return {
     sources,
@@ -477,7 +478,7 @@ function findControlEvents({ dealId, action } = {}) {
 function listPartitions() {
   let listing = [];
   try { listing = fs.readdirSync(dbFiles.AUDIT_DIR); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-  return listing.filter((name) => PARTITION_FILE_RE.test(name)).sort().map((name) => name.replace(/\.db$/i, ''));
+  return listing.filter((name) => PARTITION_FILE_RE.test(name)).sort().map((name) => name.replace(/\.db$/, ''));
 }
 
 module.exports = {
