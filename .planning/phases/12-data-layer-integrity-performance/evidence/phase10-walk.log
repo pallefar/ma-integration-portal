@@ -1,4 +1,4 @@
-HOST: load1=11.25 cpus=11 at 2026-10-10T21:06:34Z (threshold 12)
+HOST: load1=5.02 load5=8.28 cpus=11 at 2026-10-10T21:53:26Z (quiet = load1<30 and load5<1.5x30; waited 10s)
 evidence dir: <scratch>/runner-out
 
 === lane real: realEmptyDirBootstrap, authzRoleMatrix, cleanRoom404, denialAuditBounded, ddPageOneRequest, raidPagedApi, auditSealFlow, forcedChangeLandsOnChangePassword, realLoginHasNoDemoCredentials, selfServiceSessions, usersTabLifecycle ===
@@ -292,7 +292,7 @@ evidence dir: <scratch>/runner-out
 [denialAuditBounded@real] PASS - a later denial (different route) is still refused 403 :: 403
 [denialAuditBounded@real] PASS - acceptance 6: after the window the folded denials are written as at most one more row (<= 1 row per 60 s) :: [{"id":64,"count":1,"folded":false},{"id":72,"count":19,"folded":true}]
 [denialAuditBounded@real] PASS - acceptance 6: the rows account for every probe (total count == 20) :: {"total":20}
-[denialAuditBounded@real] PASS - the two rows are at least one window (60 s, with clock tolerance) apart :: {"gapMs":63364}
+[denialAuditBounded@real] PASS - the two rows are at least one window (60 s, with clock tolerance) apart :: {"gapMs":62270}
 [denialAuditBounded@real] PASS - WR-01: after the window GET /api/dd/findings/:id (random ids) holds one first row + one folded row and the counts add up to 25 :: {"rows":2,"total":25,"folded":[{"count":24,"reason":"dd-clearance"}]}
 [denialAuditBounded@real] PASS - WR-01: after the window GET /api/org/decisions?positionId=<random> holds one first row + one folded row and the counts add up to 25 :: {"rows":2,"total":25,"folded":[{"count":24,"reason":"org-clearance"}]}
 [denialAuditBounded@real] PASS - WR-01: after the window GET /api/org/flight-risk holds one first row + one folded row and the counts add up to 25 :: {"rows":2,"total":25,"folded":[{"count":24,"reason":"org-clearance"}]}
@@ -362,7 +362,7 @@ evidence dir: <scratch>/runner-out
 [selfServiceSessions@real] PASS - 1440px: My sessions is reachable from the header menu :: dropdown
 [selfServiceSessions@real] PASS - 1440px: exactly one session is marked "This device" :: [{"device":"node","current":true,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like…","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true}]
 [selfServiceSessions@real] PASS - 1440px: every row has an End-session button (real mode is writable) :: [{"device":"node","current":true,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like…","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true}]
-[selfServiceSessions@real] PASS - second context is signed in (stays on /admin.html) :: http://127.0.0.1:60505/admin.html
+[selfServiceSessions@real] PASS - second context is signed in (stays on /admin.html) :: http://127.0.0.1:57694/admin.html
 [selfServiceSessions@real] PASS - the list now shows both sessions :: 8
 [selfServiceSessions@real] PASS - ending the other session removes exactly that row; this device remains :: [{"device":"node","current":true,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true},{"device":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like…","current":false,"canEnd":true},{"device":"node","current":false,"canEnd":true}]
 [selfServiceSessions@real] PASS - the ended session is bounced to /login.html on its next navigation :: /login.html
@@ -709,5 +709,5 @@ evidence dir: <scratch>/runner-out
 [data-integrity] PASS - `git status --porcelain -- data` unchanged :: clean
 
 695 PASS, 0 FAIL. results: <scratch>/runner-out/results.json
-HOST: load at end: 19.37 24.13 53.13 at 2026-10-10T21:14:40Z
+HOST: load at end: 5.50 6.56 13.32 at 2026-10-10T22:00:02Z
 EXIT=0

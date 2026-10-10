@@ -1,4 +1,4 @@
-HOST: load1=11.85 cpus=11 at 2026-10-10T21:05:49Z (threshold 12)
+HOST: load1=6.11 load5=9.47 cpus=11 at 2026-10-10T21:52:05Z (quiet = load1<30 and load5<1.5x30; waited 10s)
 
 > te-ma-integration-portal@1.0.0 smoke
 > node scripts/smoke/run.js
@@ -73,5 +73,5 @@ admin-users    390    1             2            0            0           ok
 
 12 page x width visit(s); 0 with errors; axe critical+serious total 37 (informational).
 isolation: committed data/*.db sha256 unchanged; git status data/ + public/sent_emails/ unchanged.
-HOST: load at end: 13.04 39.06 79.63 at 2026-10-10T21:06:19Z
+HOST: load at end: 5.83 9.18 18.73 at 2026-10-10T21:52:23Z
 EXIT=0

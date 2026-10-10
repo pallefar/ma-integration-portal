@@ -1,24 +1,24 @@
-HOST: load1=11.33 cpus=11 at 2026-10-10T21:21:15Z (threshold 12)
-evidence dir: <scratch>/p9-demo
+HOST: load1=17.72 load5=10.83 cpus=11 at 2026-10-10T22:03:54Z (quiet = load1<30 and load5<1.5x30; waited 10s)
+evidence dir: <scratch>/p9-demo-out
 [setup] PASS - demo-open instance reachable anonymously (DEMO_OPEN=1) :: 200
-[demo-smoke] PASS - anonymous RAID create 201 :: {"status":201,"body":{"success":true,"entry":{"id":"raid_mv2wfqbae5d5fdac","type":"risk","title":"demo anon entry","severity":"high","owner":"demo","workstreamId":"ws_imo","status":"open","notes":"","source":"","createdAt":"2026-10-10T21:21:16.534Z"}}}
-[demo-smoke] PASS - anonymous version-less RAID update 200, no versionRequired :: {"status":200,"body":{"success":true,"entry":{"id":"raid_mv2wfqbae5d5fdac","type":"risk","title":"demo anon entry","severity":"high","owner":"demo","workstreamId":"ws_imo","status":"mitigating","notes":"","source":"","createdAt":"2026-10-10T21:21:16.534Z","version":1,"updatedAt":"2026-10-10T21:21:16.538Z"}}}
+[demo-smoke] PASS - anonymous RAID create 201 :: {"status":201,"body":{"success":true,"entry":{"id":"raid_mv2xykvt9559f61f","type":"risk","title":"demo anon entry","severity":"high","owner":"demo","workstreamId":"ws_imo","status":"open","notes":"","source":"","createdAt":"2026-10-10T22:03:55.577Z"}}}
+[demo-smoke] PASS - anonymous version-less RAID update 200, no versionRequired :: {"status":200,"body":{"success":true,"entry":{"id":"raid_mv2xykvt9559f61f","type":"risk","title":"demo anon entry","severity":"high","owner":"demo","workstreamId":"ws_imo","status":"mitigating","notes":"","source":"","createdAt":"2026-10-10T22:03:55.577Z","version":1,"updatedAt":"2026-10-10T22:03:55.582Z"}}}
 [demo-smoke] PASS - anonymous task read 200 with demo tasks :: 200
-[demo-smoke] PASS - anonymous version-less task update 200, no versionRequired :: {"status":200,"body":{"success":true,"task":{"id":"task_seed_i01","title":"Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.","titleKey":"exec.item_i01","workstreamId":"ws_imo","phase":"pre","owner":"David Miller","due":"2026-04-30","status":"doing","source":"template:ctpl_day1_100:i01","createdAt":"2026-04-20T09:00:00.000Z","version":1,"updatedAt":"2026-10-10T21:21:16.546Z"}}}
-[demo-smoke] PASS - /execution.html loaded (not bounced to login) :: http://127.0.0.1:62656/execution.html
+[demo-smoke] PASS - anonymous version-less task update 200, no versionRequired :: {"status":200,"body":{"success":true,"task":{"id":"task_seed_i01","title":"Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.","titleKey":"exec.item_i01","workstreamId":"ws_imo","phase":"pre","owner":"David Miller","due":"2026-04-30","status":"doing","source":"template:ctpl_day1_100:i01","createdAt":"2026-04-20T09:00:00.000Z","version":1,"updatedAt":"2026-10-10T22:03:55.590Z"}}}
+[demo-smoke] PASS - /execution.html loaded (not bounced to login) :: http://127.0.0.1:59329/execution.html
 [demo-smoke] PASS - no page error on load :: []
 [demo-smoke] PASS - demo task list is populated :: 34
 [demo-smoke] PASS - task status flip sent :: 1
-[demo-smoke] PASS - task status flip 200 success:true :: {"status":200,"body":{"success":true,"task":{"id":"task_seed_i01","title":"Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.","titleKey":"exec.item_i01","workstreamId":"ws_imo","phase":"pre","owner":"David Miller","due":"2026-04-30","status":"blocked","source":"template:ctpl_day1_100:i01","createdAt":"2026-04-20T09:00:00.000Z","version":2,"updatedAt":"2026-10-10T21:21:18.128Z","updatedBy":"karen"}}}
+[demo-smoke] PASS - task status flip 200 success:true :: {"status":200,"body":{"success":true,"task":{"id":"task_seed_i01","title":"Charter the IMO: named lead, executive sponsor, weekly cadence, decision log.","titleKey":"exec.item_i01","workstreamId":"ws_imo","phase":"pre","owner":"David Miller","due":"2026-04-30","status":"blocked","source":"template:ctpl_day1_100:i01","createdAt":"2026-04-20T09:00:00.000Z","version":2,"updatedAt":"2026-10-10T22:03:57.019Z","updatedBy":"karen"}}}
 [demo-smoke] PASS - no conflict dialog after the task flip
 [demo-smoke] PASS - RAID status flip sent :: 1
-[demo-smoke] PASS - RAID status flip 200 :: {"status":200,"body":{"success":true,"entry":{"id":"raid_seed_1","type":"risk","title":"Key sensing R&D engineers approached by competitors","severity":"high","probability":"medium","owner":"Karen Peterson","workstreamId":"ws_hr","status":"mitigating","notes":"Retention packages approved; 1-on-1s in progress.","createdAt":"2026-05-05T09:00:00.000Z","version":1,"updatedAt":"2026-10-10T21:21:19.161Z","updatedBy":"karen"}}}
+[demo-smoke] PASS - RAID status flip 200 :: {"status":200,"body":{"success":true,"entry":{"id":"raid_seed_1","type":"risk","title":"Key sensing R&D engineers approached by competitors","severity":"high","probability":"medium","owner":"Karen Peterson","workstreamId":"ws_hr","status":"mitigating","notes":"Retention packages approved; 1-on-1s in progress.","createdAt":"2026-05-05T09:00:00.000Z","version":1,"updatedAt":"2026-10-10T22:03:58.035Z","updatedBy":"karen"}}}
 [demo-smoke] PASS - no conflict dialog after the RAID flip
 [demo-smoke] PASS - no captured response carries versionRequired :: []
 [demo-smoke] PASS - no captured write answered 409 :: [200,200]
 [demo-smoke] PASS - no page error during the smoke :: []
-[data-integrity] PASS - committed data/demo.db* and data/control.db* unchanged :: 6 file(s) identical
+[data-integrity] PASS - committed data/demo.db* and data/control.db* unchanged :: 4 file(s) identical
 
-18 PASS, 0 FAIL. results: <scratch>/p9-demo/results.json
-HOST: load at end: 11.33 14.40 37.21 at 2026-10-10T21:21:20Z
+18 PASS, 0 FAIL. results: <scratch>/p9-demo-out/results.json
+HOST: load at end: 18.30 11.06 13.49 at 2026-10-10T22:03:59Z
 EXIT=0
