@@ -229,6 +229,41 @@ test('locked: only /healthz, the login page + assets and /api/auth/* are served'
   assert.strictEqual(api.json.credentialLockdown, true);
 });
 
+test('middleware: POST /api/csp-report alone passes while locked (SAFE-02); every other spelling or method is refused', () => {
+  const lockdown = activeLockdown();
+  assert.strictEqual(run(lockdown, 'POST', '/api/csp-report').nextCalled, true);
+  for (const [method, p] of [
+    ['GET', '/api/csp-report'], ['PUT', '/api/csp-report'], ['DELETE', '/api/csp-report'],
+    ['POST', '/api/csp-report/'], ['POST', '/api/csp-report/x'], ['POST', '/api//csp-report'],
+    ['POST', '/api/CSP-report'], ['POST', '/api/csp-report/..%2Fraid'], ['POST', '/api/csp-reports'],
+    ['GET', '/api/admin/csp-violations'], ['POST', '/api/raid'],
+  ]) {
+    const { res, nextCalled } = run(lockdown, method, p);
+    assert.strictEqual(nextCalled, false, `${method} ${p} must not pass`);
+    assert.strictEqual(res.statusCode, 403, `${method} ${p}`);
+  }
+});
+
+test('locked (live): POST /api/csp-report answers 204, the violation list and other API calls stay 403', async () => {
+  const report = await fetch(base + '/api/csp-report', {
+    method: 'POST',
+    headers: { 'content-type': 'application/csp-report' },
+    body: JSON.stringify({ 'csp-report': {
+      'document-uri': base + '/login.html?next=%2Fdeal-x', 'effective-directive': 'script-src-elem',
+      'blocked-uri': 'inline', 'source-file': base + '/login.html', 'line-number': 3,
+    } }),
+  });
+  assert.strictEqual(report.status, 204);
+  await report.text();
+
+  const list = await call('GET', '/api/admin/csp-violations');
+  assert.strictEqual(list.status, 403);
+  assert.strictEqual(list.json.credentialLockdown, true);
+  const other = await call('POST', '/api/raid', { body: {} });
+  assert.strictEqual(other.status, 403);
+  assert.strictEqual(other.json.credentialLockdown, true);
+});
+
 test('remedy: sign in with the demo password forces rotation; the lockdown holds until all four rotate', async () => {
   // karen: demo password -> 200 with the forced-change marker, persisted.
   const login = await call('POST', '/api/auth/login', { body: { username: 'karen', password: DEMO_PASSWORD } });
