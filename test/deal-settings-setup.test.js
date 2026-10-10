@@ -169,6 +169,10 @@ test('deal-settings-setup (c): out-of-range values are refused 400 and nothing i
       { synergyTargetM: 100001 },
       { currency: 'x'.repeat(11) },
       { day1Date: '2027-01-15T00:00:00Z' },
+      // IN-05 (Phase 11 review): ISO YYYY-MM-DD only — length-valid junk is refused too
+      { day1Date: 'not-a-date' },
+      { day1Date: '2027-13-01' },
+      { day1Date: '15.01.2027' },
     ]) {
       const res = await postJSON(base, `/api/deals/${deal.id}/setup`, hrbp, { dealSettings: bad });
       assert.strictEqual(res.status, 400, `${JSON.stringify(bad)} must be refused`);
@@ -272,5 +276,22 @@ test('deal-settings-setup (g): every dealSettings change records exactly one dea
   } finally {
     sessionsDb.deleteSession(runtimeConn, hrbp);
     server.close();
+  }
+});
+
+test('IN-05 (Phase 11 review): BOTH day1Date fields (wizard basics + create-deal, and dealSettings) take an ISO YYYY-MM-DD date or empty, nothing else', () => {
+  const wizard = require('../validators/wizard.js');
+  const deals = require('../validators/deals.js');
+  const basics = { name: 'Falcon', targetCompany: 'T' };
+  const schemas = [
+    ['WizardBasicsSchema', (d) => wizard.WizardBasicsSchema.safeParse(Object.assign({}, basics, { day1Date: d }))],
+    ['CreateDealSchema', (d) => deals.CreateDealSchema.safeParse(Object.assign({}, basics, { day1Date: d }))],
+    ['DealSettingsSchema', (d) => wizard.DealSettingsSchema.safeParse({ day1Date: d })],
+  ];
+  for (const [name, parse] of schemas) {
+    for (const ok of ['2026-12-01', '2027-01-31', '']) assert.ok(parse(ok).success, `${name} accepts ${JSON.stringify(ok)}`);
+    for (const bad of ['not-a-date', '2027-13-01', '2027-00-10', '2027-01-32', '15.01.2027', '20270115', '2027-1-5']) {
+      assert.ok(!parse(bad).success, `${name} refuses ${JSON.stringify(bad)}`);
+    }
   }
 });

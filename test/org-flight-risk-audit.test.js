@@ -484,8 +484,11 @@ test('org-flight-risk: grep-level guard — recordSecurityEvent has two new call
   const serverSrc = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const flightRiskGetMatch = serverSrc.match(/app\.get\('\/api\/org\/flight-risk'[\s\S]*?\n\}\);/);
   assert.ok(flightRiskGetMatch, 'GET /api/org/flight-risk route must be present');
-  const callsInsideRoute = (flightRiskGetMatch[0].match(/recordSecurityEvent/g) || []).length;
-  assert.strictEqual(callsInsideRoute, 2, 'the GET handler must call recordSecurityEvent exactly twice — once on denial, once on successful read');
+  // Phase 11 review WR-01: the denial half goes through recordClearanceDenial(req, ...)
+  // (rate-bounded, same action-named row) — an audit call site is either name.
+  const callsInsideRoute = (flightRiskGetMatch[0].match(/recordSecurityEvent|recordClearanceDenial\(req/g) || []).length;
+  assert.strictEqual(callsInsideRoute, 2, 'the GET handler must audit exactly twice — once on denial, once on successful read');
+  assert.strictEqual((flightRiskGetMatch[0].match(/recordClearanceDenial\(req, 'org-flightrisk-access-denied'/g) || []).length, 1, 'the denial is the rate-bounded org-flightrisk-access-denied row');
 
   // The module holds zero actual audit dependency: no require() of
   // db/auditHook.js, and no functional call to recordSecurityEvent — a

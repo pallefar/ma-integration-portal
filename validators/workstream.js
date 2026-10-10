@@ -77,6 +77,28 @@ registerSchema('DELETE', '/api/processes/:id', EmptyBodySchema);
 // — the schema now rejects it instead (Rule 2: the real UI only ever sends
 // a dropdown-derived valid value, so no working flow is affected).
 // ---------------------------------------------------------------------------
+// [security] WR-02 (Phase 11 review, AUTHZ-03 / D-11-03): server-minted
+// provenance. A task/RAID `source` starting with one of these prefixes is
+// written ONLY by the server's own convert / instantiate routes
+// (POST /api/dd/findings/:id/convert -> 'dd-finding:', POST /api/org/flight-
+// risk/:id/convert -> 'org-flightrisk:', POST /api/integration-tasks/
+// instantiate -> 'template:', POST /api/integration-tasks/from-remediation ->
+// 'remediation:'). The clearance resolvers trust it as provenance and those
+// routes dedupe on it, so a client-supplied reserved value let an uncleared
+// member plant a record INTO the clean room and hijack the IL's conversion.
+// Refused here (standard 400 validation body); free-text sources such as
+// 'manual' stay valid. The internal routes never pass through this schema.
+// Compared case-insensitively after trim so no near-spelling slips past a
+// future case-insensitive reader.
+const RESERVED_SOURCE_PREFIXES = Object.freeze(['dd-finding:', 'org-flightrisk:', 'template:', 'remediation:']);
+function isReservedSource(value) {
+  const v = String(value || '').trim().toLowerCase();
+  return RESERVED_SOURCE_PREFIXES.some((p) => v.startsWith(p));
+}
+const RESERVED_SOURCE_MESSAGE = 'This source value is reserved for records the server creates.';
+const ClientSourceSchema = z.string().trim().max(160)
+  .refine((v) => !isReservedSource(v), { message: RESERVED_SOURCE_MESSAGE });
+
 const TASK_STATUSES = ['todo', 'doing', 'blocked', 'done'];
 const TASK_PHASES = ['pre', 'day1', 'd30', 'd60', 'd100'];
 
@@ -89,7 +111,7 @@ const TaskUpsertSchema = z.object({
   owner: z.string().trim().max(NAME_MAX).optional(),
   due: z.string().trim().max(30).optional(),
   status: z.enum(TASK_STATUSES).optional(),
-  source: z.string().trim().max(160).optional(),
+  source: ClientSourceSchema.optional(), // WR-02: reserved provenance prefixes refused
   // CONC-02 (Phase 9, Plan 02, Pitfall 2 recurrence): without this explicit
   // field zod v4 strips an incoming `version` key by default and the
   // route-level precheck silently never fires — see RaidUpsertSchema's
@@ -358,8 +380,9 @@ const RaidUpsertSchema = z.object({
   status: z.enum(RAID_STATUSES).optional(),
   notes: z.string().trim().max(TEXT_MAX).optional(),
   // D-12: the reverse half of a bidirectional DD-finding<->RAID link — see
-  // server.js's POST /api/dd/findings/:id/convert.
-  source: z.string().trim().max(160).optional(),
+  // server.js's POST /api/dd/findings/:id/convert. WR-02: only that route
+  // (and the flight-risk convert) may mint the reserved prefixes.
+  source: ClientSourceSchema.optional(),
   // CONC-02 (Phase 9, Pitfall 2): without this explicit field zod v4 strips
   // an incoming `version` key by default and the route-level precheck
   // silently never fires. This is the optimistic-locking per-record version
@@ -401,6 +424,8 @@ const ReorderWidgetsSchema = z.object({
 registerSchema('POST', '/api/dashboard/reorder-widgets', ReorderWidgetsSchema);
 
 module.exports = {
+  RESERVED_SOURCE_PREFIXES,
+  isReservedSource,
   LineItemSchema,
   DepartmentUpsertSchema,
   ProcessUpsertSchema,

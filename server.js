@@ -19,6 +19,7 @@ const { createLockdown, lockdownMiddleware } = require('./lib/credentialLockdown
 const { pathForms } = require('./lib/requestPath');
 const readPolicy = require('./lib/readPolicy');
 const { createDenialAuditor } = require('./lib/denialAudit');
+const { projectDealForRole, projectDealsForRole } = require('./lib/dealProjection');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -1621,6 +1622,31 @@ function recordDenial(req, status, reason, route) {
   });
 }
 
+/**
+ * [security] WR-01 (Phase 11 review): the DD / org clean-room clearance
+ * refusals go through the SAME rate bound as every other denial (one row per
+ * actor + deal + method + route TEMPLATE + reason [+ subject] per window), so a
+ * probe loop over `/api/dd/findings/<random id>` or `/api/org/flight-risk` can no
+ * longer append one permanent audit.db row per request. Their historical
+ * action names and row shape are preserved (lib/denialAudit.js "CLEARANCE
+ * DENIALS"); `subject` must be a bounded value (a DD area id, or null).
+ */
+function recordClearanceDenial(req, action, reason, subject) {
+  denialAuditor.startSweeper();
+  denialAuditor.record({
+    actor: req.portalUser || null,
+    method: req.method,
+    path: canonicalPathOf(req),
+    reason,
+    status: 403,
+    route: (req.route && typeof req.route.path === 'string') ? req.route.path : undefined,
+    dealId: (req.dealContext && req.dealContext.dealId) || null,
+    request: requestMeta(req),
+    action,
+    subject: subject === undefined ? null : subject,
+  });
+}
+
 /** Audit the refusal, then answer it with the SAME status/body the caller always sent. */
 function denyAt(req, res, status, reason, body) {
   recordDenial(req, status, reason);
@@ -1638,6 +1664,16 @@ function denyAt(req, res, status, reason, body) {
 // this file (D-04) — a real deal is not a "project", it is an isolated
 // database with its own membership/lifecycle.
 // =====================================================================
+
+// [security] CR-01 (Phase 11 review): EVERY response below that hands a deal
+// registry record to the client goes through this one projection
+// (lib/dealProjection.js) — admin/hrbp get the full record, pmo/employee only
+// what the deal switcher renders. Membership filtering decides WHICH deals a
+// caller sees; this decides WHAT of each (deal size, dates, synergy target,
+// members, clearance grants are MNPI and never reach pmo/employee).
+function dealForCaller(req, deal) {
+  return projectDealForRole(deal, req.portalUser && req.portalUser.role);
+}
 
 // D-07/WIZ-01: validate-only — the wizard's first step gets ONE server-side
 // rule set (WizardBasicsSchema, validators/wizard.js, kept in exact sync
@@ -1694,7 +1730,7 @@ app.post('/api/deals', (req, res) => {
     dealType, signingDate, expectedClose, day1Date, dealSizeM, currency,
   });
   if (resumed) {
-    return res.json({ success: true, deal: dealResult, resumed: true });
+    return res.json({ success: true, deal: dealForCaller(req, dealResult), resumed: true });
   }
   // D-05/WIZ-01: the wizard's optional basics fields (dealType/signingDate/
   // expectedClose/day1Date/dealSizeM/currency) ride the SAME create call as
@@ -1735,7 +1771,7 @@ app.post('/api/deals', (req, res) => {
     actor: req.portalUser, action: 'deal-create', dealId: deal.id, subject: deal.id,
     before: null, after: deal, request: requestMeta(req),
   });
-  res.json({ success: true, deal });
+  res.json({ success: true, deal: dealForCaller(req, deal) });
 });
 
 // D-01: any authenticated role may select a deal it is a member of (not just
@@ -1763,13 +1799,14 @@ app.post('/api/deals/select', (req, res) => {
     return res.status(403).json({ error: 'You are not a member of that deal.' });
   }
   sessions.bindSessionDeal(getRuntimeConnection(), rawToken, dealId);
-  res.json({ success: true, deal });
+  res.json({ success: true, deal: dealForCaller(req, deal) });
 });
 
 // D-03: never the full registry for a non-admin — listDealsForUser() itself
 // filters to deals the caller is a member of (admin sees every active deal).
+// [security] CR-01: ...and every record is projected for the caller's role.
 app.get('/api/deals', (req, res) => {
-  res.json(controlStore.listDealsForUser(req.portalUser));
+  res.json(projectDealsForRole(controlStore.listDealsForUser(req.portalUser), req.portalUser && req.portalUser.role));
 });
 
 // D-03: membership edits are admin-only. ROLE_WRITE_POLICY's flat prefix
@@ -1797,7 +1834,7 @@ app.post('/api/deals/:id/members', (req, res) => {
     actor: req.portalUser, action: 'deal-members-update', dealId, subject: dealId,
     before: Array.from(before), after: Array.from(after), request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 // D-05/WIZ-01: records progress through the wizard's remaining setup steps
@@ -1851,7 +1888,7 @@ app.post('/api/deals/:id/setup', (req, res) => {
     });
     // Neither a step nor a completion request: settings only, nothing else
     // about the wizard changes.
-    if (step === undefined && complete !== true) return res.json({ success: true, deal: current });
+    if (step === undefined && complete !== true) return res.json({ success: true, deal: dealForCaller(req, current) });
   }
 
   // G-04-10: a completion-only post (no `step` — validators/wizard.js's
@@ -1874,7 +1911,7 @@ app.post('/api/deals/:id/setup', (req, res) => {
       actor: req.portalUser, action: 'deal-setup-update', dealId, subject: 'complete',
       before: beforeComplete, after: newComplete, request: requestMeta(req),
     });
-    return res.json({ success: true, deal: updated });
+    return res.json({ success: true, deal: dealForCaller(req, updated) });
   }
 
   const beforeStepValue = beforeSteps[step] != null ? beforeSteps[step] : null;
@@ -1890,7 +1927,7 @@ app.post('/api/deals/:id/setup', (req, res) => {
     actor: req.portalUser, action: 'deal-setup-update', dealId, subject: step,
     before: beforeStepValue, after: stampedValue, request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 // DD-04/D-02: per-area clean-room clearance. Deliberately inherits the
@@ -1955,7 +1992,7 @@ app.post('/api/deals/:id/grants', (req, res) => {
   // UNCHANGED deal — mirrors the interface contract's own stated rule.
   const setsEqual = beforeArr.length === afterArr.length && beforeArr.every((id, i) => id === afterArr[i]);
   if (setsEqual) {
-    return res.json({ success: true, deal });
+    return res.json({ success: true, deal: dealForCaller(req, deal) });
   }
 
   const updated = controlStore.setDealMemberGrants(dealId, username, ddAreas);
@@ -1972,7 +2009,7 @@ app.post('/api/deals/:id/grants', (req, res) => {
     actor: req.portalUser, action, dealId, subject: username,
     before: beforeArr, after: afterArr, request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 // DD-05/D-18: a data-room ACCESS-GRANT record — who was given access to
@@ -2033,7 +2070,7 @@ app.post('/api/admin/deals/:id/archive', (req, res) => {
     actor: req.portalUser, action: 'deal-archive', dealId, subject: dealId,
     before: deal, after: updated, request: requestMeta(req),
   });
-  res.json({ success: true, deal: updated });
+  res.json({ success: true, deal: dealForCaller(req, updated) });
 });
 
 app.delete('/api/admin/deals/:id', (req, res) => {
@@ -4557,9 +4594,11 @@ function enrichSynergy(item, ctx) {
 // a caller's synergy rows (D-08). Synergies carry no per-item clearance
 // concept today (every deal member sees every initiative), so this is an
 // enrichment pass, not a filter.
-function reportSynergyRows(db, ctx) {
+function reportSynergyRows(db, ctx, visibleLinks) {
   const lane = synergyLane(db);
-  return lane.map((item) => {
+  const project = typeof visibleLinks === 'function' ? visibleLinks : (item) => item;
+  return lane.map((raw) => {
+    const item = project(raw);
     const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
     const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     return Object.assign({}, enrichSynergy(item, ctx), { costEntries: sortedCostEntries });
@@ -4583,13 +4622,32 @@ function stageAtLastBaseline(item) {
   return last.stage || null;
 }
 
+// [security] IN-01 (Phase 11 review): an initiative's stored `taskIds` keep
+// links to tasks the reader may not see (resolveSynergyTaskIds() preserves a
+// hidden link on an uncleared edit — correct for the WRITE). On the READ the
+// ids of existing tasks outside the caller's clearance are dropped, so the
+// list is no longer a count/existence oracle for restricted tasks (the same
+// recordVisibleTo() rule the task routes 404 on). Ids that resolve to no task
+// at all carry no information and are left as stored.
+function synergyLinksVisibleTo(req, db) {
+  const deal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+  const hidden = new Set();
+  taskLane(db).forEach((t) => { if (!recordVisibleTo(req, db, deal, t)) hidden.add(t.id); });
+  return (item) => {
+    if (!hidden.size || !Array.isArray(item.taskIds) || !item.taskIds.some((id) => hidden.has(id))) return item;
+    return Object.assign({}, item, { taskIds: item.taskIds.filter((id) => !hidden.has(id)) });
+  };
+}
+
 app.get('/api/synergies', (req, res) => {
   const db = readDb();
   const lane = synergyLane(db);
   // SYN-05: ctx built ONCE per request — every item in this response is
   // judged against the identical clock and threshold.
   const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
-  res.json(lane.map((item) => {
+  const visibleLinks = synergyLinksVisibleTo(req, db); // IN-01
+  res.json(lane.map((raw) => {
+    const item = visibleLinks(raw);
     const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
     // SYN-02: newest-date-first, a STABLE sort (Array.prototype.sort() is
     // spec-guaranteed stable) run against a COPY of the stored array — two
@@ -5490,11 +5548,9 @@ app.get('/api/org/positions', (req, res) => {
     // mirroring GET /api/org/flight-risk's identical read-audit shape.
     // Gated real-deal-only (!req.isDemo), matching GET /api/reports/export's
     // established audit-scoping rule.
+    // WR-01: rate-bounded via the shared denial auditor (same row shape).
     if (!req.isDemo) {
-      auditHook.recordSecurityEvent({
-        actor: req.portalUser, action: 'org-positions-target-access-denied', dealId: req.dealContext.dealId,
-        subject: null, before: null, after: null, request: requestMeta(req),
-      });
+      recordClearanceDenial(req, 'org-positions-target-access-denied', 'org-clearance', null);
     }
     return res.status(403).json({ error: 'You are not cleared to view the target org design.' });
   }
@@ -5937,11 +5993,9 @@ app.get('/api/org/decisions', (req, res) => {
     // /api/org/flight-risk's identical read-audit shape. Gated real-deal-
     // only (!req.isDemo), matching GET /api/reports/export's established
     // audit-scoping rule.
+    // WR-01: rate-bounded via the shared denial auditor (same row shape).
     if (!req.isDemo) {
-      auditHook.recordSecurityEvent({
-        actor: req.portalUser, action: 'org-decisions-access-denied', dealId: req.dealContext.dealId,
-        subject: null, before: null, after: null, request: requestMeta(req),
-      });
+      recordClearanceDenial(req, 'org-decisions-access-denied', 'org-clearance', null);
     }
     return res.status(403).json({ error: 'You are not cleared to view org decisions.' });
   }
@@ -6057,10 +6111,8 @@ app.post('/api/org/decisions', (req, res) => {
 app.get('/api/org/flight-risk', (req, res) => {
   const deal = controlStore.getDeal(req.dealContext.dealId);
   if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
-    auditHook.recordSecurityEvent({
-      actor: req.portalUser, action: 'org-flightrisk-access-denied', dealId: req.dealContext.dealId,
-      subject: null, before: null, after: null, request: requestMeta(req),
-    });
+    // WR-01: rate-bounded via the shared denial auditor (same row shape).
+    recordClearanceDenial(req, 'org-flightrisk-access-denied', 'org-clearance', null);
     return res.status(403).json({ error: 'You are not cleared to view the flight-risk register.' });
   }
   auditHook.recordSecurityEvent({
@@ -6233,8 +6285,14 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   // An existing record outside the converter's clearance answers the central
   // 404 — never returned as `task`/`raid` in the 200 body (a leak) and never
   // silently duplicated.
-  const existingTask = b.toTask ? (taskLane(db).find((t) => t.source === source) || null) : null;
-  const existingRaid = b.toRaid ? (raidLane(db).find((r) => r.source === source) || null) : null;
+  // [security] WR-02 (Phase 11 review): adopt an existing record only when it
+  // ALSO carries this route's server-side `clearanceArea: 'hr'` stamp — the
+  // upsert schemas strip clearanceArea and refuse reserved sources, so only a
+  // genuine conversion can carry both; a record planted with a matching
+  // `source` is never handed back as the conversion.
+  const isOwnConversion = (rec) => rec.source === source && rec.clearanceArea === 'hr';
+  const existingTask = b.toTask ? (taskLane(db).find(isOwnConversion) || null) : null;
+  const existingRaid = b.toRaid ? (raidLane(db).find(isOwnConversion) || null) : null;
   if (existingTask) assertRecordVisibleOr404(req, db, deal, existingTask);
   if (existingRaid) assertRecordVisibleOr404(req, db, deal, existingRaid);
 
@@ -6481,10 +6539,9 @@ app.get('/api/dd/request-items', (req, res) => {
 // dependency, mirroring why db/controlStore.js holds no reference to
 // audit.db (AUD-02's isolation precedent).
 function refuseDdArea(req, res, areaId) {
-  auditHook.recordSecurityEvent({
-    actor: req.portalUser, action: 'dd-access-denied', dealId: req.dealContext.dealId, subject: areaId,
-    before: null, after: null, request: requestMeta(req),
-  });
+  // WR-01: rate-bounded (first denial of a window writes this exact row; the
+  // rest fold into one counted row) — see recordClearanceDenial().
+  recordClearanceDenial(req, 'dd-access-denied', 'dd-clearance', areaId == null ? null : areaId);
   const err = new accessPolicy.AreaAccessError();
   res.status(err.status).json({ error: err.message });
 }
@@ -6890,8 +6947,16 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
   // its first conversion — clearanceArea is deliberately sticky) must never
   // be handed back in the 200 body to a caller not cleared for the STAMPED
   // area. It answers the central 404 — never a leak, never a duplicate.
-  const existingTask = b.toTask ? (taskLane(db).find((t) => t.source === source) || null) : null;
-  const existingRaid = b.toRaid ? (raidLane(db).find((r) => r.source === source) || null) : null;
+  // [security] WR-02 (Phase 11 review): adopt an existing record only when it
+  // ALSO carries a server-side `clearanceArea` stamp (any DD area — the stamp
+  // is deliberately sticky across a re-pointed finding, see above). The
+  // upsert schemas strip clearanceArea and refuse reserved sources, so a
+  // record planted with a matching `source` can never be adopted as the
+  // finding's conversion; the genuine record is minted instead.
+  const isOwnConversion = (rec) => rec.source === source
+    && typeof rec.clearanceArea === 'string' && accessPolicy.DD_AREA_IDS.includes(rec.clearanceArea);
+  const existingTask = b.toTask ? (taskLane(db).find(isOwnConversion) || null) : null;
+  const existingRaid = b.toRaid ? (raidLane(db).find(isOwnConversion) || null) : null;
   if (existingTask) assertRecordVisibleOr404(req, db, deal, existingTask);
   if (existingRaid) assertRecordVisibleOr404(req, db, deal, existingRaid);
 
@@ -7228,7 +7293,7 @@ app.get('/api/reports/export', (req, res) => {
       // SINGLE enriched-synergies read GET /api/reports/pack calls too, so
       // the JSON export can never diverge from the pack's shape either.
       const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
-      rows = reportSynergyRows(db, ctx);
+      rows = reportSynergyRows(db, ctx, synergyLinksVisibleTo(req, db)); // IN-01
       columns = [
         { key: 'id', header: 'ID' },
         { key: 'title', header: 'Title' },
@@ -7377,7 +7442,7 @@ app.get('/api/reports/pack', async (req, res, next) => {
     // carries `stageAtBaseline`, resolved server-side from the SAME
     // baselines[] history POST /api/synergies/:id/rebaseline writes — never
     // re-derived inside lib/reportPack.js, which performs no database logic.
-    const synergies = reportSynergyRows(db, synergyCtx).map((item) =>
+    const synergies = reportSynergyRows(db, synergyCtx, synergyLinksVisibleTo(req, db)).map((item) => // IN-01
       Object.assign({}, item, { stageAtBaseline: stageAtLastBaseline(item) })
     );
 
@@ -7710,9 +7775,13 @@ app.post('/api/employees/get-or-create', (req, res) => {
     id: restricted ? ownId : (empId || newId('emp')),
     // restricted: the authoritative display name from the account, not a claim
     name: restricted ? (req.portalUser.name || req.portalUser.username) : (name || "Valued Team Member"),
-    role: role || "Specialist",
-    department: department || "Operations",
-    company: company || targetCompany || 'NextGen Sensors Ltd.',
+    // [security] WR-03 (Phase 11 review, amendment 5): the restricted lane is
+    // a minimal, server-minted row — the caller cannot self-assign a role,
+    // department or employer into the IL's roster (staff read GET
+    // /api/employees). Same defaults as any other server-minted profile.
+    role: restricted ? "Specialist" : (role || "Specialist"),
+    department: restricted ? "Operations" : (department || "Operations"),
+    company: restricted ? (targetCompany || 'NextGen Sensors Ltd.') : (company || targetCompany || 'NextGen Sensors Ltd.'),
     completedLessons: [],
     points: 0,
     badge: "New Recruit",
@@ -7965,9 +8034,19 @@ app.post('/api/pulses', (req, res) => {
   const db = readDb();
   db.pulses = db.pulses || [];
 
+  // [security] IN-02 (Phase 11 review, D-11-06): in a real deal the name a
+  // pulse is filed under is the AUTHOR's account display name (fallback: the
+  // username), never the free-text body value — an employee cannot file a
+  // named pulse as a colleague that the IL then reads as that colleague's.
+  // The demo store keeps the body value (showcase unchanged).
+  const accountName = req.portalUser
+    ? (String(req.portalUser.name || '').trim() || req.portalUser.username)
+    : null;
+  const filedName = (req.isDemo !== true && accountName) ? accountName : employeeName;
+
   const newPulse = {
     id: newId('pulse'),
-    employeeName,
+    employeeName: filedName,
     rating: parseInt(rating) || 3,
     comment: comment || '',
     timestamp: new Date().toISOString(),

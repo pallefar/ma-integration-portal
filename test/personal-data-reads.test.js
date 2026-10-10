@@ -57,6 +57,15 @@ const MEMBERS = [
   { username: 'pd-empb', role: 'employee' },
 ];
 
+// Phase 11 review IN-02: in a real deal a pulse is filed under the AUTHOR's
+// account display name, not the body's free-text employeeName. The accounts
+// therefore carry the display names the scenarios below post and assert, so
+// those assertions now prove the name comes from the account.
+const { ensureUser } = require('./helpers/seed-identity.js');
+ensureUser(controlConn, { username: 'pd-empa', role: 'employee', name: 'Alice A' });
+ensureUser(controlConn, { username: 'pd-empb', role: 'employee', name: 'Bob B' });
+ensureUser(controlConn, { username: 'pd-pmo', role: 'pmo', name: 'Pat PMO' });
+
 function realDeal(id) {
   return createDealFixture({ controlConn, runtimeConn, dealId: id, members: MEMBERS });
 }
@@ -206,6 +215,26 @@ test('real deal: employee sees only its own; pmo own + aggregate; hrbp/admin eve
     // a legacy pulse is never "own" for the employee or pmo (asserted above via
     // the body-leak checks); it is reachable only as admin/hrbp (full) or pmo (aggregate).
     assert.strictEqual(a.json.find((p) => p.id === 'pulse_legacy_1'), undefined);
+  });
+});
+
+test('IN-02: in a real deal POST /api/pulses files the pulse under the author\'s account name (fallback username), ignoring a forged employeeName', async () => {
+  const fx = createDealFixture({
+    controlConn, runtimeConn, dealId: 'deal_pdin02',
+    members: [{ username: 'pd-in02-hrbp', role: 'hrbp' }, { username: 'pd-empa', role: 'employee' }, { username: 'pd-in02-noname', role: 'employee' }],
+  });
+  // An account whose display name is blank falls back to the username.
+  const row = controlConn.prepare('SELECT data FROM users WHERE id = ?').get('pd-in02-noname');
+  controlConn.prepare('UPDATE users SET data = ? WHERE id = ?').run(JSON.stringify(Object.assign(JSON.parse(row.data), { name: '' })), 'pd-in02-noname');
+  await withServer(async (base) => {
+    const forged = await postPulse(base, fx.cookie('pd-empa'), { employeeName: 'Jane Doe (hrbp)', rating: 1, comment: 'I am quitting', type: '30-day' });
+    assert.strictEqual(forged.status, 201);
+    assert.strictEqual(forged.json.pulse.employeeName, 'Alice A', 'the account display name, not the body value');
+    const blank = await postPulse(base, fx.cookie('pd-in02-noname'), { employeeName: 'Someone Else', rating: 3, type: '30-day' });
+    assert.strictEqual(blank.json.pulse.employeeName, 'pd-in02-noname', 'blank display name -> username');
+    const lead = await getPulses(base, fx.cookie('pd-in02-hrbp'));
+    assert.ok(!lead.text.includes('Jane Doe') && !lead.text.includes('Someone Else'), 'the IL never reads the forged attribution');
+    assert.deepStrictEqual(lead.json.map((p) => p.employeeName).sort(), ['Alice A', 'pd-in02-noname']);
   });
 });
 

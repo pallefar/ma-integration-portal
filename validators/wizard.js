@@ -12,6 +12,12 @@ const NAME_MAX = 200;
 const DATE_MAX = 10; // 'YYYY-MM-DD' — matches validators/dd.js's DUE_DATE_MAX precedent (bounded length, not a regex-enforced calendar format)
 const CURRENCY_MAX = 10;
 const DEAL_TYPES = ['acquisition', 'jv', 'merger'];
+// IN-05 (Phase 11 review): the Day-1 date is an ISO calendar date
+// (YYYY-MM-DD, month 01-12, day 01-31) or empty — `'not-a-date'` used to pass
+// the length-only bound. Kept in exact sync with validators/deals.js's
+// CreateDealSchema copy (the D-07 anti-drift rule above).
+const ISO_DATE_OR_EMPTY = /^(\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))?$/;
+const ISO_DATE_MESSAGE = 'Use the YYYY-MM-DD date format.';
 
 // D-07: WizardBasicsSchema declares EXACTLY the same field names and the
 // same bounds validators/deals.js's CreateDealSchema uses for its own six
@@ -30,7 +36,7 @@ const WizardBasicsSchema = z.object({
   dealType: z.enum(DEAL_TYPES).optional(),
   signingDate: z.string().trim().max(DATE_MAX).optional(),
   expectedClose: z.string().trim().max(DATE_MAX).optional(),
-  day1Date: z.string().trim().max(DATE_MAX).optional(),
+  day1Date: z.string().trim().max(DATE_MAX).regex(ISO_DATE_OR_EMPTY, ISO_DATE_MESSAGE).optional(),
   dealSizeM: z.union([z.number(), z.string().max(20)]).optional(),
   currency: z.string().trim().max(CURRENCY_MAX).optional(),
 });
@@ -80,7 +86,7 @@ const DealSetupDataSchema = z.record(
 // (a 10-char ISO calendar date), `currency` the basics' CURRENCY_MAX.
 const DealSettingsSchema = z.object({
   currency: z.string().trim().max(CURRENCY_MAX).optional(),
-  day1Date: z.string().trim().max(DATE_MAX).optional(),
+  day1Date: z.string().trim().max(DATE_MAX).regex(ISO_DATE_OR_EMPTY, ISO_DATE_MESSAGE).optional(),
   synergyTargetM: z.number().min(0).max(100000).optional(),
   synergyStaleDays: z.number().positive().max(365).optional(),
   synergyHorizonYears: z.number().int().min(1).max(15).optional(),

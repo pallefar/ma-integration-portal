@@ -368,6 +368,47 @@ test('no GET mutates: every registered GET route, real-deal admin AND demo-store
   });
 });
 
+// Phase 11 review WR-04 (b): the admin lanes above cannot see a write that a GET
+// handler performs only for a RESTRICTED role (the exact shape the old
+// get-or-create GET had). Drive every GET route again as pmo and employee, in a
+// real deal and in the demo store. Their many 403s write only the append-only
+// denial-audit rows the classifier already allows.
+test('no GET mutates (WR-04 b): every registered GET route as pmo AND employee, real deal and demo store, writes nothing outside the audit trail', async (t) => {
+  const fx = createDealFixture({
+    controlConn, runtimeConn, dealId: 'deal_nogetmutroles',
+    members: [
+      { username: 'ngr-admin', role: 'admin', ddAreas: DD_AREA_IDS },
+      { username: 'ngr-pmo', role: 'pmo', ddAreas: DD_AREA_IDS },
+      { username: 'ngr-employee', role: 'employee' },
+    ],
+  });
+  const lanes = [
+    ['real-deal pmo', fx.cookie('ngr-pmo')],
+    ['real-deal employee', fx.cookie('ngr-employee')],
+    ['demo-store pmo', demoSession({ controlConn, runtimeConn, username: 'ngr-demo-pmo', role: 'pmo' })],
+    ['demo-store employee', demoSession({ controlConn, runtimeConn, username: 'ngr-demo-employee', role: 'employee' })],
+  ];
+  await withServer(async (base) => {
+    const ids = { dealId: fx.dealId, ...(await seedDd(base, fx.cookie('ngr-admin'))) };
+    state.sqlWrites.length = 0;
+    state.fsWrites.length = 0;
+    for (const [name, cookie] of lanes) {
+      const run = await driveLane(base, name, cookie, name.startsWith('demo') ? { dealId: fx.dealId } : ids);
+      assert.strictEqual(run.driven.size, INVENTORY.length, `${name}: every GET route was driven`);
+      assertExercised(run.statuses, name);
+      const hist = {};
+      for (const s of run.statuses) hist[s.status] = (hist[s.status] || 0) + 1;
+      t.diagnostic(`${name}: ${run.statuses.length} GETs, status histogram ${JSON.stringify(hist)}`);
+      if (name === 'real-deal employee') {
+        assert.ok(run.statuses.some((s) => s.status === 403), 'the employee lane really meets refusals (not vacuous)');
+        assert.ok(run.statuses.some((s) => s.status === 200), 'and real 200 reads');
+      }
+    }
+    assert.deepStrictEqual(state.egress, [], 'no GET reached an external host');
+    assert.deepStrictEqual(violations(), [], 'a GET route changed state for a restricted role');
+  });
+});
+
 test('negative control (statement level): a write to the deal DB while a GET is "in flight" is detected', async () => {
   const dealConn = store.getOrOpenConnection(dbFiles.dealDbPath('deal_nogetmut'), dbFiles.DEAL_SCHEMA_PATH);
   dealConn.prepare('CREATE TABLE IF NOT EXISTS _no_get_mutates_probe (x)').run();

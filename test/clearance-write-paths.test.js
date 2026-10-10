@@ -491,15 +491,166 @@ test('clearance-write-paths (Task 2, structural): every by-id task/RAID write ro
   assert.ok(!src.includes("'Task not found.'") && !src.includes("'Entry not found.'"), "the retired 'Task not found.' / 'Entry not found.' bodies must be gone");
 });
 
+test('clearance-write-paths (IN-01): GET /api/synergies and the synergies export drop restricted task ids for an uncleared reader; cleared readers see them; the stored hidden link survives an uncleared edit', async () => {
+  const server = await listenLocal(app);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const fx = await seedFixture(base, 'deal_cwpin01');
+    const hrId = fx.hrTask.id;
+    const created = await postJSON(base, '/api/synergies', fx.tokens.karenToken, { title: 'Linked initiative', taskIds: [hrId, fx.manualTask.id] });
+    assert.strictEqual(created.status, 201);
+    const syn = (await created.json()).initiative;
+    const synOf = async (token) => (await listAs(base, token, '/api/synergies')).find((s) => s.id === syn.id);
+
+    const uncleared = await synOf(fx.tokens.noneToken);
+    assert.deepStrictEqual(uncleared.taskIds, [fx.manualTask.id], 'the uncleared reader sees only the visible link');
+    const rawText = await (await getJSON(base, '/api/synergies', fx.tokens.noneToken)).text();
+    assert.ok(!rawText.includes(hrId), 'the restricted id appears nowhere in the uncleared body');
+    const exp = await getJSON(base, '/api/reports/export?dataset=synergies&format=json', fx.tokens.noneToken);
+    assert.strictEqual(exp.status, 200);
+    assert.ok(!(await exp.text()).includes(hrId), 'nor in the synergies export');
+
+    assert.deepStrictEqual((await synOf(fx.tokens.hrToken)).taskIds.slice().sort(), [hrId, fx.manualTask.id].sort(), 'a cleared reader sees both');
+
+    // An uncleared edit still preserves the hidden link in storage (write path unchanged).
+    const edit = await postJSON(base, '/api/synergies', fx.tokens.noneToken, { id: syn.id, version: vOf(uncleared), title: 'renamed', taskIds: [fx.manualTask.id] });
+    assert.strictEqual(edit.status, 200);
+    await edit.text();
+    assert.deepStrictEqual((await synOf(fx.tokens.adminToken)).taskIds.slice().sort(), [hrId, fx.manualTask.id].sort(), 'the hidden link is preserved');
+  } finally {
+    server.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Phase 11 review WR-02: server-minted provenance cannot be planted.
+// ---------------------------------------------------------------------------
+function plantInDeal(dealId, collection, record) {
+  const conn = store.getOrOpenConnection(dbFiles.dealDbPath(dealId), dbFiles.DEAL_SCHEMA_PATH);
+  store.runWithDb({ conn, kind: 'demo', dealId: null, dbPath: null }, () => {
+    const db = store.readDb();
+    db[collection] = db[collection] || [];
+    db[collection].push(Object.assign({}, record));
+    store.writeDb(db);
+  });
+}
+
+test('clearance-write-paths (WR-02): a client-supplied reserved provenance source is refused (400) on task AND RAID create and update; free-text sources stay valid', async () => {
+  const server = await listenLocal(app);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const fx = await seedFixture(base, 'deal_cwpreserved');
+    const none = fx.tokens.noneToken;
+    const reserved = [
+      `dd-finding:${fx.finding.id}`, 'org-flightrisk:whatever', 'template:tpl_x:item_y', 'remediation:tpl_x:dim',
+      '  DD-Finding:ddfind_x', 'Org-FlightRisk:x',
+    ];
+    for (const source of reserved) {
+      const t = await postJSON(base, '/api/integration-tasks', none, { title: 'PLANTED by uncleared pmo', source });
+      assert.strictEqual(t.status, 400, `task create with source ${JSON.stringify(source)}`);
+      assert.match((await t.json()).error, /reserved/, 'standard validation body names the reason');
+      const r = await postJSON(base, '/api/raid', none, { title: 'PLANTED RAID', type: 'risk', severity: 'high', source });
+      assert.strictEqual(r.status, 400, `RAID create with source ${JSON.stringify(source)}`);
+      await r.text();
+    }
+    // ...on the update path too (an admin is refused as well: only the server mints these).
+    const upd = await postJSON(base, '/api/integration-tasks', fx.tokens.adminToken, { id: fx.manualTask.id, version: vOf(fx.manualTask), source: 'dd-finding:x' });
+    assert.strictEqual(upd.status, 400);
+    await upd.text();
+    const updR = await postJSON(base, '/api/raid', fx.tokens.adminToken, { id: fx.manualRaid.id, version: vOf(fx.manualRaid), source: 'org-flightrisk:x' });
+    assert.strictEqual(updR.status, 400);
+    await updR.text();
+    // Nothing was planted.
+    const il = await listAs(base, fx.tokens.adminToken, '/api/integration-tasks');
+    assert.ok(!il.some((t) => t.title === 'PLANTED by uncleared pmo'), 'no planted task exists');
+    // Legitimate free-text sources still work.
+    for (const source of ['manual', 'workshop 12 May', 'imported from steering deck']) {
+      const ok = await postJSON(base, '/api/integration-tasks', none, { title: `ok ${source}`, source });
+      assert.strictEqual(ok.status, 201, `free-text source ${source}`);
+      assert.strictEqual((await ok.json()).task.source, source);
+      const okR = await postJSON(base, '/api/raid', none, { title: `ok ${source}`, type: 'risk', source });
+      assert.strictEqual(okR.status, 201);
+      await okR.text();
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('clearance-write-paths (WR-02): a record planted with a matching source (no server stamp) is never adopted — DD and flight-risk conversions mint the genuine task/RAID', async () => {
+  const server = await listenLocal(app);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const fx = await seedFixture(base, 'deal_cwpplant');
+    const admin = fx.tokens.adminToken;
+    const il = fx.tokens.karenToken;
+
+    // (1) DD finding: plant unstamped task + RAID carrying its source, then convert.
+    const fRes = await postJSON(base, '/api/dd/findings', admin, { area: 'hr', title: 'HR-SECRET second finding', severity: 'high' });
+    const { finding } = await fRes.json();
+    const src = `dd-finding:${finding.id}`;
+    plantInDeal(fx.deal.id, 'integrationTasks', { id: 'task_planted_dd', title: 'PLANTED', status: 'todo', phase: 'day1', source: src });
+    plantInDeal(fx.deal.id, 'raidEntries', { id: 'raid_planted_dd', title: 'PLANTED RAID', type: 'risk', status: 'open', source: src });
+    const conv = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, admin, { toTask: true, toRaid: true, version: vOf(finding) });
+    assert.strictEqual(conv.status, 200);
+    const body = await conv.json();
+    assert.notStrictEqual(body.task.id, 'task_planted_dd', 'the planted task is not adopted as the conversion');
+    assert.notStrictEqual(body.raid.id, 'raid_planted_dd', 'the planted RAID entry is not adopted');
+    assert.strictEqual(body.task.title, 'HR-SECRET second finding', 'the genuine task carries the finding title');
+    assert.strictEqual(body.task.clearanceArea, 'hr');
+    assert.strictEqual(body.raid.clearanceArea, 'hr');
+    assert.deepStrictEqual(body.finding.linkedTaskIds, [body.task.id]);
+    assert.deepStrictEqual(body.finding.linkedRaidIds, [body.raid.id]);
+    // A re-convert dedupes on the GENUINE (stamped) record.
+    const again = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, admin, { toTask: true, toRaid: true, version: vOf(body.finding) });
+    assert.strictEqual(again.status, 200);
+    const againBody = await again.json();
+    assert.strictEqual(againBody.task.id, body.task.id);
+    assert.strictEqual(againBody.raid.id, body.raid.id);
+
+    // (2) flight-risk: plant an unstamped task + RAID with the entry's source, then convert.
+    const empRes = await postJSON(base, '/api/employees', admin, { name: 'Pat Planted', role: 'Engineer', department: 'Eng' });
+    const { employee } = await empRes.json();
+    const frRes = await postJSON(base, '/api/org/flight-risk', il, { employeeId: employee.id, riskLevel: 'high', owner: 'karen', mitigation: 'Talk.' });
+    const { entry } = await frRes.json();
+    const frSrc = `org-flightrisk:${entry.id}`;
+    plantInDeal(fx.deal.id, 'integrationTasks', { id: 'task_planted_fr', title: 'PLANTED FR', status: 'todo', phase: 'day1', source: frSrc });
+    plantInDeal(fx.deal.id, 'raidEntries', { id: 'raid_planted_fr', title: 'PLANTED FR RAID', type: 'risk', status: 'open', source: frSrc });
+    const c = await postJSON(base, `/api/org/flight-risk/${entry.id}/convert`, il, { toTask: true, toRaid: true, version: vOf(entry) });
+    assert.strictEqual(c.status, 200);
+    const cb = await c.json();
+    assert.notStrictEqual(cb.task.id, 'task_planted_fr');
+    assert.notStrictEqual(cb.raid.id, 'raid_planted_fr');
+    assert.strictEqual(cb.task.clearanceArea, 'hr');
+    assert.ok(cb.task.title.includes('Pat Planted'), 'the genuine retention task is minted');
+    assert.deepStrictEqual(cb.entry.linkedTaskIds, [cb.task.id]);
+  } finally {
+    server.close();
+  }
+});
+
 test('clearance-write-paths (Task 2): in the demo store (no deal) a clearance-stamped record is invisible to every role — identical to the read filter; the by-id write 404s', async () => {
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
     const token = newSession('admin', 'admin'); // unbound -> demo store, deal === null
-    const created = await postJSON(base, '/api/integration-tasks', token, { title: 'Demo stamped', source: 'org-flightrisk:demo_probe' });
-    assert.strictEqual(created.status, 201);
-    const { task } = await created.json();
+    // Phase 11 review WR-02: a reserved provenance `source` can no longer be
+    // planted through the HTTP create path (400 below), so the stamped record
+    // this scenario needs is written straight into the temp demo store.
+    const refused = await postJSON(base, '/api/integration-tasks', token, { title: 'Demo stamped', source: 'org-flightrisk:demo_probe' });
+    assert.strictEqual(refused.status, 400, 'reserved source refused on create, in the demo store too');
+    const task = { id: 'task_cwp_demo_stamped', title: 'Demo stamped', status: 'todo', phase: 'day1', source: 'org-flightrisk:demo_probe' };
+    const demoConn = store.getOrOpenConnection(dbFiles.DEMO_DB_PATH, dbFiles.DEAL_SCHEMA_PATH);
+    store.runWithDb({ conn: demoConn, kind: 'demo', dealId: null, dbPath: dbFiles.DEMO_DB_PATH }, () => {
+      const db = store.readDb();
+      db.integrationTasks = db.integrationTasks || [];
+      db.integrationTasks.push(task);
+      store.writeDb(db);
+    });
     const list = await listAs(base, token, '/api/integration-tasks');
     assert.ok(!list.some((t) => t.id === task.id), 'the read filter already hides it from every role in the demo store');
     await assertNotFound(await postJSON(base, '/api/integration-tasks', token, { id: task.id, status: 'doing', version: 0 }), 'demo-store by-id write');
