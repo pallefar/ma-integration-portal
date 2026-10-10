@@ -76,6 +76,27 @@ test.after(() => {
   try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
 });
 
+// D-11-02 (Phase 11): deal-level values (staleness threshold, horizon, target)
+// are edited by the Integration Lead on the deal's own setup route.
+async function postDealSettings(base, token, dealSettings) {
+  const bound = sessionsDb.findSession(runtimeConn, token);
+  const res = await postJSON(base, `/api/deals/${bound.dealId}/setup`, token, { dealSettings });
+  return res;
+}
+
+// D-11-02 (Phase 11): POST /api/settings is admin-only now. Instance-settings
+// writes in this suite go through an admin session bound to the SAME deal as
+// the caller's token, so the schema bounds and stored-value round-trips these
+// tests protect are exercised exactly as before.
+function postSettings(base, token, body) {
+  const bound = sessionsDb.findSession(runtimeConn, token);
+  const adminToken = newSession('admin', 'admin');
+  if (bound && bound.dealId) bindDeal(adminToken, bound.dealId);
+  return postJSON(base, '/api/settings', adminToken, body).finally(() => {
+    sessionsDb.deleteSession(runtimeConn, adminToken);
+  });
+}
+
 // Small shared setup helper — boots a fresh deal + hrbp session, following
 // this file's own established one-deal-per-test convention.
 async function setupDeal(id, overrides) {
@@ -305,12 +326,23 @@ test('synergy-staleness (i): POST /api/settings with synergyStaleDays and synerg
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    const writeRes = await postJSON(base, '/api/settings', token, { synergyStaleDays: 45, synergyHorizonYears: 5 });
+    const writeRes = await postSettings(base, token, { synergyStaleDays: 45, synergyHorizonYears: 5 });
     assert.strictEqual(writeRes.status, 200);
 
     const settings = await getSettings(base, token);
     assert.strictEqual(settings.synergyStaleDays, 45, 'synergyStaleDays must survive the write, not be stripped');
     assert.strictEqual(settings.synergyHorizonYears, 5, 'synergyHorizonYears must survive the write, not be stripped');
+
+    // D-11-02: the Integration Lead's own path — the deal's setup route — stores
+    // the same two values on the deal record and the readers honour them over
+    // the instance singleton above.
+    const dealRes = await postDealSettings(base, token, { synergyStaleDays: 10, synergyHorizonYears: 4 });
+    assert.strictEqual(dealRes.status, 200);
+    const dealBody = await dealRes.json();
+    assert.strictEqual(dealBody.deal.dealSettings.synergyStaleDays, 10, 'not stripped on the setup route either');
+    assert.strictEqual(dealBody.deal.dealSettings.synergyHorizonYears, 4);
+    const rollup = await getRollup(base, token);
+    assert.strictEqual(rollup.staleThresholdDays, 10, 'the deal value (10) wins over the instance singleton (45)');
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
     server.close();
@@ -336,17 +368,23 @@ test('synergy-staleness (q): WR-03 — a huge configured threshold clamps to the
   assert.strictEqual(app.synergyStaleDays({ settings: { synergyStaleDays: 364 } }), 364, 'just under the ceiling must pass through unchanged');
 });
 
-test('synergy-staleness (r): WR-03 — POST /api/settings with an out-of-range synergyStaleDays (e.g. 999999999) is refused with 400 by the schema, before any value can reach the settings singleton', async () => {
+test('synergy-staleness (r): WR-03 — an out-of-range synergyStaleDays (e.g. 999999999) is refused with 400 by the schema on BOTH write paths (deal setup route and admin POST /api/settings), before any value can reach storage', async () => {
   const token = await setupDeal('deal_synstalr');
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    const res = await postJSON(base, '/api/settings', token, { synergyStaleDays: 999999999 });
+    // Both write paths share the bound: the deal's setup route (Integration
+    // Lead) and the admin-only instance settings route.
+    const dealRes = await postDealSettings(base, token, { synergyStaleDays: 999999999 });
+    assert.strictEqual(dealRes.status, 400, 'an out-of-range synergyStaleDays must be refused by the deal setup schema');
+    const res = await postSettings(base, token, { synergyStaleDays: 999999999 });
     assert.strictEqual(res.status, 400, 'an out-of-range synergyStaleDays must be refused by the schema, not silently accepted');
 
-    const validRes = await postJSON(base, '/api/settings', token, { synergyStaleDays: 90 });
+    const validDealRes = await postDealSettings(base, token, { synergyStaleDays: 90 });
+    assert.strictEqual(validDealRes.status, 200, 'an in-range synergyStaleDays must still be accepted on the setup route');
+    const validRes = await postSettings(base, token, { synergyStaleDays: 90 });
     assert.strictEqual(validRes.status, 200, 'an in-range synergyStaleDays must still be accepted');
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
@@ -361,7 +399,7 @@ test('synergy-staleness (k): a configured short threshold on the deal changes th
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    await postJSON(base, '/api/settings', token, { synergyStaleDays: 1 });
+    assert.strictEqual((await postDealSettings(base, token, { synergyStaleDays: 1 })).status, 200, 'the Integration Lead sets the deal staleness threshold on the setup route');
 
     const createRes = await postJSON(base, '/api/synergies', token, { title: 'Short threshold', category: 'cost', owner: 'karen' });
     const { initiative: created } = await createRes.json();
@@ -406,7 +444,7 @@ test('synergy-staleness (l): unconfirmedRealizedM never exceeds the conserved gr
     // not tip over depending on timing — the precision property under test
     // (unconfirmed <= gross) holds regardless of exactly which items land on
     // which side, so this does not need to pin down which item is stale.
-    await postJSON(base, '/api/settings', token, { synergyStaleDays: 0.0000000001 });
+    assert.strictEqual((await postDealSettings(base, token, { synergyStaleDays: 0.0000000001 })).status, 200, 'the Integration Lead sets the deal staleness threshold on the setup route');
 
     const rollup = await getRollup(base, token);
     assert.ok(rollup.unconfirmedRealizedM <= (rollup.grossRealizedM + rollup.unphasedRealizedM), 'unconfirmedRealizedM must never exceed the conserved gross+unphased total');
@@ -483,7 +521,7 @@ test('synergy-staleness (o): two initiatives sharing an identical lastConfirmedA
 
     // Both fall back to createdAt (never confirmed) — a very short threshold
     // makes both stale in the same request, judged against the same clock.
-    await postJSON(base, '/api/settings', token, { synergyStaleDays: 0.0000000001 });
+    assert.strictEqual((await postDealSettings(base, token, { synergyStaleDays: 0.0000000001 })).status, 200, 'the Integration Lead sets the deal staleness threshold on the setup route');
 
     const list = await getSynergies(base, token);
     const storedA = list.find((s) => s.id === a.id);
@@ -507,7 +545,7 @@ test('synergy-staleness (p): mine.staleCount differs between two identities read
     const { port } = server.address();
     const base = `http://127.0.0.1:${port}`;
 
-    await postJSON(base, '/api/settings', karenToken, { synergyStaleDays: 0.0000000001 });
+    assert.strictEqual((await postDealSettings(base, karenToken, { synergyStaleDays: 0.0000000001 })).status, 200, 'the Integration Lead sets the deal staleness threshold on the setup route');
 
     const karenItemRes = await postJSON(base, '/api/synergies', karenToken, { title: 'Owned by karen', category: 'cost', owner: 'karen' });
     await karenItemRes.json();

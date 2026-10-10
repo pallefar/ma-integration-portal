@@ -67,17 +67,39 @@ const DealSetupDataSchema = z.record(
 // inspects it. An explicit `path: ['step']` is what lets
 // validators/index.js's formatIssues() render this as a field-path issue
 // the wizard's existing error renderer can place beside the step control.
+//
+// D-11-02 (Phase 11): `dealSettings` carries the deal-level values an
+// Integration Lead edits on HER deal now that the instance settings singleton
+// is admin-only — currency, Day-1 date, synergy target, staleness threshold
+// and phasing horizon. The bounds mirror the instance-settings schema
+// (validators/settings.js) so a deal can never accept a value the instance
+// would refuse; the readers in server.js clamp again (belt and braces).
+// `synergyStaleDays` is deliberately `.positive()`, not `>= 1`: the staleness
+// suite legitimately uses sub-day thresholds (WR-03 note), and the reader's
+// own ceiling handles the top end. `day1Date` keeps the wizard basics bound
+// (a 10-char ISO calendar date), `currency` the basics' CURRENCY_MAX.
+const DealSettingsSchema = z.object({
+  currency: z.string().trim().max(CURRENCY_MAX).optional(),
+  day1Date: z.string().trim().max(DATE_MAX).optional(),
+  synergyTargetM: z.number().min(0).max(100000).optional(),
+  synergyStaleDays: z.number().positive().max(365).optional(),
+  synergyHorizonYears: z.number().int().min(1).max(15).optional(),
+});
+
 const DealSetupSchema = z.object({
   step: z.enum(DEAL_SETUP_STEPS).optional(),
   data: DealSetupDataSchema,
   complete: z.boolean().optional(),
+  dealSettings: DealSettingsSchema.optional(),
 }).refine(
-  (body) => body.step !== undefined || (body.complete === true && body.data === undefined),
+  (body) => body.step !== undefined
+    || body.dealSettings !== undefined
+    || (body.complete === true && body.data === undefined),
   {
-    message: 'Name the setup step to record, or mark the setup complete with no step data.',
+    message: 'Name the setup step to record, supply deal settings, or mark the setup complete with no step data.',
     path: ['step'],
   }
 );
 registerSchema('POST', '/api/deals/:id/setup', DealSetupSchema);
 
-module.exports = { WizardBasicsSchema, DealSetupSchema, DEAL_SETUP_STEPS, DEAL_TYPES };
+module.exports = { WizardBasicsSchema, DealSetupSchema, DealSettingsSchema, DEAL_SETUP_STEPS, DEAL_TYPES };

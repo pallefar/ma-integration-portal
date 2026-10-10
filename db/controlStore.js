@@ -422,6 +422,39 @@ function updateDealSetup(dealId, patch) {
   return apply(dealId, patch);
 }
 
+/**
+ * D-11-02 (Phase 11): merge deal-level values onto a deal. `currency` and
+ * `day1Date` patch the existing top-level fields createDeal() already stores;
+ * `synergyTargetM`, `synergyStaleDays` and `synergyHorizonYears` merge into a
+ * `dealSettings` sub-object (a SHALLOW merge — a partial patch never drops a
+ * previously stored sibling). Every other deal field survives untouched.
+ * Same `.immediate` read-inside-the-transaction RMW as updateDealSetup()
+ * above (D-09/CONC-01), so two concurrent edits cannot lose one another.
+ * Throws when the deal does not exist — never an upsert. Callers pass only
+ * schema-validated values (validators/wizard.js DealSettingsSchema); this
+ * function copies ONLY the five known keys, so an unknown key can never reach
+ * the stored deal record through it.
+ */
+function updateDealSettings(dealId, patch) {
+  const conn = controlConn();
+  const apply = conn.transaction((dealId, patch) => {
+    const deal = getDeal(dealId);
+    if (!deal) throw new Error(`db/controlStore.js: updateDealSettings() found no deal '${dealId}'`);
+    const p = patch || {};
+    const updated = { ...deal };
+    if (p.currency !== undefined) updated.currency = p.currency;
+    if (p.day1Date !== undefined) updated.day1Date = p.day1Date;
+    const nested = { ...(deal.dealSettings || {}) };
+    for (const key of ['synergyTargetM', 'synergyStaleDays', 'synergyHorizonYears']) {
+      if (p[key] !== undefined) nested[key] = p[key];
+    }
+    if (Object.keys(nested).length > 0) updated.dealSettings = nested;
+    conn.prepare('UPDATE deals SET data = ? WHERE id = ?').run(JSON.stringify(updated), dealId);
+    return updated;
+  }).immediate;
+  return apply(dealId, patch);
+}
+
 /** D-03: replace a deal's members[] allowlist wholesale. Throws (does not
  * silently no-op) if the deal does not exist — mirrors updateUser()'s "not
  * an upsert" contract above. Does NOT release any removed member's session
@@ -637,7 +670,7 @@ module.exports = {
   getDeal, listDeals, listDealsForUser, isDealMember,
   createDeal, createDealDeduped, updateDealMembers, archiveDeal, deleteDeal,
   setDealMemberGrants, getDealMemberGrants,
-  updateDealSetup, DEAL_SETUP_STEPS,
+  updateDealSetup, updateDealSettings, DEAL_SETUP_STEPS,
   hasOutstandingSetupStep, findUnfinishedDealFor,
   getControlSettings, setControlSettings,
   getSecretSettings, setSecretSettings,

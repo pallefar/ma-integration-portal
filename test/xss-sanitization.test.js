@@ -67,6 +67,10 @@ const app = require('../server.js');
 const { sanitizeHtml } = require('../lib/sanitizeHtml.js');
 
 function cookieHeader(token) { return `ma_session=${token}`; }
+// D-11-02 (Phase 11): page/CMS writes are admin-only now, so every CMS write in
+// this suite is authored by the admin identity. What is under test — that the
+// write path sanitizes HTML-bearing fields and never mangles plain text — does
+// not depend on which role authored the page.
 function newSession(username, role) {
   return sessionsDb.createSession(runtimeConn, { username, role, ttlMs: 12 * 60 * 60 * 1000 });
 }
@@ -77,7 +81,7 @@ test.after(() => {
 });
 
 test('xss-sanitization (a): a page body round-trips with script/handler/js-href removed and benign markup intact', async () => {
-  const token = newSession('karen', 'hrbp');
+  const token = newSession('admin', 'admin');
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
@@ -106,7 +110,7 @@ test('xss-sanitization (a): a page body round-trips with script/handler/js-href 
 });
 
 test('xss-sanitization (b): a plain-text (untagged) field round-trips byte-identical — mangling it would itself be a bug', async () => {
-  const token = newSession('karen', 'hrbp');
+  const token = newSession('admin', 'admin');
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
@@ -133,7 +137,7 @@ test('xss-sanitization (b): a plain-text (untagged) field round-trips byte-ident
 });
 
 test('xss-sanitization (c): null, absent and non-string values in a tagged field all store as an empty string', async () => {
-  const token = newSession('karen', 'hrbp');
+  const token = newSession('admin', 'admin');
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
@@ -163,7 +167,7 @@ test('xss-sanitization (c): null, absent and non-string values in a tagged field
 });
 
 test('xss-sanitization (d): a mixed-case script tag and a whitespace-split event-handler attribute are both neutralized', async () => {
-  const token = newSession('karen', 'hrbp');
+  const token = newSession('admin', 'admin');
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
@@ -198,7 +202,7 @@ test('xss-sanitization (d): a mixed-case script tag and a whitespace-split event
 });
 
 test('xss-sanitization (e): an entity-encoded variant is stored inert as text, never decoded into an executable construct', async () => {
-  const token = newSession('karen', 'hrbp');
+  const token = newSession('admin', 'admin');
   const server = await listenLocal(app);
   try {
     const { port } = server.address();

@@ -296,18 +296,22 @@ test('write-validation (g): two concurrent requests with different payloads each
 
 test('write-validation: parametrized sweep — an unknown key + one invalid field 400s naming the field, and the group\'s known-good payload still succeeds with its original response shape, across every resource group', async () => {
   const token = newSession('karen', 'hrbp');
+  // D-11-02 (Phase 11): the CMS group (courses) is admin-only now. The schema
+  // sweep is about shape validation, not role policy, so that group runs as an
+  // admin identity; every other group keeps the hrbp session it always used.
+  const adminToken = newSession('write-validation-admin', 'admin');
   const server = await listenLocal(app);
   try {
     const { port } = server.address();
-    const call = (method, urlPath, body) => fetch(`http://127.0.0.1:${port}${urlPath}`, {
+    const call = (method, urlPath, body, asAdmin) => fetch(`http://127.0.0.1:${port}${urlPath}`, {
       method,
-      headers: { Cookie: cookieHeader(token), 'Content-Type': 'application/json' },
+      headers: { Cookie: cookieHeader(asAdmin ? adminToken : token), 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 
     const cases = [
       {
-        group: 'cms', path: '/api/courses',
+        group: 'cms', path: '/api/courses', asAdmin: true,
         invalid: { evilField: '<script>x</script>' }, invalidFieldPattern: /title/i,
         valid: { title: { en: 'Sweep Course' } }, assertValid: (b) => assert.strictEqual(b.course.title.en, 'Sweep Course'),
       },
@@ -334,12 +338,12 @@ test('write-validation: parametrized sweep — an unknown key + one invalid fiel
     ];
 
     for (const c of cases) {
-      const invalidRes = await call('POST', c.path, c.invalid);
+      const invalidRes = await call('POST', c.path, c.invalid, c.asAdmin);
       assert.strictEqual(invalidRes.status, 400, `${c.group} (${c.path}) must 400 an unknown-key+invalid-field payload`);
       const invalidBody = await invalidRes.json();
       assert.match(invalidBody.error, c.invalidFieldPattern, `${c.group} (${c.path}) 400 must name the invalid field`);
 
-      const validRes = await call('POST', c.path, c.valid);
+      const validRes = await call('POST', c.path, c.valid, c.asAdmin);
       assert.ok(validRes.status === 200 || validRes.status === 201, `${c.group} (${c.path}) must still accept its known-good payload, got ${validRes.status}`);
       const validBody = await validRes.json();
       assert.strictEqual(validBody.success, true, `${c.group} (${c.path}) must keep its original { success: true, ... } response shape`);
@@ -347,6 +351,7 @@ test('write-validation: parametrized sweep — an unknown key + one invalid fiel
     }
   } finally {
     sessionsDb.deleteSession(runtimeConn, token);
+    sessionsDb.deleteSession(runtimeConn, adminToken);
     server.close();
   }
 });

@@ -116,6 +116,66 @@ const SettingsUpdateSchema = z.object({
 });
 registerSchema('POST', '/api/settings', SettingsUpdateSchema);
 
+// ---------------------------------------------------------------------------
+// GET /api/settings — the public (non-admin) subset. [security] D-11-02 /
+// AUTHZ-02 / T-11-11 (Phase 11): an ALLOWLIST, not a blocklist — every
+// non-admin caller (pmo, hrbp, employee, and the anonymous DEMO_OPEN showcase)
+// receives ONLY these keys, so a future secret-ish settings key is withheld by
+// default instead of leaking until someone remembers to add it to a delete
+// list. The admin response is unchanged (server.js publicSettings()).
+//
+// Every entry names the non-admin reader that needs it (a key with no reader
+// does not belong here). test/settings-public-subset.test.js scans the client
+// code and fails when a page reads a settings key that is neither listed here
+// nor declared admin-only there.
+//   demoMode              pmo.js / admin.js mode toggle, wizard-vs-dashboard routing
+//   targetCompany, sector,
+//   size, hq,
+//   acquisitionDate,
+//   synergyObjective      app.js sidebar target card, transitions.js profile
+//                         dropdown, dashboard.js coaching corner + process flow
+//   welcomeVideoType,
+//   welcomeVideoUrl and
+//   the _en/_de/_zh/_cs
+//   variants              employee.js welcome-video player
+//   roleVisibility        index.html showcase cards, transitions.js role switcher
+//   doomGloballyEnabled,
+//   doomUnlockXp          employee.js TEd game gate (floating-menu XP unlock)
+//   floatingMenuEnabled   transitions.js unified assistant Navigation tab
+//   timeTravelDay,
+//   timelineDay           transitions.js day badge, employee.js calendar,
+//                         dashboard.js diagnostics, signage.js timeline, pmo.js
+//   dashboardLayoutOrder  dashboard.js widget order (written by reorder-widgets)
+//   pmoCustomSetupComplete pmo.js custom-deal setup gate
+//   browserModel          transitions.js AI-Insight prompt: only whether a model
+//                         is configured; a model identifier, not a credential
+//   synergyStaleDays,
+//   synergyHorizonYears   instance defaults for the synergy staleness/phasing
+//                         readers (deal-level values live on the deal record)
+//   hasGeminiApiKey       boolean capability flag — admin.js hint; the value of
+//                         the key itself is NEVER included
+// Deliberately absent: geminiApiKey, databaseConfig (provider + connection
+// details are admin-console only).
+// ---------------------------------------------------------------------------
+const PUBLIC_SETTINGS_KEYS = Object.freeze([
+  'demoMode',
+  'targetCompany', 'sector', 'size', 'hq', 'acquisitionDate', 'synergyObjective',
+  'welcomeVideoType', 'welcomeVideoUrl',
+  'welcomeVideoType_en', 'welcomeVideoUrl_en',
+  'welcomeVideoType_de', 'welcomeVideoUrl_de',
+  'welcomeVideoType_zh', 'welcomeVideoUrl_zh',
+  'welcomeVideoType_cs', 'welcomeVideoUrl_cs',
+  'roleVisibility',
+  'doomGloballyEnabled', 'doomUnlockXp',
+  'floatingMenuEnabled',
+  'timeTravelDay', 'timelineDay',
+  'dashboardLayoutOrder',
+  'pmoCustomSetupComplete',
+  'browserModel',
+  'synergyStaleDays', 'synergyHorizonYears',
+  'hasGeminiApiKey',
+]);
+
 registerSchema('POST', '/api/settings/new-ma', EmptyBodySchema);
 
 // ---------------------------------------------------------------------------
@@ -165,6 +225,7 @@ registerSchema('POST', '/api/admin/migrate-db', MigrateDbSchema);
 registerSchema('POST', '/api/admin/users/:username/revoke-sessions', EmptyBodySchema);
 
 module.exports = {
+  PUBLIC_SETTINGS_KEYS,
   ChangePasswordSchema,
   TimeTravelSchema,
   SettingsUpdateSchema,
