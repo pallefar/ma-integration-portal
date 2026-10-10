@@ -184,3 +184,43 @@ test('precondition (P4): in a session with no deal binding (demo store) a RAID u
     await deleteReq(base, `/api/raid/${encodeURIComponent(entry.id)}`, token);
   });
 });
+
+// ---------------------------------------------------------------------------
+// P5-P7: the delete half (GD-1a — a delete with no precondition cannot be
+// judged stale, so it is refused in a deal; D-08 stale-delete unchanged).
+// ---------------------------------------------------------------------------
+
+test('precondition (P5): in a deal-bound session DELETE /api/raid/:id with no expectedVersion is refused 400 versionRequired and the entry survives', async () => {
+  await withServer(async (base) => {
+    const { token, entry } = await dealSessionWithEntry(base, 'deal_pre5');
+    const res = await deleteReq(base, `/api/raid/${encodeURIComponent(entry.id)}`, token);
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.deepStrictEqual(Object.keys(body).sort(), ['error', 'versionRequired']);
+    assert.strictEqual(body.versionRequired, true);
+    const after = await findRaid(base, token, entry.id);
+    assert.ok(after, 'the refused delete left the entry in place');
+  });
+});
+
+test('precondition (P6): DELETE /api/raid/:id?expectedVersion=0 on a never-edited entry succeeds and the entry is gone', async () => {
+  await withServer(async (base) => {
+    const { token, entry } = await dealSessionWithEntry(base, 'deal_pre6');
+    const res = await deleteReq(base, `/api/raid/${encodeURIComponent(entry.id)}?expectedVersion=0`, token);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual((await res.json()).success, true);
+    assert.strictEqual(await findRaid(base, token, entry.id), undefined);
+  });
+});
+
+test('precondition (P7): in the demo store (unbound session) DELETE /api/raid/:id with no expectedVersion still succeeds', async () => {
+  await withServer(async (base) => {
+    const token = newSession('admin', 'admin'); // deliberately NOT bound to a deal
+    const createRes = await postJSON(base, '/api/raid', token, { title: 'Demo delete fixture', type: 'issue', severity: 'low' });
+    assert.strictEqual(createRes.status, 201);
+    const { entry } = await createRes.json();
+    const res = await deleteReq(base, `/api/raid/${encodeURIComponent(entry.id)}`, token);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(await findRaid(base, token, entry.id), undefined);
+  });
+});

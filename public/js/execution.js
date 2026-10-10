@@ -1139,11 +1139,12 @@
         if (!window.confirm('Delete this entry?')) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this entry, taken from the same in-memory list the row
-        // was rendered from — never a re-fetch. Omitted entirely when the
-        // held record has no version yet (D-09 lazy adoption).
+        // was rendered from — never a re-fetch. Always sent: window.maVersionOf()
+        // yields 0 for a never-edited record (D-09 — version-less IS version
+        // 0), so a stale delete of it is still caught (R7 F-1); a delete with
+        // no precondition is refused in a real deal.
         var entry = state.raid.find(function (r) { return r.id === id; });
-        var delUrl = '/api/raid/' + encodeURIComponent(id);
-        if (entry && entry.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(entry.version);
+        var delUrl = '/api/raid/' + encodeURIComponent(id) + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(entry));
         fetch(delUrl, { method: 'DELETE' })
           .then(function (r) { return r.json(); })
           .then(function (res) {

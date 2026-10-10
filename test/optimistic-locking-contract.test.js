@@ -1667,7 +1667,7 @@ test('optimistic-locking-contract (42): DELETE /api/dd/findings/:id — stale de
   }
 });
 
-test('optimistic-locking-contract (43): DELETE with no expectedVersion still deletes — the route-level precheck is a no-op when the client supplies nothing, matching every other route\'s conflictIfStale() contract', async () => {
+test('optimistic-locking-contract (43): DELETE with no expectedVersion — refused 400 versionRequired in a deal (the record survives), still deletes in the demo store (D-09)', async () => {
   const server = app.listen(0);
   try {
     const { port } = server.address();
@@ -1677,11 +1677,20 @@ test('optimistic-locking-contract (43): DELETE with no expectedVersion still del
 
     const createRes = await postJSON(base, '/api/raid', token, { title: 'No-version delete fixture', type: 'issue', severity: 'low' });
     const { entry } = await createRes.json();
-    // No version stamp at all — deleting a freshly created, never-edited record.
+    // No precondition at all — a delete that cannot be judged stale is
+    // refused in a real deal (CONC-02 gap closure, GD-1a, R7 F-1).
     const delRes = await fetch(`${base}/api/raid/${entry.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(token) } });
-    assert.strictEqual(delRes.status, 200, 'a delete with no expectedVersion at all must still succeed — the storage-layer WHERE clause still guards the cross-process case');
+    assert.strictEqual(delRes.status, 400, 'a delete with no expectedVersion at all must be refused in a deal');
+    assert.strictEqual((await delRes.json()).versionRequired, true);
     const reread = (await (await getJSON(base, '/api/raid', token)).json()).find((r) => r.id === entry.id);
-    assert.strictEqual(reread, undefined);
+    assert.ok(reread, 'the refused delete must leave the record in place');
+
+    // Demo store (session with no deal binding) stays lenient (D-09).
+    const demoToken = newSession('admin', 'admin');
+    const demoCreate = await postJSON(base, '/api/raid', demoToken, { title: 'Demo no-version delete fixture', type: 'issue', severity: 'low' });
+    const demoEntry = (await demoCreate.json()).entry;
+    const demoDel = await fetch(`${base}/api/raid/${demoEntry.id}`, { method: 'DELETE', headers: { Cookie: cookieHeader(demoToken) } });
+    assert.strictEqual(demoDel.status, 200, 'the demo store still accepts a delete with no expectedVersion');
   } finally {
     server.close();
   }

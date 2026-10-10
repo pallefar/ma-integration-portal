@@ -6081,8 +6081,10 @@ app.delete('/api/raid/:id', (req, res) => {
   const entry = lane.find(r => r.id === req.params.id);
   if (!entry) return res.status(404).json({ error: 'Entry not found.' });
   // CONC-02 (Phase 9, Plan 06 / D-08): the representative route — stale-delete
-  // rejection via the query-channel version precondition.
-  if (conflictIfStale(req, res, entry)) return;
+  // rejection via the query-channel version precondition. A delete that
+  // carries NO expectedVersion cannot be judged stale, so it is refused in a
+  // real deal (plan 09-08, GD-1a, D-02 no exemptions); demo stays lenient.
+  if (conflictIfStale(req, res, entry, { requirePrecondition: true })) return;
   const filtered = lane.filter(r => r.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customRaidEntries = filtered;
   else db.raidEntries = filtered;

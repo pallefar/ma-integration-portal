@@ -74,4 +74,46 @@ module.exports = {
     ctx.check('fit at 390', fit.noHorizontalScroll && fit.dialogInside, fit);
     await ctx.shot(m, 'raid-f1-390.png');
   },
+
+  // R7 F-1 on the delete path: B still holds the version-less copy after A
+  // stamped it; B's delete must carry expectedVersion=0, get 409 and show the
+  // stale-delete dialog; Cancel leaves the entry in place.
+  async 'raid-delete-f1'(ctx) {
+    const entry = await seedRaid(ctx, 'F-1 never-edited entry (delete)');
+    const a = await ctx.openTab({ viewport: { width: 1440, height: 900 }, path: '/execution.html' });
+    const b = await ctx.openTab({ viewport: { width: 1440, height: 900 }, path: '/execution.html' });
+    await a.click('.ex-tab[data-ex-tab="raid"]');
+    await b.click('.ex-tab[data-ex-tab="raid"]');
+    await a.waitForSelector(`.raid-row[data-raid="${entry.id}"]`, { timeout: 10000 });
+    await b.waitForSelector(`.raid-row[data-raid="${entry.id}"]`, { timeout: 10000 });
+
+    await a.click(`.raid-row[data-raid="${entry.id}"] .raid-status`);
+    await ctx.sleep(600);
+
+    // The harness accepts the native confirm (the in-app confirm replaces it in plan 09-14).
+    await b.click(`.raid-row[data-raid="${entry.id}"] .ex-del`);
+    const dlg = await ctx.waitDialog(b);
+    const del = lastRequest(b, 'DELETE');
+    ctx.check('DELETE carries expectedVersion=0', !!del && /[?&]expectedVersion=0(&|$)/.test(del.url), del && del.url);
+    ctx.check('DELETE response 409 conflict:true', !!del && del.status === 409 && del.response && del.response.conflict === true, del && del.status);
+    const isStaleDelete = !!dlg && /still delete it/.test(dlg.title || '') && dlg.buttons.some((x) => /conflict-btn-delete/.test(x.cls));
+    ctx.check('409 stale-delete dialog', isStaleDelete, dlg && { title: dlg.title, buttons: dlg.buttons });
+
+    await b.click('.conflict-modal .conflict-btn-discard');
+    ctx.check('dialog closes on Cancel', await ctx.waitNoDialog(b));
+    const after = await getRaid(ctx, entry.id);
+    ctx.check('entry survives Cancel', !!after && after.version === 1, after && { id: after.id, version: after.version });
+  },
+
+  // The API-level contract, through the seeder session of a real deal.
+  async 'api-version-required'(ctx) {
+    const entry = await seedRaid(ctx, 'F-1 api precondition');
+    const upd = await ctx.api(ctx.seeder.cookie, 'POST', '/api/raid', { id: entry.id, notes: 'no precondition' });
+    ctx.check('update with no version refused 400 versionRequired', upd.status === 400 && upd.json && upd.json.versionRequired === true, { status: upd.status, body: upd.json });
+    ctx.check('refusal body has exactly {error, versionRequired}', !!upd.json && Object.keys(upd.json).sort().join(',') === 'error,versionRequired', upd.json && Object.keys(upd.json));
+    const del = await ctx.api(ctx.seeder.cookie, 'DELETE', '/api/raid/' + encodeURIComponent(entry.id));
+    ctx.check('delete with no expectedVersion refused 400 versionRequired', del.status === 400 && del.json && del.json.versionRequired === true, { status: del.status, body: del.json });
+    const after = await getRaid(ctx, entry.id);
+    ctx.check('entry intact after both refusals', !!after && after.notes !== 'no precondition' && after.version === undefined, after && { notes: after.notes, version: after.version });
+  },
 };
