@@ -111,6 +111,11 @@ module.exports = {
     const tempAlice = await takeTempPassword(page);
     ctx.check('a temporary password was generated and shown', typeof tempAlice === 'string' && tempAlice.length >= 12, { length: tempAlice.length });
     await ctx.shot(page, 'temp-password-modal-1440');
+    // WR-C01: the one-time password survives an accidental Escape or scrim tap.
+    await page.keyboard.press('Escape');
+    await page.mouse.click(4, 4); // the overlay's corner, outside the modal box
+    ctx.check('Escape and a scrim click leave the temp-password modal open with the value intact',
+      (await page.$('.au-modal')) !== null && (await page.inputValue('#au-temp-password')) === tempAlice);
     await page.click('#au-temp-done');
     await page.waitForSelector('.au-modal', { state: 'detached', timeout: 5000 });
     await page.waitForSelector('#users-list tr[data-username="alice"]', { timeout: 8000 });

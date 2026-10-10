@@ -96,6 +96,7 @@
     if (typeof m.onClose === 'function') m.onClose();
     if (m.overlay.parentNode) m.overlay.parentNode.removeChild(m.overlay);
     if (m.trigger && typeof m.trigger.focus === 'function' && document.contains(m.trigger)) m.trigger.focus();
+    else if (typeof m.fallbackFocus === 'function') m.fallbackFocus();
   }
 
   function focusables(root) {
@@ -106,8 +107,13 @@
   }
 
   // Opens the shared .deal-modal shell. Escape / overlay click close it; Tab is
-  // trapped; focus returns to the trigger. opts.onClose runs on every close path.
+  // trapped; focus returns to the trigger (or opts.fallbackFocus() when the
+  // trigger has left the DOM, e.g. a re-rendered table row). opts.onClose runs
+  // on every close path. opts.sticky (WR-C01): Escape and overlay clicks do NOT
+  // close it — only the modal's own explicit control does (the one-time
+  // temporary password must not be lost to a stray tap on the scrim).
   function openModal(titleText, subText, trigger, opts) {
+    var sticky = !!(opts && opts.sticky);
     closeModal();
     var overlay = el('div', 'deal-modal-overlay au-overlay');
     var modal = el('div', 'deal-modal au-modal');
@@ -124,7 +130,12 @@
     document.body.appendChild(overlay);
 
     var onKeydown = function (e) {
-      if (e.key === 'Escape') { e.stopPropagation(); closeModal(); return; }
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        if (sticky) { e.preventDefault(); return; }
+        closeModal();
+        return;
+      }
       if (e.key !== 'Tab') return;
       var f = focusables(modal);
       if (!f.length) return;
@@ -134,8 +145,11 @@
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', onKeydown, true);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
-    activeModal = { overlay: overlay, trigger: trigger || null, onKeydown: onKeydown, onClose: opts && opts.onClose };
+    overlay.addEventListener('click', function (e) { if (e.target === overlay && !sticky) closeModal(); });
+    activeModal = {
+      overlay: overlay, trigger: trigger || null, onKeydown: onKeydown,
+      onClose: opts && opts.onClose, fallbackFocus: opts && opts.fallbackFocus
+    };
     return { modal: modal, body: body, close: closeModal };
   }
 
@@ -184,9 +198,26 @@
   }
 
   // ------------------------------------------------- one-time temp password
-  // Shown once. The value lives only in this read-only input and is blanked on
-  // every close path (Done, Escape, overlay click).
-  function openTempPasswordModal(username, tempPassword, headline) {
+  // Shown once. The value lives only in this read-only input and is blanked
+  // when the modal closes. WR-C01: the modal is STICKY — Escape and a click on
+  // the scrim do nothing; the only way out is the explicit "I have saved it"
+  // acknowledgement, so the credential cannot be lost to an accidental dismiss
+  // (whose only recovery would be a second, side-effect-bearing reset). On close
+  // focus returns to the trigger, or — when the list re-rendered under it — to
+  // the user's row in the table, else the Add user button.
+  function focusUserRow(username) {
+    var rows = document.querySelectorAll('#users-list tr[data-username]');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-username') === username) {
+        var b = rows[i].querySelector('button');
+        if (b) { b.focus(); return; }
+      }
+    }
+    var add = document.getElementById('btn-users-add');
+    if (add && typeof add.focus === 'function') add.focus();
+  }
+
+  function openTempPasswordModal(username, tempPassword, headline, trigger) {
     var input = document.createElement('input');
     input.type = 'text';
     input.readOnly = true;
@@ -194,18 +225,20 @@
     input.id = 'au-temp-password';
     input.setAttribute('autocomplete', 'off');
     input.value = tempPassword;
-    var shell = openModal(headline, 'Temporary password for ' + username + '.', null, {
-      onClose: function () { input.value = ''; }
+    var shell = openModal(headline, 'Temporary password for ' + username + '.', trigger || null, {
+      sticky: true,
+      onClose: function () { input.value = ''; },
+      fallbackFocus: function () { focusUserRow(username); }
     });
     shell.body.appendChild(fieldLabel('Temporary password', input));
-    var warn = el('p', 'au-warning', 'Shown once. Share it securely — the user must change it at first sign-in.');
+    var warn = el('p', 'au-warning', 'Shown once. Copy it and share it securely — the user must change it at first sign-in. This window stays open until you confirm you have saved it.');
     warn.setAttribute('role', 'status');
     shell.body.appendChild(warn);
     var actions = el('div', 'deal-modal-actions');
     var copy = el('button', 'btn btn-secondary', 'Copy');
     copy.type = 'button';
     copy.id = 'au-temp-copy';
-    var done = el('button', 'btn btn-primary', 'Done');
+    var done = el('button', 'btn btn-primary', 'I have saved it');
     done.type = 'button';
     done.id = 'au-temp-done';
     actions.appendChild(copy);
@@ -222,8 +255,15 @@
       }
     });
     done.addEventListener('click', function () { input.value = ''; shell.close(); });
-    done.focus();
+    copy.focus();
   }
+  // Test seam (test/admin-users-ui.test.js drives the sticky contract in a
+  // node:vm fake DOM). Exposes nothing a console user could not already do.
+  window.maAdminUsersModal = {
+    openTempPasswordModal: openTempPasswordModal,
+    isOpen: function () { return !!activeModal; },
+    loadUsers: function () { return loadUsers(); }
+  };
 
   // ------------------------------------------------------------ add user
   function openAddUser(trigger) {
@@ -279,7 +319,7 @@
           temp.value = '';
           shell.close();
           loadUsers();
-          openTempPasswordModal(created, pw, 'User created');
+          openTempPasswordModal(created, pw, 'User created', trigger);
           return;
         }
         if (res.status === 409) {
@@ -490,17 +530,29 @@
         var who = (res.body.user && res.body.user.username) || u.username;
         shell.close();
         loadUsers();
-        openTempPasswordModal(who, pw, 'Password reset');
+        openTempPasswordModal(who, pw, 'Password reset', trigger);
       }
     });
   }
 
+  // IN-C03: a load requested while another is in flight is QUEUED, not dropped —
+  // a create/edit/reset that lands during the initial (slow, 503-retried) load
+  // would otherwise never be re-fetched. One trailing reload covers any number
+  // of requests made meanwhile; it runs after the in-flight load settles.
+  var inFlight = null;
   function loadUsers() {
     var host = document.getElementById('users-list');
-    if (!host || state.loading) return Promise.resolve();
+    if (!host) return Promise.resolve();
+    if (state.loading) {
+      state.pending = true;
+      return inFlight || Promise.resolve();
+    }
     state.loading = true;
-    return request('GET', '/api/admin/users').then(function (res) {
+    state.pending = false;
+    inFlight = request('GET', '/api/admin/users').then(function (res) {
       state.loading = false;
+      inFlight = null;
+      if (state.pending) { state.pending = false; return loadUsers(); }
       if (res.status === 200 && res.body) {
         state.users = Array.isArray(res.body) ? res.body : (Array.isArray(res.body.users) ? res.body.users : []);
         state.loaded = true;
@@ -510,12 +562,16 @@
       while (host.firstChild) host.removeChild(host.firstChild);
       host.appendChild(el('p', 'deal-modal-error', errorText(res, 'Could not load users')));
     });
+    return inFlight;
   }
 
   // ---------------------------------------------------------------- boot
+  // IN-C03: the first click probes the mode and loads; every later click on the
+  // Users tab re-fetches the list, so the operator always has an in-page
+  // refresh path without reloading the whole console.
   var opened = false;
   function openTab() {
-    if (opened) return;
+    if (opened) { loadUsers(); return; }
     opened = true;
     request('GET', '/api/auth/mode').then(function (res) {
       state.writable = policy.accountWritesAllowed(res.status === 200 ? res.body : null);

@@ -18,8 +18,9 @@ database files (dev). Only real-deal mode is safe for MNPI.
 > **Never run `start.command` / `start.bat` on a host that will hold real deal
 > data.** Those launchers set `DEMO_OPEN=1`, which disables all `/api`
 > authentication and authorization so the showcase runs without a login. The
-> real-deal launchers deliberately do not set it — and the server refuses to boot
-> at all when `MA_MODE=real` and `DEMO_OPEN=1` are set together.
+> real-deal launchers deliberately do not set it — they clear any `DEMO_OPEN`
+> inherited from your shell or profile — and the server refuses to boot at all
+> when `MA_MODE=real` and `DEMO_OPEN=1` are set together.
 
 The server prints a `[security]` warning at boot whenever `DEMO_OPEN=1` is in
 effect — if you see that line on a real-deal host, stop and switch launchers.
@@ -150,7 +151,8 @@ Node. Three settings tell the server about it:
   to https for a year, which is your decision to make.
 
 Sign-in throttling is **per account** (the first five failures inside 15 minutes are
-free, then an exponential backoff starting at one second, capped at 15 minutes) plus
+free, then an exponential backoff starting at one second, capped at 5 minutes for
+every account name alike, so the throttle cannot reveal which names are admins) plus
 a generous **per-source** limit (fifty failures), so one person mistyping a password
 cannot lock the rest of the team out. A throttled sign-in answers `429` with a
 `Retry-After` header and the same body whether the account exists or not.
@@ -158,8 +160,8 @@ cannot lock the rest of the team out. A throttled sign-in answers `429` with a
 ### Sign-in lockout recovery
 
 Throttle state is held only in the memory of the server process and is never
-persisted. An admin account's backoff is capped at **5 minutes** (other accounts:
-15). A locked-out admin therefore either waits it out or the operator **restarts**
+persisted. Every account's backoff is capped at **5 minutes** (the same ceiling for
+admins and everyone else). A locked-out admin therefore either waits it out or the operator **restarts**
 the service, which clears every throttle entry. If the admin password itself is lost
 or suspected compromised, stop the service, run
 `node scripts/bootstrap-admin.js --force-reset-admin` (it rotates the admin
@@ -170,9 +172,10 @@ server — the **restart** is what clears the throttle.
 ## Self-service
 
 Every signed-in person has **Change password** and **My sessions** in the account
-menu: the current device is marked, and any other session can be ended. Both are
-disabled with an explanatory note on the dev/demo committed database
-(`accountsWritable:false`).
+menu: the current device is marked, and any other session can be ended. On the
+dev/demo committed database (`accountsWritable:false`) **Change password** is
+disabled with an explanatory note; **My sessions** still lists your sessions but
+offers no **End session**.
 
 ## ADMIN_TOKEN (optional break-glass, discouraged)
 

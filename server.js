@@ -16,6 +16,7 @@ const dbFiles = require('./db/dbFiles');
 const passwords = require('./lib/passwords');
 const { createThrottle } = require('./lib/loginThrottle');
 const { createLockdown, lockdownMiddleware } = require('./lib/credentialLockdown');
+const { pathForms } = require('./lib/requestPath');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -79,6 +80,17 @@ const reportFilename = require('./lib/reportFilename');
 require('./db/realDataDir').ensureRealDataDir();
 
 const app = express();
+// [security] CR-01 (Phase 10 review): Express matches routes case-INsensitively
+// by default, while every path-prefix policy table in this file is written in
+// lowercase — so `/api/Admin/users` used to reach the admin handler with the
+// gate's `/api/admin` role check skipped. Routing is made case-sensitive here,
+// BEFORE the first app.use() (Express builds its router lazily on the first
+// middleware and reads this setting only then). The gate additionally evaluates
+// every policy against all canonical spellings (lib/requestPath.js), so the two
+// layers fail closed independently. `strict routing` stays OFF on purpose: a
+// trailing-slash variant still dispatches, and is covered because pathForms()
+// strips the trailing slash before any table is consulted.
+app.set('case sensitive routing', true);
 const PORT = process.env.PORT || 3000;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 // db.json (D-01): the live persistence layer is SQLite (db/store.js) as of
@@ -186,6 +198,21 @@ app.use((req, res, next) => {
     let hsts = 'max-age=31536000';
     if (process.env.HSTS_INCLUDE_SUBDOMAINS === '1') hsts += '; includeSubDomains';
     res.setHeader('Strict-Transport-Security', hsts);
+  }
+  next();
+});
+
+// [security] CR-01: an /api request spelled with a non-canonical mount segment
+// (`/API/...`, `/Api/...`, `//api/...`, `/%61pi/...`) never reaches the
+// consolidated /api gate (its mount is case-sensitive now) — answer a plain
+// JSON 404 here instead of letting it fall through to static/SPA handling, so
+// no such spelling can ever be served by anything.
+app.use((req, res, next) => {
+  if (req.path === '/api' || req.path.startsWith('/api/')) return next();
+  const r = pathForms(req.path);
+  const forms = r.ok ? r.forms : [String(req.path).toLowerCase().replace(/\/{2,}/g, '/')];
+  if (forms.some((f) => f === '/api' || f.startsWith('/api/'))) {
+    return res.status(404).json({ error: 'Not found' });
   }
   next();
 });
@@ -659,6 +686,29 @@ function isDemoOnlyPath(fullPath, method) {
   });
 }
 
+// [security] CR-01: the gate's path decisions over the canonical spellings
+// (`forms`, from lib/requestPath.js#pathForms) — MOST RESTRICTIVE across forms.
+// One object so the regression suite (test/path-canonical-gate.test.js) loops
+// over every policy table through exactly the code the gate runs.
+const gatePolicy = {
+  /** Allowed only if EVERY spelling is allowed (and there is at least one). */
+  roleAllows(role, forms, method) {
+    return forms.length > 0 && forms.every((f) => roleAllowedForWrite(role, f, method));
+  },
+  /** Admin-prefixed if ANY spelling is under /api/admin. */
+  isAdminPath(forms) {
+    return forms.some((f) => pathMatchesPrefix(f, '/api/admin'));
+  },
+  /** Demo-only if ANY spelling is on DEMO_ONLY_PREFIXES. */
+  isDemoOnly(forms, method) {
+    return forms.some((f) => isDemoOnlyPath(f, method));
+  },
+  /** A must-change session may proceed only if EVERY spelling is allowed. */
+  mustChangeAllows(forms) {
+    return forms.length > 0 && forms.every((f) => MUST_CHANGE_ALLOWED_PATHS.has(f));
+  },
+};
+
 // ONE consolidated /api gate (replaces the two overlapping middlewares this
 // codebase previously ran — a write/admin-token gate and a separate session
 // gate). Every /api/* route now goes through exactly this path:
@@ -695,6 +745,14 @@ function isDemoOnlyPath(fullPath, method) {
 //       route handler ever runs.
 app.use('/api', (req, res, next) => {
   if (PUBLIC_API_PATHS.has(req.path)) return next();
+
+  // [security] CR-01: every path policy below (and db/resolver.js's
+  // control-plane list) is evaluated against ALL canonical spellings of the
+  // request path — see lib/requestPath.js. An ambiguous spelling (dot segment,
+  // undecodable escape, backslash) has no route and is refused here.
+  const shape = pathForms(req.baseUrl + req.path);
+  if (!shape.ok) return res.status(404).json({ error: 'Not found' });
+  req.gatePathForms = shape.forms;
 
   const suppliedToken = req.get('X-Admin-Token') || '';
   if (ADMIN_TOKEN && suppliedToken && timingSafeEqualStr(suppliedToken, ADMIN_TOKEN)) {
@@ -739,7 +797,12 @@ app.use('/api', (req, res, next) => {
     // prefixes are written as full '/api/...' paths (matching this file's
     // route registrations 1:1), so req.baseUrl ('/api') + req.path
     // reconstructs the full path both lookups expect.
-    const fullPath = req.baseUrl + req.path;
+    // [security] CR-01: `forms` are the canonical spellings (lowercased,
+    // decoded once, `//` collapsed, trailing slash stripped) — never the raw
+    // client spelling alone. Each check takes the MOST RESTRICTIVE answer:
+    // a path is allowed only if every form is allowed; it is admin-prefixed,
+    // demo-only or must-change-blocked if ANY form is.
+    const forms = req.gatePathForms;
 
     // [security] D-10-05 / T-10-27 forced rotation: a session whose account
     // still carries mustChangePassword (temporary password, admin reset, first
@@ -749,14 +812,14 @@ app.use('/api', (req, res, next) => {
     // credential. /auth/me, /auth/logout, /auth/login and /auth/mode are public
     // paths that returned at the top of this gate and never reach it. Placed
     // before the demo-only and role checks so no other refusal can mask it.
-    if (req.portalUser.mustChangePassword === true && !MUST_CHANGE_ALLOWED_PATHS.has(fullPath)) {
+    if (req.portalUser.mustChangePassword === true && !gatePolicy.mustChangeAllows(forms)) {
       return res.status(403).json({
         error: 'You must change your password before continuing.',
         mustChangePassword: true,
       });
     }
 
-    if (isDemoOnlyPath(fullPath, req.method) && !req.isDemo) {
+    if (gatePolicy.isDemoOnly(forms, req.method) && !req.isDemo) {
       return res.status(403).json({ error: 'This showcase-only feature is unavailable inside a real deal.' });
     }
 
@@ -768,8 +831,8 @@ app.use('/api', (req, res, next) => {
     // opening every admin-prefixed GET (source/db archive download, etc.) to
     // any authenticated non-admin session. Reads elsewhere stay gated on
     // session-existence alone (D-05) — this carve-out is admin-prefix-only.
-    const requiresRoleCheck = isWrite || pathMatchesPrefix(fullPath, '/api/admin');
-    if (requiresRoleCheck && !roleAllowedForWrite(req.portalUser.role, fullPath, req.method)) {
+    const requiresRoleCheck = isWrite || gatePolicy.isAdminPath(forms);
+    if (requiresRoleCheck && !gatePolicy.roleAllows(req.portalUser.role, forms, req.method)) {
       return res.status(403).json({ error: 'Your role cannot perform this action.' });
     }
     // VAL-01/VAL-02: shape-validate, strip unknown keys, and sanitize
@@ -828,25 +891,36 @@ function isAdminOrIlRequest(req) {
 //     names, deliberately not the primary control.
 // scrypt is deliberately expensive, so both are consulted BEFORE any hashing.
 const THROTTLE_WINDOW_MS = 15 * 60 * 1000;
-const ADMIN_MAX_BACKOFF_MS = 5 * 60 * 1000;
+// [security] WR-01 (Phase 10 review): ONE backoff ceiling for every account key.
+// The original split (5 min for an enabled admin, 15 min for everyone else)
+// made the throttle an enumeration oracle — `Retry-After: 300` vs `900`, and
+// equally the moment a 429 stops, told an attacker per name "this is a live
+// admin account", contradicting T-10-30. Reporting a uniform header while still
+// enforcing the split would not close the second channel, so the cap itself is
+// uniform: every account (known, unknown, disabled, any role) backs off to at
+// most 5 minutes. T-10-55's purpose (an admin cannot be locked out for a
+// quarter hour) is kept; the cost is a shorter ceiling for non-admin names,
+// which still bounds a single name to ~12 guesses/hour on top of the per-source
+// limit below and the password-length policy.
+const ACCOUNT_MAX_BACKOFF_MS = 5 * 60 * 1000;
+const ADMIN_MAX_BACKOFF_MS = ACCOUNT_MAX_BACKOFF_MS; // historical export name (T-10-55)
 const accountThrottle = createThrottle({
   windowMs: THROTTLE_WINDOW_MS, freeFailures: 5, baseDelayMs: 1000,
-  maxDelayMs: THROTTLE_WINDOW_MS, maxEntries: 10000,
+  maxDelayMs: ACCOUNT_MAX_BACKOFF_MS, maxEntries: 10000,
 });
 const sourceThrottle = createThrottle({
   windowMs: THROTTLE_WINDOW_MS, freeFailures: 50, baseDelayMs: 1000,
   maxDelayMs: THROTTLE_WINDOW_MS, maxEntries: 10000,
 });
-// T-10-55: a known admin username must not be lockable for a quarter of an
-// hour by one failed attempt per backoff window — admin-role backoff is capped
-// at 5 minutes. Anything else (other roles, unknown name, disabled account) gets
-// the instance default, so the cap is not an enumeration oracle beyond T-10-56
-// (accepted: needs a long logged failure run, the 429 body stays identical).
+// T-10-55 + WR-01: a known admin username must not be lockable for a quarter of
+// an hour — and the ceiling must not depend on WHO the name is. The answer is
+// deliberately independent of `account` (role, existence, disabled): the same
+// options object for every name, so neither the Retry-After header nor the
+// moment the 429 lifts can distinguish an enabled admin (T-10-30).
+const UNIFORM_THROTTLE_OPTIONS = Object.freeze({ maxDelayMs: ACCOUNT_MAX_BACKOFF_MS });
+// eslint-disable-next-line no-unused-vars
 function throttleOptionsFor(account) {
-  if (account && account.role === 'admin' && account.disabled !== true) {
-    return { maxDelayMs: ADMIN_MAX_BACKOFF_MS };
-  }
-  return {};
+  return UNIFORM_THROTTLE_OPTIONS;
 }
 // The submitted name goes into an operator-visible log line: strip anything a
 // client could use to forge log structure, and bound the length.
@@ -902,8 +976,8 @@ app.post('/api/auth/login', async (req, res, next) => {
     // readDb()/writeDb() model into control.db, reached only through
     // db/controlStore.js — a deal-bound request can never read/write the
     // account store through its own connection (T-03-16). The lookup is a PK
-    // read (no scrypt) and runs BEFORE the throttle check only so the account
-    // key can carry the role's backoff ceiling (throttleOptionsFor).
+    // read (no scrypt); the backoff ceiling is uniform for every name
+    // (throttleOptionsFor, WR-01), so the lookup no longer shapes the throttle.
     const submitted = String(username || '').trim().toLowerCase();
     const user = controlStore.findUser(submitted);
     const accountKey = 'u:' + submitted;
@@ -925,7 +999,12 @@ app.post('/api/auth/login', async (req, res, next) => {
     if (!verdict.ok) {
       noteBackoff(accountThrottle.fail(accountKey), accountKey, req);
       noteBackoff(sourceThrottle.fail(sourceKey), sourceKey, req);
-      return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
+      // IN-02 (Phase 10 review): no artificial delay here. The former fixed
+      // 400 ms was additive (success had none), so it implied a timing
+      // guarantee it never gave; the real equaliser is the one scrypt
+      // derivation every attempt pays (dummyVerify above, T-10-08), and the
+      // rate limit is the account/source throttle.
+      return res.status(401).json({ error: 'Invalid username or password.' });
     }
     // A correct password ends the account's backoff episode; the source window
     // keeps sliding on its own.
@@ -1129,6 +1208,10 @@ app.get('/api/auth/sessions', (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');
     const rows = sessions.listSessionsForUser(getRuntimeConnection(), req.portalUser.username);
+    // IN-01: req.portalUser.sessionId IS the stored token hash (db/sessions.js
+    // findSession) — so `current` compares like with like. `tokenHash` stays
+    // server-side: only the derived public `id` is ever serialised (T-10-19;
+    // pinned by test/self-sessions.test.js).
     res.json(rows.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
@@ -1182,6 +1265,17 @@ const COMMITTED_CONTROL_REFUSAL = {
 // committed data/control.db. The predicate is the SAME one GET /api/auth/mode
 // exposes as `accountsWritable`, so the UI flag and these refusals cannot
 // disagree.
+// [security] CR-01 defence in depth: the consolidated /api gate is the
+// control for `/api/admin/*` (admin role, every method), but the account
+// roster and account writes must not depend on that single prefix check —
+// a future routing or prefix-table regression would otherwise hand the full
+// roster to any session. Every /api/admin/users* handler re-checks inline.
+function refuseNonAdmin(req, res) {
+  if (isAdminRequest(req)) return false;
+  res.status(403).json({ error: 'Your role cannot perform this action.' });
+  return true;
+}
+
 function refuseCommittedControlWrite(res) {
   if (!dbFiles.isCommittedControlDbActive()) return false;
   res.status(403).json(COMMITTED_CONTROL_REFUSAL);
@@ -1208,6 +1302,7 @@ function accountAuditView(acct) {
 }
 
 app.post('/api/admin/users', async (req, res, next) => {
+  if (refuseNonAdmin(req, res)) return;
   try {
     if (refuseCommittedControlWrite(res)) return;
     const { username, name, role, tempPassword: supplied } = req.body;
@@ -1253,6 +1348,7 @@ app.post('/api/admin/users', async (req, res, next) => {
 // Reads stay available even when the committed control.db is active (the
 // admin can still SEE accounts; only writes are refused).
 app.get('/api/admin/users', (req, res, next) => {
+  if (refuseNonAdmin(req, res)) return;
   try {
     const logins = sessions.lastLogins(getRuntimeConnection());
     const users = controlStore.listAccounts()
@@ -1267,6 +1363,7 @@ app.get('/api/admin/users', (req, res, next) => {
 });
 
 app.post('/api/admin/users/:username/reset-password', async (req, res, next) => {
+  if (refuseNonAdmin(req, res)) return;
   try {
     if (refuseCommittedControlWrite(res)) return;
     const target = String(req.params.username);
@@ -1291,6 +1388,7 @@ app.post('/api/admin/users/:username/reset-password', async (req, res, next) => 
 });
 
 app.patch('/api/admin/users/:username', (req, res, next) => {
+  if (refuseNonAdmin(req, res)) return;
   try {
     if (refuseCommittedControlWrite(res)) return;
     const target = String(req.params.username);
@@ -2986,7 +3084,11 @@ app.post('/api/admin/migrate-db', (req, res) => {
 // consolidated /api gate above: an hrbp/pmo/employee session 403s here before
 // this handler ever runs. This is deliberately the minimum viable offboarding
 // primitive — NOT the deferred full user-CRUD.
+// CR-01: since D-10-03 every /api/admin/users/* path IS control-plane
+// (db/resolver.js), so it is never open under DEMO_OPEN=1 and the inline
+// admin re-check below always has an identity to test.
 app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
+  if (refuseNonAdmin(req, res)) return;
   sessions.deleteAllSessionsForUser(getRuntimeConnection(), req.params.username);
   // D-08: an admin revoking a USER's sessions (offboarding) is a security
   // event — deliberately distinct from an ordinary self-service logout,
@@ -7868,6 +7970,11 @@ module.exports.parseExpectedVersion = parseExpectedVersion;
 // inventory without booting the HTTP server for every case.
 module.exports.isDemoOnlyPath = isDemoOnlyPath;
 module.exports.DEMO_ONLY_PREFIXES = DEMO_ONLY_PREFIXES;
+// CR-01 regression tests loop over every path-policy table.
+module.exports.ROLE_WRITE_POLICY = ROLE_WRITE_POLICY;
+module.exports.MUST_CHANGE_ALLOWED_PATHS = MUST_CHANGE_ALLOWED_PATHS;
+module.exports.pathMatchesPrefix = pathMatchesPrefix;
+module.exports.gatePolicy = gatePolicy;
 // D-26: exposed so a test can assert this copy and validators/workstream.js's
 // own independent RAID_LEVELS copy agree, without re-declaring a third list.
 module.exports.RAID_LEVELS = RAID_LEVELS;
