@@ -436,3 +436,40 @@ test('task-access-filter (l): both convert routes stamp clearanceArea on the cre
   assert.ok(ddConvertMatch, 'expected to locate the dd-finding convert route');
   assert.match(ddConvertMatch[0], /title: finding\.title,\s*\n\s*workstreamId,[\s\S]*?clearanceArea: finding\.area,/, 'the dd-finding convert route must stamp clearanceArea: finding.area on the created task object');
 });
+
+// Phase 11 / 11-03 (AUTHZ-03, D-11-03, R1-02): the WRITE-path twin of (c)/(d).
+// A member cleared only for legal can read their own legal task, but a by-id
+// update or delete of the financial- or hr-provenance task answers the same
+// 404 `{ error: 'Not found' }` as an id that does not exist — never a 409 echo,
+// never a 200 — and the record is untouched. Full matrix:
+// test/clearance-write-paths.test.js.
+test('task-access-filter (m): a member cleared only for legal gets 404 {error:"Not found"} on update and delete of an out-of-clearance task, byte-identical to a missing id, and the task is unchanged', async () => {
+  const server = await listenLocal(app);
+  try {
+    const { port } = server.address();
+    const base = `http://127.0.0.1:${port}`;
+    const fx = await seedFixture(base, 'deal_tafm');
+    const legal = fx.tokens.pmoLegalToken;
+    const missing = await postJSON(base, '/api/integration-tasks', legal, { id: 'task_does_not_exist', status: 'doing', version: 0 });
+    const missingText = await missing.text();
+    assert.strictEqual(missing.status, 404);
+    assert.strictEqual(missingText, '{"error":"Not found"}');
+    for (const t of [fx.tasks.financialTask, fx.tasks.hrTask]) {
+      const upd = await postJSON(base, '/api/integration-tasks', legal, { id: t.id, status: 'done', title: 'overwritten' });
+      assert.strictEqual(upd.status, 404);
+      assert.strictEqual(await upd.text(), missingText, 'invisible must answer byte-identically to missing');
+      const del = await fetch(`${base}/api/integration-tasks/${t.id}`, { method: 'DELETE', headers: { Cookie: `ma_session=${legal}` } });
+      assert.strictEqual(del.status, 404);
+      assert.strictEqual(await del.text(), missingText);
+    }
+    const adminList = await (await getJSON(base, '/api/integration-tasks', fx.tokens.adminToken)).json();
+    for (const t of [fx.tasks.financialTask, fx.tasks.hrTask]) {
+      const now = adminList.find((r) => r.id === t.id);
+      assert.ok(now, 'the restricted task still exists');
+      assert.strictEqual(now.title, t.title, 'and is unchanged');
+      assert.strictEqual(now.status, t.status);
+    }
+  } finally {
+    server.close();
+  }
+});
