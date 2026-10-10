@@ -93,11 +93,20 @@ test('tracer: admin creates a user, the user signs in with the temp password, a 
     body: { username: 'alice', password: created.json.tempPassword },
   });
   assert.strictEqual(login.status, 200, JSON.stringify(login.json));
-  const aliceCookie = sessionCookieFrom({ headers: login.headers });
+  let aliceCookie = sessionCookieFrom({ headers: login.headers });
   assert.ok(aliceCookie, 'login must set the session cookie');
 
   let me = await api('GET', '/api/auth/me', { cookie: aliceCookie });
   assert.strictEqual(me.json.user.role, 'pmo');
+
+  // D-10-05 (plan 10-05): a temp-password session is fenced to change-password
+  // until it rotates — rotate, then carry on with the fresh cookie.
+  const rotated = await api('POST', '/api/auth/change-password', {
+    cookie: aliceCookie, body: { currentPassword: created.json.tempPassword, newPassword: 'alice-rotated-Pass-1' },
+  });
+  assert.strictEqual(rotated.status, 200, JSON.stringify(rotated.json));
+  aliceCookie = sessionCookieFrom({ headers: rotated.headers });
+  assert.ok(aliceCookie, 'change-password must re-issue the session cookie');
 
   // pmo may write a default-tier route: anything but the role-gate 403.
   let write = await api('POST', '/api/raid', { cookie: aliceCookie, body: {} });
@@ -143,6 +152,17 @@ async function createUser(admin, username, role, extra) {
   });
   assert.strictEqual(res.status, 201, JSON.stringify(res.json));
   return res.json;
+}
+// D-10-05 (plan 10-05): an admin-created account carries mustChangePassword, and
+// the gate fences any session of it to change-password. Tests that mint a
+// direct session for such an account (instead of rotating through the HTTP
+// flow) clear the flag on the stored blob so the session exercises the
+// behaviour under test, not the fence (the fence has its own file).
+function markRotated(username) {
+  const row = controlConn.prepare('SELECT data FROM users WHERE id = ?').get(username);
+  const blob = JSON.parse(row.data);
+  blob.mustChangePassword = false;
+  controlConn.prepare('UPDATE users SET data = ? WHERE id = ?').run(JSON.stringify(blob), username);
 }
 function userSessionCount(username) {
   return runtimeConn.prepare('SELECT COUNT(*) AS n FROM sessions WHERE username = ?').get(username).n;
@@ -212,6 +232,7 @@ test('reset-password: one-time temp password, old password dead, sessions revoke
 test('disable: the live cookie 401s on its next request, sessions are gone, re-enable needs a fresh sign-in', async () => {
   const admin = adminCookie();
   await createUser(admin, 'dora', 'pmo');
+  markRotated('dora');
   const doraCookie = cookieOf(sessionAs(runtimeConn, controlConn, { username: 'dora', role: 'pmo' }));
   assert.strictEqual((await api('GET', '/api/auth/me', { cookie: doraCookie })).json.user.username, 'dora');
   assert.strictEqual((await api('GET', '/api/menus', { cookie: doraCookie })).status, 200);
@@ -239,6 +260,7 @@ test('last-admin guard: sole admin cannot demote or disable itself; with a secon
   assert.strictEqual(JSON.parse(controlConn.prepare('SELECT data FROM users WHERE id = ?').get('admin').data).role, 'admin');
 
   await createUser(admin, 'boss2', 'admin');
+  markRotated('boss2');
   const boss2 = cookieOf(sessionAs(runtimeConn, controlConn, { username: 'boss2', role: 'admin' }));
   // Nobody may disable their own account, even with a second admin present.
   const selfOff = await api('PATCH', '/api/admin/users/boss2', { cookie: boss2, body: { disabled: true } });

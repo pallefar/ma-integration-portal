@@ -261,6 +261,12 @@ function isOpenMode(req) {
 // unauthenticated mode probe the login page reads before any session exists.
 const PUBLIC_API_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me', '/auth/mode']);
 
+// [security] D-10-05: the ONLY gated /api path a session with
+// mustChangePassword may use (full '/api/...' form, as the consolidated gate
+// reconstructs it). The public auth paths above (me/logout/mode/login) never
+// reach the gate at all; everything else answers 403 {mustChangePassword:true}.
+const MUST_CHANGE_ALLOWED_PATHS = new Set(['/api/auth/change-password']);
+
 // Extracts the raw opaque session token from the `ma_session` cookie (replaces
 // the previous HMAC payload decode — the token itself carries no data; it is
 // looked up against the sessions table).
@@ -671,6 +677,21 @@ app.use('/api', (req, res, next) => {
     // route registrations 1:1), so req.baseUrl ('/api') + req.path
     // reconstructs the full path both lookups expect.
     const fullPath = req.baseUrl + req.path;
+
+    // [security] D-10-05 / T-10-27 forced rotation: a session whose account
+    // still carries mustChangePassword (temporary password, admin reset, first
+    // bootstrap, a demo password detected at login) may do NOTHING except
+    // replace it. The client redirect (plan 10-06) is UX; THIS gate is the
+    // control — so a temp password can never become a permanent working
+    // credential. /auth/me, /auth/logout, /auth/login and /auth/mode are public
+    // paths that returned at the top of this gate and never reach it. Placed
+    // before the demo-only and role checks so no other refusal can mask it.
+    if (req.portalUser.mustChangePassword === true && !MUST_CHANGE_ALLOWED_PATHS.has(fullPath)) {
+      return res.status(403).json({
+        error: 'You must change your password before continuing.',
+        mustChangePassword: true,
+      });
+    }
 
     if (isDemoOnlyPath(fullPath, req.method) && !req.isDemo) {
       return res.status(403).json({ error: 'This showcase-only feature is unavailable inside a real deal.' });
