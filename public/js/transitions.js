@@ -128,7 +128,12 @@
   const CONFLICT_APPLY_LABEL = 'Apply my changes anyway';
   const CONFLICT_DISCARD_LABEL = 'Discard mine, keep theirs';
   const CONFLICT_APPLYING_LABEL = 'Applying…';
-  const CONFLICT_EMPTY_DIFF = "No conflicting fields — the record's version changed without affecting anything you edited. Apply your changes to continue.";
+  // R7 F-3 / GD-6: a record whose version moved while no payload field maps
+  // to a record field (a `{}` confirm-current, a convert, a re-baseline, a
+  // cost-entry add) used to render a sentence asserting the change was
+  // irrelevant to the user's edit — a claim the client cannot know. The neutral
+  // panel says only what is true and reuses the ONE fallback sentence
+  // (CONFLICT_ATTRIBUTION_FALLBACK) so it is a single constant.
   // E2-error (Plan 03): the reapply-failure banner. One fixed prefix/suffix
   // pair with a swapped-in reason — never a separate string per failure
   // mode, so the copy stays exactly on the Copywriting Contract's sentence.
@@ -234,6 +239,9 @@
   // UI-SPEC E4: with both actor and time present render "Changed by {name},
   // {relative time}"; with either missing render the fallback sentence —
   // never a blank line, never a line containing the word "undefined".
+  // Returns true when the real "Changed by" line was rendered, false when the
+  // fallback sentence was (so a caller that is already showing that same
+  // sentence elsewhere can omit this element instead of repeating it — A7).
   function renderConflictAttribution(el, body) {
     const name = body && body.changedBy;
     const time = (body && body.changedAt) ? relativeTime(body.changedAt) : null;
@@ -244,9 +252,10 @@
       strong.textContent = name;
       el.appendChild(strong);
       el.appendChild(document.createTextNode(', ' + time));
-    } else {
-      el.textContent = CONFLICT_ATTRIBUTION_FALLBACK;
+      return true;
     }
+    el.textContent = CONFLICT_ATTRIBUTION_FALLBACK;
+    return false;
   }
 
   // UI-SPEC E1-partial: a changed field whose value (mine or theirs) is
@@ -286,13 +295,43 @@
   // empty renders the neutral panel — never a claim about what changed.
   const CONFLICT_FIELD_MAP = [
     { method: 'POST', path: /^\/api\/synergies\/[^/]+\/stage$/, aliases: { targetStage: 'stage' }, ignore: ['reason'] },
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/rebaseline$/, ignore: ['reason'] },
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/cost-entries$/, ignore: ['date', 'amountM', 'note'] },
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/phasing\/([^/]+)$/, cell: { array: 'phasing', key: 'month', fields: ['targetM', 'realizedM'] } },
+    { method: 'POST', path: /^\/api\/dd\/findings\/[^/]+\/convert$/, ignore: ['toTask', 'toRaid'] },
+    { method: 'POST', path: /^\/api\/org\/flight-risk\/[^/]+\/convert$/, ignore: ['toTask', 'toRaid'] },
   ];
 
-  // Display labels (R7 F-5): authored, so the CSS no longer case-transforms
-  // them. Looked up by hasOwnProperty — a payload key is user-supplied JSON.
+  // Display labels (R7 F-5 / GD-8): authored, so the CSS no longer
+  // case-transforms them. Looked up by hasOwnProperty — a payload key is
+  // user-supplied JSON ('constructor' must not resolve to a function).
   const CONFLICT_FIELD_LABELS = {
-    stage: 'Stage',
+    status: 'Status', title: 'Title', text: 'Request', notes: 'Notes', owner: 'Owner',
+    due: 'Due date', dueDate: 'Due date', severity: 'Severity', probability: 'Probability',
+    type: 'Type', phase: 'Phase', workstreamId: 'Workstream', stage: 'Stage',
+    realizedM: 'Realized (M)', targetM: 'Target (M)', runRateM: 'Run-rate (M)',
+    startMonth: 'Start month', curveShape: 'Curve shape',
+    costPlannedM: 'Planned cost (M)', costExpectedMonth: 'Expected cost month',
+    category: 'Category', level: 'Level', reportsToId: 'Reports to', employeeId: 'Person',
+    riskLevel: 'Risk level', mitigation: 'Mitigation', blocked: 'Blocked',
+    vdrLink: 'Data room link', area: 'Area', description: 'Description', name: 'Name',
   };
+
+  // Fallback for a key the table does not know: drop a trailing 'Id' that
+  // follows a lowercase letter, split camelCase / underscores / hyphens into
+  // words, lower-case them, capitalise the first, and render a final
+  // standalone 'M' word as '(M)' — neutral, no currency symbol (GD-8).
+  function humaniseConflictKey(key) {
+    const raw = String(key);
+    const words = raw.replace(/([a-z])Id$/, '$1')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/[_-]+/g, ' ')
+      .split(/\s+/).filter(Boolean);
+    if (words.length === 0) return raw;
+    const out = words.map((w, i) => ((i === words.length - 1 && i > 0 && w === 'M') ? '(M)' : w.toLowerCase()));
+    out[0] = out[0].charAt(0).toUpperCase() + out[0].slice(1);
+    return out.join(' ');
+  }
 
   function conflictRequestPath(url) {
     try {
@@ -315,7 +354,7 @@
 
   function conflictFieldLabel(field) {
     return Object.prototype.hasOwnProperty.call(CONFLICT_FIELD_LABELS, field)
-      ? CONFLICT_FIELD_LABELS[field] : String(field);
+      ? CONFLICT_FIELD_LABELS[field] : humaniseConflictKey(field);
   }
 
   // Builds the diff rows [{ label, mine, theirs }] for one session render.
@@ -327,9 +366,25 @@
     const entry = found ? found.entry : {};
     const aliases = entry.aliases || {};
     const ignore = entry.ignore || [];
+    const cell = entry.cell || null;
     const rows = [];
     Object.keys(payload).forEach((key) => {
       if (key === 'id' || key === 'version' || ignore.indexOf(key) >= 0) return;
+      if (cell) {
+        // One month cell: the server's value for the SAME month, or nothing
+        // ('(empty)') when the month row does not exist there. Never the
+        // record's total of the same name.
+        if (cell.fields.indexOf(key) < 0) return;
+        const month = found.match[1];
+        const arr = Array.isArray(currentRecord[cell.array]) ? currentRecord[cell.array] : [];
+        const theirCell = arr.find((el) => el && el[cell.key] === month);
+        rows.push({
+          label: conflictFieldLabel(key) + ' · ' + month,
+          mine: payload[key],
+          theirs: theirCell ? theirCell[key] : undefined,
+        });
+        return;
+      }
       const field = Object.prototype.hasOwnProperty.call(aliases, key) ? aliases[key] : key;
       if (!Object.prototype.hasOwnProperty.call(currentRecord, field)) return;
       rows.push({ label: conflictFieldLabel(field), mine: payload[key], theirs: currentRecord[field] });
@@ -446,7 +501,9 @@
     const attribution = document.createElement('p');
     attribution.className = 'conflict-modal-attribution';
     head.appendChild(title);
-    head.appendChild(attribution);
+    // The attribution element joins the head per variant below: the deleted
+    // variant has nothing true to say (GD-10) and the neutral panel must not
+    // repeat the fallback sentence it already shows (A7).
     modal.appendChild(head);
 
     const intro = document.createElement('p');
@@ -468,6 +525,7 @@
       // paragraph, no diff list — the title question IS the confirmation.
       title.textContent = CONFLICT_TITLE_DELETE;
       renderConflictAttribution(attribution, body);
+      head.appendChild(attribution);
 
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
@@ -503,6 +561,7 @@
       title.textContent = CONFLICT_TITLE_DELETED;
       intro.textContent = CONFLICT_DELETED_INTRO;
       renderConflictAttribution(attribution, body);
+      head.appendChild(attribution);
 
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
@@ -514,7 +573,7 @@
       modal.appendChild(intro);
       title.textContent = CONFLICT_TITLE_EDIT;
       intro.textContent = CONFLICT_INTRO_EDIT;
-      renderConflictAttribution(attribution, body);
+      const realAttribution = renderConflictAttribution(attribution, body);
 
       const diffList = document.createElement('div');
       diffList.className = 'conflict-diff-list';
@@ -528,11 +587,16 @@
       const rows = buildConflictRows(session, payload, currentRecord);
 
       if (rows.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'conflict-diff-empty';
-        empty.textContent = CONFLICT_EMPTY_DIFF;
-        diffList.appendChild(empty);
+        // GD-6: the neutral panel — only the one true thing (the record's
+        // version moved), via the single fallback constant. When the head's
+        // attribution would repeat that very sentence it is omitted (A7).
+        const neutral = document.createElement('p');
+        neutral.className = 'conflict-diff-empty';
+        neutral.textContent = CONFLICT_ATTRIBUTION_FALLBACK;
+        diffList.appendChild(neutral);
+        if (realAttribution) head.appendChild(attribution);
       } else {
+        head.appendChild(attribution);
         rows.forEach((r) => {
           const row = document.createElement('div');
           row.className = 'conflict-diff-row';

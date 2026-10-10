@@ -876,3 +876,110 @@ test('DT1 (tracer): a synergy stage conflict shows ONE "Stage" row: mine = the r
   document.querySelectorAll('.conflict-btn-discard')[0].click();
   assert.strictEqual(await p, first);
 });
+
+// Opens a dialog for `url`/`payload` against the given 409 body and returns the
+// handles a test needs. Every caller must settle the held promise itself.
+async function openDialogFor(url, payload, bodyOver, method) {
+  const first = makeResponse({ status: 409, body: conflictOf(Object.assign({ conflictKind: 'version' }, bodyOver || {})) });
+  const fake = makeFakeFetch([first]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+  const p = sandbox.window.fetch(url, { method: method || 'POST', body: JSON.stringify(payload) });
+  await flushAll();
+  return { p, first, fake, sandbox, document };
+}
+
+test('DT2: confirm-current {version} (no payload field) -> the neutral panel exactly once, Apply offered, the retired sentence nowhere', async () => {
+  const { p, first, document } = await openDialogFor('/api/synergies/s1/confirm-current', { version: 1 },
+    { currentRecord: { id: 's1', stage: 'idea' } });
+
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-row').length, 0);
+  const text = MODAL_TEXT(document);
+  assert.strictEqual(countOf(text, NEUTRAL), 1, 'the neutral sentence appears exactly once');
+  assert.ok(document.querySelectorAll('.conflict-btn-apply').length === 1, 'Apply my changes anyway is still offered');
+  assert.ok(!text.includes('No conflicting fields'), 'retired sentence (part 1)');
+  assert.ok(!text.includes('without affecting anything you edited'), 'retired sentence (part 2)');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, first);
+});
+
+test('DT3: payloads that name no record field (convert, rebaseline, cost-entry add) all render the neutral panel and still offer Apply', async () => {
+  const cases = [
+    ['/api/dd/findings/f1/convert', { toTask: true, toRaid: false, version: 2 }, { id: 'f1', title: 'Finding', toTask: false, toRaid: false }],
+    ['/api/org/flight-risk/r1/convert', { toTask: true, toRaid: true, version: 2 }, { id: 'r1', riskLevel: 'high', toTask: false, toRaid: false }],
+    ['/api/synergies/s1/rebaseline', { reason: 'x', version: 1 }, { id: 's1', reason: 'old', stage: 'idea' }],
+    ['/api/synergies/s1/cost-entries', { date: '2026-03-01', amountM: 1, version: 1 }, { id: 's1', date: 'd', amountM: 9, costEntries: [] }],
+  ];
+  for (const [url, payload, record] of cases) {
+    const { p, first, document } = await openDialogFor(url, payload, { currentRecord: record });
+    assert.strictEqual(document.querySelectorAll('.conflict-diff-row').length, 0, url + ': no rows');
+    assert.strictEqual(countOf(MODAL_TEXT(document), NEUTRAL), 1, url + ': neutral panel once');
+    assert.strictEqual(document.querySelectorAll('.conflict-btn-apply').length, 1, url + ': Apply offered');
+    document.querySelectorAll('.conflict-btn-discard')[0].click();
+    assert.strictEqual(await p, first);
+  }
+});
+
+test('DT4: a per-month phasing conflict compares the month CELL with the same cell on the server — never the initiative total', async () => {
+  const { p, first, document } = await openDialogFor('/api/synergies/s1/phasing/2026-03', { realizedM: 2.5, version: 1 }, {
+    currentRecord: { id: 's1', realizedM: 9.9, phasing: [{ month: '2026-02', realizedM: 4, targetM: 4 }, { month: '2026-03', realizedM: 1, targetM: 2 }] },
+  });
+
+  const rows = document.querySelectorAll('.conflict-diff-row');
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-label')[0].textContent, 'Realized (M) · 2026-03');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-mine')[0].textContent, '2.5');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-theirs')[0].textContent, '1', 'theirs is the 2026-03 cell, not the 9.9 total');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, first);
+});
+
+test('DT5: a month row missing on the server renders theirs as (empty)', async () => {
+  const { p, first, document } = await openDialogFor('/api/synergies/s1/phasing/2026-03', { targetM: 3, version: 1 }, {
+    currentRecord: { id: 's1', targetM: 7, phasing: [{ month: '2026-02', realizedM: 4, targetM: 4 }] },
+  });
+
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-row').length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-label')[0].textContent, 'Target (M) · 2026-03');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-theirs')[0].textContent, '(empty)');
+  assert.ok(document.querySelectorAll('.conflict-diff-theirs')[0].classList.contains('conflict-diff-value-empty'));
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, first);
+});
+
+test('DT6: diff labels are display labels from a fixed table, with a humanised fallback for an unknown key', async () => {
+  const record = { id: 'x', realizedM: 1, dueDate: '2026-01-01', reportsToId: 'p1', someNewField: 'a', grossRealizedM: 3 };
+  const payload = { id: 'x', version: 1, realizedM: 2, dueDate: '2026-02-02', reportsToId: 'p2', someNewField: 'b', grossRealizedM: 4 };
+  const { p, first, document } = await openDialogFor('/api/raid', payload, { currentRecord: record });
+
+  const labels = document.querySelectorAll('.conflict-diff-label').map((l) => l.textContent);
+  assert.deepStrictEqual(labels, ['Realized (M)', 'Due date', 'Reports to', 'Some new field', 'Gross realized (M)']);
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, first);
+});
+
+test('DT7: a mapped field whose mine and theirs are equal is still rendered with both values', async () => {
+  const { p, first, document } = await openDialogFor('/api/synergies/s1/stage', { targetStage: 'validated', version: 1 },
+    { currentRecord: { id: 's1', stage: 'validated' } });
+
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-row').length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-mine')[0].textContent, 'validated');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-theirs')[0].textContent, 'validated');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, first);
+});
+
+test('DT14: neutral panel + a body with no attribution -> the fallback sentence appears once; the attribution line is omitted', async () => {
+  const { p, first, document } = await openDialogFor('/api/synergies/s1/confirm-current', { version: 1 },
+    { currentRecord: { id: 's1', stage: 'idea' }, changedBy: null, changedAt: null });
+
+  assert.strictEqual(countOf(MODAL_TEXT(document), NEUTRAL), 1, 'never the same sentence twice in one dialog');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-attribution').length, 0, 'the attribution element is omitted, not blank');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, first);
+});
+
+test('DT-src: the retired empty-diff sentence occurs nowhere in the wrapper region source', () => {
+  assert.ok(!WRAPPER_SRC.includes('No conflicting fields'), 'sentence start must be gone');
+  assert.ok(!WRAPPER_SRC.includes('without affecting anything you edited'), 'sentence middle must be gone');
+  assert.ok(!/CONFLICT_EMPTY_DIFF/.test(WRAPPER_SRC), 'the constant itself must be deleted');
+});
