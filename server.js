@@ -203,6 +203,7 @@ const egress = require('./lib/egress').createEgress({
 });
 const csp = require('./lib/csp');
 aiService.setEgressCheck(() => egress.allows('gemini'));
+const EGRESS_DISABLED_MESSAGE = 'This feature is switched off by your administrator.';
 app.use((req, res, next) => {
   const cspHeaders = csp.headersFor({ egress: egress.current() });
   for (const name of Object.keys(cspHeaders)) res.setHeader(name, cspHeaders[name]);
@@ -877,6 +878,22 @@ const gatePolicy = {
     return forms.length > 0 && readPolicy.readAllowsForms(role, forms, canonical);
   },
 };
+
+// [security] SAFE-06 / D-13-05 (plan 13-02, PD-15): the "AI training" PDF upload
+// (POST /api/rag/upload) exists only in dev/demo. In real-deal mode the route is
+// answered 404 for EVERY caller - unauthenticated included - BEFORE the /api
+// gate, because an unmounted route would be answered 403 by that gate for an
+// authenticated non-admin (a different, route-revealing status). Matched on
+// every canonical spelling of the path (lib/requestPath.js), so `/api//rag/upload`
+// style spellings cannot slip past.
+app.use((req, res, next) => {
+  if (!dbFiles.IS_REAL_MODE) return next();
+  const r = pathForms(req.path);
+  if (r.ok && r.forms.some((f) => f === '/api/rag/upload')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+});
 
 // ONE consolidated /api gate (replaces the two overlapping middlewares this
 // codebase previously ran — a write/admin-token gate and a separate session
@@ -2560,6 +2577,12 @@ const ragPdfTask = createIsolatedTask({
 
 // POST AI Model RAG PDF Training Upload & AI Insight Review
 app.post('/api/rag/upload', async (req, res, next) => {
+  // [security] SAFE-06 / D-13-05 (PD-14): Gemini switched off -> a 200 marker the
+  // client never retries and no generic hook (503 retry, 409 dialog, 403 denial)
+  // engages on. Checked FIRST: nothing is parsed, leased or written.
+  if (!egress.allows('gemini')) {
+    return res.json({ egressDisabled: 'gemini', message: EGRESS_DISABLED_MESSAGE });
+  }
   // tryAcquire() is synchronous and precedes the base64 decode, so a refused
   // request costs nothing beyond the body the JSON parser already read.
   const lease = ragPdfTask.tryAcquire();
@@ -2820,9 +2843,10 @@ app.get('/api/settings', (req, res) => {
     // shared fields (targetCompany, roleVisibility, ...) instead of a sparse object.
     const custom = { ...(db.settings || {}), ...(db.customSettings || {}), demoMode: false, geminiApiKey: secretGeminiApiKey };
     custom.timeTravelDay = custom.timeTravelDay !== undefined ? custom.timeTravelDay : (db.settings.timeTravelDay || 30);
+    custom.egress = { ...egress.current() };
     res.json(settingsResponseFor(req, custom));
   } else {
-    res.json(settingsResponseFor(req, { ...(db.settings || {}), geminiApiKey: secretGeminiApiKey }));
+    res.json(settingsResponseFor(req, { ...(db.settings || {}), geminiApiKey: secretGeminiApiKey, egress: { ...egress.current() } }));
   }
 });
 
@@ -3768,6 +3792,10 @@ app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
 
 // GET AI Insight dynamic RAG portal insight
 app.get('/api/ai/insight', async (req, res, next) => {
+  // [security] SAFE-06 / D-13-05 (PD-14): see POST /api/rag/upload.
+  if (!egress.allows('gemini')) {
+    return res.json({ egressDisabled: 'gemini', message: EGRESS_DISABLED_MESSAGE });
+  }
   const { portal } = req.query;
   if (!portal) {
     return res.status(400).json({ error: 'Portal parameter is required.' });
@@ -3895,7 +3923,9 @@ app.post('/api/assessment', async (req, res, next) => {
       questions: db.questions,
       // ISO-01 (Task 2 cutover): the key is a secret field, sourced from
       // runtime.db's secretSettings singleton regardless of demo/custom lane.
-      apiKey: controlStore.getSecretSettings().geminiApiKey || ''
+      // [security] SAFE-06 / D-13-05 (PD-14): Gemini off -> an empty key, so the
+      // existing local plan is used (refusing would block a core assessment write).
+      apiKey: egress.allows('gemini') ? (controlStore.getSecretSettings().geminiApiKey || '') : ''
     });
   } catch (error) {
     // [security] D-06/CONC-01: async handler — a write-lock contention error

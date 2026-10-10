@@ -155,3 +155,116 @@ test('dev: a toggle through process A is visible in process B\'s next response (
     await b.stop();
   }
 });
+
+test('dev: GET /api/settings exposes the effective egress booleans to a non-admin and never the key', async () => {
+  const dir = fs.mkdtempSync(path.join(DIR, 'settings-'));
+  const s = await startServer({ dir, mode: 'dev' });
+  try {
+    const res = await s.request('/api/settings', { token: 'hrbp' });
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body.egress, { gemini: true, huggingface: true, youtube: true });
+    assert.ok(!('geminiApiKey' in res.body));
+    await s.request('/api/admin/egress', { method: 'POST', body: { gemini: false }, token: 'admin' });
+    const after = await s.request('/api/settings', { token: 'hrbp' });
+    assert.deepStrictEqual(after.body.egress, { gemini: false, huggingface: true, youtube: true });
+  } finally {
+    await s.stop();
+  }
+});
+
+test('aiService backstop: with the egress check false each Gemini function takes its local fallback and never calls fetch', async () => {
+  const aiService = require('../aiService');
+  const realFetch = global.fetch;
+  const calls = [];
+  global.fetch = (...a) => { calls.push(String(a[0])); return Promise.reject(new Error('fetch must not be called')); };
+  aiService.setEgressCheck(() => false);
+  try {
+    const plan = await aiService.generate100DayPlan({
+      targetCompany: 'Backstop Co', scores: { culture: 3, talent: 3, value: 3 }, responses: {}, questions: [], apiKey: 'sk-present',
+    });
+    assert.ok(typeof plan === 'string' && plan.length > 0);
+    const review = await aiService.reviewPdfContent({ pdfText: 'Integration policy text.', fileName: 'p.pdf', apiKey: 'sk-present' });
+    assert.ok(review && typeof review === 'object');
+    const insight = await aiService.generateSmolInsight({ portal: 'employee', apiKey: 'sk-present' });
+    assert.ok(insight);
+    assert.deepStrictEqual(calls, []);
+  } finally {
+    global.fetch = realFetch;
+    aiService.setEgressCheck(() => true);
+  }
+});
+
+test('dev, gemini off: insight / rag upload answer the 200 marker, assessment uses the local plan - zero outbound Gemini calls', async () => {
+  const dir = fs.mkdtempSync(path.join(DIR, 'inproc-'));
+  require('./helpers/egress-server').seedDevDir(dir);
+  Object.assign(process.env, {
+    MA_CONTROL_DB_PATH: path.join(dir, 'control.db'),
+    MA_RUNTIME_DB_PATH: path.join(dir, 'runtime.db'),
+    MA_DEMO_DB_PATH: path.join(dir, 'demo.db'),
+    MA_AUDIT_DB_PATH: path.join(dir, 'audit.db'),
+    MA_DEALS_DIR: path.join(dir, 'deals'),
+  });
+  delete process.env.DEMO_OPEN;
+  process.env.ADMIN_TOKEN = '';
+  const { listenLocal } = require('./helpers/listen-local');
+  const store = require('../db/store.js');
+  const dbFiles = require('../db/dbFiles.js');
+  const sessionsDb = require('../db/sessions.js');
+  const { ensureUser } = require('./helpers/seed-identity.js');
+  const controlStore = require('../db/controlStore.js');
+  const app = require('../server.js');
+  const rt = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+  const ctl = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+  const demo = store.getOrOpenConnection(dbFiles.DEMO_DB_PATH, dbFiles.DEAL_SCHEMA_PATH);
+  ensureUser(ctl, { username: 'egress-admin2', role: 'admin' });
+  const cookie = `ma_session=${sessionsDb.createSession(rt, { username: 'egress-admin2', role: 'admin', ttlMs: 3600000 })}`;
+  controlStore.setSecretSettings({ geminiApiKey: 'sk-test-not-real' });
+
+  const realFetch = global.fetch;
+  const outbound = [];
+  global.fetch = (u, init) => {
+    const url = String(u);
+    if (/^http:\/\/127\.0\.0\.1/.test(url)) return realFetch(u, init);
+    outbound.push(url);
+    return Promise.reject(new Error('stubbed outbound fetch'));
+  };
+  const server = await listenLocal(app);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const call = async (p, method, body) => {
+    const res = await fetch(base + p, {
+      method, headers: { Cookie: cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: res.status, body: await res.json() };
+  };
+  const gemini = () => outbound.filter((u) => /generativelanguage\.googleapis\.com/.test(u));
+  const PDF = { fileName: 'policy.pdf', fileData: 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4').toString('base64') };
+  const ragCount = () => demo.prepare('SELECT COUNT(*) AS n FROM ragUploads').get().n;
+  try {
+    // positive control: with gemini ON and a key, the stub DOES see the outbound call
+    const on = await call('/api/ai/insight?portal=employee', 'GET');
+    assert.strictEqual(on.status, 200);
+    assert.ok(gemini().length >= 1, 'positive control: gemini on + key -> an outbound call is attempted');
+    outbound.length = 0;
+
+    const off = await call('/api/admin/egress', 'POST', { gemini: false });
+    assert.strictEqual(off.status, 200);
+
+    const rows = ragCount();
+    const ins = await call('/api/ai/insight?portal=employee', 'GET');
+    assert.strictEqual(ins.status, 200);
+    assert.strictEqual(ins.body.egressDisabled, 'gemini');
+    assert.ok(ins.body.message);
+    const up = await call('/api/rag/upload', 'POST', PDF);
+    assert.strictEqual(up.status, 200);
+    assert.strictEqual(up.body.egressDisabled, 'gemini');
+    assert.strictEqual(ragCount(), rows, 'nothing is written when Gemini is off');
+    const qs = demo.prepare('SELECT data FROM questions LIMIT 3').all().map((r) => JSON.parse(r.data).id);
+    const responses = Object.fromEntries(qs.map((id) => [id, 4]));
+    const asm = await call('/api/assessment', 'POST', { responses });
+    assert.ok(asm.status === 200 || asm.status === 201, `assessment status ${asm.status}: ${JSON.stringify(asm.body)}`);
+    assert.deepStrictEqual(gemini(), [], 'zero outbound Gemini calls with gemini off');
+  } finally {
+    global.fetch = realFetch;
+    await new Promise((r) => server.close(r));
+  }
+});

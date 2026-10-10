@@ -42,3 +42,21 @@ test('real mode, nothing stored: the page CSP carries no https: origin at all; a
     await s.stop();
   }
 });
+
+test('real mode: POST /api/rag/upload is 404 for every caller (unauthenticated, hrbp, admin), spelling variants included', async () => {
+  const s = await startServer({ dir: fs.mkdtempSync(path.join(DIR, 'rag-')), mode: 'real' });
+  try {
+    const body = { fileName: 'x.pdf', fileData: 'data:application/pdf;base64,JVBERi0=' };
+    for (const token of [undefined, 'hrbp', 'admin']) {
+      const res = await s.request('/api/rag/upload', { method: 'POST', body, token });
+      assert.strictEqual(res.status, 404, `caller ${token || 'anonymous'}`);
+      assert.deepStrictEqual(res.body, { error: 'Not found' });
+    }
+    const slash = await s.request('/api/rag/upload/', { method: 'POST', body, token: 'hrbp' });
+    assert.strictEqual(slash.status, 404);
+    const dbl = await s.request('/api//rag/upload', { method: 'POST', body, token: 'admin' });
+    assert.strictEqual(dbl.status, 404);
+  } finally {
+    await s.stop();
+  }
+});
