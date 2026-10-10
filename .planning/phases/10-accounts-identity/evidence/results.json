@@ -1,0 +1,730 @@
+[
+  {
+    "scenario": "lane:real",
+    "step": "server booted, /api/auth/mode answers",
+    "status": "PASS",
+    "detail": {
+      "mode": "real",
+      "demoOpen": false,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "lane:real",
+    "step": "bootstrap-admin created the first admin",
+    "status": "PASS",
+    "detail": {
+      "preBootstrapUserCount": 0
+    }
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "login with a temp password lands on /change-password.html",
+    "status": "PASS",
+    "detail": "/change-password.html"
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "heading says the password must be changed",
+    "status": "PASS",
+    "detail": "You must change your password"
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "opening /index.html directly bounces back to /change-password.html",
+    "status": "PASS",
+    "detail": "/change-password.html"
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "a too-short password is refused client-side with the 12-char rule",
+    "status": "PASS",
+    "detail": "The new password must be at least 12 characters."
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "changing to a 12+ char password lands on /",
+    "status": "PASS",
+    "detail": "/"
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "the temporary password stops working",
+    "status": "PASS",
+    "detail": 401
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "the new password signs in and is no longer forced",
+    "status": "PASS",
+    "detail": false
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "390px: change-password screen has no horizontal overflow",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "forcedChangeLandsOnChangePassword@real",
+    "step": "a wrong current password reads \"Current password is incorrect.\"",
+    "status": "PASS",
+    "detail": "Current password is incorrect."
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "mode probe says real, accountsWritable true",
+    "status": "PASS",
+    "detail": {
+      "mode": "real",
+      "demoOpen": false,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "real lane: first boot seeded zero accounts before bootstrap",
+    "status": "PASS",
+    "detail": 0
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: stayed on /login.html with no session",
+    "status": "PASS",
+    "detail": "/login.html"
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: #lg-demo-slot has no children",
+    "status": "PASS",
+    "detail": 0
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: page text has no \"Demo accounts\"",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: page text has no published demo password",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: no demo account buttons",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: no horizontal overflow",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "1440px: sign-in form present",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: stayed on /login.html with no session",
+    "status": "PASS",
+    "detail": "/login.html"
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: #lg-demo-slot has no children",
+    "status": "PASS",
+    "detail": 0
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: page text has no \"Demo accounts\"",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: page text has no published demo password",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: no demo account buttons",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: no horizontal overflow",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "realLoginHasNoDemoCredentials@real",
+    "step": "390px: sign-in form present",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "1440px: My sessions is reachable from the header menu",
+    "status": "PASS",
+    "detail": "dropdown"
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "1440px: exactly one session is marked \"This device\"",
+    "status": "PASS",
+    "detail": [
+      {
+        "device": "node",
+        "current": true,
+        "canEnd": true
+      },
+      {
+        "device": "node",
+        "current": false,
+        "canEnd": true
+      }
+    ]
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "1440px: every row has an End-session button (real mode is writable)",
+    "status": "PASS",
+    "detail": [
+      {
+        "device": "node",
+        "current": true,
+        "canEnd": true
+      },
+      {
+        "device": "node",
+        "current": false,
+        "canEnd": true
+      }
+    ]
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "second context is signed in (stays on /admin.html)",
+    "status": "PASS",
+    "detail": "http://127.0.0.1:64059/admin.html"
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "the list now shows both sessions",
+    "status": "PASS",
+    "detail": 3
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "ending the other session removes exactly that row; this device remains",
+    "status": "PASS",
+    "detail": [
+      {
+        "device": "node",
+        "current": true,
+        "canEnd": true
+      },
+      {
+        "device": "node",
+        "current": false,
+        "canEnd": true
+      }
+    ]
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "the ended session is bounced to /login.html on its next navigation",
+    "status": "PASS",
+    "detail": "/login.html"
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "no page error (1440)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "390px: My sessions is reachable (dropdown)",
+    "status": "PASS",
+    "detail": "dropdown"
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "390px: no horizontal scroll with the sessions modal open",
+    "status": "PASS",
+    "detail": {
+      "fits": true,
+      "scrollWidth": 390,
+      "innerWidth": 390
+    }
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "390px: the sessions modal lies inside the viewport",
+    "status": "PASS",
+    "detail": {
+      "inside": true,
+      "left": 12,
+      "right": 378,
+      "top": 131.6875,
+      "vw": 390
+    }
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "390px: Escape closes the modal",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "390px: Change password is reachable for a non-admin (dropdown)",
+    "status": "PASS",
+    "detail": "dropdown"
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "390px: no horizontal scroll with the change-password modal open",
+    "status": "PASS",
+    "detail": {
+      "fits": true,
+      "scrollWidth": 390,
+      "innerWidth": 390
+    }
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "390px: the change-password modal lies inside the viewport",
+    "status": "PASS",
+    "detail": {
+      "inside": true,
+      "left": 12,
+      "right": 378,
+      "top": 205.703125,
+      "vw": 390
+    }
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "a mismatched confirmation is refused before any request",
+    "status": "PASS",
+    "detail": "The new password and its confirmation do not match."
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "success reads \"Password changed. Your other sessions were signed out.\"",
+    "status": "PASS",
+    "detail": "Password changed. Your other sessions were signed out."
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "the modal closes itself after success",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "the new password signs in",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "selfServiceSessions@real",
+    "step": "no page error (390)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "lane:dev",
+    "step": "server booted, /api/auth/mode answers",
+    "status": "PASS",
+    "detail": {
+      "mode": "dev",
+      "demoOpen": false,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev",
+    "step": "mode probe says dev",
+    "status": "PASS",
+    "detail": {
+      "mode": "dev",
+      "demoOpen": false,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev",
+    "step": "dev: accountsWritable is true (temp control copy)",
+    "status": "PASS",
+    "detail": {
+      "mode": "dev",
+      "demoOpen": false,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev",
+    "step": "demo panel shows the three account buttons",
+    "status": "PASS",
+    "detail": [
+      "admin",
+      "karen",
+      "pmo"
+    ]
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev",
+    "step": "no \"Open the demo\" link outside demo-open",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev",
+    "step": "stayed on /login.html",
+    "status": "PASS",
+    "detail": "/login.html"
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev",
+    "step": "click fills username and password",
+    "status": "PASS",
+    "detail": {
+      "user": "karen",
+      "passLen": 11
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev",
+    "step": "no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "lane:demo-open",
+    "step": "server booted, /api/auth/mode answers",
+    "status": "PASS",
+    "detail": {
+      "mode": "demo",
+      "demoOpen": true,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "demoOpenAnonymousNoLoop@demo-open",
+    "step": "a cookie-less tab stays on /execution.html",
+    "status": "PASS",
+    "detail": "/execution.html"
+  },
+  {
+    "scenario": "demoOpenAnonymousNoLoop@demo-open",
+    "step": "at most 2 document navigations in 6 s (the loop made dozens)",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "demoOpenAnonymousNoLoop@demo-open",
+    "step": "no /api/deals request without a session",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "demoOpenAnonymousNoLoop@demo-open",
+    "step": "no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-open",
+    "step": "mode probe says demo-open",
+    "status": "PASS",
+    "detail": {
+      "mode": "demo",
+      "demoOpen": true,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-open",
+    "step": "anonymous /api/auth/me is authEnabled:false (the loop trigger)",
+    "status": "PASS",
+    "detail": {
+      "authEnabled": false,
+      "user": null
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-open",
+    "step": "demo panel visible with three buttons",
+    "status": "PASS",
+    "detail": [
+      "admin",
+      "karen",
+      "pmo"
+    ]
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-open",
+    "step": "\"Open the demo without signing in\" link present, href /",
+    "status": "PASS",
+    "detail": {
+      "has": true,
+      "href": "/"
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-open",
+    "step": "cookie-less /login.html stays on /login.html for 4 s",
+    "status": "PASS",
+    "detail": {
+      "pathNow": "/login.html",
+      "navigations": 0
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-open",
+    "step": "no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "lane:dev-committed",
+    "step": "server booted, /api/auth/mode answers",
+    "status": "PASS",
+    "detail": {
+      "mode": "dev",
+      "demoOpen": false,
+      "accountsWritable": false
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev-committed",
+    "step": "mode probe says dev",
+    "status": "PASS",
+    "detail": {
+      "mode": "dev",
+      "demoOpen": false,
+      "accountsWritable": false
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev-committed",
+    "step": "dev-committed: accountsWritable is false (committed control.db active)",
+    "status": "PASS",
+    "detail": {
+      "mode": "dev",
+      "demoOpen": false,
+      "accountsWritable": false
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev-committed",
+    "step": "demo panel shows the three account buttons",
+    "status": "PASS",
+    "detail": [
+      "admin",
+      "karen",
+      "pmo"
+    ]
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev-committed",
+    "step": "no \"Open the demo\" link outside demo-open",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev-committed",
+    "step": "stayed on /login.html",
+    "status": "PASS",
+    "detail": "/login.html"
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev-committed",
+    "step": "click fills username and password",
+    "status": "PASS",
+    "detail": {
+      "user": "karen",
+      "passLen": 11
+    }
+  },
+  {
+    "scenario": "devLoginShowsDemoPanel@dev-committed",
+    "step": "no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "selfServiceReadOnly@dev-committed",
+    "step": "Change password is disabled with aria-disabled",
+    "status": "PASS",
+    "detail": {
+      "disabled": true,
+      "ariaDisabled": "true",
+      "note": "Read-only demo accounts — password changes need a real-deal host (start-real-deal)."
+    }
+  },
+  {
+    "scenario": "selfServiceReadOnly@dev-committed",
+    "step": "the one-line note names start-real-deal",
+    "status": "PASS",
+    "detail": "Read-only demo accounts — password changes need a real-deal host (start-real-deal)."
+  },
+  {
+    "scenario": "selfServiceReadOnly@dev-committed",
+    "step": "My sessions lists sessions without End-session buttons",
+    "status": "PASS",
+    "detail": [
+      {
+        "device": "node",
+        "current": true,
+        "canEnd": false
+      }
+    ]
+  },
+  {
+    "scenario": "selfServiceReadOnly@dev-committed",
+    "step": "the sessions modal repeats the read-only note",
+    "status": "PASS",
+    "detail": "Read-only demo accounts — password changes need a real-deal host (start-real-deal)."
+  },
+  {
+    "scenario": "selfServiceReadOnly@dev-committed",
+    "step": "change-password page: form disabled with the start-real-deal note",
+    "status": "PASS",
+    "detail": {
+      "note": "Accounts are read-only on the demo database. Start a real-deal host (start-real-deal) to change passwords.",
+      "current": true,
+      "next": true,
+      "submit": true
+    }
+  },
+  {
+    "scenario": "selfServiceReadOnly@dev-committed",
+    "step": "no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "lane:dev-committed",
+    "step": "committed data/control.db AND control.db-wal unchanged across this lane",
+    "status": "PASS",
+    "detail": {
+      "control": "e83f049e9f01",
+      "wal": "absent-or-em"
+    }
+  },
+  {
+    "scenario": "lane:demo-committed",
+    "step": "server booted, /api/auth/mode answers",
+    "status": "PASS",
+    "detail": {
+      "mode": "demo",
+      "demoOpen": true,
+      "accountsWritable": false
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-committed",
+    "step": "mode probe says demo-open",
+    "status": "PASS",
+    "detail": {
+      "mode": "demo",
+      "demoOpen": true,
+      "accountsWritable": false
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-committed",
+    "step": "anonymous /api/auth/me is authEnabled:false (the loop trigger)",
+    "status": "PASS",
+    "detail": {
+      "authEnabled": false,
+      "user": null
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-committed",
+    "step": "demo panel visible with three buttons",
+    "status": "PASS",
+    "detail": [
+      "admin",
+      "karen",
+      "pmo"
+    ]
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-committed",
+    "step": "\"Open the demo without signing in\" link present, href /",
+    "status": "PASS",
+    "detail": {
+      "has": true,
+      "href": "/"
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-committed",
+    "step": "cookie-less /login.html stays on /login.html for 4 s",
+    "status": "PASS",
+    "detail": {
+      "pathNow": "/login.html",
+      "navigations": 0
+    }
+  },
+  {
+    "scenario": "demoOpenLoginStays@demo-committed",
+    "step": "no page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "lane:demo-committed",
+    "step": "committed data/control.db AND control.db-wal unchanged across this lane",
+    "status": "PASS",
+    "detail": {
+      "control": "e83f049e9f01",
+      "wal": "absent-or-em"
+    }
+  },
+  {
+    "scenario": "data-integrity",
+    "step": "committed data/demo.db and data/control.db (+ -wal) sha256 unchanged",
+    "status": "PASS",
+    "detail": "4 value(s) identical"
+  },
+  {
+    "scenario": "data-integrity",
+    "step": "`git status --porcelain -- data` unchanged",
+    "status": "PASS",
+    "detail": "clean"
+  }
+]
