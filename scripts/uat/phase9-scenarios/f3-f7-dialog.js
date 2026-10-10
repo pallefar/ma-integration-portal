@@ -321,7 +321,6 @@ module.exports = {
   // scroll. One tab, bodies fulfilled by route so the variants are exact.
   async 'dialog-widths'(ctx) {
     const item = await seedSynergy(ctx, 'F-5 widths', { phased: true });
-    const page = await openSynergyTab(ctx, item.id);
     const pattern = '**/api/synergies/**';
     const variants = [
       {
@@ -347,8 +346,11 @@ module.exports = {
       },
     ];
     for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-      await page.setViewportSize(size);
-      await ctx.sleep(300);
+      // Plan 09-16: a FRESH tab loaded at each width — what a real device at
+      // that width sees. (Resizing one 1440-wide page in place left charts and
+      // tables measured at 1440 for a moment, so the page-level overflow check
+      // flaked once in the full walk although the dialog itself fitted.)
+      const page = await openSynergyTab(ctx, item.id, { viewport: size });
       for (const v of variants) {
         await fulfillJson(page, pattern, 409, v.body);
         await fireWrite(page, v.url, v.payload);
@@ -361,6 +363,7 @@ module.exports = {
         await ctx.waitNoDialog(page, 400);
         await page.unroute(pattern);
       }
+      await page.context().close();
     }
   },
 };

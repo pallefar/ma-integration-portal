@@ -1,0 +1,3062 @@
+[
+  {
+    "scenario": "setup",
+    "step": "deal deal_mv288p4w8630c2c0 created, pmo granted legal",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "A request carries version 0",
+    "status": "PASS",
+    "detail": {
+      "id": "raid_mv288p7mc2c9a4a2",
+      "status": "mitigating",
+      "version": 0
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "A response 200",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "B request carries version 0",
+    "status": "PASS",
+    "detail": {
+      "id": "raid_mv288p7mc2c9a4a2",
+      "status": "mitigating",
+      "version": 0
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "B response 409 conflict:true",
+    "status": "PASS",
+    "detail": {
+      "status": 409,
+      "conflict": true
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "one overlay",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "status row present",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Status",
+        "mine": "mitigating",
+        "theirs": "mitigating"
+      }
+    ]
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "A's write survived (no silent clobber)",
+    "status": "PASS",
+    "detail": {
+      "status": "mitigating",
+      "version": 1
+    }
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "dialog opens at 390",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "raid-f1",
+    "step": "fit at 390",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 243.703125,
+        "right": 358,
+        "bottom": 600.28125
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "in-app confirm titled \"Delete this entry?\"",
+    "status": "PASS",
+    "detail": "Delete this entry?"
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "one overlay throughout",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "no \"changed again\" banner on the first conflict",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "DELETE carries expectedVersion=0",
+    "status": "PASS",
+    "detail": "/api/raid/raid_mv288sd037df7728?expectedVersion=0"
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "DELETE response 409 conflict:true",
+    "status": "PASS",
+    "detail": 409
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "409 stale-delete dialog",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "buttons": [
+        {
+          "text": "Cancel",
+          "cls": "btn btn-secondary conflict-btn-discard",
+          "disabled": false
+        },
+        {
+          "text": "Delete anyway",
+          "cls": "btn btn-danger conflict-btn-delete",
+          "disabled": false
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "dialog closes on Cancel",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "raid-delete-f1",
+    "step": "entry survives Cancel",
+    "status": "PASS",
+    "detail": {
+      "id": "raid_mv288sd037df7728",
+      "version": 1
+    }
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "update with no version refused 400 versionRequired",
+    "status": "PASS",
+    "detail": {
+      "status": 400,
+      "body": {
+        "error": "This save did not include the version of the record it was based on. Reload the page and try again.",
+        "versionRequired": true
+      }
+    }
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "refusal body has exactly {error, versionRequired}",
+    "status": "PASS",
+    "detail": [
+      "error",
+      "versionRequired"
+    ]
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "delete with no expectedVersion refused 400 versionRequired",
+    "status": "PASS",
+    "detail": {
+      "status": 400,
+      "body": {
+        "error": "This save did not include the version of the record it was based on. Reload the page and try again.",
+        "versionRequired": true
+      }
+    }
+  },
+  {
+    "scenario": "api-version-required",
+    "step": "entry intact after both refusals",
+    "status": "PASS",
+    "detail": {
+      "notes": ""
+    }
+  },
+  {
+    "scenario": "task-f1-never-edited",
+    "step": "A flip #1 carries version 0 and is 200",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "version": 0
+    }
+  },
+  {
+    "scenario": "task-f1-never-edited",
+    "step": "A flip #2 carries version 1 and is 200",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "version": 1
+    }
+  },
+  {
+    "scenario": "task-f1-never-edited",
+    "step": "B request version 0",
+    "status": "PASS",
+    "detail": {
+      "id": "task_mv288v8peb47fd72",
+      "status": "doing",
+      "version": 0
+    }
+  },
+  {
+    "scenario": "task-f1-never-edited",
+    "step": "B 409 + one overlay",
+    "status": "PASS",
+    "detail": {
+      "status": 409,
+      "conflict": true,
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "task-f1-never-edited",
+    "step": "server keeps A's status",
+    "status": "PASS",
+    "detail": {
+      "status": "blocked",
+      "version": 2
+    }
+  },
+  {
+    "scenario": "task-f1-never-edited",
+    "step": "no page errors",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "task-discard-keeps-theirs",
+    "step": "dialog closes on Discard",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "task-discard-keeps-theirs",
+    "step": "after Discard row shows A's status",
+    "status": "PASS",
+    "detail": {
+      "aLabel": "Blocked",
+      "bBefore": "To do",
+      "bAfter": "Blocked"
+    }
+  },
+  {
+    "scenario": "task-discard-keeps-theirs",
+    "step": "next flip 200 no overlay",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "sentVersion": 2,
+      "serverVersion": 2
+    }
+  },
+  {
+    "scenario": "task-discard-keeps-theirs",
+    "step": "no page errors",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "synergy-stage-never-edited",
+    "step": "A stage request carries version 0 and is 200",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "version": 0
+    }
+  },
+  {
+    "scenario": "synergy-stage-never-edited",
+    "step": "B request version 0",
+    "status": "PASS",
+    "detail": {
+      "targetStage": "validated",
+      "version": 0
+    }
+  },
+  {
+    "scenario": "synergy-stage-never-edited",
+    "step": "B 409 + one overlay",
+    "status": "PASS",
+    "detail": {
+      "status": 409,
+      "conflict": true,
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "synergy-stage-never-edited",
+    "step": "no native alert alongside the dialog (WR-01)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "synergy-stage-never-edited",
+    "step": "server keeps A's stage change",
+    "status": "PASS",
+    "detail": {
+      "stage": "validated",
+      "version": 1
+    }
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "A header write 200 with version 1",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "version": 1
+    }
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "B 409 + one overlay",
+    "status": "PASS",
+    "detail": {
+      "status": 409,
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "dialog carries mine/theirs values",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Realized (M)",
+        "mine": "2.5",
+        "theirs": "1.5"
+      }
+    ]
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "no native alert alongside the dialog (WR-01)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "dialog closes after Apply",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "B made exactly one conflicting write then one reapply",
+    "status": "PASS",
+    "detail": [
+      [
+        1,
+        409
+      ],
+      [
+        2,
+        200
+      ]
+    ]
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "API holds B's value",
+    "status": "PASS",
+    "detail": {
+      "realizedM": 2.5,
+      "version": 3
+    }
+  },
+  {
+    "scenario": "synergy-realized-f2",
+    "step": "B's card header shows B's value",
+    "status": "PASS",
+    "detail": {
+      "money": "$2.5M",
+      "input": "2.5"
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "A write 200 (1440)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "B request version 0 and 409 (1440)",
+    "status": "PASS",
+    "detail": {
+      "status": 409,
+      "version": 0
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "one overlay, no native alert (1440)",
+    "status": "PASS",
+    "detail": {
+      "overlays": 1,
+      "native": []
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "no re-fetch while the dialog is open (1440)",
+    "status": "PASS",
+    "detail": {
+      "before": 0,
+      "now": 0
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "B's select still shows B's value under the dialog (1440)",
+    "status": "PASS",
+    "detail": "received"
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "fit at 1440 (DD dialog)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 298.203125,
+        "right": 1000,
+        "bottom": 601.78125
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "dialog closes after Apply (1440)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "after Apply B's select shows the server value and the API holds it (1440)",
+    "status": "PASS",
+    "detail": {
+      "api": "received",
+      "select": "received"
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "A write 200 (390)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "B request version 0 and 409 (390)",
+    "status": "PASS",
+    "detail": {
+      "status": 409,
+      "version": 0
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "one overlay, no native alert (390)",
+    "status": "PASS",
+    "detail": {
+      "overlays": 1,
+      "native": []
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "no re-fetch while the dialog is open (390)",
+    "status": "PASS",
+    "detail": {
+      "before": 0,
+      "now": 0
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "B's select still shows B's value under the dialog (390)",
+    "status": "PASS",
+    "detail": "received"
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "fit at 390 (DD dialog)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 243.703125,
+        "right": 358,
+        "bottom": 600.28125
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "dialog closes after Apply (390)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "dd-f2",
+    "step": "after Apply B's select shows the server value and the API holds it (390)",
+    "status": "PASS",
+    "detail": {
+      "api": "received",
+      "select": "received"
+    }
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "position stamped to version 1",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "version": 1
+    }
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "A edit 200",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "in-app confirm shown first",
+    "status": "PASS",
+    "detail": "Delete position? This cannot be undone."
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "DELETE carries expectedVersion=1",
+    "status": "PASS",
+    "detail": "/api/org/positions/pos_mv28c3i008ab6cc6?expectedVersion=1"
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "409 stale-delete dialog",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "no inline org error alongside the dialog (WR-02)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "dialog closes after Delete anyway",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "node gone from DOM and API",
+    "status": "PASS",
+    "detail": {
+      "inDom": false,
+      "serverHasPosition": false
+    }
+  },
+  {
+    "scenario": "org-delete-anyway-f2",
+    "step": "native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "one-tab-no-self-conflict",
+    "step": "synergy sub-route twice: versions 0 then 1, both 200",
+    "status": "PASS",
+    "detail": [
+      {
+        "status": 200,
+        "version": 0
+      },
+      {
+        "status": 200,
+        "version": 1
+      }
+    ]
+  },
+  {
+    "scenario": "one-tab-no-self-conflict",
+    "step": "no overlay in the synergy tab",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "one-tab-no-self-conflict",
+    "step": "DD item twice: versions 0 then 1, both 200",
+    "status": "PASS",
+    "detail": [
+      {
+        "status": 200,
+        "version": 0
+      },
+      {
+        "status": 200,
+        "version": 1
+      }
+    ]
+  },
+  {
+    "scenario": "one-tab-no-self-conflict",
+    "step": "no overlay in the DD tab",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "one-tab-no-self-conflict",
+    "step": "API holds the second write",
+    "status": "PASS",
+    "detail": "received"
+  },
+  {
+    "scenario": "raid-f2-apply",
+    "step": "A flip 200",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "raid-f2-apply",
+    "step": "dialog shown",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "raid-f2-apply",
+    "step": "dialog closes after Apply",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "raid-f2-apply",
+    "step": "after Apply row shows server status",
+    "status": "PASS",
+    "detail": {
+      "serverStatus": "mitigating",
+      "serverVersion": 2,
+      "rowLabel": "Mitigating"
+    }
+  },
+  {
+    "scenario": "raid-f2-apply",
+    "step": "Apply reapplied with the fresh version",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "version": 2
+    }
+  },
+  {
+    "scenario": "raid-f2-apply",
+    "step": "next flip 200 without overlay",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "sentVersion": 2,
+      "serverVersion": 2
+    }
+  },
+  {
+    "scenario": "raid-f2-apply",
+    "step": "no page errors",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "in-app confirm shown first (1440)",
+    "status": "PASS",
+    "detail": "Delete this entry?"
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "stale-delete dialog shown (1440)",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "fit at 1440 (stale-delete dialog)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 373.796875,
+        "right": 1000,
+        "bottom": 526.1875
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "dialog closes after Delete anyway (1440)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "row removed after Delete anyway (1440)",
+    "status": "PASS",
+    "detail": {
+      "inDom": false,
+      "serverHasEntry": false
+    }
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "native dialogs: 0 (1440)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "in-app confirm shown first (390)",
+    "status": "PASS",
+    "detail": "Delete this entry?"
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "stale-delete dialog shown (390)",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "fit at 390 (stale-delete dialog)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 335,
+        "right": 358,
+        "bottom": 508.984375
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "dialog closes after Delete anyway (390)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "row removed after Delete anyway (390)",
+    "status": "PASS",
+    "detail": {
+      "inDom": false,
+      "serverHasEntry": false
+    }
+  },
+  {
+    "scenario": "raid-f2-delete-anyway",
+    "step": "native dialogs: 0 (390)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "third-writer",
+    "step": "writer A 200 (1440)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "third-writer",
+    "step": "conflict dialog, no banner, theirs=closed (1440)",
+    "status": "PASS",
+    "detail": {
+      "overlays": 1,
+      "banner": null,
+      "rows": [
+        {
+          "label": "Status",
+          "mine": "mitigating",
+          "theirs": "closed"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "third-writer",
+    "step": "fit at 1440 (edit dialog)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 298.203125,
+        "right": 1000,
+        "bottom": 601.78125
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "third-writer",
+    "step": "third writer 200 (1440)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "third-writer",
+    "step": "banner on third writer (1440)",
+    "status": "PASS",
+    "detail": "That didn't go through — the record changed again. Your edits are still here; review the fresh values below and try again."
+  },
+  {
+    "scenario": "third-writer",
+    "step": "one overlay throughout (1440)",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "third-writer",
+    "step": "theirs refreshed, mine unchanged (1440)",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Status",
+        "mine": "mitigating",
+        "theirs": "open"
+      }
+    ]
+  },
+  {
+    "scenario": "third-writer",
+    "step": "fit at 1440 (banner state)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 256.203125,
+        "right": 1000,
+        "bottom": 643.78125
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "third-writer",
+    "step": "final Apply resolves and row shows server status (1440)",
+    "status": "PASS",
+    "detail": {
+      "closed": true,
+      "serverStatus": "mitigating",
+      "serverVersion": 4,
+      "rowLabel": "Mitigating"
+    }
+  },
+  {
+    "scenario": "third-writer",
+    "step": "writer A 200 (390)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "third-writer",
+    "step": "conflict dialog, no banner, theirs=closed (390)",
+    "status": "PASS",
+    "detail": {
+      "overlays": 1,
+      "banner": null,
+      "rows": [
+        {
+          "label": "Status",
+          "mine": "mitigating",
+          "theirs": "closed"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "third-writer",
+    "step": "fit at 390 (edit dialog)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 243.703125,
+        "right": 358,
+        "bottom": 600.28125
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "third-writer",
+    "step": "third writer 200 (390)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "third-writer",
+    "step": "banner on third writer (390)",
+    "status": "PASS",
+    "detail": "That didn't go through — the record changed again. Your edits are still here; review the fresh values below and try again."
+  },
+  {
+    "scenario": "third-writer",
+    "step": "one overlay throughout (390)",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "third-writer",
+    "step": "theirs refreshed, mine unchanged (390)",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Status",
+        "mine": "mitigating",
+        "theirs": "open"
+      }
+    ]
+  },
+  {
+    "scenario": "third-writer",
+    "step": "fit at 390 (banner state)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 180.703125,
+        "right": 358,
+        "bottom": 663.28125
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "third-writer",
+    "step": "final Apply resolves and row shows server status (390)",
+    "status": "PASS",
+    "detail": {
+      "closed": true,
+      "serverStatus": "mitigating",
+      "serverVersion": 4,
+      "rowLabel": "Mitigating"
+    }
+  },
+  {
+    "scenario": "different-records",
+    "step": "different records: both flips 200",
+    "status": "PASS",
+    "detail": {
+      "a": 200,
+      "b": 200
+    }
+  },
+  {
+    "scenario": "different-records",
+    "step": "different records: no overlay",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "A advanced the initiative to committed",
+    "status": "PASS",
+    "detail": "committed"
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "dialog opened (one overlay)",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "Stage row present",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Stage",
+        "mine": "validated",
+        "theirs": "committed"
+      }
+    ]
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "mine = the stage B asked for",
+    "status": "PASS",
+    "detail": {
+      "label": "Stage",
+      "mine": "validated",
+      "theirs": "committed"
+    }
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "theirs = server stage",
+    "status": "PASS",
+    "detail": {
+      "label": "Stage",
+      "mine": "validated",
+      "theirs": "committed"
+    }
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "no neutral panel",
+    "status": "PASS",
+    "detail": 0
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "retired sentence absent",
+    "status": "PASS",
+    "detail": "Someone else updated thisChanged by karen, just nowYour changes are still here. Review what changed below, then decide h"
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "dialog closes on Discard",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "synergy-stage-f3",
+    "step": "A's stage survived (no clobber)",
+    "status": "PASS",
+    "detail": "committed"
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "other user stamped a newer version",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "request was confirm-current with only a version",
+    "status": "PASS",
+    "detail": {
+      "url": "/api/synergies/syn_mv28engz16a85e86/confirm-current",
+      "body": {
+        "version": 1
+      }
+    }
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "409 conflict:true",
+    "status": "PASS",
+    "detail": 409
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "no diff rows",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "neutral sentence exactly once",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "Apply my changes anyway present",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Discard mine, keep theirs",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Apply my changes anyway",
+        "cls": "btn btn-primary conflict-btn-apply",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "retired sentence absent",
+    "status": "PASS",
+    "detail": "Someone else updated thisChanged by karen, just nowYour changes are still here. Review what changed below, then decide how to proceed.This record changed since "
+  },
+  {
+    "scenario": "confirm-current-neutral-f3",
+    "step": "dialog closes on Discard",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "phasing-month-f3",
+    "step": "A month write 200",
+    "status": "PASS",
+    "detail": {
+      "url": "/api/synergies/syn_mv28g4u623c9ae95/phasing/2026-01",
+      "status": 200
+    }
+  },
+  {
+    "scenario": "phasing-month-f3",
+    "step": "one overlay",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "phasing-month-f3",
+    "step": "row labelled with the month",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Target (M) · 2026-01",
+        "mine": "9",
+        "theirs": "7"
+      }
+    ]
+  },
+  {
+    "scenario": "phasing-month-f3",
+    "step": "mine = B's cell value",
+    "status": "PASS",
+    "detail": {
+      "label": "Target (M) · 2026-01",
+      "mine": "9",
+      "theirs": "7"
+    }
+  },
+  {
+    "scenario": "phasing-month-f3",
+    "step": "theirs = A's cell value, not the total",
+    "status": "PASS",
+    "detail": {
+      "row": {
+        "label": "Target (M) · 2026-01",
+        "mine": "9",
+        "theirs": "7"
+      },
+      "total": 10.7
+    }
+  },
+  {
+    "scenario": "phasing-month-f3",
+    "step": "dialog closes on Discard",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "other user stamped realized 3",
+    "status": "PASS",
+    "detail": 3
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "Realized (M) label",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Realized (M)",
+        "mine": "5",
+        "theirs": "3"
+      }
+    ]
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "values mine 5 / theirs 3",
+    "status": "PASS",
+    "detail": {
+      "label": "Realized (M)",
+      "mine": "5",
+      "theirs": "3"
+    }
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "realized dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "other user set due date",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "Due date label",
+    "status": "PASS",
+    "detail": [
+      {
+        "label": "Due date",
+        "mine": "2026-12-15",
+        "theirs": "2026-12-01"
+      }
+    ]
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "values mine 2026-12-15 / theirs 2026-12-01",
+    "status": "PASS",
+    "detail": {
+      "label": "Due date",
+      "mine": "2026-12-15",
+      "theirs": "2026-12-01"
+    }
+  },
+  {
+    "scenario": "labels-f5",
+    "step": "due-date dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "one overlay",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "title is the edit title",
+    "status": "PASS",
+    "detail": "Someone else updated this"
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "attribution still shown",
+    "status": "PASS",
+    "detail": "Changed by karen, just now"
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "withheld sentence shown",
+    "status": "PASS",
+    "detail": "Someone else updated thisChanged by karen, just nowThis record is no longer within your clearance; your change cannot be applied.Close"
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "no diff rows",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "no Apply / Delete anyway",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Close",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "exactly one button, Close",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Close",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "retired sentence absent",
+    "status": "PASS",
+    "detail": "Someone else updated thisChanged by karen, just nowThis record is no longer within your clearance; your change cannot be"
+  },
+  {
+    "scenario": "withheld-f4",
+    "step": "Close closes the dialog",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "reapply-4xx-f4",
+    "step": "other user stamped a newer version",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "reapply-4xx-f4",
+    "step": "real first 409 -> dialog with an Apply",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Discard mine, keep theirs",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Apply my changes anyway",
+        "cls": "btn btn-primary conflict-btn-apply",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "reapply-4xx-f4",
+    "step": "banner shows the server reason",
+    "status": "PASS",
+    "detail": "That didn't go through — You are not cleared for that due-diligence area. Your edits are still here; review the fresh values below and try again."
+  },
+  {
+    "scenario": "reapply-4xx-f4",
+    "step": "banner is not a network error",
+    "status": "PASS",
+    "detail": "That didn't go through — You are not cleared for that due-diligence area. Your edits are still here; review the fresh values below and try again."
+  },
+  {
+    "scenario": "reapply-4xx-f4",
+    "step": "dialog still open, still one overlay",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "reapply-4xx-f4",
+    "step": "dialog closes on Discard",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "deleted-variant-f7",
+    "step": "title is \"Someone else deleted this\"",
+    "status": "PASS",
+    "detail": "Someone else deleted this"
+  },
+  {
+    "scenario": "deleted-variant-f7",
+    "step": "no attribution element",
+    "status": "PASS",
+    "detail": 0
+  },
+  {
+    "scenario": "deleted-variant-f7",
+    "step": "intro kept",
+    "status": "PASS",
+    "detail": "Someone else deleted thisSomeone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.Close"
+  },
+  {
+    "scenario": "deleted-variant-f7",
+    "step": "contradictory fallback line absent",
+    "status": "PASS",
+    "detail": "Someone else deleted thisSomeone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.Close"
+  },
+  {
+    "scenario": "deleted-variant-f7",
+    "step": "exactly one button, Close",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Close",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "deleted-variant-f7",
+    "step": "Close closes the dialog",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "edit @1440: variant content",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this",
+      "rows": [
+        {
+          "label": "Target (M) · 2026-01",
+          "mine": "9.5",
+          "theirs": "0.2"
+        },
+        {
+          "label": "Realized (M) · 2026-01",
+          "mine": "2",
+          "theirs": "0"
+        }
+      ],
+      "buttons": 2
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "edit @1440: fits the viewport",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 255.609375,
+        "right": 1000,
+        "bottom": 644.375
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "withheld @1440: variant content",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this",
+      "rows": [],
+      "buttons": 1
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "withheld @1440: fits the viewport",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 344.796875,
+        "right": 1000,
+        "bottom": 555.1875
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "deleted @1440: variant content",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else deleted this",
+      "rows": [],
+      "buttons": 1
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "deleted @1440: fits the viewport",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 353.203125,
+        "right": 1000,
+        "bottom": 546.796875
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "edit @390: variant content",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this",
+      "rows": [
+        {
+          "label": "Target (M) · 2026-01",
+          "mine": "9.5",
+          "theirs": "0.2"
+        },
+        {
+          "label": "Realized (M) · 2026-01",
+          "mine": "2",
+          "theirs": "0"
+        }
+      ],
+      "buttons": 2
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "edit @390: fits the viewport",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 201.109375,
+        "right": 358,
+        "bottom": 642.875
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "withheld @390: variant content",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this",
+      "rows": [],
+      "buttons": 1
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "withheld @390: fits the viewport",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 306.296875,
+        "right": 358,
+        "bottom": 537.6875
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "deleted @390: variant content",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else deleted this",
+      "rows": [],
+      "buttons": 1
+    }
+  },
+  {
+    "scenario": "dialog-widths",
+    "step": "deleted @390: fits the viewport",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 304.203125,
+        "right": 358,
+        "bottom": 539.796875
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid untouched: in-app confirm titled \"Delete this entry?\"",
+    "status": "PASS",
+    "detail": "Delete this entry?"
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid untouched: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid untouched: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid untouched: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid untouched: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid untouched: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid untouched: one DELETE",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "stale entry edited behind the tab (v2)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: in-app confirm titled \"Delete this entry?\"",
+    "status": "PASS",
+    "detail": "Delete this entry?"
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: same overlay became the stale-delete state",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: stale buttons Cancel + Delete anyway",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete anyway",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: no \"changed again\" banner",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "raid stale: two DELETEs (409 then 2xx)",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "delete-confirm-raid",
+    "step": "no page errors",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task untouched: in-app confirm titled \"Delete this task?\"",
+    "status": "PASS",
+    "detail": "Delete this task?"
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task untouched: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task untouched: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task untouched: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task untouched: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task untouched: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task untouched: one DELETE",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task edited behind the tab",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: in-app confirm titled \"Delete this task?\"",
+    "status": "PASS",
+    "detail": "Delete this task?"
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: same overlay became the stale-delete state",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: stale buttons Cancel + Delete anyway",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete anyway",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: no \"changed again\" banner",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "task stale: two DELETEs (409 then 2xx)",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative untouched: in-app confirm titled \"Delete this initiative?\"",
+    "status": "PASS",
+    "detail": "Delete this initiative?"
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative untouched: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative untouched: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative untouched: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative untouched: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative untouched: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative untouched: one DELETE",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative edited behind the tab",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: in-app confirm titled \"Delete this initiative?\"",
+    "status": "PASS",
+    "detail": "Delete this initiative?"
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: same overlay became the stale-delete state",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: stale buttons Cancel + Delete anyway",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete anyway",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: no \"changed again\" banner",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "initiative stale: two DELETEs (409 then 2xx)",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry untouched: in-app confirm titled \"Delete this cost entry?\"",
+    "status": "PASS",
+    "detail": "Delete this cost entry?"
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry untouched: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry untouched: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry untouched: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry untouched: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry untouched: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry untouched: one DELETE",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost-entry holder edited behind the tab",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: in-app confirm titled \"Delete this cost entry?\"",
+    "status": "PASS",
+    "detail": "Delete this cost entry?"
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: same overlay became the stale-delete state",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: stale buttons Cancel + Delete anyway",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete anyway",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: no \"changed again\" banner",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "cost entry stale: two DELETEs (409 then 2xx)",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "execution page: no page errors",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position untouched: in-app confirm titled \"Delete position? This cannot be undone.\"",
+    "status": "PASS",
+    "detail": "Delete position? This cannot be undone."
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position untouched: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position untouched: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position untouched: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position untouched: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position untouched: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position untouched: one DELETE",
+    "status": "PASS",
+    "detail": 1
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position edited behind the tab",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: in-app confirm titled \"Delete position? This cannot be undone.\"",
+    "status": "PASS",
+    "detail": "Delete position? This cannot be undone."
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: confirm offers Cancel + Delete",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: no DELETE sent before the confirm click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: same overlay became the stale-delete state",
+    "status": "PASS",
+    "detail": {
+      "title": "Someone else updated this — still delete it?",
+      "overlays": 1
+    }
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: stale buttons Cancel + Delete anyway",
+    "status": "PASS",
+    "detail": [
+      {
+        "text": "Cancel",
+        "cls": "btn btn-secondary conflict-btn-discard",
+        "disabled": false
+      },
+      {
+        "text": "Delete anyway",
+        "cls": "btn btn-danger conflict-btn-delete",
+        "disabled": false
+      }
+    ]
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: no \"changed again\" banner",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: record gone from the DOM and the API",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "position stale: two DELETEs (409 then 2xx)",
+    "status": "PASS",
+    "detail": 2
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "refusal: in-app confirm shown",
+    "status": "PASS",
+    "detail": "Delete position? This cannot be undone."
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "refusal: dialog closes",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "refusal: inline error carries the server message",
+    "status": "PASS",
+    "detail": "This position has 1 direct report(s) — reassign them before deleting."
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "refusal: position still exists",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "refusal: native dialogs: 0",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "delete-confirm-surfaces",
+    "step": "org page: no page errors",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "entry edited behind the tab (1440)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "confirm state opens (1440)",
+    "status": "PASS",
+    "detail": "Delete this entry?"
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "fit at 1440 (confirm state)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 382.203125,
+        "right": 1000,
+        "bottom": 517.796875
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "stale state (1440)",
+    "status": "PASS",
+    "detail": "Someone else updated this — still delete it?"
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "fit at 1440 (stale state)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 440,
+        "top": 373.796875,
+        "right": 1000,
+        "bottom": 526.1875
+      },
+      "viewport": {
+        "w": 1440,
+        "h": 900
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "Cancel closes (1440)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "entry survives Cancel (1440)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "native dialogs: 0 (1440)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "entry edited behind the tab (390)",
+    "status": "PASS",
+    "detail": 200
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "confirm state opens (390)",
+    "status": "PASS",
+    "detail": "Delete this entry?"
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "fit at 390 (confirm state)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 354.203125,
+        "right": 358,
+        "bottom": 489.796875
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "stale state (390)",
+    "status": "PASS",
+    "detail": "Someone else updated this — still delete it?"
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "fit at 390 (stale state)",
+    "status": "PASS",
+    "detail": {
+      "noHorizontalScroll": true,
+      "dialogInside": true,
+      "rect": {
+        "left": 32,
+        "top": 335,
+        "right": 358,
+        "bottom": 508.984375
+      },
+      "viewport": {
+        "w": 390,
+        "h": 844
+      },
+      "overflowing": []
+    }
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "Cancel closes (390)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "entry survives Cancel (390)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "confirm-widths",
+    "step": "native dialogs: 0 (390)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /css/style.css (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/css/style.css?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /css/style.css (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /css/style.css (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /css/style.css (stamp > pre-gap-closure 1784600001)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /css/style.css (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/transitions.js (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/js/transitions.js?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/transitions.js (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/transitions.js (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/transitions.js (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/execution.js (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/js/execution.js?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/execution.js (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/execution.js (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/execution.js (stamp > pre-gap-closure 1786433369)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html requests /js/execution.js (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/execution.html loaded without a page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /css/style.css (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/css/style.css?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /css/style.css (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /css/style.css (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /css/style.css (stamp > pre-gap-closure 1784600001)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /css/style.css (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/transitions.js (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/js/transitions.js?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/transitions.js (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/transitions.js (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/transitions.js (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/org.js (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/js/org.js?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/org.js (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/org.js (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/org.js (stamp > pre-gap-closure 1786433369)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html requests /js/org.js (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/org.html loaded without a page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /css/style.css (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/css/style.css?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /css/style.css (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /css/style.css (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /css/style.css (stamp > pre-gap-closure 1784600001)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /css/style.css (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/transitions.js (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/js/transitions.js?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/transitions.js (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/transitions.js (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/transitions.js (stamp > pre-gap-closure 1784900002)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/transitions.js (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/due-diligence.js (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/js/due-diligence.js?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/due-diligence.js (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/due-diligence.js (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/due-diligence.js (stamp > pre-gap-closure 1786427686)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html requests /js/due-diligence.js (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/due-diligence.html loaded without a page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/login.html requests /css/style.css (requested)",
+    "status": "PASS",
+    "detail": [
+      {
+        "url": "/css/style.css?v=1791625638",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/login.html requests /css/style.css (one numeric stamp)",
+    "status": "PASS",
+    "detail": [
+      "1791625638"
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/login.html requests /css/style.css (stamp matches the page on disk)",
+    "status": "PASS",
+    "detail": {
+      "requested": 1791625638,
+      "disk": 1791625638
+    }
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/login.html requests /css/style.css (stamp > pre-gap-closure 1784600001)",
+    "status": "PASS",
+    "detail": 1791625638
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/login.html requests /css/style.css (200)",
+    "status": "PASS",
+    "detail": [
+      200
+    ]
+  },
+  {
+    "scenario": "asset-stamps",
+    "step": "/login.html loaded without a page error",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "data-integrity",
+    "step": "committed data/demo.db* and data/control.db* unchanged",
+    "status": "PASS",
+    "detail": "2 file(s) identical"
+  }
+]
