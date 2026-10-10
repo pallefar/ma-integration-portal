@@ -2364,7 +2364,10 @@ app.get('/api/admin/deals/:id/audit', (req, res) => {
 // [security] T-12-113: the export carries the FULL MNPI trail out of the host.
 // Admin-only (the /api/admin rows), sealed-only, an attachment with
 // `Cache-Control: no-store`, and its SHA-256 is recorded as a control event
-// AFTER the last byte (an aborted client records nothing).
+// AFTER the last byte. WR-03 (12-REVIEW): the attempt itself is recorded
+// (`audit-partition-export-started`) before the first byte, and a client
+// disconnect or stream error records `audit-partition-export-aborted` with the
+// bytes sent — never an `-exported` hash for a partial file.
 app.get('/api/admin/deals/:id/audit/export', async (req, res, next) => {
   const id = auditPartitionIdOf(req, res);
   if (!id) return;

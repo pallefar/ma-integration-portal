@@ -603,3 +603,46 @@ test('lifecycle (o): scripts/audit-admin.js — seal/export/purge with actor cli
   assert.strictEqual(parsed.purgeBlockedBy, 'retention-never');
   assert.ok(parsed.events.length >= 4);
 });
+
+test('lifecycle (p): WR-03 — every export attempt is a control event; a disconnect or stream error records -export-aborted, never -exported', async () => {
+  const dealId = makeDealWithPartition('p', 3);
+  archive(dealId);
+  auditHook.closePartitionConnection(dealId);
+  const sealed = auditLifecycle.sealPartitionFile(dealId, { actor: { username: 'lcadmin', role: 'admin' } });
+  const depsWith = (recorded, extra) => Object.assign({
+    findEvents: (actions) => (actions.includes('audit-partition-sealed')
+      ? [{ ts: '2026-01-01T00:00:00.000Z', after: { sha256: sealed.sha256, rows: sealed.rows, headHash: sealed.headHash } }]
+      : []),
+    recordEvent: (ev) => recorded.push({ action: ev.action, after: ev.after }),
+    now: new Date('2026-06-01T00:00:00Z'),
+  }, extra);
+
+  // 1. client disconnects after the header line
+  const r1 = [];
+  let sent1 = 0;
+  const aborted = await auditLifecycle.exportPartition(dealId, depsWith(r1, {
+    write: (chunk) => { sent1 += Buffer.byteLength(chunk, 'utf8'); },
+    shouldAbort: () => sent1 > 0,
+  }));
+  assert.strictEqual(aborted.outcome, 'aborted');
+  assert.deepStrictEqual(r1.map((e) => e.action), ['audit-partition-export-started', 'audit-partition-export-aborted']);
+  assert.strictEqual(r1[0].after.sealedSha256, sealed.sha256);
+  assert.deepStrictEqual(r1[1].after, { reason: 'client-disconnected', bytes: sent1 });
+  assert.ok(sent1 > 0);
+
+  // 2. the write fails mid-stream
+  const r2 = [];
+  let calls = 0;
+  await assert.rejects(auditLifecycle.exportPartition(dealId, depsWith(r2, {
+    write: () => { calls += 1; if (calls === 2) throw new Error('EPIPE'); },
+  })), /EPIPE/);
+  assert.deepStrictEqual(r2.map((e) => e.action), ['audit-partition-export-started', 'audit-partition-export-aborted']);
+  assert.strictEqual(r2[1].after.reason, 'stream-error');
+
+  // 3. a complete export: started, then the -exported completion event
+  const r3 = [];
+  const done = await auditLifecycle.exportPartition(dealId, depsWith(r3, { write: () => {} }));
+  assert.strictEqual(done.outcome, 'exported');
+  assert.deepStrictEqual(r3.map((e) => e.action), ['audit-partition-export-started', 'audit-partition-exported']);
+  try { fs.chmodSync(partitionFile(dealId), 0o600); } catch (e) { /* ignore */ }
+});
