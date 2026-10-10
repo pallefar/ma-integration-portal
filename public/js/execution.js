@@ -1168,7 +1168,6 @@
           });
       });
       row.querySelector('.ex-del').addEventListener('click', function () {
-        if (!window.confirm('Delete this entry?')) return;
         // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
         // holds for this entry, taken from the same in-memory list the row
         // was rendered from — never a re-fetch. Always sent: window.maVersionOf()
@@ -1177,9 +1176,13 @@
         // no precondition is refused in a real deal.
         var entry = state.raid.find(function (r) { return r.id === id; });
         var delUrl = '/api/raid/' + encodeURIComponent(id) + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(entry));
-        fetch(delUrl, { method: 'DELETE' })
-          .then(function (r) { return r.json(); })
+        // R7 F-6 / GD-9 (09-14): the in-app confirm — the SAME dialog that
+        // becomes the stale-delete variant on a 409; no browser-native confirm.
+        // Resolves null when nothing was sent (Cancel/Escape).
+        window.maConfirmDelete('Delete this entry?', delUrl)
+          .then(function (r) { return r ? r.json() : null; })
           .then(function (res) {
+            if (res === null) return; // cancelled — nothing was sent
             if (res && res.success) {
               state.raid = state.raid.filter(function (x) { return x.id !== id; });
               renderRaid();

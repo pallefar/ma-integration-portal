@@ -181,6 +181,12 @@
   const CONFLICT_DELETE_LABEL = 'Delete anyway';
   const CONFLICT_DELETING_LABEL = 'Deleting…';
   const CONFLICT_CANCEL_LABEL = 'Cancel';
+  // R7 F-6 / GD-9 (09-14): the in-app delete confirm's primary action. The
+  // 09-UI-SPEC's "Destructive confirmation" row promised ONE surface for a
+  // stale delete; the page's browser-native confirm stacked a second prompt
+  // in front of it. window.maConfirmDelete (below) replaces that native
+  // confirm with a 'confirm' state of this same dialog shell.
+  const CONFIRM_DELETE_LABEL = 'Delete';
   // Reapply-failure reason for the one outcome unique to the delete variant:
   // resubmitting "Delete anyway" lands on a record someone else already
   // finished deleting (the route's own not-found response). Plugged into the
@@ -216,7 +222,11 @@
   // stale or repeated click, or a reapply response that lands after the user
   // already left, can never resolve a promise twice or hand it a foreign
   // response.
-  function settleConflictSession(session, response) {
+  //
+  // 09-14: `failure` ({ error }) rejects the held promise instead — used only
+  // by the in-app delete confirm when its own DELETE fails at the network
+  // level, so the page's existing network-failure branch keeps working.
+  function settleConflictSession(session, response, failure) {
     if (session.settled) return;
     session.settled = true;
     session.inFlight = false;
@@ -227,7 +237,8 @@
       document.removeEventListener('keydown', session.onKeydown);
       activeConflictSession = null;
     }
-    session.resolve(response);
+    if (failure && session.reject) session.reject(failure.error);
+    else session.resolve(response);
     // The shown session just ended: bring up the next queued conflict (a
     // function declaration below — hoisted — so ordering in this IIFE is free).
     openNextQueuedConflict();
@@ -521,6 +532,52 @@
     }).catch(() => rerender(CONFLICT_ERROR_REASON_NETWORK));
   }
 
+  // R7 F-6 / GD-9 (09-14): the user's click on the in-app confirm's "Delete".
+  // Sends the page's DELETE through the internal attemptFetch with a context
+  // naming THIS session (reapply:true => a marker 409 comes back raw instead
+  // of opening a second held session). Outcomes:
+  //   2xx             -> settle with that Response
+  //   marker 409      -> the SAME session re-renders in place as the
+  //                      stale-delete variant (no banner: it is the first
+  //                      conflict, not "changed again"); from then on the
+  //                      existing stale-delete semantics apply unchanged
+  //   marker-less 409 / other 4xx / 5xx -> settle with that Response so the
+  //                      page shows its own error (e.g. the org
+  //                      "Has 2 direct reports." refusal)
+  //   network failure -> the held promise REJECTS (the page's catch branch)
+  // While the first DELETE is on the wire the dialog can no longer be
+  // cancelled — the request is irrevocable, and the page must learn how it
+  // ended — see the guards in the Cancel handler and activateConflictSession.
+  function runConfirmDelete(session, btn, cancelBtn) {
+    if (session.settled || session.inFlight) return;
+    session.inFlight = true;
+    btn.disabled = true;
+    btn.textContent = CONFLICT_DELETING_LABEL;
+    if (cancelBtn) cancelBtn.disabled = true;
+    attemptFetch(session.input, session.init, session.url, 'DELETE', 0,
+      { reapply: true, confirmSession: session }).then((res) => {
+      if (session.settled) return undefined;
+      if (res && res.status === 409) {
+        return res.clone().json().then((b) => {
+          if (session.settled) return;
+          if (b && b.conflict === true) {
+            session.body = b;
+            session.originalRes = res;
+            session.confirmState = false;
+            session.inFlight = false;
+            renderConflictSession(session, undefined);
+          } else {
+            settleConflictSession(session, res);
+          }
+        }, () => settleConflictSession(session, res));
+      }
+      settleConflictSession(session, res);
+      return undefined;
+    }, (err) => {
+      settleConflictSession(session, null, { error: err });
+    });
+  }
+
   // T-09-14/T-09-16: (re)renders a session's contents into ITS OWN overlay/
   // modal in place — a second conflict (or a failed reapply) never closes and
   // recreates the overlay, and never stacks a second one. `errorReason`, when
@@ -568,7 +625,31 @@
     // neither may be offered (T-09-51).
     const isWithheld = !!body && body.conflictKind !== 'deleted' && body.currentRecord === null;
 
-    if (isWithheld) {
+    if (session.confirmState) {
+      // R7 F-6 / GD-9: the in-app delete confirm — title is the page's own
+      // question (textContent only, T-09-54), no intro, no attribution (there
+      // is nothing to attribute yet). Cancel/Escape/overlay settle with null
+      // and send nothing (T-09-55); "Delete" is the one destructive action.
+      title.textContent = session.message;
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn-secondary conflict-btn-discard';
+      cancelBtn.textContent = CONFLICT_CANCEL_LABEL;
+      cancelBtn.addEventListener('click', () => {
+        if (session.inFlight) return;
+        settleConflictSession(session, null);
+      });
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-danger conflict-btn-delete';
+      deleteBtn.textContent = CONFIRM_DELETE_LABEL;
+      deleteBtn.addEventListener('click', () => runConfirmDelete(session, deleteBtn, cancelBtn));
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(deleteBtn);
+    } else if (isWithheld) {
       modal.appendChild(intro);
       title.textContent = CONFLICT_TITLE_EDIT;
       intro.textContent = CONFLICT_WITHHELD_TEXT;
@@ -739,8 +820,16 @@
     overlay.appendChild(modal);
     session.overlay = overlay;
     session.modal = modal;
-    session.onKeydown = (e) => { if (e.key === 'Escape') settleConflictSession(session, session.originalRes); };
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) settleConflictSession(session, session.originalRes); });
+    // 09-14: while the in-app confirm's first DELETE is on the wire it cannot
+    // be cancelled (the request is already sent; the page must learn the
+    // outcome) — Escape and an overlay click are ignored until it answers.
+    const exitLocked = () => session.confirmState && session.inFlight;
+    session.onKeydown = (e) => {
+      if (e.key === 'Escape' && !exitLocked()) settleConflictSession(session, session.originalRes);
+    };
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay && !exitLocked()) settleConflictSession(session, session.originalRes);
+    });
     activeConflictSession = session;
     try {
       renderConflictSession(session, undefined);
@@ -876,6 +965,35 @@
     const tok = localStorage.getItem(KEY);
     if (tok && isApi(url)) init = withToken(init, tok);
     return attemptFetch(input, init, url, method, 0);
+  };
+
+  // R7 F-6 / GD-9 / D-08 (09-14): the in-app delete confirm. The 09-UI-SPEC's
+  // "Destructive confirmation" row promised ONE surface; the pages' browser
+  // confirm stacked a second prompt in front of the stale-delete dialog.
+  // `maConfirmDelete(message, url)` opens a conflict session in a 'confirm'
+  // state of the same `.conflict-modal` shell; "Delete" sends the DELETE and,
+  // on a marker 409, the SAME overlay becomes the stale-delete variant.
+  // Resolves null when nothing was sent (Cancel/Escape/overlay, or another
+  // dialog already open — it refuses rather than stack), the final Response
+  // otherwise (2xx; the original 409 after a stale-state Cancel; a
+  // non-conflict error so the page shows its own), and REJECTS on a network
+  // failure — exactly what a plain window.fetch(url, {method:'DELETE'})
+  // would have handed the page, so its existing branches keep working (D-05).
+  window.maConfirmDelete = function (message, url) {
+    if (activeConflictSession) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      let init = { method: 'DELETE' };
+      const tok = localStorage.getItem(KEY);
+      if (tok && isApi(url)) init = withToken(init, tok);
+      const session = {
+        body: null, input: url, init, url, method: 'DELETE',
+        originalRes: null, resolve, reject,
+        settled: false, inFlight: false,
+        overlay: null, modal: null, onKeydown: null,
+        confirmState: true, message: String(message),
+      };
+      activateConflictSession(session);
+    });
   };
 })();
 // ma-fetch-wrapper:end

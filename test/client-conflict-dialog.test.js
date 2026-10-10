@@ -1090,3 +1090,214 @@ test('DT-src: the retired empty-diff sentence occurs nowhere in the wrapper regi
   assert.ok(!WRAPPER_SRC.includes('without affecting anything you edited'), 'sentence middle must be gone');
   assert.ok(!/CONFLICT_EMPTY_DIFF/.test(WRAPPER_SRC), 'the constant itself must be deleted');
 });
+
+// ---------------------------------------------------------------------------
+// 09-14 (R7 F-6 / GD-9 / D-08): window.maConfirmDelete — the in-app delete
+// confirm that lives in the conflict dialog's shell and becomes the
+// stale-delete variant when the DELETE meets a marker 409. One surface, two
+// states; no browser-native confirm anywhere (CF11).
+// ---------------------------------------------------------------------------
+
+// A sandbox whose window.confirm is a spy: the in-app confirm must never
+// reach for the browser-native one.
+const CF_SPIES = [];
+function cfSandbox(fetchImpl) {
+  const built = buildSandbox(fetchImpl);
+  const spy = { calls: 0 };
+  built.sandbox.window.confirm = () => { spy.calls++; return true; };
+  CF_SPIES.push(spy);
+  return Object.assign({ confirmSpy: spy }, built);
+}
+const CF_URL = '/api/raid/r1?expectedVersion=1';
+const cfTitle = (document) => document.querySelectorAll('.conflict-modal-title')[0];
+const cfButtons = (document) => document.querySelectorAll('.btn').map((b) => b.textContent);
+const cfText = (document) => document.querySelectorAll('.conflict-modal')
+  .map((m) => m.textContent).join(' ');
+
+test('CF1: maConfirmDelete opens one overlay titled with the question, Cancel + Delete, no attribution, no fetch', async () => {
+  const fake = makeRoutedFetch(() => makeResponse({ status: 200, body: { success: true } }));
+  const { sandbox, document } = cfSandbox(fake.impl);
+
+  assert.strictEqual(typeof sandbox.window.maConfirmDelete, 'function');
+  const p = sandbox.window.maConfirmDelete('Delete this entry?', CF_URL);
+  const outcome = track(p);
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+  assert.strictEqual(cfTitle(document).textContent, 'Delete this entry?');
+  assert.deepStrictEqual(cfButtons(document), ['Cancel', 'Delete']);
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-delete').length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-attribution').length, 0, 'no attribution in the plain confirm state');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-error').length, 0);
+  assert.strictEqual(fake.calls.length, 0, 'opening the confirm sends nothing');
+  assert.strictEqual(outcome.settled, false);
+
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, null);
+});
+
+test('CF2: Cancel, Escape and an overlay click each resolve null, send nothing and remove the overlay', async () => {
+  for (const how of ['cancel', 'escape', 'overlay']) {
+    const fake = makeRoutedFetch(() => makeResponse({ status: 200, body: {} }));
+    const { sandbox, document } = cfSandbox(fake.impl);
+    const p = sandbox.window.maConfirmDelete('Delete this task?', CF_URL);
+    await flushAll();
+    assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, how);
+    if (how === 'cancel') document.querySelectorAll('.conflict-btn-discard')[0].click();
+    else if (how === 'escape') document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    else {
+      const overlay = document.querySelectorAll('.conflict-modal-overlay')[0];
+      overlay.dispatchEvent({ type: 'click', target: overlay });
+    }
+    assert.strictEqual(await p, null, how + ' resolves null');
+    assert.strictEqual(fake.calls.length, 0, how + ' sends nothing (T-09-55)');
+    assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, how + ' removes the overlay');
+  }
+});
+
+test('CF3: Delete sends exactly one DELETE to the URL, shows Deleting… disabled in flight, resolves with the 2xx', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const ok = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch(() => gate.then(() => ok));
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete this entry?', CF_URL);
+  await flushAll();
+
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  await flushAll();
+  assert.strictEqual(fake.calls.length, 1);
+  assert.strictEqual(fake.calls[0].input, CF_URL);
+  assert.strictEqual(fake.calls[0].init.method, 'DELETE');
+  const btn = document.querySelectorAll('.conflict-btn-delete')[0];
+  assert.strictEqual(btn.textContent, 'Deleting…');
+  assert.strictEqual(btn.disabled, true);
+
+  release();
+  assert.strictEqual(await p, ok);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('CF4: Delete answered by a marker 409 -> the SAME overlay becomes the stale-delete state; Delete anyway re-sends with the fresh version and resolves once with the 200', async () => {
+  const ok = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch((i) => (i === 0
+    ? makeResponse({ status: 409, body: conflictOf({ currentVersion: 4 }) })
+    : ok));
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete this entry?', CF_URL);
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'one overlay throughout');
+  assert.strictEqual(cfTitle(document).textContent, 'Someone else updated this — still delete it?');
+  assert.ok(cfText(document).includes('Changed by karen'), 'attribution shown');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-error').length, 0, 'no "changed again" banner on the first conflict');
+  assert.deepStrictEqual(cfButtons(document), ['Cancel', 'Delete anyway']);
+  assert.strictEqual(outcome.settled, false);
+
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  await flushAll();
+  assert.strictEqual(fake.calls.length, 2);
+  assert.strictEqual(fake.calls[1].input, '/api/raid/r1?expectedVersion=4');
+  assert.strictEqual(fake.calls[1].init.method, 'DELETE');
+  assert.strictEqual(await p, ok);
+  assert.strictEqual(outcome.count, 1, 'resolves exactly once');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('CF5: Cancel in the stale state resolves with the original 409; exactly one fetch in total', async () => {
+  const conflictRes = makeResponse({ status: 409, body: conflictOf() });
+  const fake = makeRoutedFetch(() => conflictRes);
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete this entry?', CF_URL);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  await flushAll();
+  assert.strictEqual(cfTitle(document).textContent, 'Someone else updated this — still delete it?');
+
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, conflictRes, 'resolves with the original 409 (GD-5: the page re-reads)');
+  assert.strictEqual(fake.calls.length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('CF6: a non-conflict refusal (400, no marker) resolves with that Response and removes the overlay', async () => {
+  const refusal = makeResponse({ status: 400, body: { error: 'Has 2 direct reports.' } });
+  const fake = makeRoutedFetch(() => refusal);
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete position? This cannot be undone.', '/api/org/positions/p1?expectedVersion=0');
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  assert.strictEqual(await p, refusal);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('CF7: a network failure rejects the promise and removes the overlay', async () => {
+  const fake = makeRoutedFetch(() => { throw new Error('offline'); });
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete this task?', CF_URL);
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-delete')[0].click();
+  await flushAll();
+  assert.strictEqual(outcome.settled, true);
+  assert.ok(outcome.error instanceof Error && outcome.error.message === 'offline');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('CF8: two synchronous clicks on Delete send one request; the same for Delete anyway', async () => {
+  const ok = makeResponse({ status: 200, body: {} });
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : ok));
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const p = sandbox.window.maConfirmDelete('Delete this entry?', CF_URL);
+  await flushAll();
+
+  const del = document.querySelectorAll('.conflict-btn-delete')[0];
+  del.click(); del.click();
+  await flushAll();
+  assert.strictEqual(fake.calls.length, 1, 'double click on Delete');
+
+  const anyway = document.querySelectorAll('.conflict-btn-delete')[0];
+  anyway.click(); anyway.click();
+  await flushAll();
+  assert.strictEqual(fake.calls.length, 2, 'double click on Delete anyway');
+  assert.strictEqual(await p, ok);
+});
+
+test('CF9: a message with markup characters renders literally under the title', async () => {
+  const fake = makeRoutedFetch(() => makeResponse({ status: 200, body: {} }));
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const msg = '<img src=x onerror=alert(1)> & "quotes"';
+  const p = sandbox.window.maConfirmDelete(msg, CF_URL);
+  await flushAll();
+  const title = cfTitle(document);
+  assert.strictEqual(title.textContent, msg);
+  assert.ok(title.children.every((c) => c.nodeType === 3), 'only text nodes under the title');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await p;
+});
+
+test('CF10: with a conflict dialog already open, maConfirmDelete resolves null at once and sends nothing', async () => {
+  const conflictRes = makeResponse({ status: 409, body: conflictOf() });
+  const fake = makeRoutedFetch(() => conflictRes);
+  const { sandbox, document } = cfSandbox(fake.impl);
+  const first = sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'Mine' }) });
+  await flushAll();
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+
+  const res = await sandbox.window.maConfirmDelete('Delete this entry?', CF_URL);
+  assert.strictEqual(res, null);
+  assert.strictEqual(fake.calls.length, 1, 'nothing sent');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'overlay count unchanged');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await first;
+});
+
+test('CF11: the native window.confirm is never called by any CF case', () => {
+  assert.ok(CF_SPIES.length >= 10, 'spies were installed: ' + CF_SPIES.length);
+  CF_SPIES.forEach((s) => assert.strictEqual(s.calls, 0));
+  const noComments = WRAPPER_SRC.replace(/\/\/.*$/gm, '');
+  assert.ok(!/window\.confirm|[^.\w]confirm\(/.test(noComments), 'no native confirm call in the wrapper region');
+});

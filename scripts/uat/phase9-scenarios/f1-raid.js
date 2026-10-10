@@ -90,9 +90,23 @@ module.exports = {
     await a.click(`.raid-row[data-raid="${entry.id}"] .raid-status`);
     await ctx.sleep(600);
 
-    // The harness accepts the native confirm (the in-app confirm replaces it in plan 09-14).
+    // 09-14 (R7 F-6): the delete asks with the IN-APP confirm — no native
+    // dialog — and the same overlay becomes the stale-delete state.
     await b.click(`.raid-row[data-raid="${entry.id}"] .ex-del`);
-    const dlg = await ctx.waitDialog(b);
+    const confirm = await ctx.waitDialog(b);
+    ctx.check('in-app confirm titled "Delete this entry?"', !!confirm && confirm.title === 'Delete this entry?', confirm && confirm.title);
+    ctx.check('confirm offers Cancel + Delete', !!confirm && confirm.buttons.map((x) => x.text).join('|') === 'Cancel|Delete', confirm && confirm.buttons);
+    ctx.check('no DELETE sent before the confirm click', !lastRequest(b, 'DELETE'));
+    await b.click('.conflict-modal .conflict-btn-delete');
+    await b.waitForFunction(() => {
+      const t = document.querySelector('.conflict-modal-title');
+      return t && /still delete it/.test(t.textContent);
+    }, null, { timeout: 5000 });
+    await ctx.sleep(150);
+    const dlg = await ctx.readDialog(b);
+    ctx.check('one overlay throughout', !!dlg && dlg.overlays === 1, dlg && dlg.overlays);
+    ctx.check('no "changed again" banner on the first conflict', !!dlg && !dlg.banner, dlg && dlg.banner);
+    ctx.check('native dialogs: 0', b.nativeDialogs.length === 0, b.nativeDialogs);
     const del = lastRequest(b, 'DELETE');
     ctx.check('DELETE carries expectedVersion=0', !!del && /[?&]expectedVersion=0(&|$)/.test(del.url), del && del.url);
     ctx.check('DELETE response 409 conflict:true', !!del && del.status === 409 && del.response && del.response.conflict === true, del && del.status);
