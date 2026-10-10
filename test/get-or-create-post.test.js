@@ -231,6 +231,32 @@ test('real deal, employee: get-or-create resolves ONLY the caller\'s own record 
   });
 });
 
+test('IN-04 (Phase 11 review): a trailing-slash spelling behaves exactly like the canonical path; other variants answer 404, never a 500 diagnostic', async () => {
+  const fx = realDeal('deal_gocin04', 'gi');
+  const post = (base, p, cookie, body) => fetch(base + p, {
+    method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify(body),
+  });
+  await withServer(async (base) => {
+    const canonical = await postGoc(base, fx.cookie('gi-employee'), { name: 'whoever' });
+    assert.strictEqual(canonical.status, 201, canonical.text);
+    const slash = await post(base, GOC + '/', fx.cookie('gi-employee'), { name: 'whoever' });
+    const slashBody = await slash.json();
+    assert.strictEqual(slash.status, 200, 'trailing slash: the SAME handler, the own record now exists');
+    assert.deepStrictEqual(slashBody.employee, canonical.json.employee, 'identical record to the canonical spelling');
+    // the canonical schema really ran on the trailing-slash spelling
+    const tooLong = await post(base, GOC + '/', fx.cookie('gi-employee'), { name: 'x'.repeat(201) });
+    assert.strictEqual(tooLong.status, 400, 'validated with the canonical route\'s schema');
+    await tooLong.text();
+    for (const variant of ['/api/employees/Get-or-create', '/api//employees/get-or-create', '/api/employees/get-or-%63reate']) {
+      const r = await post(base, variant, fx.cookie('gi-admin'), { name: 'whoever' });
+      const text = await r.text();
+      assert.notStrictEqual(r.status, 500, `${variant}: never the 500 diagnostic`);
+      assert.ok(!/no registered validation schema/.test(text), `${variant}: no schema oracle`);
+      assert.ok(r.status === 404 || r.status === 403, `${variant}: refused (got ${r.status})`);
+    }
+  });
+});
+
 test('WR-03 (Phase 11 review): the restricted lane never takes role / department / company from the body — server-minted defaults only; staff never see the self-assigned values', async () => {
   const fx = realDeal('deal_gocwr03', 'gw');
   const dealConn = store.getOrOpenConnection(dbFiles.dealDbPath('deal_gocwr03'), dbFiles.DEAL_SCHEMA_PATH);

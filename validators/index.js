@@ -325,7 +325,32 @@ function validationMiddleware(req, res, next) {
   // before the gate's role-check/validation chain), but a future refactor of
   // that gate must not accidentally start rejecting them here.
   if (UNVALIDATED_BY_DESIGN.has(key)) return next();
-  const schema = resolveSchema(method, fullPath);
+  let schema = resolveSchema(method, fullPath);
+  // [security] IN-04 (Phase 11 review): the consolidated gate decides on the
+  // CANONICAL path (lib/requestPath.js), so a non-canonical spelling of a real
+  // write route used to pass the gate and then meet a 500 "no registered
+  // schema" here (a loud error log per request and an "unvalidated write"
+  // oracle). Two cases, mirroring exactly what the router itself will do:
+  //   1. trailing slash(es): Express routing is non-strict, so the router WILL
+  //      serve the canonical route — validate with that route's schema, i.e.
+  //      behave exactly like the canonical spelling;
+  //   2. any other variant (case, `//`, percent-encoded static segment) whose
+  //      canonical form names a real write route: the case-sensitive router
+  //      serves no handler for it, so answer the router's own 404 here — never
+  //      a 500 and never a body validated against a schema the router will not
+  //      run behind it.
+  // A path whose canonical form has no schema either is still the loud
+  // fail-closed 500 below (a genuinely unregistered write route is a bug).
+  if (!schema && fullPath.length > 1 && fullPath.endsWith('/')) {
+    const trimmed = fullPath.replace(/\/+$/, '');
+    if (trimmed) schema = resolveSchema(method, trimmed);
+  }
+  if (!schema) {
+    const canonical = typeof req.gatePathCanonical === 'string' ? req.gatePathCanonical : '';
+    if (canonical && canonical !== fullPath && resolveSchema(method, canonical)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+  }
   if (!schema) {
     console.error(`[validation] No schema registered for ${key} — refusing rather than passing an unvalidated write through (VAL-01).`);
     return res.status(500).json({ error: 'This write route has no registered validation schema.' });
