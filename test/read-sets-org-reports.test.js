@@ -192,3 +192,144 @@ test('read-sets-org (positions): the converted route cannot touch an unloaded co
     assert.throws(() => part.customEmployees, (e) => e.code === 'COLLECTION_NOT_LOADED');
   });
 });
+
+// ---- Task 2: decisions / flight-risk / summary / capabilities ----------
+test('read-sets-org (decisions): body === builder(readDb()) per identity, with and without positionId; read + denial audit unchanged', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    for (const ident of IDENTITIES) {
+      const token = newSession(ident.name, ident.role, dealId);
+      for (const q of ['', '?positionId=pos_c2', '?positionId=nope']) {
+        const readBefore = countByAction(dealId, 'org-decisions-read');
+        const deniedBefore = countByAction(dealId, 'org-decisions-access-denied');
+        const r = await httpGet(base, `/api/org/decisions${q}`, token);
+        if (!ident.hr) {
+          assert.strictEqual(r.status, 403);
+          // WR-01: denial rows are rate-bounded per caller, so the first
+          // refusal writes one row and an immediate repeat writes none.
+          assert.strictEqual(countByAction(dealId, 'org-decisions-access-denied') - deniedBefore, q === '' ? 1 : 0);
+          assert.strictEqual(countByAction(dealId, 'org-decisions-read') - readBefore, 0);
+          assert.ok(!r.text.includes('retain'), 'refusal must not carry decisions');
+          continue;
+        }
+        assert.strictEqual(r.status, 200);
+        const pid = q.startsWith('?positionId=') ? q.slice('?positionId='.length) : undefined;
+        const expected = inDeal(dealId, () => JSON.stringify(app.orgDecisionsBody(store.readDb(), pid)));
+        assert.strictEqual(r.text, expected, `${ident.name} ${q}`);
+        assert.strictEqual(countByAction(dealId, 'org-decisions-read') - readBefore, 1);
+      }
+    }
+  });
+});
+
+test('read-sets-org (flight-risk): body === full-read lane per identity; read + denial audit unchanged', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    for (const ident of IDENTITIES) {
+      const token = newSession(ident.name, ident.role, dealId);
+      const readBefore = countByAction(dealId, 'org-flightrisk-read');
+      const deniedBefore = countByAction(dealId, 'org-flightrisk-access-denied');
+      const r = await httpGet(base, '/api/org/flight-risk', token);
+      if (!ident.hr) {
+        assert.strictEqual(r.status, 403);
+        assert.strictEqual(countByAction(dealId, 'org-flightrisk-access-denied') - deniedBefore, 1);
+        assert.strictEqual(countByAction(dealId, 'org-flightrisk-read') - readBefore, 0);
+        assert.ok(!r.text.includes('retention bonus'));
+        continue;
+      }
+      assert.strictEqual(r.status, 200);
+      const expected = inDeal(dealId, () => JSON.stringify(store.readDb().orgFlightRisks));
+      assert.strictEqual(r.text, expected, ident.name);
+      assert.strictEqual(countByAction(dealId, 'org-flightrisk-read') - readBefore, 1);
+    }
+  });
+});
+
+test('read-sets-org (summary): body === orgSummaryFor(readDb()) per identity; restricted key structurally absent when uncleared; no audit rows', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    for (const ident of IDENTITIES) {
+      const token = newSession(ident.name, ident.role, dealId);
+      const before = auditHook.queryAudit({ dealId, limit: 500 }).length;
+      const r = await httpGet(base, '/api/org/summary', token);
+      assert.strictEqual(r.status, 200);
+      const expected = inDeal(dealId, () => {
+        const deal = require('../db/controlStore.js').getDeal(dealId);
+        return JSON.stringify(app.orgSummaryFor(store.readDb(), deal, { username: ident.name, role: ident.role }));
+      });
+      assert.strictEqual(r.text, expected, ident.name);
+      assert.strictEqual(r.text.includes('restricted'), ident.hr, `${ident.name} restricted key presence`);
+      assert.strictEqual(auditHook.queryAudit({ dealId, limit: 500 }).length - before, 0, 'summary writes no audit rows');
+    }
+  });
+});
+
+test('read-sets-org (capabilities): unchanged answers per identity (no deal read at all)', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    for (const ident of IDENTITIES) {
+      const token = newSession(ident.name, ident.role, dealId);
+      const r = await httpGet(base, '/api/org/capabilities', token);
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(JSON.parse(r.text).targetOrgDesign === true, ident.hr, ident.name);
+    }
+  });
+});
+
+// ---- Task 2: POST /api/org/positions on its lane set --------------------
+async function postPosition(base, token, body) {
+  const res = await fetch(`${base}/api/org/positions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: `ma_session=${token}` },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+test('read-sets-org (POST positions): create + update with and without an employee reference, on a partial read set', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    const token = newSession('karen', 'hrbp', dealId);
+    const a = await postPosition(base, token, { title: 'New Vacant', level: 'L2', state: 'current', reportsToId: 'pos_c1' });
+    assert.strictEqual(a.status, 201);
+    assert.strictEqual(a.body.position.employeeId, null);
+    const b = await postPosition(base, token, { title: 'Filled', level: 'L2', state: 'current', employeeId: 'emp_3' });
+    assert.strictEqual(b.status, 201);
+    assert.strictEqual(b.body.position.employeeId, 'emp_3');
+    const c = await postPosition(base, token, { title: 'Ghost', employeeId: 'emp_nope' });
+    assert.strictEqual(c.status, 404);
+    assert.strictEqual(c.body.error, 'That employee could not be found.');
+    const d = await postPosition(base, token, { id: 'pos_c3', title: 'Open Role v2', employeeId: 'emp_2' });
+    assert.strictEqual(d.status, 200);
+    assert.strictEqual(d.body.position.title, 'Open Role v2');
+    const e = await postPosition(base, token, { id: 'pos_c1', reportsToId: 'pos_c2' });
+    assert.strictEqual(e.status, 400);
+    assert.strictEqual((await postPosition(base, token, { id: 'pos_zzz', title: 'x' })).status, 404);
+
+    inDeal(dealId, () => {
+      const db = store.readDb();
+      const titles = db.orgPositions.map((p) => p.title);
+      assert.ok(titles.includes('New Vacant') && titles.includes('Filled') && titles.includes('Open Role v2'));
+      assert.strictEqual(db.customEmployees.length, 3, 'roster untouched');
+      assert.strictEqual(db.orgDecisions.length, 3, 'decisions untouched');
+      assert.strictEqual(db.orgFlightRisks.length, 3, 'flight-risks untouched');
+      assert.strictEqual(db.settings.demoMode, false, 'settings not rewritten');
+    });
+  });
+});
+
+test('read-sets-org (POST positions): uncleared caller refused 403; stale update answers 409 and changes nothing', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    const itToken = newSession('pmo_it', 'pmo', dealId);
+    assert.strictEqual((await postPosition(base, itToken, { title: 'Nope', employeeId: 'emp_1' })).status, 403);
+    assert.strictEqual((await postPosition(base, itToken, { id: 'pos_c2', title: 'Hijack', version: 99 })).status, 403, 'gate runs before any record is resolved');
+
+    const hrToken = newSession('pmo_hr', 'pmo', dealId);
+    const stale = await postPosition(base, hrToken, { id: 'pos_c2', title: 'Late edit', version: 99 });
+    assert.strictEqual(stale.status, 409, 'a stale version is a conflict, not a write');
+    inDeal(dealId, () => {
+      assert.strictEqual(store.readDb().orgPositions.find((p) => p.id === 'pos_c2').title, 'Staff Eng');
+    });
+  });
+});

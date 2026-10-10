@@ -5911,9 +5911,21 @@ function positionGraphFailure(lane, candidate) {
 // D-04 tier 1: any `hr`-area-cleared deal member may create/maintain org
 // structure, not only IL/admin. Upsert-by-id, mirroring the DD routes'
 // validate-before-mutate shape.
+// D-12-02 (12-11, PD-20): the common position write reads its own lane, plus
+// the roster lane ONLY when the body names an employeeId (the sole consumer of
+// employeeRosterLane() in this route). Every OTHER org write below (copy-to-
+// target, delete, import, decisions, flight-risk, convert) keeps readDb(): they
+// are rare/bulk or touch the task/RAID lanes too, so the whole-deal read is the
+// honest read set there.
+function orgPositionWriteSet(body) {
+  if (!body || !body.employeeId) return ORG_POSITIONS_SET;
+  const settings = readSingleton('settings');
+  const roster = settings && settings.demoMode === false ? 'customEmployees' : 'employees';
+  return ['orgPositions', 'settings', roster];
+}
 app.post('/api/org/positions', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(orgPositionWriteSet(b));
   const deal = controlStore.getDeal(req.dealContext.dealId);
   if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
     return res.status(403).json({ error: 'You are not cleared to edit the org design.' });
@@ -6293,8 +6305,16 @@ function derivedDecisionFor(decisions, positionId) {
 // clearance boundary as target-state org structure, never open-tier like
 // current-state positions. Ordered most-recent-first; narrowed by an
 // optional `positionId` query value.
+// Pure body builder (exposed as app.orgDecisionsBody for the equality suite):
+// most-recent-first, narrowed by an optional positionId.
+function orgDecisionsBody(db, positionId) {
+  let lane = orgDecisionsLane(db);
+  if (positionId) lane = lane.filter((d) => d.positionId === positionId);
+  return lane.slice().sort((a, b) => String(b.decidedAt || '').localeCompare(String(a.decidedAt || '')));
+}
+app.orgDecisionsBody = orgDecisionsBody;
+
 app.get('/api/org/decisions', (req, res) => {
-  const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
   if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
     // [security] T-ERM-07 (260810-erm): the decision log is RESTRICTED MNPI
@@ -6317,10 +6337,7 @@ app.get('/api/org/decisions', (req, res) => {
       subject: req.query.positionId || null, before: null, after: null, request: requestMeta(req),
     });
   }
-  let lane = orgDecisionsLane(db);
-  if (req.query.positionId) lane = lane.filter((d) => d.positionId === req.query.positionId);
-  const ordered = lane.slice().sort((a, b) => String(b.decidedAt || '').localeCompare(String(a.decidedAt || '')));
-  res.json(ordered);
+  res.json(orgDecisionsBody(readCollections(['orgDecisions']), req.query.positionId));
 });
 
 // D-04 tier 2: recording a decision is the most consequential act this app
@@ -6428,8 +6445,7 @@ app.get('/api/org/flight-risk', (req, res) => {
     actor: req.portalUser, action: 'org-flightrisk-read', dealId: req.dealContext.dealId,
     subject: null, before: null, after: null, request: requestMeta(req),
   });
-  const db = readDb();
-  res.json(orgFlightRiskLane(db));
+  res.json(orgFlightRiskLane(readCollections(['orgFlightRisks'])));
 });
 
 // Resolves the SAME employee roster lane GET/POST /api/employees itself
@@ -6759,9 +6775,11 @@ function orgSummaryFor(db, deal, user) {
 // already clearance-scoped BEFORE it is computed — exactly as
 // GET /api/dd/summary documents for itself, above.
 app.get('/api/org/summary', (req, res) => {
-  const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
-  res.json(orgSummaryFor(db, deal, req.portalUser));
+  // D-12-02: an uncleared caller's summary is the open tier only, which reads
+  // positions alone; the restricted tier also tallies decisions + flight-risks.
+  const set = accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr') ? ORG_READ_SET : ORG_POSITIONS_SET;
+  res.json(orgSummaryFor(readCollections(set), deal, req.portalUser));
 });
 
 // =====================================================================
