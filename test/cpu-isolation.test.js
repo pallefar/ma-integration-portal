@@ -61,6 +61,9 @@ fs.writeFileSync(FIXTURE_WORKER, [
   "  if (p.op === 'exit') process.exit(3);",
   "  if (p.op === 'hang') return new Promise(() => {});",
   "  if (p.op === 'sleep') { await new Promise((r) => setTimeout(r, p.ms)); return { result: { slept: p.ms } }; }",
+  "  if (p.op === 'undef') return undefined;",
+  "  if (p.op === 'noresult') return { other: 1 };",
+  "  if (p.op === 'noclone') return { result: { fn: () => 1 } };",
   "  throw new Error('unknown op');",
   '});',
 ].join('\n'));
@@ -126,6 +129,17 @@ test('isolatedTask: a handler error rejects that job only — the worker survive
     await assert.rejects(runOnce(task, { op: 'throw' }), (e) => e instanceof TaskWorkerError && /boom/.test(e.message));
     assert.deepStrictEqual(await runOnce(task, { op: 'echo', value: 7 }), { echo: 7 });
     assert.strictEqual(task.spawnCount(), 1, 'a reported handler error must not cost a respawn');
+  } finally { task.close(); }
+});
+
+test('isolatedTask: IN-B01 — a missing or non-cloneable result is a structured error for that job; the worker survives', async () => {
+  const task = fixtureTask();
+  try {
+    await assert.rejects(runOnce(task, { op: 'undef' }), (e) => e instanceof TaskWorkerError && /no result/.test(e.message));
+    await assert.rejects(runOnce(task, { op: 'noresult' }), (e) => e instanceof TaskWorkerError && /no result/.test(e.message));
+    await assert.rejects(runOnce(task, { op: 'noclone' }), (e) => e instanceof TaskWorkerError && !/exited unexpectedly/.test(e.message));
+    assert.deepStrictEqual(await runOnce(task, { op: 'echo', value: 5 }), { echo: 5 });
+    assert.strictEqual(task.spawnCount(), 1, 'no respawn: the worker never died');
   } finally { task.close(); }
 });
 
