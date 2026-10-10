@@ -159,7 +159,54 @@ function lastLogins(conn) {
   return out;
 }
 
+/**
+ * D-10-07 [security]: the identifier a client sees for one of its OWN sessions.
+ * The stored `token_hash` is the session's lookup key (SHA-256 of the cookie
+ * secret) and what req.portalUser.sessionId carries into the audit trail —
+ * handing it out would let anyone who sees the list response (a proxy log, a
+ * screenshot) correlate it with server-side records. A domain-separated
+ * SHA-256 over it is stable, unguessable without the row, and never equal to
+ * any stored value (T-10-19).
+ */
+function publicSessionId(tokenHash) {
+  return crypto.createHash('sha256').update('session-id:' + tokenHash).digest('hex').slice(0, 32);
+}
+
+/**
+ * D-10-07: this user's unexpired sessions, newest first. Rows keep their
+ * `tokenHash` INTERNALLY (so the caller can flag `current`); the HTTP layer
+ * must only ever expose the derived `id`.
+ */
+function listSessionsForUser(conn, username) {
+  return conn.prepare(
+    `SELECT token_hash, created_at, expires_at, user_agent, ip FROM sessions
+     WHERE username = ? AND expires_at > ? ORDER BY created_at DESC, rowid DESC`
+  ).all(username, new Date().toISOString()).map((r) => ({
+    tokenHash: r.token_hash,
+    id: publicSessionId(r.token_hash),
+    createdAt: r.created_at,
+    expiresAt: r.expires_at,
+    userAgent: r.user_agent,
+    ip: r.ip,
+  }));
+}
+
+/**
+ * D-10-07: delete ONE session belonging to `username`, addressed by its
+ * derived public id. The lookup is keyed by the caller's username, so another
+ * user's session id simply matches nothing (`{ deleted: false }`) — never an
+ * authorization error that would confirm the id exists (T-10-19).
+ */
+function endOwnSession(conn, username, publicId) {
+  const rows = conn.prepare('SELECT token_hash FROM sessions WHERE username = ?').all(username);
+  const hit = rows.find((r) => publicSessionId(r.token_hash) === publicId);
+  if (!hit) return { deleted: false, tokenHash: null };
+  conn.prepare('DELETE FROM sessions WHERE token_hash = ? AND username = ?').run(hit.token_hash, username);
+  return { deleted: true, tokenHash: hit.token_hash };
+}
+
 module.exports = {
+  publicSessionId, listSessionsForUser, endOwnSession,
   recordLogin, lastLogins,
   createSession, findSession, deleteSession, deleteAllSessionsForUser, pruneExpiredSessions,
   newSessionToken, hashToken, bindSessionDeal, releaseSessionsForDeal,

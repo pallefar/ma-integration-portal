@@ -348,6 +348,7 @@ const ROLE_WRITE_POLICY = [
   { prefix: '/api/assessment', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/assessment-instances', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/auth/change-password', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // D-09: every role may change their OWN password
+  { prefix: '/api/auth/sessions', roles: ['admin', 'hrbp', 'pmo', 'employee'] }, // D-10-07: every role manages its OWN sessions (handlers are keyed by the caller's username)
 
   // D-01/D-03 (Phase 3): ANY authenticated role may select a deal they are a
   // member of — this is how an employee/pmo member switches INTO a deal
@@ -932,6 +933,55 @@ app.post('/api/auth/change-password', async (req, res, next) => {
     res.json({ success: true });
   } catch (err) {
     if (isBusyError(err)) return next(err); // central 503 + Retry-After
+    next(err);
+  }
+});
+
+// =====================================================================
+// Self-service sessions (ACCT-06 server half, D-10-07). A control-plane path,
+// so never open under DEMO_OPEN=1 and never deal-bound. Every query is keyed
+// by the CALLER's username — there is no way to name another user's sessions.
+// The id exposed per session is a derived value (db/sessions.js
+// publicSessionId), never the stored token hash (T-10-19).
+// =====================================================================
+
+app.get('/api/auth/sessions', (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const rows = sessions.listSessionsForUser(getRuntimeConnection(), req.portalUser.username);
+    res.json(rows.map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt,
+      expiresAt: r.expiresAt,
+      userAgent: r.userAgent ? String(r.userAgent).slice(0, 200) : null,
+      ip: r.ip || null,
+      current: req.portalUser.sessionId !== null && r.tokenHash === req.portalUser.sessionId,
+    })));
+  } catch (err) {
+    if (isBusyError(err)) return next(err);
+    next(err);
+  }
+});
+
+app.delete('/api/auth/sessions/:id', (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const ended = sessions.endOwnSession(getRuntimeConnection(), req.portalUser.username, String(req.params.id));
+    // Indistinguishable from an unknown id: a foreign session id must never be
+    // confirmable by status code.
+    if (!ended.deleted) return res.status(404).json({ error: 'Session not found.' });
+    if (req.portalUser.sessionId !== null && ended.tokenHash === req.portalUser.sessionId) {
+      // The caller ended the session it is using — same cookie clearing as logout.
+      res.setHeader('Set-Cookie', 'ma_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+      return res.json({ success: true, endedCurrent: true });
+    }
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'session-end-own', subject: req.portalUser.username,
+      request: requestMeta(req),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    if (isBusyError(err)) return next(err);
     next(err);
   }
 });
