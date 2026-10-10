@@ -48,3 +48,13 @@ CREATE TABLE IF NOT EXISTS app_state (
   key TEXT PRIMARY KEY,
   data TEXT NOT NULL
 );
+
+-- D-10-03 (Phase 10): last successful sign-in per account, shown in the admin
+-- Users tab. Lives HERE — runtime.db is gitignored churn that changes on every
+-- login — and never in the committed control.db (a last-login stamp written
+-- into control.db would dirty a git-tracked file on every sign-in).
+CREATE TABLE IF NOT EXISTS account_logins (
+  username      TEXT PRIMARY KEY,
+  last_login_at TEXT NOT NULL,    -- ISO-8601
+  last_login_ip TEXT
+);

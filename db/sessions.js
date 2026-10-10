@@ -139,7 +139,28 @@ function pruneExpiredSessions(conn) {
   conn.prepare(`DELETE FROM sessions WHERE expires_at < ?`).run(new Date().toISOString());
 }
 
+/**
+ * D-10-03: stamp the account's last successful sign-in (runtime.db's
+ * account_logins, never control.db). Upsert — one row per username.
+ */
+function recordLogin(conn, username, ip) {
+  conn.prepare(
+    `INSERT INTO account_logins (username, last_login_at, last_login_ip) VALUES (?, ?, ?)
+     ON CONFLICT(username) DO UPDATE SET last_login_at = excluded.last_login_at, last_login_ip = excluded.last_login_ip`
+  ).run(username, new Date().toISOString(), ip || null);
+}
+
+/** username -> last_login_at (ISO string) for every account that has signed in. */
+function lastLogins(conn) {
+  const out = new Map();
+  for (const row of conn.prepare('SELECT username, last_login_at FROM account_logins').all()) {
+    out.set(row.username, row.last_login_at);
+  }
+  return out;
+}
+
 module.exports = {
+  recordLogin, lastLogins,
   createSession, findSession, deleteSession, deleteAllSessionsForUser, pruneExpiredSessions,
   newSessionToken, hashToken, bindSessionDeal, releaseSessionsForDeal,
 };

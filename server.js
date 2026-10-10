@@ -780,6 +780,7 @@ app.post('/api/auth/login', async (req, res, next) => {
       username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
       userAgent: req.get('user-agent'), ip: req.ip,
     });
+    sessions.recordLogin(getRuntimeConnection(), user.username, req.ip); // D-10-03: runtime.db only
     // SameSite=Strict (was Lax, D-08) — this app has no cross-site inbound-link
     // flow that depends on Lax's top-level-navigation carve-out, and every
     // write is already same-origin JSON fetch() (no classic <form> posts, no
@@ -789,9 +790,12 @@ app.post('/api/auth/login', async (req, res, next) => {
       'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
     if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
     res.setHeader('Set-Cookie', cookie.join('; '));
+    // D-10-03: the response user object is the publicAccount() allowlist
+    // projection — a secret field added to the account blob later can never
+    // ride out through login by accident.
     res.json({
       success: true,
-      user: { username: user.username, name: user.name || user.username, role: user.role },
+      user: controlStore.publicAccount(user),
       mustChangePassword: user.mustChangePassword === true,
     });
   } catch (err) {
@@ -850,7 +854,7 @@ app.get('/api/auth/me', (req, res) => {
   res.json({
     authEnabled: true,
     dealId: sess.dealId || null,
-    user: { username: user.username, name: user.name || user.username, role: user.role },
+    user: controlStore.publicAccount(user),
   });
 });
 
@@ -1012,6 +1016,46 @@ app.post('/api/admin/users', async (req, res, next) => {
     });
   } catch (err) {
     if (isBusyError(err)) return next(err); // central 503 + Retry-After
+    next(err);
+  }
+});
+
+// Reads stay available even when the committed control.db is active (the
+// admin can still SEE accounts; only writes are refused).
+app.get('/api/admin/users', (req, res, next) => {
+  try {
+    const logins = sessions.lastLogins(getRuntimeConnection());
+    const users = controlStore.listAccounts()
+      .map((acct) => controlStore.publicAccount(acct, { lastLoginAt: logins.get(acct.username) || null }))
+      .sort((a, b) => (a.username < b.username ? -1 : a.username > b.username ? 1 : 0));
+    res.set('Cache-Control', 'no-store');
+    res.json(users);
+  } catch (err) {
+    if (isBusyError(err)) return next(err);
+    next(err);
+  }
+});
+
+app.post('/api/admin/users/:username/reset-password', async (req, res, next) => {
+  try {
+    if (refuseCommittedControlWrite(res)) return;
+    const target = String(req.params.username);
+    if (!controlStore.getAccount(target)) return res.status(404).json({ error: 'User not found.' });
+    const picked = pickTempPassword(req.body && req.body.tempPassword);
+    if (picked.problem) return res.status(400).json({ error: picked.problem });
+    const updated = controlStore.updateUser(target, {
+      hash: await passwords.hashPassword(picked.tempPassword), salt: null, mustChangePassword: true,
+    });
+    // The old credential is dead and so is every session that authenticated
+    // with it; the target must sign in with the temp password and rotate it.
+    sessions.deleteAllSessionsForUser(getRuntimeConnection(), target);
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'user-password-reset', subject: target, request: requestMeta(req),
+    });
+    res.set('Cache-Control', 'no-store'); // the response carries a one-time secret
+    res.json({ success: true, user: controlStore.publicAccount(updated), tempPassword: picked.tempPassword });
+  } catch (err) {
+    if (isBusyError(err)) return next(err);
     next(err);
   }
 });
