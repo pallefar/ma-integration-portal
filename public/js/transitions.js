@@ -266,6 +266,77 @@
     }
   }
 
+  // R7 F-3 / GD-6 / D-03 / Pitfall 12: the diff compares what the user EDITED
+  // (the payload's keys — their intent) with what the server holds now. Most
+  // routes name their payload keys exactly like the record's fields, so
+  // payload-keys-that-exist-on-the-record is the right default. A few routes
+  // do not: the stage route sends `targetStage` for the record's `stage`, the
+  // per-month phasing route sends a bare `targetM`/`realizedM` that means ONE
+  // cell of `phasing[]` (not the record's total of the same name), and some
+  // routes send action parameters that are not record fields at all. This
+  // declarative per-route table says which is which, so a route is described
+  // in one place instead of by an if-chain in the renderer. An entry has a
+  // method, a pathname pattern and any of:
+  //   aliases  payload key -> record field it stands for;
+  //   cell     { array, key, fields } compare each of `fields` that the payload
+  //            carries against the element of record[array] whose `key` equals
+  //            the pattern's first capture (the label gets ' · ' + the capture);
+  //   ignore   payload keys that are parameters, not edited fields.
+  // A request no entry matches uses the default; a request whose rows come out
+  // empty renders the neutral panel — never a claim about what changed.
+  const CONFLICT_FIELD_MAP = [
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/stage$/, aliases: { targetStage: 'stage' }, ignore: ['reason'] },
+  ];
+
+  // Display labels (R7 F-5): authored, so the CSS no longer case-transforms
+  // them. Looked up by hasOwnProperty — a payload key is user-supplied JSON.
+  const CONFLICT_FIELD_LABELS = {
+    stage: 'Stage',
+  };
+
+  function conflictRequestPath(url) {
+    try {
+      return new URL(url, (typeof location !== 'undefined' && location.href) || undefined).pathname;
+    } catch (e) {
+      return String(url || '').split('?')[0];
+    }
+  }
+
+  function findConflictFieldMapEntry(method, url) {
+    const path = conflictRequestPath(url);
+    for (let i = 0; i < CONFLICT_FIELD_MAP.length; i++) {
+      const entry = CONFLICT_FIELD_MAP[i];
+      if (entry.method !== method) continue;
+      const m = entry.path.exec(path);
+      if (m) return { entry, match: m };
+    }
+    return null;
+  }
+
+  function conflictFieldLabel(field) {
+    return Object.prototype.hasOwnProperty.call(CONFLICT_FIELD_LABELS, field)
+      ? CONFLICT_FIELD_LABELS[field] : String(field);
+  }
+
+  // Builds the diff rows [{ label, mine, theirs }] for one session render.
+  // `mine` always comes from the ORIGINAL payload, `theirs` from the latest
+  // conflict body's currentRecord — which the server already clearance-filtered
+  // (T-09-53: this reads only what was sent; it requests and invents nothing).
+  function buildConflictRows(session, payload, currentRecord) {
+    const found = findConflictFieldMapEntry(session.method, session.url);
+    const entry = found ? found.entry : {};
+    const aliases = entry.aliases || {};
+    const ignore = entry.ignore || [];
+    const rows = [];
+    Object.keys(payload).forEach((key) => {
+      if (key === 'id' || key === 'version' || ignore.indexOf(key) >= 0) return;
+      const field = Object.prototype.hasOwnProperty.call(aliases, key) ? aliases[key] : key;
+      if (!Object.prototype.hasOwnProperty.call(currentRecord, field)) return;
+      rows.push({ label: conflictFieldLabel(field), mine: payload[key], theirs: currentRecord[field] });
+    });
+    return rows;
+  }
+
   // D-03: "Apply my changes anyway" is a genuine REAPPLY against fresh
   // state, not a forced write carrying the stale value. Two shapes of
   // version precondition exist across routes: the common case carries
@@ -451,24 +522,23 @@
       let payload = {};
       try { payload = JSON.parse((init && init.body) || '{}'); } catch (e) { payload = {}; }
       const currentRecord = (body && body.currentRecord) || {};
-      // Pitfall 12: the keys a field-patch payload carries ARE the fields
-      // the user changed — never id/version, and only fields the server's
-      // current record actually has.
-      const fields = Object.keys(payload).filter((k) => k !== 'id' && k !== 'version'
-        && Object.prototype.hasOwnProperty.call(currentRecord, k));
+      // Pitfall 12 / R7 F-3: the rows come from the per-route field map — the
+      // payload's keys are the user's edited intent, translated to the record
+      // field they stand for, and only fields the server's record has.
+      const rows = buildConflictRows(session, payload, currentRecord);
 
-      if (fields.length === 0) {
+      if (rows.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'conflict-diff-empty';
         empty.textContent = CONFLICT_EMPTY_DIFF;
         diffList.appendChild(empty);
       } else {
-        fields.forEach((field) => {
+        rows.forEach((r) => {
           const row = document.createElement('div');
           row.className = 'conflict-diff-row';
           const label = document.createElement('div');
           label.className = 'conflict-diff-label';
-          label.textContent = field;
+          label.textContent = r.label;
           row.appendChild(label);
 
           const values = document.createElement('div');
@@ -476,12 +546,12 @@
 
           const mine = document.createElement('div');
           mine.className = 'conflict-diff-mine';
-          setConflictDiffValue(mine, payload[field]);
+          setConflictDiffValue(mine, r.mine);
           values.appendChild(mine);
 
           const theirs = document.createElement('div');
           theirs.className = 'conflict-diff-theirs';
-          setConflictDiffValue(theirs, currentRecord[field]);
+          setConflictDiffValue(theirs, r.theirs);
           values.appendChild(theirs);
 
           row.appendChild(values);

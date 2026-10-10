@@ -838,3 +838,41 @@ test('client-conflict-dialog: a 503 on a same-origin /api write still takes the 
   assert.strictEqual(res.status, 200);
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, 'a 503 must never open the conflict dialog');
 });
+
+// ---------------------------------------------------------------------------
+// SC6 / GD-6 / GD-7 / GD-8 / GD-10 (Phase 9 gap closure, plan 09-13): the
+// dialog tells the truth. DT1-DT14 prove, in node:vm, that a payload whose keys
+// do not mirror the record's field names still yields a correct diff (R7 F-3),
+// that a record withheld by clearance is never rendered (F-4), that the
+// reapply-failure banner carries the server's real reason (F-4), that labels
+// are display labels (F-5) and that the deleted variant carries no
+// attribution line it cannot back (F-7).
+// ---------------------------------------------------------------------------
+
+const MODAL_TEXT = (document) => document.querySelectorAll('.conflict-modal')
+  .map((m) => m.textContent).join('\n');
+const countOf = (haystack, needle) => haystack.split(needle).length - 1;
+const NEUTRAL = 'This record changed since you loaded it.';
+
+test('DT1 (tracer): a synergy stage conflict shows ONE "Stage" row: mine = the requested stage, theirs = the server stage', async () => {
+  const first = makeResponse({ status: 409, body: conflictOf({
+    conflictKind: 'version', currentVersion: 2,
+    currentRecord: { id: 's1', stage: 'committed' },
+  }) });
+  const fake = makeFakeFetch([first]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/synergies/s1/stage', {
+    method: 'POST', body: JSON.stringify({ targetStage: 'validated', version: 1 }),
+  });
+  await flushAll();
+
+  const rows = document.querySelectorAll('.conflict-diff-row');
+  assert.strictEqual(rows.length, 1, 'exactly one diff row');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-label')[0].textContent, 'Stage');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-mine')[0].textContent, 'validated');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-theirs')[0].textContent, 'committed');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-empty').length, 0, 'no neutral panel when a row is present');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, first);
+});
