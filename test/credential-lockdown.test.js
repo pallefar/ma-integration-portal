@@ -118,11 +118,13 @@ function activeLockdown() {
   return lockdown;
 }
 
-test('allowlist: one frozen constant of exactly the seven public names', () => {
+test('allowlist: one frozen constant of exactly the eleven public names (seven pages/assets + the four vendored fonts)', () => {
   assert.strictEqual(Object.isFrozen(LOCKDOWN_STATIC_ALLOWLIST), true);
   assert.deepStrictEqual([...LOCKDOWN_STATIC_ALLOWLIST].sort(), [
     '/change-password.html', '/css/style.css', '/favicon.ico', '/js/change-password.js',
     '/js/login.js', '/login.html', '/te-logo.png',
+    '/vendor/fonts/inter-latin-ext.woff2', '/vendor/fonts/inter-latin.woff2',
+    '/vendor/fonts/outfit-latin-ext.woff2', '/vendor/fonts/outfit-latin.woff2',
   ]);
   // server.js holds no second copy of the list (plan 10-09 imports this one).
   const src = fs.readFileSync(path.join(REPO, 'server.js'), 'utf8');

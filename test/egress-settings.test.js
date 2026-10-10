@@ -156,6 +156,43 @@ test('dev: a toggle through process A is visible in process B\'s next response (
   }
 });
 
+test('fonts are vendored: no font-CDN reference under public/ (outside vendor/ + uploads/), no CSP lists one, woff2 + OFL texts present', () => {
+  const root = path.join(__dirname, '..', 'public');
+  const offenders = [];
+  (function walk(dir) {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        if (dir === root && (ent.name === 'vendor' || ent.name === 'uploads')) continue;
+        walk(full);
+      } else if (/\.(html?|css|js|json|svg|txt|md)$/i.test(ent.name)) {
+        const txt = fs.readFileSync(full, 'utf8');
+        if (/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(txt)) offenders.push(path.relative(root, full));
+      }
+    }
+  })(root);
+  assert.deepStrictEqual(offenders, []);
+
+  const bools = [false, true];
+  for (const gemini of bools) for (const huggingface of bools) for (const youtube of bools) {
+    const policy = headersFor({ egress: { gemini, huggingface, youtube } })['Content-Security-Policy'];
+    assert.ok(!/googleapis|gstatic/.test(policy), policy);
+  }
+
+  const dir = path.join(root, 'vendor', 'fonts');
+  for (const f of ['inter-latin.woff2', 'inter-latin-ext.woff2', 'outfit-latin.woff2', 'outfit-latin-ext.woff2', 'OFL-Inter.txt', 'OFL-Outfit.txt']) {
+    assert.ok(fs.statSync(path.join(dir, f)).size > 1000, `${f} present`);
+  }
+  for (const f of ['inter-latin.woff2', 'outfit-latin-ext.woff2']) {
+    assert.strictEqual(fs.readFileSync(path.join(dir, f)).subarray(0, 4).toString('latin1'), 'wOF2');
+  }
+  const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
+  assert.ok(!/@import\s+url\(\s*['"]?https?:/.test(css), 'no remote @import in style.css');
+  for (const f of ['inter-latin', 'inter-latin-ext', 'outfit-latin', 'outfit-latin-ext']) {
+    assert.ok(css.includes(`/vendor/fonts/${f}.woff2`), `style.css references ${f}`);
+  }
+});
+
 test('dev: GET /api/settings exposes the effective egress booleans to a non-admin and never the key', async () => {
   const dir = fs.mkdtempSync(path.join(DIR, 'settings-'));
   const s = await startServer({ dir, mode: 'dev' });
@@ -164,6 +201,10 @@ test('dev: GET /api/settings exposes the effective egress booleans to a non-admi
     assert.strictEqual(res.status, 200);
     assert.deepStrictEqual(res.body.egress, { gemini: true, huggingface: true, youtube: true });
     assert.ok(!('geminiApiKey' in res.body));
+    // the vendored fonts and the stylesheet that declares them are served by the portal itself
+    const font = await fetch(`${s.base}/vendor/fonts/inter-latin.woff2`);
+    assert.strictEqual(font.status, 200);
+    assert.ok((await font.arrayBuffer()).byteLength > 1000);
     await s.request('/api/admin/egress', { method: 'POST', body: { gemini: false }, token: 'admin' });
     const after = await s.request('/api/settings', { token: 'hrbp' });
     assert.deepStrictEqual(after.body.egress, { gemini: false, huggingface: true, youtube: true });
