@@ -41,6 +41,37 @@
 //     (0600) outside the transaction, after a free-space precondition of
 //     3 x file size + 64 MB (PD-28).
 //
+// AUTHORING RULES.
+//   1. forward-only: there is no down(). A migration moves a file from id-1 to
+//      id and nothing moves it back.
+//   2. NEVER edit a released migration — add a new NNN-<slug>.js. A released
+//      id is already stamped into files in the field; changing its body would
+//      make "version N" mean two different schemas.
+//   3. A migration is additive and idempotent where it can be: it runs before
+//      the family schema's own `CREATE ... IF NOT EXISTS` exec, so a new table
+//      or column belongs in BOTH the schema file (fresh files) and a migration
+//      (existing files). Fresh files never run up() — they are stamped.
+//   4. Heavy or destructive migrations set `backup: true` (see above).
+//   5. Committed demo/control files (PD-5): if a non-baseline migration is ever
+//      needed for data/demo.db or data/control.db, regenerate those files with a
+//      dedicated script in a deliberate commit — a boot never writes them, and a
+//      pending migration on one reports not-ready
+//      ('committed-file-needs-regeneration').
+//
+// NOT-READY. A failed migration, a failed PRAGMA quick_check, a refused backup
+// or a committed file that would need a write records a failure in
+// db/readiness.js and keeps THAT file refused until restart (sticky, per path);
+// GET /healthz answers 503 `not-ready` with the family, migration id and reason,
+// and every request that needs the file fails closed (503, retryable:false).
+// The instance keeps listening so the failure is reportable.
+//
+// ROLLBACK PATH. Migrations are forward-only, so recovery is a restore, not an
+// undo: stop the service, restore the data directory from the last WAL-aware
+// backup taken BEFORE upgrading (a `backup: true` migration also leaves
+// `<file>.pre-v<id>.bak`), start the previous release. The stamp-only baselines
+// need no rollback at all: an older release ignores `user_version`, so a file
+// stamped at version 1 opens unchanged in a pre-Phase-12 release.
+//
 // [security] MA_MIGRATIONS_DIR (test-only) loads CODE from an alternative
 // directory; with MA_MODE=real a set value is a [security] fatal at require
 // time (T-12-53).
