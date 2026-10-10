@@ -1,7 +1,8 @@
 /**
  * Due Diligence workspace (DD-01/DD-04) — renders exactly the functional
- * areas the server returned for the signed-in caller (GET /api/dd/areas),
- * then each returned area's own request items (GET /api/dd/request-items).
+ * areas the server returned for the signed-in caller, and each returned
+ * area's own request items, findings and data-room links, all from ONE
+ * request (GET /api/dd/workspace).
  * Every item's status/owner/due-date/blocked flag is editable inline,
  * PATCHing back through POST /api/dd/request-items with the item's id.
  *
@@ -11,8 +12,8 @@
  *
  * T-04-01: the page holds NO client-side list of all eight DD_AREAS to draw
  * placeholders from — an uncleared area must never be visible here, not even
- * as a greyed-out or locked row. It renders only the areas GET /api/dd/areas
- * actually returned.
+ * as a greyed-out or locked row. It renders only the areas the workspace
+ * response actually returned.
  *
  * D-15: `overdue` is a value the SERVER attaches to every item response —
  * this page never recomputes it client-side, only reads item.overdue.
@@ -34,7 +35,7 @@
   // admin/hrbp (the same audience D-02 gives area grants to).
   var state = {
     areas: [], itemsByArea: {}, checklistStatus: '', findingsByArea: {},
-    vdrLinksByArea: {}, role: '', dealId: null, vdrGrantStatus: '',
+    vdrLinksByArea: {}, role: '', dealId: null, vdrGrantStatus: '', summary: { mine: null },
   };
 
   function el(tag, opts) {
@@ -45,26 +46,30 @@
     return node;
   }
 
+  // D-12-02 / PD-16: ONE request per load and per refresh. GET /api/dd/workspace
+  // returns the caller's cleared areas plus, for each cleared area only, its
+  // request items, findings and data-room links, and the caller's own `mine`
+  // nudge counts — every array is the same clearance-filtered list the
+  // per-area routes return (the page used to issue 18 requests). An area the
+  // caller is not cleared for has no key in any of the maps.
   function load() {
-    return fetch('/api/dd/areas').then(function (r) { return r.json(); }).then(function (areas) {
-      state.areas = Array.isArray(areas) ? areas : [];
-      var perArea = state.areas.map(function (a) {
-        return fetch('/api/dd/request-items?area=' + encodeURIComponent(a.id))
-          .then(function (r) { return r.json(); })
-          .then(function (items) { state.itemsByArea[a.id] = Array.isArray(items) ? items : []; })
-          .then(function () {
-            return fetch('/api/dd/findings?area=' + encodeURIComponent(a.id))
-              .then(function (r) { return r.json(); })
-              .then(function (findings) { state.findingsByArea[a.id] = Array.isArray(findings) ? findings : []; });
-          });
+    return fetch('/api/dd/workspace').then(function (r) { return r.json(); }).then(function (ws) {
+      ws = ws && typeof ws === 'object' ? ws : {};
+      state.areas = Array.isArray(ws.areas) ? ws.areas : [];
+      state.itemsByArea = {};
+      state.findingsByArea = {};
+      state.vdrLinksByArea = {};
+      state.areas.forEach(function (a) {
+        var items = ws.itemsByArea && ws.itemsByArea[a.id];
+        var findings = ws.findingsByArea && ws.findingsByArea[a.id];
+        var links = ws.vdrLinksByArea && ws.vdrLinksByArea[a.id];
+        state.itemsByArea[a.id] = Array.isArray(items) ? items : [];
+        state.findingsByArea[a.id] = Array.isArray(findings) ? findings : [];
+        state.vdrLinksByArea[a.id] = Array.isArray(links) ? links : [];
       });
-      // D-17: ONE aggregate fetch, not per-area — GET /api/dd/vdr-links
-      // already groups server-side by cleared area.
-      var vdrAgg = fetch('/api/dd/vdr-links').then(function (r) { return r.json(); }).then(function (agg) {
-        state.vdrLinksByArea = {};
-        (agg && agg.areas ? agg.areas : []).forEach(function (a) { state.vdrLinksByArea[a.area] = a.links || []; });
-      });
-      return Promise.all(perArea.concat([vdrAgg]));
+      // The nudge counts ride along with the workspace response (`mine` is
+      // the same builder as GET /api/dd/summary's), so no second request.
+      state.summary = { mine: ws.mine || null };
     });
   }
 
@@ -401,7 +406,7 @@
   }
 
   // D-17: the per-area aggregate of every item's data-room reference, from
-  // the SAME GET /api/dd/vdr-links response load() already fetched once —
+  // the vdrLinksByArea map load() received in the single workspace response —
   // this function only reads state.vdrLinksByArea, it never re-fetches.
   function renderVdrLinksList(area) {
     var section = el('div', { className: 'dd-vdr-list' });
@@ -544,8 +549,9 @@
   }
 
   // D-21: the owner nudge — badge + dismissible banner for open/overdue
-  // rows assigned to the SIGNED-IN caller, sourced from GET /api/dd/summary's
-  // already-clearance-scoped `mine` counts (Task 1). Names counts only —
+  // rows assigned to the SIGNED-IN caller, sourced from the already-
+  // clearance-scoped `mine` counts GET /api/dd/workspace returns (the same
+  // builder as GET /api/dd/summary). Names counts only —
   // never an area, an item title or another person — because a banner is
   // legible to anyone standing near the screen, not only the signed-in
   // user. Raised through the SAME shared banner mechanism (transitions.js's
@@ -600,10 +606,11 @@
     }
   }
 
+  // The nudge counts arrive with the workspace response (state.summary.mine) — no
+  // request of its own. Best-effort: absent counts simply leave the nudge off.
   function loadOwnerNudge() {
-    return fetch('/api/dd/summary').then(function (r) { return r.json(); }).then(function (summary) {
-      renderOwnerNudge(summary && summary.mine);
-    }).catch(function () { /* best-effort — the nudge simply stays absent */ });
+    try { renderOwnerNudge(state.summary && state.summary.mine); } catch (e) { /* the nudge simply stays absent */ }
+    return Promise.resolve();
   }
 
   document.addEventListener('DOMContentLoaded', function () {

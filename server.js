@@ -6783,6 +6783,42 @@ function publicDdItem(item) {
   return Object.assign({}, item, { overdue: computeOverdue(item) });
 }
 
+// D-12-02 (Phase 12, plan 12-10): the collections the due-diligence handlers
+// actually read. A DD request loads exactly these through readCollections()
+// instead of reconstructing the whole deal; any other collection a handler
+// touches is a throwing accessor (CollectionNotLoadedError), never an empty
+// array. Templates (ddRequestTemplates), tasks and RAID are read only by the
+// convert/instantiate routes, which stay on readDb().
+const DD_READ_SET = ['settings', 'ddRequestItems', 'ddFindings'];
+
+// The caller's own "what do I owe" counts. `items`/`findings` MUST already be
+// clearance-filtered (accessPolicy.filterByAreaGrant) — an uncleared area's
+// rows can then never contribute to the caller's count (T-04-45). Shared by
+// GET /api/dd/summary and GET /api/dd/workspace so the two can never disagree.
+function ddMineFor(items, findings, user) {
+  const myUsername = String((user && user.username) || '').trim();
+  const mine = { openItems: 0, overdueItems: 0, openFindings: 0 };
+  items.forEach((item) => {
+    if (String(item.owner || '').trim() !== myUsername) return;
+    if (item.status !== 'closed') mine.openItems++;
+    if (computeOverdue(item)) mine.overdueItems++;
+  });
+  findings.forEach((finding) => {
+    if (String(finding.owner || '').trim() !== myUsername) return;
+    if (finding.status === 'open') mine.openFindings++;
+  });
+  return mine;
+}
+
+// One data-room link row — the shape GET /api/dd/vdr-links and the workspace
+// both return per item.
+function ddVdrLinkEntry(item) {
+  return {
+    itemId: item.id, text: item.text, url: item.vdrLink.url, folderRef: item.vdrLink.folderRef,
+    label: item.vdrLink.label || '', updatedAt: item.vdrLink.updatedAt, updatedBy: item.vdrLink.updatedBy,
+  };
+}
+
 // DD-05/D-17: applies `vdrLink` from the upsert body onto `item`, called on
 // BOTH the create and update paths below. Absent key -> item's own value is
 // left untouched. Explicit `vdrLink: null` -> cleared. A non-null value
@@ -6813,10 +6849,55 @@ app.get('/api/dd/areas', (req, res) => {
   res.json(accessPolicy.DD_AREAS.filter((a) => granted.has(a.id)));
 });
 
+// D-12-02 / PD-16: the whole due-diligence workspace in ONE request — the
+// caller's cleared areas plus, per cleared area, its request items, findings
+// and data-room links, and the caller's own `mine` nudge counts. The page used
+// to make 18 requests per load (areas + 2 per area + vdr-links + summary), each
+// a full-deal read. Every field is produced by the SAME functions the per-area
+// routes use (grantedAreas, filterByAreaGrant, publicDdItem, ddVdrLinkEntry,
+// ddMineFor), so each per-area array is byte-for-byte what that route returns.
+// [security] D-16/T-12-90: the three by-area objects are seeded ONLY from the
+// granted area ids, so an uncleared area has no key, no empty array and no
+// count anywhere in the response — absence carries no signal. Rows are
+// clearance-filtered BEFORE grouping (T-04-01), never after. T-12-91: one
+// `dd-findings-read` row (subject 'workspace') per real-deal load replaces the
+// one-per-area rows the page load used to write; demo loads write none,
+// matching GET /api/dd/findings.
+app.get('/api/dd/workspace', (req, res) => {
+  const db = readCollections(DD_READ_SET);
+  const deal = controlStore.getDeal(req.dealContext.dealId);
+  const granted = new Set(accessPolicy.grantedAreas(deal, req.portalUser));
+  const areas = accessPolicy.DD_AREAS.filter((a) => granted.has(a.id));
+
+  const items = accessPolicy.filterByAreaGrant(ddRequestLane(db), deal, req.portalUser);
+  const findings = accessPolicy.filterByAreaGrant(ddFindingsLane(db), deal, req.portalUser);
+
+  const itemsByArea = {};
+  const findingsByArea = {};
+  const vdrLinksByArea = {};
+  areas.forEach((a) => { itemsByArea[a.id] = []; findingsByArea[a.id] = []; vdrLinksByArea[a.id] = []; });
+  items.forEach((item) => {
+    if (!itemsByArea[item.area]) return; // defensive; filterByAreaGrant() already guarantees this
+    itemsByArea[item.area].push(publicDdItem(item));
+    if (item.vdrLink) vdrLinksByArea[item.area].push(ddVdrLinkEntry(item));
+  });
+  findings.forEach((finding) => {
+    if (findingsByArea[finding.area]) findingsByArea[finding.area].push(finding);
+  });
+
+  if (!req.isDemo) {
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'dd-findings-read', dealId: req.dealContext.dealId,
+      subject: 'workspace', before: null, after: null, request: requestMeta(req),
+    });
+  }
+  res.json({ areas, itemsByArea, findingsByArea, vdrLinksByArea, mine: ddMineFor(items, findings, req.portalUser) });
+});
+
 // T-04-01: filterByAreaGrant() runs server-side on EVERY list response — an
 // uncleared area's items are omitted here, never filtered client-side.
 app.get('/api/dd/request-items', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddRequestLane(db);
   let visible = accessPolicy.filterByAreaGrant(lane, deal, req.portalUser);
@@ -6864,13 +6945,16 @@ function ddAreaRefused(req, res, deal, areaId) {
 }
 
 app.get('/api/dd/request-items/:id', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const item = ddRequestLane(db).find((i) => i.id === req.params.id);
   if (ddAreaRefused(req, res, deal, item ? item.area : null)) return;
   res.json(publicDdItem(item));
 });
 
+// D-12-02 (PD-20): DELETE, instantiate and finding convert stay on readDb() —
+// rare, multi-lane (convert/instantiate touch tasks + RAID + templates) and
+// already proportional on WRITE thanks to the dirty-row writeDb (12-02).
 app.delete('/api/dd/request-items/:id', (req, res) => {
   const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
@@ -6899,7 +6983,7 @@ app.delete('/api/dd/request-items/:id', (req, res) => {
 // between areas requires clearance for both sides).
 app.post('/api/dd/request-items', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddRequestLane(db);
 
@@ -6974,7 +7058,7 @@ app.post('/api/dd/request-items', (req, res) => {
 // `links` array) — mirroring GET /api/dd/areas's own D-16 shape, so absence
 // carries no signal about whether the caller is cleared for it.
 app.get('/api/dd/vdr-links', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddRequestLane(db);
   const withLinks = lane.filter((item) => item.vdrLink);
@@ -6982,10 +7066,7 @@ app.get('/api/dd/vdr-links', (req, res) => {
   const byArea = new Map();
   visible.forEach((item) => {
     if (!byArea.has(item.area)) byArea.set(item.area, []);
-    byArea.get(item.area).push({
-      itemId: item.id, text: item.text, url: item.vdrLink.url, folderRef: item.vdrLink.folderRef,
-      label: item.vdrLink.label || '', updatedAt: item.vdrLink.updatedAt, updatedBy: item.vdrLink.updatedBy,
-    });
+    byArea.get(item.area).push(ddVdrLinkEntry(item));
   });
   const areaFilter = req.query.area;
   const areas = accessPolicy.DD_AREAS
@@ -6999,7 +7080,9 @@ app.get('/api/dd/vdr-links', (req, res) => {
 // list, not deal content — it carries no MNPI, so this list route is
 // unfiltered (no area-grant check), unlike GET /api/dd/request-items above.
 app.get('/api/dd/request-templates', (req, res) => {
-  res.json(readDb().ddRequestTemplates || []);
+  // D-12-02: only the templates collection (not in DD_READ_SET — no other DD
+  // route reads it except instantiate, which stays on readDb()).
+  res.json(readCollections(['ddRequestTemplates']).ddRequestTemplates || []);
 });
 
 // Instantiate a DD request template: every item becomes a live request item
@@ -7068,7 +7151,7 @@ const DD_FINDING_SEVERITIES = ['low', 'medium', 'high', 'critical'];
 const DD_FINDING_STATUSES = ['open', 'mitigating', 'closed'];
 
 app.get('/api/dd/findings', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddFindingsLane(db);
   let visible = accessPolicy.filterByAreaGrant(lane, deal, req.portalUser);
@@ -7089,7 +7172,7 @@ app.get('/api/dd/findings', (req, res) => {
 });
 
 app.get('/api/dd/findings/:id', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const finding = ddFindingsLane(db).find((f) => f.id === req.params.id);
   if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
@@ -7129,7 +7212,7 @@ app.delete('/api/dd/findings/:id', (req, res) => {
 // `area` additionally requires clearance for that NEW area.
 app.post('/api/dd/findings', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddFindingsLane(db);
 
@@ -7334,7 +7417,7 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
 // unfiltered by the caller's own grant; this route only ever reports the
 // caller's own view.
 app.get('/api/dd/summary', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const grantedSet = new Set(accessPolicy.grantedAreas(deal, req.portalUser));
 
@@ -7390,18 +7473,9 @@ app.get('/api/dd/summary', (req, res) => {
 
   // `mine` is derived from the SAME already-filtered `items`/`findings`
   // arrays above — an uncleared area's own rows can never contribute to the
-  // caller's own "what do I owe" count either.
-  const myUsername = String((req.portalUser && req.portalUser.username) || '').trim();
-  const mine = { openItems: 0, overdueItems: 0, openFindings: 0 };
-  items.forEach((item) => {
-    if (String(item.owner || '').trim() !== myUsername) return;
-    if (item.status !== 'closed') mine.openItems++;
-    if (computeOverdue(item)) mine.overdueItems++;
-  });
-  findings.forEach((finding) => {
-    if (String(finding.owner || '').trim() !== myUsername) return;
-    if (finding.status === 'open') mine.openFindings++;
-  });
+  // caller's own "what do I owe" count either (ddMineFor, shared with the
+  // workspace route).
+  const mine = ddMineFor(items, findings, req.portalUser);
 
   res.json({ areas, totals, mine });
 });

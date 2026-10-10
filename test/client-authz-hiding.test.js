@@ -1341,7 +1341,8 @@ test('WR-C04 (vm): due-diligence.js and org.js send no request for a role refuse
   assert.deepStrictEqual(await bootPageScript('org.js', ME_EMPLOYEE, '/org.html', me), []);
   for (const meBody of [ME_PMO, ME_OPEN]) {
     const dd = await bootPageScript('due-diligence.js', meBody, '/due-diligence.html', me);
-    assert.deepStrictEqual(dd, ['/api/auth/me', '/api/dd/areas']);
+    // 12-10 (D-12-02): the page's one DD request is the workspace batch (was /api/dd/areas + 17 more).
+    assert.deepStrictEqual(dd, ['/api/auth/me', '/api/dd/workspace']);
     const org = await bootPageScript('org.js', meBody, '/org.html', me);
     assert.deepStrictEqual(org.sort(), ['/api/auth/me', '/api/employees', '/api/org/capabilities', '/api/org/positions']);
   }
