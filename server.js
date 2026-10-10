@@ -420,32 +420,48 @@ function parseExpectedVersion(req) {
   return { version: n, invalid: false };
 }
 
-// CONC-02 (Phase 9, PD-2 route-level precheck layer): a fast, informative
-// 409 in the common single-process case, using THIS request's own freshly-
-// read `record` — never a substitute for the WHERE-clause layer in
-// db/store.js's writeDb(), which is the one that is actually race-free
-// against Phase 8's multi-process model (09-RESEARCH.md Pattern 2). Fires
-// when the client actually supplied a version (via `parseExpectedVersion`
-// above — either `req.body.version` or `req.query.expectedVersion`).
+// CONC-02 (Phase 9): the single optimistic-locking gate every versioned
+// write route passes through. It owns two layers of the contract, in order:
 //
-// CONC-02 gap closure (plan 09-08, GD-1/GD-1b/GD-2): a request that supplies
-// NO precondition is refused 400 `{ error, versionRequired: true }` when the
-// route opted in with `opts.requirePrecondition` AND `req.isDemo !== true` —
-// the fail-closed predicate: every request that is not positively a
-// demo-store request (a deal-bound one, or one with no resolver context at
-// all) is strict; the demo store stays lenient (D-09 lazy adoption). A
-// missing STORED version is still version 0, so a client holding a
-// never-edited record sends `version: 0` and is judged like any other. This
-// is an opt-in per route family during the rollout (plan 09-09 extends it);
-// plan 09-10 folds it into this function unconditionally and deletes the
-// option.
+//   1. Route-level precondition (PD-2, this function). A fast, informative
+//      409 in the common single-process case, judged against THIS request's
+//      own freshly-read `record`. It is never a substitute for the
+//      WHERE-clause layer in db/store.js's writeDb(), which is the one that
+//      is actually race-free against Phase 8's multi-process model
+//      (09-RESEARCH.md Pattern 2) — the two layers are deliberately both
+//      kept.
+//   2. The precondition RULE (GD-1/GD-1a/GD-1b/GD-2, D-02, D-06): an update
+//      or delete of an EXISTING record (`record` truthy) that supplies NO
+//      precondition — neither `req.body.version` nor
+//      `req.query.expectedVersion`, resolved by parseExpectedVersion() above
+//      — is refused 400 `{ error, versionRequired: true }`, because a write
+//      that names no version cannot be judged stale. There is no per-route
+//      opt-in or opt-out: the rule is unconditional and lives only here, so
+//      every current and future versioned route inherits it. The structural
+//      Part 1 gate in test/optimistic-locking-contract.test.js fails the
+//      suite when a versioned-lane write handler skips this function, and
+//      S1 in test/optimistic-locking-precondition.test.js fails it if an
+//      option ever re-introduces a per-route switch.
 //
-// `opts.clearanceFilter`, when given, is applied to `record` before it is
-// echoed into the 409 body — the hook plans 04/05 pass the existing
-// DD/org area-clearance gates through, so a race where the record's area
-// concurrently changed to one the caller isn't cleared for cannot leak the
-// full current record (09-RESEARCH.md Architecture Pattern 3). RAID entries
-// are not area-gated, so this plan passes none.
+// Fail-closed demo predicate (GD-1b): only `req.isDemo === true` (set by
+// db/resolver.js for the demo store) is lenient — D-09 lazy adoption keeps
+// the committed demo data byte-identical. A deal-bound request OR a request
+// with no resolver context at all is strict. A create (`record` falsy) is
+// never refused for lacking a precondition (D-06: creates carry no version
+// precondition). A missing STORED version is version 0, so a client holding
+// a never-edited record sends `version: 0` and is judged like any other.
+// Only exact equality passes (D-01): one version below OR above the stored
+// one is a conflict.
+//
+// `opts.clearanceFilter` is the ONLY option. When given, it is applied to
+// `record` before it is echoed into the 409 body, and it is armed on the
+// request's db context (CR-01) BEFORE every return below — including the
+// 400s — so the WHERE-layer conflict throw can never echo an unfiltered
+// record even when the client sent no (or an invalid) version. The DD/org
+// callers pass their area-clearance gates through it, so a race where the
+// record's area concurrently changed to one the caller isn't cleared for
+// cannot leak the full current record (09-RESEARCH.md Pattern 3). The
+// arming statement must stay first; do not reorder it below a return.
 //
 // Returns `true` when it has already responded (caller must return early
 // without mutating/writing anything further), `false` otherwise.
@@ -472,7 +488,7 @@ function conflictIfStale(req, res, record, opts) {
     return true;
   }
   if (parsed.version === undefined) {
-    if (options.requirePrecondition && record && req.isDemo !== true) {
+    if (record && req.isDemo !== true) {
       res.status(400).json({ error: VERSION_REQUIRED_MESSAGE, versionRequired: true });
       return true;
     }
@@ -3178,7 +3194,7 @@ app.post('/api/integration-tasks', (req, res) => {
     // any field mutation below, including the status-flip branch (a kanban
     // quick action goes through the identical check as a full edit, D-02 —
     // no exemptions for a single-field payload).
-    if (conflictIfStale(req, res, task, { requirePrecondition: true })) return;
+    if (conflictIfStale(req, res, task)) return;
     // Validate EVERYTHING before touching the object — readDb() hands back the
     // shared cache, so a mutation followed by a 400 would silently stick.
     // VAL-01: status/phase enum membership is now owned exclusively by
@@ -3231,7 +3247,7 @@ app.delete('/api/integration-tasks/:id', (req, res) => {
   // dual-channel contract conflictIfStale() already delegates to (Plan 02).
   // Deleting something already gone is not a conflict (the 404 above already
   // covers it) — this only fires when the record is present but stale.
-  if (conflictIfStale(req, res, task, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, task)) return;
   const filtered = lane.filter(t => t.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customIntegrationTasks = filtered;
   else db.integrationTasks = filtered;
@@ -3807,7 +3823,7 @@ app.post('/api/synergies', (req, res) => {
     // CONC-02 (Phase 9): the route-level precheck fast path — placed BEFORE
     // any field mutation below, including the SYN-05 stamping-field
     // computation next.
-    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+    if (conflictIfStale(req, res, item)) return;
     // SYN-05/D-16: computed from the RAW body before any mutation below —
     // whether this edit touches ANY field in the SYNERGY_STAMPING_FIELDS
     // allowlist. Title and notes are deliberately absent from that list.
@@ -3950,7 +3966,7 @@ app.delete('/api/synergies/:id', (req, res) => {
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
   // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection, same
   // query-channel contract as the sibling sub-routes above.
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
   const filtered = lane.filter(s => s.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customSynergyInitiatives = filtered;
   else db.synergyInitiatives = filtered;
@@ -3973,7 +3989,7 @@ app.post('/api/synergies/:id/cost-entries', (req, res) => {
   // CONC-02 (Phase 9, Plan 02 Task 2): a cost-entry addition mutates the
   // owning initiative record — D-02 gives it no exemption from the version
   // precondition, even though the entry itself is a nested sub-object.
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
 
   item.costEntries = Array.isArray(item.costEntries) ? item.costEntries : [];
   const entry = { id: newId('cost'), date: b.date, amountM: roundSynergyMoney(b.amountM), note: String(b.note || '').slice(0, 2000) };
@@ -3998,7 +4014,7 @@ app.delete('/api/synergies/:id/cost-entries/:eid', (req, res) => {
   // contract Task 1 built. This is an UPDATE of the initiative (deleting a
   // nested entry from it), never a record delete, so it uses the ordinary
   // conflict path rather than a later plan's stale-delete surface.
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
 
   const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
   const filtered = entries.filter(e => e.id !== req.params.eid);
@@ -4031,7 +4047,7 @@ app.post('/api/synergies/:id/generate-phasing', (req, res) => {
   // item.phasing (a destructive act the client already confirms) — the
   // version precondition is checked here too, D-02, before any of the
   // fields below are touched.
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
 
   item.runRateM = roundSynergyMoney(b.runRateM);
   item.startMonth = b.startMonth;
@@ -4089,7 +4105,7 @@ app.post('/api/synergies/:id/phasing/:month', (req, res) => {
   // CONC-02 (Phase 9, Plan 02 Task 2): placed immediately after the
   // not-found guard — before the month-shape/row-existence checks below —
   // and before the first mutation of the resolved initiative (D-02).
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
 
   // SYN-01/D-25: a malformed :month path param is a 400 (bad request shape),
   // distinct from a well-formed month that simply has no row (404 below) —
@@ -4144,7 +4160,7 @@ app.post('/api/synergies/:id/stage', (req, res) => {
   // fires and returns first whenever a stale version is supplied, regardless
   // of whether the request would otherwise hit the same-stage no-op, the
   // unrecognized-stage refusal, or a real stage move.
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
 
   const targetStage = b.targetStage;
   const reason = String(b.reason || '').trim();
@@ -4215,7 +4231,7 @@ app.post('/api/synergies/:id/rebaseline', (req, res) => {
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
   // CONC-02 (Phase 9, Plan 02 Task 2): after the not-found guard, before
   // any mutation (D-02).
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
 
   const reason = String(b.reason || '').trim();
   if (!reason) return res.status(400).json({ error: 'A reason is required to re-baseline.' });
@@ -4242,7 +4258,7 @@ app.post('/api/synergies/:id/confirm-current', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
 
   item.lastConfirmedAt = new Date().toISOString();
   writeDb(db);
@@ -4406,7 +4422,7 @@ app.post('/api/raid', (req, res) => {
     if (!item) return res.status(404).json({ error: 'Entry not found.' });
     // CONC-02 (Phase 9, tracer): the route-level precheck fast path — RAID
     // entries carry no area-clearance gate, so no clearanceFilter is passed.
-    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+    if (conflictIfStale(req, res, item)) return;
     // Validate before mutating the shared readDb() cache (see task update).
     // VAL-01: status enum membership is now owned exclusively by
     // validators/workstream.js's RaidUpsertSchema (z.enum); the
@@ -4584,7 +4600,7 @@ app.post('/api/org/positions', (req, res) => {
     // area grant checked at the top, so a caller reaching this path is
     // already cleared for every record the route can resolve — a
     // per-record filter would be a second, parallel check of the same fact.
-    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+    if (conflictIfStale(req, res, item)) return;
     // Evaluate a shallow merge of the existing row and the incoming keys
     // BEFORE any field of the stored row is mutated — readDb() hands back a
     // shared cache, so a mutation followed by a refusal would stick.
@@ -4710,7 +4726,7 @@ app.delete('/api/org/positions/:id', (req, res) => {
   // a delete that is both stale AND blocked by direct reports returns 409,
   // not 400, so the caller learns their view is stale (the more fundamental
   // problem) before the business-rule refusal.
-  if (conflictIfStale(req, res, target, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, target)) return;
   const directReports = lane.filter((p) => p.reportsToId === target.id);
   if (directReports.length) {
     return res.status(400).json({ error: `This position has ${directReports.length} direct report(s) — reassign them before deleting.` });
@@ -5118,7 +5134,7 @@ app.post('/api/org/flight-risk', (req, res) => {
     // above — after the not-found guard and the employee-existence check,
     // before the first field of the stored row is mutated. No
     // clearanceFilter, for the same reason given there.
-    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+    if (conflictIfStale(req, res, item)) return;
     if (b.employeeId !== undefined) item.employeeId = b.employeeId;
     if (b.riskLevel !== undefined) item.riskLevel = b.riskLevel;
     // WR-02 (06-REVIEW.md): a blank/whitespace-only owner defaults to the
@@ -5182,7 +5198,7 @@ app.delete('/api/org/flight-risk/:id', (req, res) => {
   const item = lane.find((r) => r.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Flight-risk entry not found.' });
   // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection.
-  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, item)) return;
   db.orgFlightRisks = lane.filter((r) => r.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
@@ -5221,7 +5237,7 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   // untouched (Pitfall 6) — nothing here has mutated anything yet. No
   // clearanceFilter, for the same reason given on the sibling routes above:
   // the whole route is already gated on a single `hr` area grant.
-  if (conflictIfStale(req, res, entry, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, entry)) return;
 
   const source = 'org-flightrisk:' + entry.id;
   const employee = employeeRosterLane(db).find((e) => e.id === entry.employeeId);
@@ -5524,7 +5540,6 @@ app.delete('/api/dd/request-items/:id', (req, res) => {
   // documented reasoning applies identically here).
   if (conflictIfStale(req, res, item, {
     clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? publicDdItem(record) : null,
-    requirePrecondition: true,
   })) return;
   db.ddRequestItems = lane.filter((i) => i.id !== req.params.id);
   writeDb(db);
@@ -5559,7 +5574,6 @@ app.post('/api/dd/request-items', (req, res) => {
     // never discloses a wider shape than the route's 200 response would.
     if (conflictIfStale(req, res, item, {
       clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? publicDdItem(record) : null,
-      requirePrecondition: true,
     })) return;
     // Validate everything before mutating the shared readDb() cache (see
     // the task/RAID/synergy handlers' identical ordering comment above).
@@ -5757,7 +5771,6 @@ app.delete('/api/dd/findings/:id', (req, res) => {
   // this route's POST sibling.
   if (conflictIfStale(req, res, finding, {
     clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
-    requirePrecondition: true,
   })) return;
   db.ddFindings = lane.filter((f) => f.id !== req.params.id);
   writeDb(db);
@@ -5788,7 +5801,6 @@ app.post('/api/dd/findings', (req, res) => {
     // learns their write was rejected) but no field value from the finding.
     if (conflictIfStale(req, res, finding, {
       clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
-      requirePrecondition: true,
     })) return;
     // VAL-01: title-required-when-id-absent is owned by the schema's own
     // refine(); this empty-title-on-UPDATE guard stays here because the
@@ -5869,7 +5881,6 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
   // yet. Same clearance-filtered conflict body as POST /api/dd/findings.
   if (conflictIfStale(req, res, finding, {
     clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
-    requirePrecondition: true,
   })) return;
 
   const source = 'dd-finding:' + finding.id;
@@ -6089,7 +6100,7 @@ app.delete('/api/raid/:id', (req, res) => {
   // rejection via the query-channel version precondition. A delete that
   // carries NO expectedVersion cannot be judged stale, so it is refused in a
   // real deal (plan 09-08, GD-1a, D-02 no exemptions); demo stays lenient.
-  if (conflictIfStale(req, res, entry, { requirePrecondition: true })) return;
+  if (conflictIfStale(req, res, entry)) return;
   const filtered = lane.filter(r => r.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customRaidEntries = filtered;
   else db.raidEntries = filtered;

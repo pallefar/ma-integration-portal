@@ -304,3 +304,115 @@ test('precondition (P7): in the demo store (unbound session) DELETE /api/raid/:i
     assert.strictEqual(await findRaid(base, token, entry.id), undefined);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 09-10 Task 1 (tracer): the rule is unconditional inside conflictIfStale().
+// U1-U6 drive the function directly with a recording fake `res`; S1 is the
+// structural guard that no per-route opt-in can come back (T-09-36/T-09-42).
+// ---------------------------------------------------------------------------
+
+function recordingRes() {
+  const r = { code: null, body: null, sent: 0 };
+  r.status = function (c) { r.code = c; return r; };
+  r.json = function (b) { r.body = b; r.sent += 1; return r; };
+  return r;
+}
+
+test('precondition (U1): a non-demo request with no precondition against an existing record is refused 400 versionRequired', () => {
+  const res = recordingRes();
+  const handled = app.conflictIfStale({ body: {}, query: {}, isDemo: false }, res, { id: 'x', version: 2 });
+  assert.strictEqual(handled, true);
+  assert.strictEqual(res.code, 400);
+  assert.strictEqual(res.body.versionRequired, true);
+  assert.deepStrictEqual(Object.keys(res.body).sort(), ['error', 'versionRequired']);
+});
+
+test('precondition (U2): a demo-store request (isDemo === true) with no precondition passes through untouched', () => {
+  const res = recordingRes();
+  const handled = app.conflictIfStale({ body: {}, query: {}, isDemo: true }, res, { id: 'x', version: 2 });
+  assert.strictEqual(handled, false);
+  assert.strictEqual(res.sent, 0, 'nothing is sent for a lenient demo request');
+});
+
+test('precondition (U3): fail-closed — a request with no isDemo key at all is strict', () => {
+  const res = recordingRes();
+  const handled = app.conflictIfStale({ body: {}, query: {} }, res, { id: 'x', version: 2 });
+  assert.strictEqual(handled, true);
+  assert.strictEqual(res.code, 400);
+  assert.strictEqual(res.body.versionRequired, true);
+});
+
+test('precondition (U4): a create (no existing record) is never refused for lacking a precondition', () => {
+  for (const record of [null, undefined]) {
+    const res = recordingRes();
+    const handled = app.conflictIfStale({ body: {}, query: {}, isDemo: false }, res, record);
+    assert.strictEqual(handled, false);
+    assert.strictEqual(res.sent, 0);
+  }
+});
+
+test('precondition (U5): only exact equality passes; one below and one above are 409 carrying the stored currentVersion', () => {
+  const stored = { id: 'x', version: 2 };
+  const ok = recordingRes();
+  assert.strictEqual(app.conflictIfStale({ body: { version: 2 }, query: {}, isDemo: false }, ok, stored), false);
+  assert.strictEqual(ok.sent, 0);
+  for (const v of [1, 3]) {
+    const res = recordingRes();
+    assert.strictEqual(app.conflictIfStale({ body: { version: v }, query: {}, isDemo: false }, res, stored), true);
+    assert.strictEqual(res.code, 409);
+    assert.strictEqual(res.body.conflict, true);
+    assert.strictEqual(res.body.currentVersion, 2);
+  }
+});
+
+test('precondition (U6): an invalid expectedVersion query is a 400 with the unchanged message, never "no precondition"', () => {
+  const res = recordingRes();
+  const handled = app.conflictIfStale({ body: {}, query: { expectedVersion: 'abc' }, isDemo: false }, res, { id: 'x', version: 2 });
+  assert.strictEqual(handled, true);
+  assert.strictEqual(res.code, 400);
+  assert.strictEqual(res.body.error, 'expectedVersion must be a non-negative integer.');
+  assert.strictEqual(res.body.versionRequired, undefined);
+});
+
+test('precondition (S1, structural): the rule sits in the body of conflictIfStale(); no call site passes any option but clearanceFilter; no per-route opt-in exists', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const defIdx = src.indexOf('function conflictIfStale(');
+  assert.ok(defIdx !== -1, 'the single definition must exist');
+  const openIdx = src.indexOf('{', src.indexOf(')', defIdx));
+  const closeIdx = braceMatchPre(src, openIdx);
+  assert.ok(closeIdx > openIdx);
+  const body = src.slice(openIdx, closeIdx + 1);
+  assert.ok(body.includes('versionRequired: true'), 'the precondition-required response lives in the function body');
+  assert.ok(!/(options|opts)\.\w*[Pp]recondition/.test(body), 'the function body must not consult a per-route option');
+  assert.ok(!/requirePrecondition/.test(src), 'server.js must contain no reference to a per-route precondition option');
+
+  // Every call site: collect the paren-balanced argument text and its options-object keys.
+  const callRe = /conflictIfStale\(/g;
+  let m; let sites = 0;
+  while ((m = callRe.exec(src))) {
+    const lineStart = src.lastIndexOf('\n', m.index) + 1;
+    const linePrefix = src.slice(lineStart, m.index);
+    if (!/^\s*if \(\s*$/.test(linePrefix)) continue; // the definition and comment mentions
+    let depth = 1; let i = m.index + m[0].length;
+    for (; i < src.length && depth > 0; i++) {
+      if (src[i] === '(') depth++;
+      else if (src[i] === ')') depth--;
+    }
+    const args = src.slice(m.index + m[0].length, i - 1);
+    sites += 1;
+    const braceAt = args.indexOf('{');
+    if (braceAt === -1) continue; // plain three-argument form
+    const objEnd = braceMatchPre(args, braceAt);
+    const obj = args.slice(braceAt + 1, objEnd).replace(/\/\/[^\n]*/g, '');
+    // top-level keys only (clearanceFilter's arrow body holds nested parens/ternary colons)
+    let d = 0; let stripped = '';
+    for (const ch of obj) {
+      if (ch === '{' || ch === '(' || ch === '[') d++;
+      else if (ch === '}' || ch === ')' || ch === ']') d--;
+      else if (d === 0) stripped += ch;
+    }
+    const keys = [...stripped.matchAll(/(?:^|,)\s*([A-Za-z_]\w*)\s*:/g)].map((k) => k[1]);
+    assert.deepStrictEqual([...new Set(keys)], ['clearanceFilter'], `call site passes an option other than clearanceFilter: ${args.slice(0, 120)}`);
+  }
+  assert.strictEqual(sites, 23, 'every one of the 23 versioned write handlers calls conflictIfStale()');
+});

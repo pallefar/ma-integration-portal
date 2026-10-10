@@ -1932,15 +1932,36 @@ test('CR-01 (c, arming): conflictIfStale() with a clearanceFilter arms areaClear
   const ctx = { conn: null, kind: 'deal', dealId: 'deal_cr01c', dbPath: null };
   const denyAll = () => null;
   store.runWithDb(ctx, () => {
-    const req = { body: {}, query: {} };
+    // Demo-shaped request (the demo store is lenient, D-09): no client
+    // version supplied — the precheck passes through, having armed first.
+    const req = { body: {}, query: {}, isDemo: true };
     const res = { status() { return this; }, json() { return this; } };
     const handled = app.conflictIfStale(req, res, { id: 'x', version: 3, area: 'legal' }, { clearanceFilter: denyAll });
-    assert.strictEqual(handled, false, 'no client version supplied — precheck passes through');
+    assert.strictEqual(handled, false, 'no client version supplied on a demo-shaped request — precheck passes through');
   });
   assert.strictEqual(typeof ctx.areaClearanceFilter, 'function',
     'the WHERE-layer filter must be armed as a side effect of the precheck, before its early returns');
   assert.strictEqual(ctx.areaClearanceFilter('ddFindings', { id: 'x', title: 'secret' }), null,
     'the armed hook applies the SAME rule the precheck would have applied');
+});
+
+test('CR-01 (c2, arming on the 400 path): a deal-shaped request with no precondition gets 400 versionRequired AND the filter was armed before that return (09-10, T-09-44)', () => {
+  const ctx = { conn: null, kind: 'deal', dealId: 'deal_cr01c2', dbPath: null };
+  const denyAll = () => null;
+  const sent = { code: null, body: null };
+  let handled;
+  store.runWithDb(ctx, () => {
+    const req = { body: {}, query: {}, isDemo: false };
+    const res = { status(c) { sent.code = c; return this; }, json(b) { sent.body = b; return this; } };
+    handled = app.conflictIfStale(req, res, { id: 'x', version: 3, area: 'legal' }, { clearanceFilter: denyAll });
+  });
+  assert.strictEqual(handled, true, 'a strict request with no precondition is handled (refused)');
+  assert.strictEqual(sent.code, 400);
+  assert.strictEqual(sent.body.versionRequired, true);
+  assert.deepStrictEqual(Object.keys(sent.body).sort(), ['error', 'versionRequired'], 'the refusal never carries the record');
+  assert.strictEqual(typeof ctx.areaClearanceFilter, 'function',
+    'the arming statement precedes the new 400 return — a refused request can still never leak through the WHERE layer');
+  assert.strictEqual(ctx.areaClearanceFilter('ddFindings', { id: 'x', title: 'secret' }), null);
 });
 
 test('CR-01 (d, store-layer parity): with an armed granting filter, the WHERE-layer conflict echoes the FILTERED projection, not the raw record', () => {
