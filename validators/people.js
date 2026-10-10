@@ -43,6 +43,29 @@ registerSchema('POST', '/api/employees/complete-lesson', CompleteLessonSchema);
 registerSchema('POST', '/api/employees/uncomplete-lesson', CompleteLessonSchema);
 
 // ---------------------------------------------------------------------------
+// POST /api/employees/get-or-create — { empId, name, role, department,
+// company, isLeader, leaderRole, buddyName, buddyEmail }. [security] D-11-04 /
+// AUTHZ-04 (R3 F-2): this was `GET /api/employees/get-or-create?...` — a GET
+// that creates roster rows, so it bypassed BOTH ROLE_WRITE_POLICY and
+// validationMiddleware (each keyed on write methods) and was triggerable by a
+// plain cross-site link or <img>. Every field is optional and bounded; unknown
+// keys are stripped by zod's default object behaviour. The handler (not this
+// schema) decides which supplied values it honours for a restricted caller.
+// ---------------------------------------------------------------------------
+const EmployeeGetOrCreateSchema = z.object({
+  empId: z.string().trim().max(ID_MAX).optional(),
+  name: z.string().trim().max(NAME_MAX).optional(),
+  role: z.string().trim().max(NAME_MAX).optional(),
+  department: z.string().trim().max(NAME_MAX).optional(),
+  company: z.string().trim().max(NAME_MAX).optional(),
+  isLeader: z.union([z.boolean(), z.string().max(10)]).optional(),
+  leaderRole: z.string().trim().max(NAME_MAX).optional(),
+  buddyName: z.string().trim().max(NAME_MAX).optional(),
+  buddyEmail: z.string().trim().max(EMAIL_MAX).optional(),
+});
+registerSchema('POST', '/api/employees/get-or-create', EmployeeGetOrCreateSchema);
+
+// ---------------------------------------------------------------------------
 // POST /api/employees/award-merit — { empId, points }. The handler's own
 // `parseInt(points) || 50` fallback means any value is tolerated at
 // runtime; the schema narrows to what the UI sends (empId required, points
@@ -120,6 +143,7 @@ registerSchema('DELETE', '/api/communications/:id', EmptyBodySchema);
 
 module.exports = {
   EmployeeUpsertSchema,
+  EmployeeGetOrCreateSchema,
   CompleteLessonSchema,
   AwardMeritSchema,
   HrbpUpsertSchema,

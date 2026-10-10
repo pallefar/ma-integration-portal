@@ -2195,9 +2195,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function initializeEmployee() {
-    const url = `/api/employees/get-or-create?empId=${encodeURIComponent(empId)}&name=${encodeURIComponent(name)}&role=${encodeURIComponent(role)}&department=${encodeURIComponent(dept)}&company=${encodeURIComponent(company)}`;
-    
-    fetch(url)
+    // [security] D-11-04 / AUTHZ-04: find-or-create is a state-changing call, so it is a
+    // POST with a JSON body (a plain link or <img> cannot fire it), not a GET.
+    fetch('/api/employees/get-or-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empId, name, role, department: dept, company })
+    })
       .then(res => res.json())
       .then(data => {
         if (data.success) {

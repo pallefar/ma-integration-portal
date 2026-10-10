@@ -138,7 +138,9 @@ const MATRIX = [
   { p: '/api/pulses', deny: [], ok200: true },
   { p: '/api/deals', deny: [], ok200: true },
   { p: '/api/auth/sessions', deny: [], ok200: true },
-  { p: '/api/employees/get-or-create?empId=x', deny: [], ok200: false },
+  // plan 11-06: get-or-create is a POST now; the GET path no longer exists, so a real-deal
+  // employee meets the roster rule's 403 and staff reach the router's 404 (never a 2xx)
+  { p: '/api/employees/get-or-create?empId=x', deny: ['employee'], ok200: false },
 ];
 const READ_GATE_ERROR = 'Your role cannot view this information.';
 
@@ -215,7 +217,8 @@ test('matrix: the final table denies exactly the PRD rows (unit)', () => {
   assert.strictEqual(p.roleAllowedForRead('pmo', '/api/hrbps'), false);
   assert.strictEqual(p.roleAllowedForRead('hrbp', '/api/hrbps'), true);
   assert.strictEqual(p.roleAllowedForRead('employee', '/api/courses'), true);
-  assert.strictEqual(p.roleAllowedForRead('employee', '/api/employees/get-or-create'), true);
+  // plan 11-06: the temporary all-roles get-or-create read rule (amendment 1) is removed
+  assert.strictEqual(p.roleAllowedForRead('employee', '/api/employees/get-or-create'), false);
   assert.deepStrictEqual(p.accessSummaryFor('employee', false).roster, true, 'demo store: everything true');
   assert.deepStrictEqual(p.accessSummaryFor('employee', true).roster, false);
   assert.deepStrictEqual(p.accessSummaryFor('pmo', true).roster, true);
