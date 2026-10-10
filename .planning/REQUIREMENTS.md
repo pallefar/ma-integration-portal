@@ -27,13 +27,13 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 
 ### Accounts & Identity (ACCT)
 
-- [ ] **ACCT-01**: An admin can create a user, set their role, disable and re-enable them, and issue a temporary password from the admin console; every action is audited and a disable or role change takes effect on that user's next request (open sessions re-read role/disabled state).
-- [ ] **ACCT-02**: A real-deal host with no users can create its first admin from a one-time secret via a CLI run as the service user, so no installation ends with nobody able to log in and recovery never depends on a long-lived shared token.
-- [ ] **ACCT-03**: Real-deal mode is explicit and isolated — `MA_MODE=real` set only by `start-real-deal.*`, the service unit and the container image; it runs on its own gitignored data directory seeded from the committed control DB with demo accounts removed; the committed `control.db`/`demo.db` are never opened for writing in real-deal mode; creating a real deal outside real-deal mode against the committed control DB path is refused.
-- [ ] **ACCT-04**: A temporary password forces a change at first login; password hashes use a current work factor and are transparently re-hashed at the next successful login.
-- [ ] **ACCT-05**: Login throttling is keyed per account and source with backoff, and one user's mistakes cannot lock the team out when the server sits behind a reverse proxy.
-- [ ] **ACCT-06**: Every user can change their own password and see and end their own active sessions from the UI.
-- [ ] **ACCT-07**: In real-deal mode the published demo credentials cannot exist or work — the seeded control DB carries no demo accounts, the server refuses to serve beyond login/change-password if any account still verifies the demo password, and the login page shows demo credentials only in demo-open mode.
+- [x] **ACCT-01**: An admin can create a user, set their role, disable and re-enable them, and issue a temporary password from the admin console; every action is audited and a disable or role change takes effect on that user's next request (open sessions re-read role/disabled state).
+- [x] **ACCT-02**: A real-deal host with no users can create its first admin from a one-time secret via a CLI run as the service user, so no installation ends with nobody able to log in and recovery never depends on a long-lived shared token.
+- [x] **ACCT-03**: Real-deal mode is explicit and isolated — `MA_MODE=real` set only by `start-real-deal.*`, the service unit and the container image; it runs on its own gitignored data directory seeded from the committed control DB with demo accounts removed; the committed `control.db`/`demo.db` are never opened for writing in real-deal mode; creating a real deal outside real-deal mode against the committed control DB path is refused.
+- [x] **ACCT-04**: A temporary password forces a change at first login; password hashes use a current work factor and are transparently re-hashed at the next successful login.
+- [x] **ACCT-05**: Login throttling is keyed per account and source with backoff, and one user's mistakes cannot lock the team out when the server sits behind a reverse proxy.
+- [x] **ACCT-06**: Every user can change their own password and see and end their own active sessions from the UI.
+- [x] **ACCT-07**: In real-deal mode the published demo credentials cannot exist or work — the seeded control DB carries no demo accounts, the server refuses to serve beyond login/change-password if any account still verifies the demo password, and the login page shows demo credentials only in demo-open mode.
 
 ### Authorization (AUTHZ)
 
@@ -113,7 +113,7 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 - [ ] **OPS-05**: Configuration is parsed and validated at boot into one documented contract; invalid values refuse to start, `DEMO_OPEN=1` refuses to start when real deals exist, and the effective contract is logged.
 - [ ] **OPS-06**: Logs are structured with request id, duration and status (no bodies or filenames); `/readyz` reports every database, WAL size, free disk and draining state; `/healthz` is cheap and reports the version.
 - [ ] **OPS-07**: The AI key is held only in the environment or a `0600` file outside `data/` and never written to any database; unbounded in-memory structures (throttle map, connection cache) are pruned.
-- [ ] **OPS-08**: MNPI database files and directories are created `0600`/`0700` under any umask. *(Pulled forward into Phase 10.)*
+- [x] **OPS-08**: MNPI database files and directories are created `0600`/`0700` under any umask. *(Pulled forward into Phase 10.)*
 
 ### Deployment & Release (DEPLOY, REL)
 
@@ -126,7 +126,7 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 ### Collaboration (COLLAB) & Setup Wizard (WIZ)
 
 - [ ] **COLLAB-01**: An Integration Lead can invite and assign an existing user to a deal, remove them, and set per-area clearance grants; the clearance ledger (who, area, granted by/at, revoked at) is viewable and exportable.
-- [ ] **COLLAB-02**: A change to a user's role or clearance grants takes effect on their already-open sessions at their next request, not only at next login. *(Pulled forward into Phase 10.)*
+- [x] **COLLAB-02**: A change to a user's role or clearance grants takes effect on their already-open sessions at their next request, not only at next login. *(Pulled forward into Phase 10.)*
 - [ ] **COLLAB-03**: A deal member sees a coarse, MNPI-safe presence signal — how many teammates are active on this deal — without who-is-where detail.
 - [ ] **COLLAB-04**: A deal member sees a clearance-scoped team activity feed served by the same `changes` projection as IL-12 — a read-side projection of the append-only audit, never a new logging path.
 - [ ] **WIZ-02**: The deal-setup wizard has a workstream-lead onboarding step that assigns leads and their per-area clearance grants during setup.
@@ -163,19 +163,19 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 
 ## Traceability
 
-All 86 requirements (2 complete, 84 pending) mapped to exactly one phase.
+All 86 requirements (11 complete, 75 pending) mapped to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CONC-01 | Phase 8 | Complete |
 | CONC-02 | Phase 9 | Complete |
-| ACCT-01 | Phase 10 | Pending |
-| ACCT-02 | Phase 10 | Pending |
-| ACCT-03 | Phase 10 | Pending |
-| ACCT-04 | Phase 10 | Pending |
-| ACCT-05 | Phase 10 | Pending |
-| ACCT-06 | Phase 10 | Pending |
-| ACCT-07 | Phase 10 | Pending |
+| ACCT-01 | Phase 10 | Complete |
+| ACCT-02 | Phase 10 | Complete |
+| ACCT-03 | Phase 10 | Complete |
+| ACCT-04 | Phase 10 | Complete |
+| ACCT-05 | Phase 10 | Complete |
+| ACCT-06 | Phase 10 | Complete |
+| ACCT-07 | Phase 10 | Complete |
 | AUTHZ-01 | Phase 11 | Pending |
 | AUTHZ-02 | Phase 11 | Pending |
 | AUTHZ-03 | Phase 11 | Pending |
@@ -234,14 +234,14 @@ All 86 requirements (2 complete, 84 pending) mapped to exactly one phase.
 | OPS-05 | Phase 20 | Pending |
 | OPS-06 | Phase 20 | Pending |
 | OPS-07 | Phase 20 | Pending |
-| OPS-08 | Phase 10 | Pending |
+| OPS-08 | Phase 10 | Complete |
 | DEPLOY-01 | Phase 21 | Pending |
 | DEPLOY-02 | Phase 21 | Pending |
 | DEPLOY-03 | Phase 21 | Pending |
 | REL-01 | Phase 21 | Pending |
 | REL-02 | Phase 21 | Pending |
 | COLLAB-01 | Phase 22 | Pending |
-| COLLAB-02 | Phase 10 | Pending |
+| COLLAB-02 | Phase 10 | Complete |
 | COLLAB-03 | Phase 22 | Pending |
 | COLLAB-04 | Phase 22 | Pending |
 | WIZ-02 | Phase 22 | Pending |

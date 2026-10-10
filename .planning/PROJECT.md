@@ -77,12 +77,12 @@ record's first co-edit). Architecture is unchanged (SQLite, host-local WAL, `rep
 
 - ✓ CONC-01: Concurrent writers (overlapping in-process requests or separate processes on one host) serialize safely with zero lost updates — `BEGIN IMMEDIATE` + busy-retry → 503 Retry-After, audit append atomic with the deal commit, client silent retry + honest give-up toast, proven by a real multi-process soak (`npm run soak`) — Phase 8 (2026-08-11)
 - ✓ CONC-02: Optimistic locking — stale co-edited writes rejected 409 with a reload-and-reapply dialog, including the first co-edit of a never-edited record (client sends version 0; real-deal writes without a precondition refused 400); held-promise dialog sessions so pages show the server's outcome; in-app delete confirm; truthful diffs — Phase 9 (2026-10-10, reopened by the R7 browser walk and closed by gap-closure plans 09-08..09-16; verified 14/14, security SECURED 61/61)
+- ✓ ACCT-01..07, COLLAB-02, OPS-08: real accounts and identity — explicit `MA_MODE=real` on its own gitignored data dir (committed control/demo DBs never written), bootstrap-admin CLI, admin user CRUD, role/disabled re-read per request, forced rotation + scrypt N=2^17 with lazy rehash, per-account/per-source throttle, Secure cookie decoupled from HSTS, self-service password/sessions UI, demo-credential lockdown + `/api/auth/mode`, 0600/0700 files, canonical-path gate hardening (CR-01) — Phase 10 (2026-10-10; verified 16/16, security SECURED 59/59; `compression` ≥1.8.2 bump deferred to REL-02)
 
 ### Active
 
 <!-- v3.0 Production-Ready — 86 requirements across Phases 8–23; full text + traceability in .planning/REQUIREMENTS.md -->
 
-- [ ] ACCT + COLLAB-02 + OPS-08: real accounts, explicit real-deal mode, no published credentials (Phase 10)
 - [ ] AUTHZ: read/write policy, admin-only config, clean-room on tasks/RAID (Phase 11)
 - [ ] DATA/QUAL: dirty-row writes + audit, paged reads, schema versions, audit partitions, CPU isolation, deterministic tests, smoke harness (Phase 12)
 - [ ] SAFE: sanitizer/CSP/slides/egress (Phase 13); deal files, limits, legacy hazards (Phase 14)

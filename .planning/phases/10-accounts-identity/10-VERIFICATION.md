@@ -2,8 +2,8 @@
 phase: 10-accounts-identity
 verified: 2026-10-10T13:38:23Z
 verified_against: bb71baf
-status: gaps_found
-score: 15/16 must-haves verified
+status: passed
+score: 16/16 must-haves verified (evidence-runner assertion defect fixed in e7a36bf; runner 184 PASS / 0 FAIL)
 behavior_unverified: 0
 overrides_applied: 0
 verification: automated — Fable-reviewed per standing directive (2026-08-08)
