@@ -1993,6 +1993,35 @@ test('CR-01 (d, store-layer parity): with an armed granting filter, the WHERE-la
     'the armed filter output — not the raw record — is what the conflict detail carries');
 });
 
+// ---- IN-03 (09-REVIEW round 2): disagreeing body/query version channels
+// are refused, never silently resolved in the body's favour. ----
+
+test('IN-03 (a): parseExpectedVersion flags disagreeing channels as a mismatch; agreeing or single channels behave as before', () => {
+  const { parseExpectedVersion } = app;
+  assert.deepStrictEqual(parseExpectedVersion({ body: { version: 2 }, query: { expectedVersion: '5' } }),
+    { version: undefined, invalid: false, mismatch: true });
+  assert.deepStrictEqual(parseExpectedVersion({ body: { version: 2 }, query: { expectedVersion: 'abc' } }),
+    { version: undefined, invalid: false, mismatch: true });
+  assert.deepStrictEqual(parseExpectedVersion({ body: { version: 5 }, query: { expectedVersion: '5' } }),
+    { version: 5, invalid: false });
+  assert.deepStrictEqual(parseExpectedVersion({ body: { version: 5 }, query: {} }), { version: 5, invalid: false });
+  assert.deepStrictEqual(parseExpectedVersion({ body: {}, query: { expectedVersion: '4' } }), { version: 4, invalid: false });
+});
+
+test('IN-03 (b): conflictIfStale answers a disagreeing dual-channel request with a fixed 400 that echoes nothing', () => {
+  const sent = {};
+  const res = {
+    status(code) { sent.status = code; return res; },
+    json(body) { sent.body = body; return res; },
+  };
+  const req = { body: { version: 1 }, query: { expectedVersion: '3' }, isDemo: false };
+  const refused = app.conflictIfStale(req, res, { id: 'r1', version: 3, title: 'secret title' });
+  assert.strictEqual(refused, true);
+  assert.strictEqual(sent.status, 400);
+  assert.deepStrictEqual(Object.keys(sent.body), ['error']);
+  assert.ok(!JSON.stringify(sent.body).includes('secret'), 'nothing about the record is echoed');
+});
+
 // ---- WR-04 (09-REVIEW round 2): the route precheck and the WHERE layer must
 // agree on ONE coercion of a malformed stored version (db/collections.js
 // comparableVersion): anything that is not a non-negative safe integer is 0.

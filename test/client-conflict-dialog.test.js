@@ -1302,6 +1302,28 @@ test('CF11: the native window.confirm is never called by any CF case', () => {
   assert.ok(!/window\.confirm|[^.\w]confirm\(/.test(noComments), 'no native confirm call in the wrapper region');
 });
 
+// ---- IN-03 (09-REVIEW round 2): a request carrying BOTH version channels
+// gets both rewritten to the fresh value (the server refuses disagreeing
+// channels); a query-only route's body stays byte-identical (test above). ----
+
+test('IN03: apply on a route with ?expectedVersion= AND a body version rewrites BOTH to the fresh version', async () => {
+  const fake = makeFakeFetch([
+    makeResponse({ status: 409, body: conflictOf({ currentVersion: 8 }) }),
+    makeResponse({ status: 200, body: { ok: true } }),
+  ]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/widgets/rec1?expectedVersion=3', { method: 'POST', body: JSON.stringify({ title: 'My title', version: 3 }) });
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+  await p;
+
+  assert.strictEqual(fake.calls[1].input, '/api/widgets/rec1?expectedVersion=8');
+  assert.deepStrictEqual(JSON.parse(fake.calls[1].init.body), { title: 'My title', version: 8 },
+    'the body version must move in step with the query, never stay stale');
+});
+
 // ---- WR-03 (09-REVIEW round 2) / UI-SPEC A9: every exit is locked while a
 // reapply is on the wire. An exit mid-flight used to settle the page with the
 // stale 409 while the irrevocable reapply was still committing, so the page's

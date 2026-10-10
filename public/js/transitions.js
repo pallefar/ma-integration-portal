@@ -430,8 +430,12 @@
   // detected structurally from the request URL, not from the HTTP method,
   // so this works for any verb a future route uses (Plan 06's RAID DELETE
   // is the first such route). Returns a NEW { input, init } pair; never
-  // mutates the caller's own `init`, and never rewrites both — a
-  // query-parameter route's body (if any) is left byte-identical.
+  // mutates the caller's own `init`. A query-parameter route's body is left
+  // byte-identical UNLESS it also carries its own `version` key — IN-03
+  // (09-REVIEW round 2): then both channels are rewritten to the same fresh
+  // value, because server.js parseExpectedVersion() refuses a request whose
+  // two channels disagree (it used to let the body silently win, which would
+  // have looped this reapply on "the record changed again" forever).
   function withFreshVersion(input, init, url, method, freshVersion) {
     const newInit = Object.assign({}, init);
     try {
@@ -440,6 +444,15 @@
         u.searchParams.set('expectedVersion', freshVersion);
         const rewrittenUrl = u.pathname + u.search + u.hash;
         const newInput = (typeof input === 'string') ? rewrittenUrl : input;
+        try {
+          const parsedBody = (init && typeof init.body === 'string') ? JSON.parse(init.body) : null;
+          if (parsedBody && typeof parsedBody === 'object' && Object.prototype.hasOwnProperty.call(parsedBody, 'version')) {
+            parsedBody.version = freshVersion;
+            newInit.body = JSON.stringify(parsedBody);
+          }
+        } catch (e) {
+          // Not a JSON body — nothing version-bearing to keep in step.
+        }
         return { input: newInput, init: newInit };
       }
     } catch (e) {
