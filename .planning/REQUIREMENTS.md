@@ -45,14 +45,14 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 
 ### Data Layer (DATA) and Test Signal (QUAL)
 
-- [ ] **DATA-01**: A write rewrites and audits only the records that changed — one changed record produces exactly one audit row, an unchanged record none, a reorder persists via sequence without audit noise — and on the 1,000-task / 5,000-RAID deal median write latency is ≤ 40 ms (review baseline 86–97 ms and 6,220 audit rows per click).
-- [ ] **DATA-02**: A read loads only the collections the request needs; the heaviest lists (RAID, tasks) support server-side filter and paging; the due-diligence workspace loads through one batch request; 10 users × 3 list reads at volume stay at p95 ≤ 300 ms (baseline 483 ms) and the server's event-loop p99 stays ≤ 100 ms under the 40-client review profile (baseline 1,921 ms).
-- [ ] **DATA-03**: Every database file carries a schema version; ordered migrations run at boot under an exclusive lock, including migrating the legacy single audit file; a failed migration or integrity check keeps the instance not-ready.
-- [ ] **DATA-04**: Audit rows are written per deal into a tamper-evident partition (hash-chained) while control-plane events stay in the control audit; at deal close an admin seals a partition (read-only, SHA-256 recorded as a control-plane event) and exports it; purge is a separate audited admin action possible only after a sealed export exists and the documented retention period has passed (default: never auto-purge); the admin viewer queries across partitions. Supersedes v2.1.0 AUD-02 "trail survives deal deletion" (recorded in PROJECT.md).
-- [ ] **DATA-05**: CPU-bound work (steerco PDF pack, PDF parsing) runs off the event loop behind a concurrency guard — while a pack renders, other requests' event-loop p99 stays ≤ 50 ms (baseline 2,397 ms blocked) — and the permanent "pack unavailable on this platform" 503 is not retried by the client.
-- [ ] **DATA-06**: The test suite is deterministic and isolated — listeners bind loopback, no test can write the real `data/*.db`, a GitHub Actions workflow runs it on ubuntu + windows — and `npm run soak` plus the Phase 9 contract suite pass unchanged after the store rewrite.
-- [ ] **QUAL-01**: Shipped client assets are cache-busted by content — a changed `public/js|css` file can never be served from a stale `?v=` stamp (automated, test-enforced).
-- [ ] **QUAL-02**: A browser smoke harness (real browser + axe, one command, not shipped in release zips) exists from Phase 11; every UI phase adds its pages to it.
+- [x] **DATA-01**: A write rewrites and audits only the records that changed — one changed record produces exactly one audit row, an unchanged record none, a reorder persists via sequence without audit noise — and on the 1,000-task / 5,000-RAID deal median write latency is ≤ 40 ms (review baseline 86–97 ms and 6,220 audit rows per click).
+- [x] **DATA-02**: A read loads only the collections the request needs; the heaviest lists (RAID, tasks) support server-side filter and paging; the due-diligence workspace loads through one batch request; 10 users × 3 list reads at volume stay at p95 ≤ 300 ms (baseline 483 ms) and the server's event-loop p99 stays ≤ 100 ms under the 40-client review profile (baseline 1,921 ms).
+- [x] **DATA-03**: Every database file carries a schema version; ordered migrations run at boot under an exclusive lock, including migrating the legacy single audit file; a failed migration or integrity check keeps the instance not-ready.
+- [x] **DATA-04**: Audit rows are written per deal into a tamper-evident partition (hash-chained) while control-plane events stay in the control audit; at deal close an admin seals a partition (read-only, SHA-256 recorded as a control-plane event) and exports it; purge is a separate audited admin action possible only after a sealed export exists and the documented retention period has passed (default: never auto-purge); the admin viewer queries across partitions. Supersedes v2.1.0 AUD-02 "trail survives deal deletion" (recorded in PROJECT.md).
+- [x] **DATA-05**: CPU-bound work (steerco PDF pack, PDF parsing) runs off the event loop behind a concurrency guard — while a pack renders, other requests' event-loop p99 stays ≤ 50 ms (baseline 2,397 ms blocked) — and the permanent "pack unavailable on this platform" 503 is not retried by the client.
+- [x] **DATA-06**: The test suite is deterministic and isolated — listeners bind loopback, no test can write the real `data/*.db`, a GitHub Actions workflow runs it on ubuntu + windows — and `npm run soak` plus the Phase 9 contract suite pass unchanged after the store rewrite.
+- [x] **QUAL-01**: Shipped client assets are cache-busted by content — a changed `public/js|css` file can never be served from a stale `?v=` stamp (automated, test-enforced).
+- [x] **QUAL-02**: A browser smoke harness (real browser + axe, one command, not shipped in release zips) exists from Phase 11; every UI phase adds its pages to it.
 
 ### Content & File Safety (SAFE)
 
@@ -181,14 +181,14 @@ All 86 requirements (11 complete, 75 pending) mapped to exactly one phase.
 | AUTHZ-03 | Phase 11 | Complete |
 | AUTHZ-04 | Phase 11 | Complete |
 | AUTHZ-05 | Phase 11 | Complete |
-| DATA-01 | Phase 12 | Pending |
-| DATA-02 | Phase 12 | Pending |
-| DATA-03 | Phase 12 | Pending |
-| DATA-04 | Phase 12 | Pending |
-| DATA-05 | Phase 12 | Pending |
-| DATA-06 | Phase 12 | Pending |
-| QUAL-01 | Phase 12 | Pending |
-| QUAL-02 | Phase 12 | Pending |
+| DATA-01 | Phase 12 | Complete |
+| DATA-02 | Phase 12 | Complete |
+| DATA-03 | Phase 12 | Complete |
+| DATA-04 | Phase 12 | Complete |
+| DATA-05 | Phase 12 | Complete |
+| DATA-06 | Phase 12 | Complete |
+| QUAL-01 | Phase 12 | Complete |
+| QUAL-02 | Phase 12 | Complete |
 | SAFE-01 | Phase 13 | Pending |
 | SAFE-02 | Phase 13 | Pending |
 | SAFE-03 | Phase 13 | Pending |

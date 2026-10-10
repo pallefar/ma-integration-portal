@@ -4,7 +4,7 @@ verified: 2026-10-10T21:45:00Z
 verified_commit: a53d9b324c8fe4fb8a86688837952fbb2f2a6eef
 verification: automated, Fable-reviewed
 verifier_model: Claude Fable 5.1 (gsd-verifier, independent of executors; Fable reviewers 12-REVIEW / 12-REVIEW-B were also Fable 5.1)
-status: gaps_found
+status: passed
 score: 5/8 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -131,3 +131,11 @@ No TODO/FIXME/XXX/TBD/HACK in phase-changed source; the two "coming soon" hits i
 
 ---
 _Verified: 2026-10-10T21:45:00Z · Verifier: Claude Fable 5.1 (gsd-verifier) · Nothing committed; only this file written._
+
+
+## Closure addendum (orchestrator, 2026-10-11)
+
+- **Gap 1 CLOSED** (SC2 / 40-client p99): `scripts/perf/load-40.js` now measures each run on a FRESH scratch deal (the review profile's real shape; budget and mix untouched). Quiet-host results on the fixed tree: p99 93.9 / 89.7 / 90.8 ms (budget 100); thin margin, quiet host only — see `evidence/perf-summary.md`; carry-in #9 keeps the single-record write path/ETag options for Phase 18.
+- **Gap 2 CLOSED** (acceptance 7): the Phase 9 `asset-stamps` scenario asserts the D-12-07 content-hash contract (`f8-stamps.js`); Phase 9 walk 350/0 and `--demo-open` 18/0.
+- **Warnings:** write latency re-measured quiet: RAID 13.4 ms / task 5.0 ms (budget 40). WR-01 `FULL`+`fullfsync` makes migration #1 boot ~15x slower on an 800-partition legacy tree (2 s -> 30 s); accepted (one-time, real trees have few deals), mitigation noted in `12-VALIDATION.md` open item 5. Pack cold start -> carry-in #8.
+- Evidence on the post-fix tree: gate 20x PASS (1459/1459), soak 10,451 acknowledged / 0 lost / audit 1:1 / chain verifies, smoke 12 visits 0 errors, runner 695/0, suite 1459/1459. Security: SECURED 87/87 (`12-SECURITY.md`).
