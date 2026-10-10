@@ -50,7 +50,17 @@ function isControlPlanePath(fullPath) {
     || fullPath.startsWith('/api/deals/')
     || fullPath === '/api/admin/deals'
     || fullPath.startsWith('/api/admin/deals/')
-    || fullPath.startsWith('/api/admin/users/');
+    || fullPath.startsWith('/api/admin/users/')
+    // [security] D-10-03/D-10-07 (T-10-13): the account surfaces are
+    // control-plane — never deal-bound (a session pointing at an archived deal
+    // must still be able to change its password / end its sessions) and, because
+    // a control-plane path resolves to kind 'control' (req.isDemo false), never
+    // open under DEMO_OPEN=1. The EXACT `/api/admin/users` (list/create) is not
+    // covered by the trailing-slash prefix above.
+    || fullPath === '/api/admin/users'
+    || fullPath === '/api/auth/sessions'
+    || fullPath.startsWith('/api/auth/sessions/')
+    || fullPath === '/api/auth/change-password';
 }
 
 /** Thrown by resolveDatabase() when a session's deal binding cannot be

@@ -48,6 +48,7 @@ require('./validators/people'); // ditto
 require('./validators/assessment'); // ditto
 require('./validators/settings'); // ditto
 require('./validators/dd'); // ditto
+require('./validators/users'); // ditto (D-10-03 admin user management + own-session end)
 const orgValidators = require('./validators/org'); // provides ORG_STATE_CURRENT/ORG_STATE_TARGET below, plus its own registerSchema() side effect
 const wizardValidators = require('./validators/wizard'); // provides DEAL_SETUP_STEPS below, plus its own registerSchema() side effect
 // RPT-01 (07-01): GET /api/reports/export is a READ route, so it is outside
@@ -267,6 +268,35 @@ function readSessionCookie(req) {
   const cookies = String(req.headers.cookie || '');
   const m = cookies.match(/(?:^|;\s*)ma_session=([^;]+)/);
   return m ? m[1] : null;
+}
+
+// [security] D-10-04 / COLLAB-02 (T-10-14): resolve a session cookie to the
+// caller's CURRENT identity. The sessions table's `role` column is the value
+// snapshotted at login and is NEVER trusted for authorization — role and
+// disabled state are re-read from the control.db account on EVERY request
+// (one indexed PK SELECT, a <= ~50-row table), so an admin's role change or
+// disable binds on the user's very next request with no re-login. A missing or
+// disabled account revokes every session of that username immediately.
+// Returns null (anonymous) when there is no live, enabled account behind the
+// cookie; `mustChangePassword` is carried for the D-10-05 gate (plan 10-05).
+function resolveSessionIdentity(cookieToken) {
+  if (!cookieToken) return null;
+  const runtimeConn = getRuntimeConnection();
+  const sess = sessions.findSession(runtimeConn, cookieToken);
+  if (!sess) return null;
+  const acct = controlStore.getAccount(sess.username);
+  if (!acct || acct.disabled === true) {
+    sessions.deleteAllSessionsForUser(runtimeConn, sess.username);
+    return null;
+  }
+  return {
+    username: acct.username,
+    role: acct.role,
+    name: acct.name || acct.username,
+    sessionId: sess.sessionId,
+    dealId: sess.dealId,
+    mustChangePassword: acct.mustChangePassword === true,
+  };
 }
 
 // Coarse role -> resource-group capability map (D-04/D-05, AUTH-02). Consulted
@@ -615,9 +645,10 @@ app.use('/api', (req, res, next) => {
       request: requestMeta(req),
     });
   } else {
-    const cookieToken = readSessionCookie(req);
-    const sess = cookieToken ? sessions.findSession(getRuntimeConnection(), cookieToken) : null;
-    req.portalUser = sess; // may be null here — see step (c) above
+    // D-10-04: the identity is re-resolved from control.db on every request,
+    // never trusted from the login-time session snapshot (see
+    // resolveSessionIdentity()).
+    req.portalUser = resolveSessionIdentity(readSessionCookie(req)); // may be null here — see step (c) above
   }
 
   resolver.dealResolverMiddleware(req, res, () => {
@@ -804,12 +835,11 @@ app.get('/api/auth/me', (req, res) => {
   // request that would resolve to demo.db — i.e. no session, or a session
   // with no deal binding — a session bound to a REAL deal is never open,
   // mirroring isOpenMode(req)'s rule without needing the resolver to have run.
-  const cookieToken = readSessionCookie(req);
-  const sess = cookieToken ? sessions.findSession(getRuntimeConnection(), cookieToken) : null;
+  const sess = resolveSessionIdentity(readSessionCookie(req)); // D-10-04: disabled/missing account -> null
   const wouldResolveDemo = !sess || !sess.dealId;
   if (!dbFiles.IS_REAL_MODE && process.env.DEMO_OPEN === '1' && wouldResolveDemo) return res.json({ authEnabled: false, user: null });
   if (!sess) return res.json({ authEnabled: true, user: null });
-  const user = controlStore.findUser(sess.username);
+  const user = controlStore.getAccount(sess.username);
   // D-04: dealId is the caller's CURRENT server-side binding (D-01) — the
   // header deal switcher (public/js/deal-switcher.js) needs this to render
   // "which context am I in right now" without a second round-trip. Never the
@@ -820,7 +850,7 @@ app.get('/api/auth/me', (req, res) => {
   res.json({
     authEnabled: true,
     dealId: sess.dealId || null,
-    user: user ? { username: user.username, name: user.name || user.username, role: user.role } : { username: sess.username, role: sess.role },
+    user: { username: user.username, name: user.name || user.username, role: user.role },
   });
 });
 
@@ -898,6 +928,123 @@ app.post('/api/auth/change-password', async (req, res, next) => {
     res.json({ success: true });
   } catch (err) {
     if (isBusyError(err)) return next(err); // central 503 + Retry-After
+    next(err);
+  }
+});
+
+// =====================================================================
+// Admin user management (ACCT-01, D-10-03). Every route sits under
+// ROLE_WRITE_POLICY's `/api/admin` prefix (admin only, every method) and is a
+// control-plane path (db/resolver.js), so it can never be open under
+// DEMO_OPEN=1 (T-10-13). No account deletion exists by design — disable only.
+// =====================================================================
+
+const COMMITTED_CONTROL_REFUSAL = {
+  error: 'Accounts on the committed demo database are read-only. Use a real-deal host (start-real-deal) to manage real accounts.',
+  committedControlDb: true,
+};
+
+// [security] D-10-01/T-10-21: a credential hash must never be written into the
+// committed data/control.db. The predicate is the SAME one GET /api/auth/mode
+// exposes as `accountsWritable`, so the UI flag and these refusals cannot
+// disagree.
+function refuseCommittedControlWrite(res) {
+  if (!dbFiles.isCommittedControlDbActive()) return false;
+  res.status(403).json(COMMITTED_CONTROL_REFUSAL);
+  return true;
+}
+
+// Resolve a supplied-or-generated one-time temporary password. Returns
+// { tempPassword } or { problem }. An empty string means "generate one" (a
+// blank form field), anything else is held to the mode's password policy.
+function pickTempPassword(supplied) {
+  if (supplied === undefined || supplied === null || supplied === '') {
+    return { tempPassword: passwords.generateTempPassword() };
+  }
+  const problem = passwords.checkNewPassword(supplied, { realMode: dbFiles.IS_REAL_MODE });
+  if (problem) return { problem };
+  return { tempPassword: supplied };
+}
+
+// The audit before/after of an account change carries ONLY these fields —
+// never the hash, salt or a temporary password (T-10-17).
+function accountAuditView(acct) {
+  const v = controlStore.publicAccount(acct);
+  return { username: v.username, name: v.name, role: v.role, disabled: v.disabled, mustChangePassword: v.mustChangePassword };
+}
+
+app.post('/api/admin/users', async (req, res, next) => {
+  try {
+    if (refuseCommittedControlWrite(res)) return;
+    const { username, name, role, tempPassword: supplied } = req.body;
+    const picked = pickTempPassword(supplied);
+    if (picked.problem) return res.status(400).json({ error: picked.problem });
+    if (controlStore.getAccount(username)) {
+      return res.status(409).json({ error: 'That username is already taken.' });
+    }
+    const account = {
+      username, name, role,
+      hash: await passwords.hashPassword(picked.tempPassword),
+      salt: null,
+      disabled: false,
+      mustChangePassword: true,
+      createdAt: new Date().toISOString(),
+      createdBy: req.portalUser.username,
+    };
+    try {
+      controlStore.createAccount(account);
+    } catch (err) {
+      // A concurrent create of the same username loses on the PK.
+      if (err && typeof err.code === 'string' && err.code.startsWith('SQLITE_CONSTRAINT')) {
+        return res.status(409).json({ error: 'That username is already taken.' });
+      }
+      throw err;
+    }
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'user-create', subject: username,
+      after: accountAuditView(account), request: requestMeta(req),
+    });
+    res.set('Cache-Control', 'no-store'); // the response carries a one-time secret
+    res.status(201).json({
+      success: true,
+      user: controlStore.publicAccount(account),
+      tempPassword: picked.tempPassword,
+    });
+  } catch (err) {
+    if (isBusyError(err)) return next(err); // central 503 + Retry-After
+    next(err);
+  }
+});
+
+app.patch('/api/admin/users/:username', (req, res, next) => {
+  try {
+    if (refuseCommittedControlWrite(res)) return;
+    const target = String(req.params.username);
+    let result;
+    try {
+      result = controlStore.updateAccountGuarded(target, req.body, {
+        actorUsername: req.portalUser && req.portalUser.username,
+      });
+    } catch (err) {
+      if (err && err.code === 'ACCOUNT_NOT_FOUND') return res.status(404).json({ error: 'User not found.' });
+      if (err && err.code === 'SELF_DISABLE') return res.status(409).json({ error: 'You cannot disable your own account.' });
+      if (err && err.code === 'LAST_ADMIN') {
+        return res.status(409).json({ error: 'At least one enabled admin must remain.', lastAdmin: true });
+      }
+      throw err;
+    }
+    // D-10-04: a disabled account loses every live session immediately (it
+    // would 401 on its next request anyway via resolveSessionIdentity(); this
+    // removes the rows). Re-enabling needs a fresh sign-in.
+    if (req.body.disabled === true) sessions.deleteAllSessionsForUser(getRuntimeConnection(), target);
+    const view = (a) => ({ role: a.role, name: a.name || a.username, disabled: a.disabled === true });
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'user-update', subject: target,
+      before: view(result.before), after: view(result.after), request: requestMeta(req),
+    });
+    res.json({ success: true, user: controlStore.publicAccount(result.after) });
+  } catch (err) {
+    if (isBusyError(err)) return next(err);
     next(err);
   }
 });

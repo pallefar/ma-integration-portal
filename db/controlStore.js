@@ -125,6 +125,79 @@ function updateUser(username, patch) {
   return apply(username, patch);
 }
 
+/**
+ * D-10-03 [security]: the ONLY projection of an account that may leave this
+ * process (API responses, audit before/after). An explicit ALLOWLIST — `hash`,
+ * `salt` and any field added to the account blob later are excluded by
+ * construction, so a new secret-bearing field can never leak by accident
+ * (T-10-17). `extras` (e.g. { lastLoginAt }) is merged last.
+ */
+function publicAccount(acct, extras) {
+  if (!acct) return null;
+  return {
+    username: acct.username,
+    name: acct.name || acct.username,
+    role: acct.role,
+    disabled: acct.disabled === true,
+    mustChangePassword: acct.mustChangePassword === true,
+    createdAt: acct.createdAt || null,
+    createdBy: acct.createdBy || null,
+    ...(extras || {}),
+  };
+}
+
+/** Every account row in seq order (alias of listUsers() under the D-10-03 name). */
+function listAccounts() {
+  return listUsers();
+}
+
+function codedError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+/**
+ * D-10-03/D-10-04: apply an admin PATCH ({role?, name?, disabled?}) to one
+ * account with the last-admin and self-disable guards evaluated INSIDE the same
+ * `.immediate` (BEGIN IMMEDIATE) transaction as the write — two concurrent
+ * demotions cannot both observe "another admin remains" (T-10-16).
+ *
+ *   ACCOUNT_NOT_FOUND  no such account
+ *   SELF_DISABLE       an actor disabling their own account
+ *   LAST_ADMIN         the change would leave zero enabled admins
+ *
+ * Returns { before, after } (full blobs — callers MUST project through
+ * publicAccount() before logging or responding).
+ */
+function updateAccountGuarded(username, patch, { actorUsername } = {}) {
+  const conn = controlConn();
+  const apply = conn.transaction((target, changes) => {
+    const row = conn.prepare('SELECT id, data FROM users WHERE id = ?').get(String(target));
+    if (!row) throw codedError('ACCOUNT_NOT_FOUND', `no account '${target}'`);
+    const before = JSON.parse(row.data);
+    if (changes.disabled === true && actorUsername && before.username === actorUsername) {
+      throw codedError('SELF_DISABLE', 'an account cannot disable itself');
+    }
+    const clean = {};
+    for (const key of Object.keys(changes)) {
+      if (changes[key] !== undefined) clean[key] = changes[key];
+    }
+    const after = { ...before, ...clean };
+    const wasEnabledAdmin = before.role === 'admin' && before.disabled !== true;
+    const isEnabledAdmin = after.role === 'admin' && after.disabled !== true;
+    if (wasEnabledAdmin && !isEnabledAdmin) {
+      const others = conn.prepare('SELECT id, data FROM users WHERE id != ?').all(row.id)
+        .map((r) => JSON.parse(r.data))
+        .filter((u) => u.role === 'admin' && u.disabled !== true);
+      if (others.length === 0) throw codedError('LAST_ADMIN', 'at least one enabled admin must remain');
+    }
+    conn.prepare('UPDATE users SET data = ? WHERE id = ?').run(JSON.stringify(after), row.id);
+    return { before, after };
+  }).immediate;
+  return apply(username, patch || {});
+}
+
 // --- deals (blob-per-row + `status` metadata column, control-schema.sql) --
 
 /** Every deal row (including archived ones), in seq order. */
@@ -560,6 +633,7 @@ function setSecretSettings(patch) {
 
 module.exports = {
   findUser, listUsers, updateUser, getAccount, countAccounts, createAccount,
+  publicAccount, listAccounts, updateAccountGuarded,
   getDeal, listDeals, listDealsForUser, isDealMember,
   createDeal, createDealDeduped, updateDealMembers, archiveDeal, deleteDeal,
   setDealMemberGrants, getDealMemberGrants,
