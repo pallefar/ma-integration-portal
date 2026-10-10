@@ -1,0 +1,193 @@
+[lane:dev] PASS - server booted, /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[demoShowcaseUnchanged@dev] PASS - dev: published demo account admin signs in without a forced rotation :: {"mustChangePassword":false}
+[demoShowcaseUnchanged@dev] PASS - dev: published demo account karen signs in without a forced rotation :: {"mustChangePassword":false}
+[demoShowcaseUnchanged@dev] PASS - dev: published demo account pmo signs in without a forced rotation :: {"mustChangePassword":false}
+[demoShowcaseUnchanged@dev] PASS - admin: GET /api/settings answers 200 with the showcase profile (targetCompany, welcome-video keys, roleVisibility) :: {"status":200,"keys":26}
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @1440: stays on the page :: /dashboard.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @1440: page has content (not blank) :: {"bodyLen":4552}
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @390: stays on the page :: /dashboard.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /dashboard.html @390: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @1440: stays on the page :: /employee.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @1440: the welcome-video section is rendered :: {"hasTarget":true,"welcome":true,"bodyLen":5406}
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @1440: page has content (not blank) :: {"bodyLen":5406}
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @390: stays on the page :: /employee.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /employee.html @390: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @1440: stays on the page :: /pmo.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @1440: page has content (not blank) :: {"bodyLen":2503}
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @390: stays on the page :: /pmo.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /pmo.html @390: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @1440: stays on the page :: /execution.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @1440: page has content (not blank) :: {"bodyLen":5574}
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @390: stays on the page :: /execution.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /execution.html @390: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @1440: stays on the page :: /admin.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @1440: page has content (not blank) :: {"bodyLen":1568}
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @390: stays on the page :: /admin.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /admin.html @390: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @1440: stays on the page :: /overview.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @1440: page has content (not blank) :: {"bodyLen":788}
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @390: stays on the page :: /overview.html
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev admin /overview.html @390: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - karen: GET /api/settings answers 200 with the showcase profile (targetCompany, welcome-video keys, roleVisibility) :: {"status":200,"keys":24}
+[demoShowcaseUnchanged@dev] PASS - karen: the settings payload carries no secret-ish key :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /dashboard.html @1440: stays on the page :: /dashboard.html
+[demoShowcaseUnchanged@dev] PASS - dev karen /dashboard.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /dashboard.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /dashboard.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /dashboard.html @1440: page has content (not blank) :: {"bodyLen":4538}
+[demoShowcaseUnchanged@dev] PASS - dev karen /dashboard.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@dev] PASS - dev karen /employee.html @1440: stays on the page :: /employee.html
+[demoShowcaseUnchanged@dev] PASS - dev karen /employee.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /employee.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /employee.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /employee.html @1440: the welcome-video section is rendered :: {"hasTarget":true,"welcome":true,"bodyLen":5393}
+[demoShowcaseUnchanged@dev] PASS - dev karen /employee.html @1440: page has content (not blank) :: {"bodyLen":5393}
+[demoShowcaseUnchanged@dev] PASS - dev karen /employee.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@dev] PASS - dev karen /pmo.html @1440: stays on the page :: /pmo.html
+[demoShowcaseUnchanged@dev] PASS - dev karen /pmo.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /pmo.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /pmo.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /pmo.html @1440: page has content (not blank) :: {"bodyLen":2476}
+[demoShowcaseUnchanged@dev] PASS - dev karen /execution.html @1440: stays on the page :: /execution.html
+[demoShowcaseUnchanged@dev] PASS - dev karen /execution.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /execution.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /execution.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /execution.html @1440: page has content (not blank) :: {"bodyLen":5562}
+[demoShowcaseUnchanged@dev] PASS - dev karen /admin.html @1440: stays on the page :: /admin.html
+[demoShowcaseUnchanged@dev] PASS - dev karen /admin.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /admin.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /admin.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /admin.html @1440: page has content (not blank) :: {"bodyLen":1422}
+[demoShowcaseUnchanged@dev] PASS - dev karen /overview.html @1440: stays on the page :: /overview.html
+[demoShowcaseUnchanged@dev] PASS - dev karen /overview.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /overview.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /overview.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev karen /overview.html @1440: page has content (not blank) :: {"bodyLen":776}
+[demoShowcaseUnchanged@dev] PASS - pmo: GET /api/settings answers 200 with the showcase profile (targetCompany, welcome-video keys, roleVisibility) :: {"status":200,"keys":24}
+[demoShowcaseUnchanged@dev] PASS - pmo: the settings payload carries no secret-ish key :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /dashboard.html @1440: stays on the page :: /dashboard.html
+[demoShowcaseUnchanged@dev] PASS - dev pmo /dashboard.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /dashboard.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /dashboard.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /dashboard.html @1440: page has content (not blank) :: {"bodyLen":4511}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /dashboard.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /employee.html @1440: stays on the page :: /employee.html
+[demoShowcaseUnchanged@dev] PASS - dev pmo /employee.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /employee.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /employee.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /employee.html @1440: the welcome-video section is rendered :: {"hasTarget":true,"welcome":true,"bodyLen":5365}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /employee.html @1440: page has content (not blank) :: {"bodyLen":5365}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /employee.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /pmo.html @1440: stays on the page :: /pmo.html
+[demoShowcaseUnchanged@dev] PASS - dev pmo /pmo.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /pmo.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /pmo.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /pmo.html @1440: page has content (not blank) :: {"bodyLen":2450}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /execution.html @1440: stays on the page :: /execution.html
+[demoShowcaseUnchanged@dev] PASS - dev pmo /execution.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /execution.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /execution.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /execution.html @1440: page has content (not blank) :: {"bodyLen":5533}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /admin.html @1440: stays on the page :: /admin.html
+[demoShowcaseUnchanged@dev] PASS - dev pmo /admin.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /admin.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /admin.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /admin.html @1440: page has content (not blank) :: {"bodyLen":1393}
+[demoShowcaseUnchanged@dev] PASS - dev pmo /overview.html @1440: stays on the page :: /overview.html
+[demoShowcaseUnchanged@dev] PASS - dev pmo /overview.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /overview.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /overview.html @1440: no page error :: []
+[demoShowcaseUnchanged@dev] PASS - dev pmo /overview.html @1440: page has content (not blank) :: {"bodyLen":747}
+[lane:demo-open] PASS - server booted, /api/auth/mode answers :: {"mode":"demo","demoOpen":true,"accountsWritable":true}
+[demoShowcaseUnchanged@demo-open] PASS - anon: GET /api/settings answers 200 with the showcase profile (targetCompany, welcome-video keys, roleVisibility) :: {"status":200,"keys":24}
+[demoShowcaseUnchanged@demo-open] PASS - anon: the settings payload carries no secret-ish key :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @1440: stays on the page :: /dashboard.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @1440: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @1440: page has content (not blank) :: {"bodyLen":4479}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @390: stays on the page :: /dashboard.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /dashboard.html @390: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @1440: stays on the page :: /employee.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @1440: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @1440: the welcome-video section is rendered :: {"hasTarget":true,"welcome":true,"bodyLen":5333}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @1440: page has content (not blank) :: {"bodyLen":5333}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @1440: settings-driven target company name "NextGen Sensors Ltd." is present in the page :: {"hasTarget":true}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @390: stays on the page :: /employee.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /employee.html @390: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @1440: stays on the page :: /pmo.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @1440: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @1440: page has content (not blank) :: {"bodyLen":2430}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @390: stays on the page :: /pmo.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /pmo.html @390: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @1440: stays on the page :: /execution.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @1440: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @1440: page has content (not blank) :: {"bodyLen":5472}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @390: stays on the page :: /execution.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /execution.html @390: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @1440: cookie-less admin console lands on /login.html (Phase 10 contract, unchanged) :: /login.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @1440: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @390: cookie-less admin console lands on /login.html (Phase 10 contract, unchanged) :: /login.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /admin.html @390: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @1440: stays on the page :: /overview.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @1440: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @1440: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @1440: no page error :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @1440: page has content (not blank) :: {"bodyLen":686}
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @390: stays on the page :: /overview.html
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @390: no 401/403 raised by the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @390: no 5xx during the page load :: []
+[demoShowcaseUnchanged@demo-open] PASS - demo-open anon /overview.html @390: no page error :: []
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data` unchanged :: clean

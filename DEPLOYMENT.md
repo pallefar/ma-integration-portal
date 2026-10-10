@@ -177,6 +177,170 @@ dev/demo committed database (`accountsWritable:false`) **Change password** is
 disabled with an explanatory note; **My sessions** still lists your sessions but
 offers no **End session**.
 
+## Roles and what they can read
+
+Every account has exactly one of four roles. In the portal they are shown as
+**Admin** (`admin`), **Integration Leader** (`hrbp`, the person who runs the deal),
+**Workstream lead** (`pmo`) and **Employee** (`employee`). What a role may *read* is a
+declared table, evaluated by the server on every `GET` / `HEAD` request — the
+browser hiding a control is a convenience, never the enforcement.
+
+- **Fail-closed.** A read route with no row below is refused (`403`) for every role
+  on a real deal. A route added without a row fails the test suite
+  (`test/read-policy-coverage.test.js`), so the table cannot silently fall behind.
+- **One spelling.** The verdict is taken over the canonical form of the path
+  (decoded once, `//` collapsed, trailing slash dropped, lower-cased): `/api/Synergies`,
+  `/api//raid` and `/api/%73ynergies` get the same answer as `/api/synergies`.
+- **The showcase is lenient on purpose.** Requests that resolve to the demo store
+  (demo mode, dev mode without a deal, `DEMO_OPEN=1`) are not judged by this table, so
+  the demonstration behaves exactly as it always has. The table applies to every
+  request bound to a **real deal** and to the control-plane routes (`/api/deals*`,
+  `/api/admin*`, `/api/auth/sessions`) always.
+- **Drift is a build failure.** `test/deployment-role-matrix.test.js` compares the
+  table below with `lib/readPolicy.js` row for row, in order.
+
+| Route prefix | admin | hrbp (Integration Leader) | pmo (workstream lead) | employee | Why |
+|---|---|---|---|---|---|
+| `/api/admin` | yes | no | no | no | Account roster, audit log, source and database archive downloads (every method). |
+| `/api/auth/sessions` | yes | yes | yes | yes | Each role lists and ends only its own sessions. |
+| `/api/deals` (exact) | yes | yes | yes | yes | The deal list, already filtered to the deals the caller is a member of (the deal switcher). |
+| `/api/deals` | yes | yes | no | no | Per-deal member grants and clearance map (`/api/deals/:id/grants`). |
+| `/api/synergies` | yes | yes | yes | no | Synergy financials (run-rate, one-time cost, owners). |
+| `/api/integration-tasks` | yes | yes | yes | no | Task lane; titles can name the pre-announcement target. Clearance-filtered per record. |
+| `/api/checklist-templates` | yes | yes | yes | no | Templates that feed the task lane. |
+| `/api/raid` | yes | yes | yes | no | Risks, issues and decisions about the deal. Clearance-filtered per record. |
+| `/api/org` | yes | yes | yes | no | Org design: named positions, target-state designs, retention data. Clearance-gated. |
+| `/api/dd` | yes | yes | yes | no | Due-diligence workspace; handlers additionally apply per-area clearance. |
+| `/api/reports` | yes | yes | yes | no | IMO exports and the report pack aggregate every deal dataset. |
+| `/api/employees` | yes | yes | yes | no | The named roster (names, e-mails, departments). |
+| `/api/communications` | yes | yes | yes | no | Communications log can name affected populations pre-announcement. |
+| `/api/projects` | yes | yes | yes | no | Project list carries target and project names. |
+| `/api/processes` | yes | yes | yes | no | Process integration catalog (sending to receiving). |
+| `/api/assessments` | yes | yes | yes | no | Named assessment results. |
+| `/api/ai/insight` | yes | yes | yes | no | Sends portal data to the AI provider (third-party egress). |
+| `/api/rag/search` | yes | yes | yes | no | Deal uploads are indexed; a search would return their text. |
+| `/api/assessment-instances` | yes | no | no | no | Admin-only, matching the handler guard. |
+| `/api/hrbps` | yes | yes | no | no | Integration Leader directory with colleague e-mail addresses. |
+| `/api/assessment/latest` | yes | yes | yes | yes | Org-level latest scores, not personal. |
+| `/api/assessment-templates` | yes | yes | yes | yes | Question templates a respondent needs. |
+| `/api/assessment-status` | yes | yes | yes | yes | Completion status with respondent names stripped. |
+| `/api/settings` | yes | yes | yes | yes | Admin gets the full object; every other role gets the public allowlist only (no API key, no connection details). |
+| `/api/departments` | yes | yes | yes | yes | Department list (employee dashboard). |
+| `/api/modules` | yes | yes | yes | yes | Learning modules. |
+| `/api/questions` | yes | yes | yes | yes | Assessment questions a respondent needs. |
+| `/api/slides` | yes | yes | yes | yes | Slide content. |
+| `/api/courses` | yes | yes | yes | yes | Learning courses. |
+| `/api/lessons` | yes | yes | yes | yes | Learning lessons. |
+| `/api/i18n` | yes | yes | yes | yes | Translations. |
+| `/api/menus` | yes | yes | yes | yes | Menus the shell renders for every role. |
+| `/api/pages` | yes | yes | yes | yes | CMS pages. |
+| `/api/banners` | yes | yes | yes | yes | Banners. |
+| `/api/media` | yes | yes | yes | yes | CMS media. |
+| `/api/notifications` | yes | yes | yes | yes | The caller's notifications; task and RAID nudges are withheld from roles that cannot read those lanes. |
+| `/api/alerts` | yes | yes | yes | yes | Alerts. |
+| `/api/pulses` | yes | yes | yes | yes | Pulse feed projected per role in a real deal (see Personal data below). |
+
+### Configuration and content are admin-only to write
+
+Instance configuration and shared content can be changed by an **admin** only. A
+Workstream lead, Integration Leader or Employee receives `403` on every method that
+changes these, under every path spelling; the stored data is untouched.
+
+| Write route | Covers |
+|---|---|
+| `/api/settings` | instance settings, the company profile, the AI-provider key, the new-acquisition reset (`/api/settings/new-ma`) |
+| `/api/menus` | navigation menus |
+| `/api/pages` | page content and layouts |
+| `/api/banners` | banners |
+| `/api/slides` | slides and slide uploads (`/api/slides/upload`) |
+| `/api/media` | the media library |
+| `/api/i18n` | translations |
+| `/api/courses` | courses and their lessons (`/api/courses/:id/lessons*`) |
+
+The one exception is the demo-only time-travel control (`POST /api/settings/time-travel`),
+which is refused outside the demo store anyway.
+
+`GET /api/settings` returns the **full** object to an admin and a **public allowlist**
+to everyone else (target-company profile, welcome-video settings, role visibility,
+the demo/timeline flags and the synergy defaults — and `hasGeminiApiKey`, a boolean
+that says whether a key exists, never the key). A setting added later is withheld
+from non-admins until someone adds it to the allowlist
+(`PUBLIC_SETTINGS_KEYS` in `validators/settings.js`).
+
+### Deal-level values: the Integration Leader's route
+
+The values an Integration Leader legitimately changes for **their own deal** are not
+instance settings. They are posted to `POST /api/deals/:id/setup` as
+`{ "dealSettings": { ... } }` by an admin or by an `hrbp` who is a member of that
+deal (a non-member receives the same `404` a missing deal gets):
+
+| Field | Bounds |
+|---|---|
+| `currency` | text, at most 10 characters |
+| `day1Date` | text, at most 10 characters (`YYYY-MM-DD`) |
+| `synergyTargetM` | number, 0 to 100000 (millions) |
+| `synergyStaleDays` | number, greater than 0, at most 365 |
+| `synergyHorizonYears` | whole number, 1 to 15 |
+
+A value set on the deal wins over the instance setting, which wins over the built-in
+default. Every change is recorded as a `deal-settings-update` security event with
+the before and after values.
+
+### Personal data
+
+- **Pulse feedback** (`/api/pulses`, real deals only). An admin or Integration
+  Leader reads every named rating and comment. An author reads their own. A
+  Workstream lead reads their own plus one **aggregate row** per other pulse
+  carrying only `rating`, `type` and the calendar day, re-ordered so arrival order
+  does not identify anyone. An Employee reads only their own. Authorship is stamped
+  from the signed-in account on the server, never from the request body.
+- **Integration Leader directory** (`/api/hrbps`, colleague e-mail addresses) is
+  admin and Integration Leader only.
+- **The employee's own roster record.** A role that may not read the roster
+  resolves only the record derived from its own account when it opens the employee
+  portal (`POST /api/employees/get-or-create`); a colleague's id or name supplied in
+  the request is ignored. No `GET` request changes application data (an instrumented
+  test drives every registered `GET` route; only append-only read-audit rows are
+  written).
+
+### Clean-room clearance reaches tasks and RAID entries
+
+A task or RAID entry that came from a due-diligence area (a converted finding, a
+flight-risk conversion) carries that area. A deal member who is **not cleared** for
+the area gets `404 {"error":"Not found"}` — byte-for-byte what a missing id returns —
+on reading, updating, flipping the status of, deleting or re-converting it, with or
+without a version, and the record's fields appear in no response. Lists simply omit
+it. The Integration Leader and admin are cleared for every area; any other member
+needs an explicit grant (`POST /api/deals/:id/grants`). A genuinely missing id and an
+invisible one are indistinguishable to the caller by design; the refusal of an
+invisible record is audited as `clearance-404`, a genuinely missing id is not.
+
+### Controls the portal hides
+
+The portal asks the server what the signed-in role may do (`access` on
+`GET /api/auth/me`) and does not draw a control that could only answer `403`:
+
+| When the role cannot… | The portal hides |
+|---|---|
+| read the roster | the Acquired Team Leaderboard, the Leaders portal roster, the chatbot's roster summary (neutral line instead) |
+| read communications | the employee notifications banner list and the Digital Broadcast Archive |
+| read the Integration Leader directory | the provisioning desk in the PMO console, the profile menu's leader lookup, the wizard directory |
+| use AI insight / playbook search | the AI-Insight card (the chatbot keeps answering without playbook snippets) |
+| read synergies, diligence or org | the matching panels and nudges on the deal home |
+| write configuration (everyone except admin) | the admin console's course, slide, page, translation, menu, banner and media tabs; the settings, role-visibility, custom-M&A and database cards; the demo/edit-mode switches; inline "Edit Content"; the PMO demo-mode switch and custom-setup wizard; the AI-model download prompt |
+
+Hiding is presentation only. Pages with no page-level role gate (the admin console,
+due-diligence and org pages) can still be *opened* by any signed-in role; the data
+calls that role may not make answer `403` and no record content is shown.
+
+### Refused requests are audited
+
+Every refusal above is a `403`/`404` the server records as an `access-denied` event,
+**rate-bounded to at most one audit row per account + method + route + reason per 60
+seconds per server process**, with the folded count written as the next row. The
+details, including the accepted loss of pending counts on a crash, are in the next
+section.
+
 ## Denial audit (refused requests)
 
 Every request the server **refuses on authorization grounds** is written to the
