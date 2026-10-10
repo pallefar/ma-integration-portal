@@ -203,8 +203,29 @@ function queryAudit({ dealId, actor, from, to, limit, offset } = {}) {
   return conn.prepare(`SELECT * FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, lim, off);
 }
 
+/**
+ * D-12-01 (Phase 12): how many audit rows match, WITHOUT materialising them.
+ * The proportional-audit proofs (test/writedb-dirty-rows.test.js,
+ * test/audit-volume.test.js, scripts/perf/write-latency.js) assert "one change
+ * -> exactly one row" through this function and queryAudit() only — never raw SQL
+ * on audit.db — so the physical layout behind this API can change (per-deal
+ * partitions, plan 12-08) without those proofs needing an edit. Every filter is
+ * optional and parameterised.
+ */
+function countAudit({ dealId, rowId, collection, action } = {}) {
+  const conn = getAuditConnection();
+  const clauses = [];
+  const params = [];
+  if (dealId) { clauses.push('deal_id = ?'); params.push(dealId); }
+  if (rowId) { clauses.push('row_id = ?'); params.push(rowId); }
+  if (collection) { clauses.push('collection = ?'); params.push(collection); }
+  if (action) { clauses.push('action = ?'); params.push(action); }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  return conn.prepare(`SELECT COUNT(*) AS n FROM audit_log ${where}`).get(...params).n;
+}
+
 module.exports = {
   AUDITED_DB_KINDS,
   getAuditConnection, closeAuditConnection,
-  writeAuditBatch, recordSecurityEvent, queryAudit,
+  writeAuditBatch, recordSecurityEvent, queryAudit, countAudit,
 };

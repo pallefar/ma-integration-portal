@@ -11,9 +11,10 @@
 // data.__snapshot[key] (THIS request's own read baseline, never live DB state,
 // and REQUIRED — writeDb() throws if it's missing) inside one SQLite
 // transaction: ids new to this request's snapshot are INSERTed, ids already in
-// this request's snapshot are unconditionally UPDATEd (so seq/data are rewritten
-// even when content is unchanged — this is what makes pure reorders and
-// non-tail inserts persist, and an UPDATE against an already-deleted row is a
+// this request's snapshot whose serialized form changed are UPDATEd (D-12-01:
+// an UNCHANGED row is never rewritten or audited — only its `seq` is updated,
+// and only when its position moved, which is what makes pure reorders and
+// non-tail inserts persist; an UPDATE against an already-deleted row is a
 // harmless 0-row no-op rather than a resurrection), and only ids this request's
 // own snapshot saw and dropped are deleted. This snapshot-tagged three-way merge
 // is what closes both the same-collection lost-update race (D-04) — a
@@ -263,6 +264,30 @@ function getConnection() {
   return requireDb();
 }
 
+// D-12-01 (Phase 12): per-connection prepared-statement cache. better-sqlite3
+// statements are bound to the connection that prepared them, so the cache is
+// keyed on the Database object itself (a WeakMap — a closed/evicted connection
+// takes its statements with it, nothing to invalidate by hand). Before this,
+// writeDb() re-parsed three-to-six statements for every one of the 38 array
+// collections on every call (R5-01: a parse/plan round trip per collection per
+// write even when nothing changed).
+const stmtCache = new WeakMap();
+function prep(conn, sql) {
+  let byConn = stmtCache.get(conn);
+  if (!byConn) { byConn = new Map(); stmtCache.set(conn, byConn); }
+  let stmt = byConn.get(sql);
+  if (!stmt) { stmt = conn.prepare(sql); byConn.set(sql, stmt); }
+  return stmt;
+}
+
+/** A prepare-on-first-use accessor: a collection that never reaches a given
+ * statement never pays to prepare it (and, with prep()'s cache, pays only
+ * once per connection when it does). */
+function lazyStmt(conn, sql) {
+  let stmt = null;
+  return () => stmt || (stmt = prep(conn, sql));
+}
+
 /**
  * Reconstruct the full whole-object database from SQLite. Throws (does not
  * silently return an empty object) on any unrecoverable read failure — the
@@ -272,17 +297,23 @@ function readDb() {
   const conn = requireDb();
   const out = {};
   const snapshot = {};
+  // D-12-01: the stored `seq` of every row at read time, kept BESIDE (never
+  // inside) __snapshot — a separate non-enumerable map so the id -> raw shape of
+  // __snapshot is unchanged. writeDb() uses it to tell "this row moved" (seq-only
+  // UPDATE) from "this row did not move" (no statement at all).
+  const seqs = {};
 
   for (const key of ARRAY_COLLECTIONS) {
-    const rows = conn.prepare(`SELECT id, data FROM ${key} ORDER BY seq`).all();
+    const rows = prep(conn, `SELECT id, seq, data FROM ${key} ORDER BY seq`).all();
     out[key] = rows.map((r) => JSON.parse(r.data));
     // The stored `data` string is exactly what was written (JSON.stringify at
     // write time) — string comparison against it is a cheap, exact "did this
     // row change since I read it" check with no re-serialization needed.
     snapshot[key] = new Map(rows.map((r) => [r.id, r.data]));
+    seqs[key] = new Map(rows.map((r) => [r.id, r.seq]));
   }
   for (const key of SINGLETON_KEYS) {
-    const row = conn.prepare('SELECT data FROM app_state WHERE key = ?').get(key);
+    const row = prep(conn, 'SELECT data FROM app_state WHERE key = ?').get(key);
     out[key] = row ? JSON.parse(row.data) : undefined;
   }
 
@@ -290,6 +321,7 @@ function readDb() {
   // and Object.keys(db) never exposes it — dozens of endpoints serialize the
   // read-model object straight to API clients.
   Object.defineProperty(out, '__snapshot', { value: snapshot, enumerable: false, configurable: true });
+  Object.defineProperty(out, '__seq', { value: seqs, enumerable: false, configurable: true });
 
   // ISO-03: which physical database this read actually came from, stamped
   // the same non-enumerable way as __snapshot so a later plan's audit hook
@@ -313,23 +345,45 @@ function readDb() {
  * silently treating a missing snapshot as "nothing to diff against", since
  * that would silently degrade into never deleting anything.
  *
- * Per-item merge rule, keyed on whether this request's OWN snapshot already
- * had the id (not on whether the content changed):
- *   - id NOT in this request's snapshot -> genuinely new this request -> INSERT.
- *   - id IS in this request's snapshot -> UPDATE unconditionally (never a
- *     skip-if-unchanged upsert). This is deliberate, not a missed
- *     optimization: an UPDATE rewrites `seq`/`data` even when content is
- *     unchanged, so a pure reorder (or a non-tail insert that shifts
- *     trailing items' positions) actually persists (CR-01) — and if a
- *     concurrent writer already DELETEd that row, the UPDATE affects 0 rows
- *     instead of resurrecting it (CR-02), because UPDATE (unlike INSERT ...
- *     ON CONFLICT DO UPDATE) can never re-create a row that no longer
- *     exists.
- * A prepare() call is issued for every array collection on every writeDb()
- * call regardless of whether that collection has any delta (only the
- * .run() execution is conditional) — this is a parse/plan round-trip, not
- * "no SQL issued", contrary to what an earlier version of this comment
- * claimed.
+ * Per-item merge rule (D-12-01 — writes and audit proportional to what
+ * CHANGED), keyed first on whether this request's OWN snapshot already had
+ * the id, then on whether the row's serialized form differs from the raw this
+ * request read:
+ *   - id NOT in this request's snapshot -> genuinely new this request ->
+ *     INSERT + one `insert` audit delta.
+ *   - id in the snapshot, serialized form EQUAL to the raw it was read as ->
+ *     the row is untouched by this writer: NO data UPDATE and NO audit delta.
+ *     Only when the row's position moved (its array index differs from the
+ *     `seq` it was read with, or that seq is unknown) a seq-only statement
+ *     `UPDATE <c> SET seq = ? WHERE id = ?` persists the move — a pure reorder
+ *     or a non-tail insert still persists (CR-01), no data blob is rewritten
+ *     and no audit row is produced. Because the statement is keyed on id, a row
+ *     a concurrent writer already DELETEd affects 0 rows instead of being
+ *     resurrected (CR-02 — UPDATE, unlike INSERT ... ON CONFLICT DO UPDATE, can
+ *     never re-create a row that no longer exists).
+ *   - id in the snapshot, serialized form DIFFERENT -> a real change:
+ *     non-versioned collections UPDATE unconditionally (last-writer-wins, as
+ *     before) and audit only when the statement actually changed a row;
+ *     versioned collections take the Phase 9 version-WHERE path (stamp, stale
+ *     -> 409) unchanged.
+ *   - ids this request's snapshot saw and dropped -> DELETE (versioned: with
+ *     the version WHERE), audited only when the statement actually deleted a
+ *     row.
+ *
+ * Why this is strictly safer than the previous "UPDATE every row
+ * unconditionally" rule (superseded here, D-12-01): an untouched row is never
+ * written, so a stale writer's copy of it can never overwrite another
+ * process's already-committed change to the same row — the cross-process
+ * clobber class CONC-02 exists to close — and one click at volume no longer
+ * rewrites (and audits) every row of the collection (R2-01 / R5-01 / R1-07:
+ * 6,220 byte-identical audit rows per create on a 1k-task / 5k-RAID deal).
+ *
+ * The audit append stays the FINAL step inside the SAME `.immediate`
+ * transaction (Phase 8 CR-01) — see the comment above the audit block below.
+ * The caller's snapshot baseline (`__snapshot` / `__seq`) is refreshed only
+ * AFTER that transaction commits, so a rolled-back write never mutates the
+ * baseline, and a second writeDb() on the same object writes and audits only
+ * what changed since the first.
  *
  * Throws on unrecoverable failure (better-sqlite3's db.transaction()
  * re-throws and rolls back automatically).
@@ -340,6 +394,11 @@ function writeDb(data) {
     throw new Error('writeDb(): data was not produced by readDb() — missing __snapshot');
   }
   const before = data.__snapshot;
+  // D-12-01: per-collection Map id -> seq stored at read time. Absent (an
+  // object that carries a __snapshot but no __seq) means "position unknown" —
+  // every retained row is then conservatively re-seq'd, which is exactly the
+  // pre-Phase-12 persistence behaviour for positions.
+  const beforeSeq = data.__seq || null;
 
   // AUD-01/D-08 (Phase 3 Plan 05): only collect a per-row delta list when
   // THIS request's resolved context is one of auditHook.AUDITED_DB_KINDS —
@@ -352,6 +411,11 @@ function writeDb(data) {
   const auditKind = scoped ? scoped.kind : null;
   const deltas = (scoped && auditHook.AUDITED_DB_KINDS.has(auditKind)) ? [] : null;
 
+  // D-12-01 / PD-24: snapshot-baseline refreshes collected while the
+  // transaction runs and applied only after it COMMITS. Each entry is
+  // `{ key, id, raw?, seq?, del? }`.
+  const refresh = [];
+
   // D-03/CONC-01 (Phase 8): .immediate acquires the write lock UP FRONT via
   // BEGIN IMMEDIATE, rather than a plain/deferred BEGIN that only acquires
   // the write lock the first time a write statement runs inside the
@@ -360,13 +424,10 @@ function writeDb(data) {
   // attempts to write can hit SQLITE_BUSY_SNAPSHOT partway through, after
   // some statements may already have executed; .immediate fails fast, before
   // any statement in the body runs, if the lock cannot be acquired within
-  // busy_timeout (db/dbFiles.js). The transaction BODY below is otherwise
-  // unchanged — the snapshot-diff merge algorithm (see this function's own
-  // doc comment above) is byte-identical to pre-Phase-8. No try/catch is
-  // added around applyWrite(data) below — a SqliteError (including
-  // SQLITE_BUSY*) must propagate uncaught through writeDb()'s existing
-  // no-swallow contract so it reaches server.js's central 503 error
-  // middleware (D-06).
+  // busy_timeout (db/dbFiles.js). No try/catch is added around
+  // applyWrite(data) below — a SqliteError (including SQLITE_BUSY*) must
+  // propagate uncaught through writeDb()'s existing no-swallow contract so it
+  // reaches server.js's central 503 error middleware (D-06).
   //
   // [security] CR-01 (Phase 8 review fix): the audit append (previously a
   // SEPARATE transaction dispatched only after this transaction had already
@@ -376,24 +437,21 @@ function writeDb(data) {
   const applyWrite = conn.transaction((payload) => {
     for (const key of ARRAY_COLLECTIONS) {
       const beforeMap = before[key] || new Map();
-      before[key] = beforeMap; // FA-4: so a later refresh below is visible to a second writeDb() call reusing this same snapshot.
+      before[key] = beforeMap; // so a later refresh below is visible to a second writeDb() call reusing this same snapshot.
+      const seqMap = (beforeSeq && beforeSeq[key]) || null;
       const afterArr = payload[key] || [];
       const afterIds = new Set();
 
-      const insert = conn.prepare(
-        `INSERT INTO ${key} (id, project_id, seq, data) VALUES (?, ?, ?, ?)`
-      );
-      const update = conn.prepare(
-        `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ?`
-      );
-      const del = conn.prepare(`DELETE FROM ${key} WHERE id = ?`);
+      // Every statement is prepared on first use and cached per connection
+      // (prep() above) — a collection with no delta prepares nothing.
+      const insert = lazyStmt(conn, `INSERT INTO ${key} (id, project_id, seq, data) VALUES (?, ?, ?, ?)`);
+      const update = lazyStmt(conn, `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ?`);
+      const seqOnly = lazyStmt(conn, `UPDATE ${key} SET seq = ? WHERE id = ?`);
+      const del = lazyStmt(conn, `DELETE FROM ${key} WHERE id = ?`);
 
       // CONC-02 (Phase 9, PD-1/PD-2/D-09): a versioned branch, taken ONLY
       // when this collection is in VERSIONED_COLLECTIONS — every other
       // collection's statements/behavior above are byte-for-byte unchanged.
-      // The three extra prepared statements below are gated the same way,
-      // so a non-versioned collection's writeDb() call pays zero extra
-      // parse/plan cost.
       const versioned = VERSIONED_COLLECTIONS.has(key);
       // WR-04 (09-REVIEW round 2): the stored version is compared through the
       // SAME rule as db/collections.js comparableVersion() — a value that is
@@ -405,20 +463,16 @@ function writeDb(data) {
       // requires every line naming the extractor to carry the bound `?`.
       const versionMatchSql = "(json_extract(data,'$.version') IS NULL OR (CASE WHEN json_type(data,'$.version') = 'integer' AND json_extract(data,'$.version') BETWEEN 0 AND 9007199254740991 THEN json_extract(data,'$.version') ELSE 0 END) = ?)";
       const versionedUpdate = versioned
-        ? conn.prepare(
-          `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ? AND ${versionMatchSql}`
-        )
+        ? lazyStmt(conn, `UPDATE ${key} SET project_id = ?, seq = ?, data = ? WHERE id = ? AND ${versionMatchSql}`)
         : null;
       const versionedDelete = versioned
-        ? conn.prepare(
-          `DELETE FROM ${key} WHERE id = ? AND ${versionMatchSql}`
-        )
+        ? lazyStmt(conn, `DELETE FROM ${key} WHERE id = ? AND ${versionMatchSql}`)
         : null;
       // Pitfall 5: changes===0 from either statement above cannot by itself
       // distinguish "stale version" from "row concurrently deleted" — this
       // disambiguating SELECT runs inside the SAME transaction (the write
       // lock is already held, so it adds no race) whenever that happens.
-      const conflictSelect = versioned ? conn.prepare(`SELECT data FROM ${key} WHERE id = ?`) : null;
+      const conflictSelect = versioned ? lazyStmt(conn, `SELECT data FROM ${key} WHERE id = ?`) : null;
 
       afterArr.forEach((item, i) => {
         const id = idOf(item);
@@ -431,95 +485,101 @@ function writeDb(data) {
           // a pre-Phase-9 legacy row) — its FIRST subsequent edit is what
           // stamps version:1, exactly like any other unstamped row.
           const serialized = JSON.stringify(item);
-          insert.run(id, projectIdOf(item), i, serialized);
+          insert().run(id, projectIdOf(item), i, serialized);
           if (deltas) deltas.push({ collection: key, rowId: id, action: 'insert', before: null, after: serialized });
-        } else if (versioned) {
-          // This request's own snapshot already had this id, and this
-          // collection is version-checked (CONC-02/D-01/D-02: uniform
-          // check, no exemptions — a single-field kanban status flip goes
-          // through the identical path as a full edit).
-          const priorObj = JSON.parse(priorRaw);
+          refresh.push({ key, id, raw: serialized, seq: i });
+          return;
+        }
+
+        // This request's own snapshot already had this id. Decide "untouched
+        // by this writer" by comparing the item's serialized form with the raw
+        // it was read as — a plain string compare, no parse (checker I-3: the
+        // old versioned branch parsed every row's prior raw first, the dominant
+        // per-row cost at 5k RAID rows). Only when the strings differ is the
+        // prior raw parsed, once, both to learn the stored version and to rule
+        // out a non-canonical stored form (key order / whitespace written by
+        // some other serializer) being mistaken for a change.
+        const candidate = JSON.stringify(item);
+        let priorObj = null;
+        let untouched = candidate === priorRaw;
+        if (!untouched) {
+          priorObj = JSON.parse(priorRaw);
+          untouched = JSON.stringify(priorObj) === candidate;
+        }
+
+        if (untouched) {
+          // D-12-01 (supersedes the Phase 1 CR-01 "UPDATE unconditionally" and
+          // the Phase 9 "untouched row re-UPDATE through the version WHERE"
+          // branches): no data statement, no audit delta, no clobber of
+          // another writer's committed change to this row. If — and only if —
+          // the row's position moved, persist the move with a seq-only UPDATE
+          // by id (0 rows if a concurrent writer deleted it: CR-02, never a
+          // resurrection). Reordering stays CR-01-correct.
+          const priorSeq = seqMap ? seqMap.get(id) : undefined;
+          if (priorSeq !== i) {
+            const moved = seqOnly().run(i, id);
+            if (moved.changes > 0) refresh.push({ key, id, seq: i });
+          }
+          return;
+        }
+
+        if (versioned) {
+          // CONC-02/D-01/D-02: uniform check, no exemptions — a single-field
+          // kanban status flip goes through the identical path as a full
+          // edit. A changed row is stamped BEFORE serialization (PD-1):
+          // version becomes the numeric baseline (0 for a legacy/unstamped
+          // row) plus one; updatedAt is the current ISO timestamp; updatedBy
+          // is the request actor's username when one is resolvable from the
+          // AsyncLocalStorage store (D-11-style — never synthesized), and is
+          // left untouched when it is not (server startup, migration
+          // scripts, tests) — Pitfall 10: never sourced from audit.db, which
+          // structurally excludes demo-mode writes.
           const expectedVersion = comparableVersion(priorObj && priorObj.version);
-          const candidate = JSON.stringify(item);
-          if (candidate === priorRaw) {
-            // CR-01 (Phase 1) + CONC-02 correctness: untouched-by-THIS-
-            // writer, so no version bump — but writeDb()'s per-collection
-            // loop still visits EVERY row in the array on EVERY call
-            // (whole-object snapshot-diff, D-03), including ids this
-            // writer never intended to touch. A plain unconditional
-            // update() here would silently overwrite another process's
-            // ALREADY-COMMITTED change to this same row with this
-            // writer's now-stale copy of it — exactly the class of
-            // cross-process clobber CONC-02 exists to close, just
-            // reached through the "reorder/no-op" path instead of an
-            // explicit edit. So this still goes through the SAME
-            // version-checked WHERE clause as a real edit: on a match it
-            // rewrites seq/data (preserving CR-01 reordering); on a
-            // mismatch, someone else already changed (or deleted) this
-            // row since this writer's own readDb() — since this writer
-            // never intended to modify ITS CONTENT, that is silently NOT
-            // this writer's conflict to raise; the other write's newer
-            // state stands untouched (CR-02's no-resurrect precedent
-            // applies identically when the row is now gone).
-            const untouchedResult = versionedUpdate.run(projectIdOf(item), i, candidate, id, expectedVersion);
-            if (untouchedResult.changes > 0 && deltas) {
-              deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: candidate });
-            }
-          } else {
-            // A changed row is stamped BEFORE serialization (PD-1): version
-            // becomes the numeric baseline (0 for a legacy/unstamped row)
-            // plus one; updatedAt is the current ISO timestamp; updatedBy is
-            // the request actor's username when one is resolvable from the
-            // AsyncLocalStorage store (D-11-style — never synthesized), and
-            // is left untouched when it is not (server startup, migration
-            // scripts, tests) — Pitfall 10: never sourced from audit.db,
-            // which structurally excludes demo-mode writes.
-            item.version = expectedVersion + 1;
-            item.updatedAt = new Date().toISOString();
-            if (scoped && scoped.actor && scoped.actor.username) {
-              item.updatedBy = scoped.actor.username;
-            }
-            const serialized = JSON.stringify(item);
-            const result = versionedUpdate.run(projectIdOf(item), i, serialized, id, expectedVersion);
-            if (result.changes === 0) {
-              const row = conflictSelect.get(id);
-              if (row) {
-                // Row still exists: a genuine version conflict — someone
-                // else's write landed between this request's readDb() and
-                // this writeDb() call (the cross-process window Phase 8's
-                // multi-process WAL model introduced).
-                const current = JSON.parse(row.data);
-                throw makeConflictError({
-                  conflictKind: 'version', collection: key, recordId: id,
-                  currentRecord: conflictVisibleRecord(key, current, scoped),
-                  currentVersion: comparableVersion(current.version),
-                  changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
-                });
-              }
-              // PD-4: row is now gone — a concurrent delete, scoped ONLY to
-              // versioned collections (every other collection keeps the
-              // pre-Phase-9 CR-02 silent no-resurrect no-op verbatim).
+          item.version = expectedVersion + 1;
+          item.updatedAt = new Date().toISOString();
+          if (scoped && scoped.actor && scoped.actor.username) {
+            item.updatedBy = scoped.actor.username;
+          }
+          const serialized = JSON.stringify(item);
+          const result = versionedUpdate().run(projectIdOf(item), i, serialized, id, expectedVersion);
+          if (result.changes === 0) {
+            const row = conflictSelect().get(id);
+            if (row) {
+              // Row still exists: a genuine version conflict — someone
+              // else's write landed between this request's readDb() and
+              // this writeDb() call (the cross-process window Phase 8's
+              // multi-process WAL model introduced).
+              const current = JSON.parse(row.data);
               throw makeConflictError({
-                conflictKind: 'deleted', collection: key, recordId: id,
-                currentRecord: null, currentVersion: null, changedBy: null, changedAt: null,
+                conflictKind: 'version', collection: key, recordId: id,
+                currentRecord: conflictVisibleRecord(key, current, scoped),
+                currentVersion: comparableVersion(current.version),
+                changedBy: current.updatedBy || null, changedAt: current.updatedAt || null,
               });
             }
-            // FA-4: refresh THIS request's own snapshot for `id` so a
-            // handler that calls writeDb(db) twice against one readDb()
-            // result does not self-conflict on its own second call.
-            beforeMap.set(id, serialized);
-            if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: serialized });
+            // PD-4: row is now gone — a concurrent delete, scoped ONLY to
+            // versioned collections (every other collection keeps the
+            // pre-Phase-9 CR-02 silent no-resurrect no-op verbatim).
+            throw makeConflictError({
+              conflictKind: 'deleted', collection: key, recordId: id,
+              currentRecord: null, currentVersion: null, changedBy: null, changedAt: null,
+            });
           }
-        } else {
-          // This request's own snapshot already had this id: always UPDATE
-          // (never insert-or-upsert here). If the row still exists this
-          // rewrites seq/data unconditionally, so reordering and non-tail
-          // inserts persist (CR-01). If a concurrent writer already deleted
-          // this row, the UPDATE affects 0 rows and does NOT resurrect it
-          // (CR-02).
-          const serialized = JSON.stringify(item);
-          update.run(projectIdOf(item), i, serialized, id);
+          // FA-4: refresh THIS request's own snapshot for `id` (applied after
+          // commit, below) so a handler that calls writeDb(db) twice against
+          // one readDb() result does not self-conflict on its own second call.
+          refresh.push({ key, id, raw: serialized, seq: i });
           if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: serialized });
+        } else {
+          // Non-versioned, genuinely changed: UPDATE by id. If a concurrent
+          // writer already deleted this row the UPDATE affects 0 rows and does
+          // NOT resurrect it (CR-02) — and, because this write changed nothing,
+          // it is not audited (PD-24).
+          const result = update().run(projectIdOf(item), i, candidate, id);
+          if (result.changes > 0) {
+            if (deltas) deltas.push({ collection: key, rowId: id, action: 'update', before: priorRaw, after: candidate });
+            refresh.push({ key, id, raw: candidate, seq: i });
+          }
         }
       });
 
@@ -528,6 +588,7 @@ function writeDb(data) {
       // writer's concurrent same-collection addition).
       for (const id of beforeMap.keys()) {
         if (!afterIds.has(id)) {
+          let deleted;
           if (versioned) {
             // D-08 (Phase 9): a delete based on a stale version gets the
             // same typed conflict as an update — bound to THIS request's
@@ -536,9 +597,9 @@ function writeDb(data) {
             const priorRaw = beforeMap.get(id);
             const priorObj = JSON.parse(priorRaw);
             const expectedVersion = comparableVersion(priorObj && priorObj.version);
-            const result = versionedDelete.run(id, expectedVersion);
+            const result = versionedDelete().run(id, expectedVersion);
             if (result.changes === 0) {
-              const row = conflictSelect.get(id);
+              const row = conflictSelect().get(id);
               if (row) {
                 const current = JSON.parse(row.data);
                 throw makeConflictError({
@@ -551,19 +612,22 @@ function writeDb(data) {
               // Row already gone (concurrent delete elsewhere): this
               // writer's own intent — the record being gone — is already
               // satisfied. CR-02's idempotent no-resurrect no-op, not a
-              // conflict.
+              // conflict, and nothing changed by this write (PD-24: not
+              // audited).
             }
+            deleted = result.changes > 0;
           } else {
-            del.run(id);
+            deleted = del().run(id).changes > 0;
           }
-          if (deltas) deltas.push({ collection: key, rowId: id, action: 'delete', before: beforeMap.get(id), after: null });
+          if (deleted && deltas) deltas.push({ collection: key, rowId: id, action: 'delete', before: beforeMap.get(id), after: null });
+          refresh.push({ key, id, del: true });
         }
       }
     }
 
     for (const key of SINGLETON_KEYS) {
       if (payload[key] !== undefined) {
-        conn.prepare(
+        prep(conn,
           `INSERT INTO app_state (key, data) VALUES (?, ?)
            ON CONFLICT(key) DO UPDATE SET data = excluded.data`
         ).run(key, JSON.stringify(payload[key]));
@@ -631,6 +695,29 @@ function writeDb(data) {
   }).immediate; // D-03/CONC-01: BEGIN IMMEDIATE — see comment above applyWrite's declaration
 
   applyWrite(data);
+
+  // D-12-01 / PD-24: the transaction committed — only now is it safe to move
+  // the caller's baseline forward (inserts, changed rows, re-seq'd rows and
+  // deletes), so a second writeDb() on the same readDb() object writes and
+  // audits only NEW changes and never re-INSERTs a row it already inserted.
+  if (refresh.length) {
+    let seqs = data.__seq;
+    if (!seqs) {
+      seqs = {};
+      Object.defineProperty(data, '__seq', { value: seqs, enumerable: false, configurable: true });
+    }
+    for (const op of refresh) {
+      const raws = before[op.key] || (before[op.key] = new Map());
+      const seqMap = seqs[op.key] || (seqs[op.key] = new Map());
+      if (op.del) {
+        raws.delete(op.id);
+        seqMap.delete(op.id);
+        continue;
+      }
+      if (op.raw !== undefined) raws.set(op.id, op.raw);
+      if (op.seq !== undefined) seqMap.set(op.id, op.seq);
+    }
+  }
 
   return true; // preserves existing callers' truthy-return expectation
 }
