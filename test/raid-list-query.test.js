@@ -242,3 +242,146 @@ test('raid-list-query (f): restricted visibility is the same through the legacy 
     }
   });
 });
+
+// ================================================================= Task 2 ===
+
+test('raid-list-query (g): ?status / ?owner / ?workstream narrow correctly; the response is a bare array unless limit is given', async () => {
+  const { fx, rows } = seedDeal();
+  await withServer(async (base) => {
+    const visible = expectedVisible(rows, 'all');
+    const open = await (await get(base, '/api/raid?status=open', fx.tokens.karen)).json();
+    assert.ok(Array.isArray(open));
+    assert.deepStrictEqual(ids(open), ids(visible.filter((r) => r.status === 'open')));
+    const bob = await (await get(base, '/api/raid?owner=bob', fx.tokens.karen)).json();
+    assert.deepStrictEqual(ids(bob), ids(visible.filter((r) => r.owner === 'bob')));
+    const ws = await (await get(base, '/api/raid?workstream=ws_hr', fx.tokens.karen)).json();
+    assert.deepStrictEqual(ids(ws), ids(visible.filter((r) => r.workstreamId === 'ws_hr')));
+    const combo = await (await get(base, '/api/raid?status=closed&owner=chen&workstream=ws_finance', fx.tokens.karen)).json();
+    assert.deepStrictEqual(ids(combo), ids(visible.filter((r) => r.status === 'closed' && r.owner === 'chen' && r.workstreamId === 'ws_finance')));
+    assert.ok(combo.length > 0, 'the combined filter is not vacuous');
+  });
+});
+
+test('raid-list-query (h): ?q is a case-insensitive Unicode substring over title and notes; with limit, total is the filtered visible count', async () => {
+  const { fx, rows } = seedDeal();
+  await withServer(async (base) => {
+    const visible = expectedVisible(rows, 'all');
+    const byTitle = await (await get(base, '/api/raid?q=SUPPLIER', fx.tokens.karen)).json();
+    assert.deepStrictEqual(ids(byTitle), ids(visible.filter((r) => /supplier/i.test(r.title) || /supplier/i.test(r.notes))));
+    const byNotes = await (await get(base, `/api/raid?q=${encodeURIComponent('lieferanten')}`, fx.tokens.karen)).json();
+    assert.deepStrictEqual(ids(byNotes), ['raid_m07']);
+    const unicode = await (await get(base, `/api/raid?q=${encodeURIComponent('äPFEL')}`, fx.tokens.karen)).json();
+    assert.deepStrictEqual(ids(unicode), ['raid_m10']);
+    const umlautInNotes = await (await get(base, `/api/raid?q=${encodeURIComponent('prüfen')}`, fx.tokens.karen)).json();
+    assert.deepStrictEqual(ids(umlautInNotes), ['raid_m07']);
+
+    const paged = await (await get(base, '/api/raid?q=risk&limit=5&status=open', fx.tokens.karen)).json();
+    const expected = visible.filter((r) => r.status === 'open' && (/risk/i.test(r.title) || /risk/i.test(r.notes)));
+    assert.strictEqual(paged.total, expected.length);
+    assert.deepStrictEqual(ids(paged.items), ids(expected.slice(0, 5)));
+  });
+});
+
+test('raid-list-query (i): no existence oracle — an uncleared pmo\'s total excludes restricted rows and ?q on a restricted word answers 0', async () => {
+  const { fx, rows } = seedDeal();
+  await withServer(async (base) => {
+    const visibleNone = expectedVisible(rows, []);
+    const total = await (await get(base, '/api/raid?limit=1', fx.tokens.pmo_none)).json();
+    assert.strictEqual(total.total, visibleNone.length);
+    for (const word of ['Zebrafish', 'retention', 'Restricted', 'legal Zebrafish']) {
+      const q = await (await get(base, `/api/raid?q=${encodeURIComponent(word)}&limit=50`, fx.tokens.pmo_none)).json();
+      assert.deepStrictEqual(q, { items: [], total: 0 }, `q=${word}`);
+      const qa = await (await get(base, `/api/raid?q=${encodeURIComponent(word)}`, fx.tokens.pmo_none)).json();
+      assert.deepStrictEqual(qa, [], `legacy q=${word}`);
+    }
+    // the cleared holder DOES find them — the filter works, it is the clearance that hides them
+    const legal = await (await get(base, `/api/raid?q=${encodeURIComponent('legal Zebrafish')}`, fx.tokens.pmo_legal)).json();
+    assert.deepStrictEqual(ids(legal).sort(), ['raid_r_legal', 'raid_r_legalstamp']);
+    const hr = await (await get(base, `/api/raid?q=Zebrafish`, fx.tokens.pmo_hr)).json();
+    assert.deepStrictEqual(ids(hr).sort(), ['raid_r_hr', 'raid_r_hrstamp']);
+    // status / owner / workstream filters never reveal a restricted row either
+    const openCount = await (await get(base, '/api/raid?status=open&limit=200', fx.tokens.pmo_none)).json();
+    assert.strictEqual(openCount.total, visibleNone.filter((r) => r.status === 'open').length);
+  });
+});
+
+test('raid-list-query (j): invalid list parameters answer 400 with one fixed body; unknown keys are ignored', async () => {
+  const { fx, rows } = seedDeal();
+  await withServer(async (base) => {
+    const bad = [
+      'limit=0', 'limit=201', 'limit=abc', 'limit=-1', 'limit=1.5', 'limit=', 'limit=1e2',
+      'offset=-1', 'offset=5', 'offset=abc&limit=5',
+      'status=bogus', 'status=', 'status[]=open', 'status=open&status=closed',
+      `owner=${'x'.repeat(121)}`, `q=${'y'.repeat(201)}`,
+      'limit[a]=1', 'q[]=a',
+    ];
+    for (const qs of bad) {
+      const res = await get(base, `/api/raid?${qs}`, fx.tokens.karen);
+      assert.strictEqual(res.status, 400, `?${qs}`);
+      assert.deepStrictEqual(await res.json(), { error: 'Invalid list query.' }, `?${qs}`);
+    }
+    // unknown keys (including `phase`, which RAID does not define) are ignored -> the legacy array
+    const ignored = await get(base, '/api/raid?phase=day1&sort=title&foo=bar', fx.tokens.karen);
+    assert.strictEqual(ignored.status, 200);
+    assert.strictEqual(await ignored.text(), JSON.stringify(expectedVisible(rows, 'all')));
+    // limit boundaries are accepted
+    assert.strictEqual((await get(base, '/api/raid?limit=1', fx.tokens.karen)).status, 200);
+    assert.strictEqual((await get(base, '/api/raid?limit=200', fx.tokens.karen)).status, 200);
+  });
+});
+
+test('raid-list-query (k): POST /api/raid create, update, stale 409 (filtered echo), 404 for an invisible id — and DELETE — behave exactly as before on the RAID read set', async () => {
+  const { fx, rows } = seedDeal();
+  await withServer(async (base) => {
+    // create
+    const created = await post(base, '/api/raid', fx.tokens.pmo_none, { title: 'Fresh entry', type: 'risk', severity: 'low' });
+    assert.strictEqual(created.status, 201);
+    const entry = (await created.json()).entry;
+    const afterCreate = await (await get(base, '/api/raid?limit=200', fx.tokens.pmo_none)).json();
+    assert.strictEqual(afterCreate.total, expectedVisible(rows, []).length + 1);
+    assert.strictEqual(afterCreate.items[afterCreate.items.length - 1].id, entry.id, 'appended at the tail of the lane');
+
+    // update (version 0 -> 1), then a stale write is a 409
+    const upd = await post(base, '/api/raid', fx.tokens.pmo_none, { id: entry.id, title: 'Renamed', version: 0 });
+    assert.strictEqual(upd.status, 200);
+    const stale = await post(base, '/api/raid', fx.tokens.pmo_none, { id: entry.id, title: 'Stale', version: 0 });
+    assert.strictEqual(stale.status, 409);
+    assert.strictEqual((await stale.json()).conflictKind, 'version');
+
+    // an invisible id is a byte-identical 404 BEFORE any 409 — for update and delete
+    const hidden = await post(base, '/api/raid', fx.tokens.pmo_none, { id: 'raid_r_hrstamp', title: 'x', version: 0 });
+    assert.strictEqual(hidden.status, 404);
+    const hiddenBody = await hidden.text();
+    const missing = await post(base, '/api/raid', fx.tokens.pmo_none, { id: 'raid_does_not_exist', title: 'x', version: 0 });
+    assert.strictEqual(missing.status, 404);
+    assert.strictEqual(await missing.text(), hiddenBody, 'invisible and missing are indistinguishable');
+    const hiddenDel = await fetch(`${base}/api/raid/raid_r_hr?expectedVersion=0`, { method: 'DELETE', headers: { Cookie: cookieHeader(fx.tokens.pmo_none) } });
+    assert.strictEqual(hiddenDel.status, 404);
+
+    // delete works and the lane shrinks
+    const del = await fetch(`${base}/api/raid/${entry.id}?expectedVersion=1`, { method: 'DELETE', headers: { Cookie: cookieHeader(fx.tokens.pmo_none) } });
+    assert.strictEqual(del.status, 200);
+    const afterDelete = await (await get(base, '/api/raid?limit=200', fx.tokens.pmo_none)).json();
+    assert.strictEqual(afterDelete.total, expectedVisible(rows, []).length);
+
+    // the restricted rows survived every one of those writes untouched
+    const stillThere = await (await get(base, '/api/raid?limit=200', fx.tokens.karen)).json();
+    assert.strictEqual(stillThere.total, 60);
+  });
+});
+
+test('raid-list-query (l): the RAID write handlers load only RAID_READ_SET — source-level', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok((src.match(/RAID_READ_SET/g) || []).length >= 3);
+  for (const route of ["app.post('/api/raid',", "app.delete('/api/raid/:id',"]) {
+    const start = src.indexOf(route);
+    assert.ok(start !== -1, route);
+    const body = src.slice(start, src.indexOf('\n});', start));
+    assert.ok(body.includes('readCollections(RAID_READ_SET)'), `${route} must read through the RAID read set`);
+    assert.ok(!/=\s*readDb\(\)/.test(body), `${route} must not assign from readDb()`);
+  }
+  const listStart = src.indexOf("app.get('/api/raid',");
+  const listBody = src.slice(listStart, src.indexOf('\n});', listStart));
+  assert.ok(!/=\s*readDb\(\)/.test(listBody), 'GET /api/raid must not assign from readDb()');
+  assert.ok(listBody.includes('raidRowVisible('), 'GET /api/raid applies the shared provenance predicate');
+});

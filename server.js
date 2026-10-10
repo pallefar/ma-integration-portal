@@ -5660,7 +5660,7 @@ app.get('/api/raid', (req, res) => {
 
 app.post('/api/raid', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(RAID_READ_SET);
   const lane = raidLane(db);
   if (b.id) {
     const item = lane.find(r => r.id === b.id);
@@ -7401,7 +7401,7 @@ app.get('/api/notifications', (req, res) => {
 });
 
 app.delete('/api/raid/:id', (req, res) => {
-  const db = readDb();
+  const db = readCollections(RAID_READ_SET);
   const lane = raidLane(db);
   const entry = lane.find(r => r.id === req.params.id);
   // [security] D-11-03 / R1-02: missing AND out-of-clearance both answer the
