@@ -10,6 +10,21 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+
+// [security] D-12-06 / R5-04: db/dbFiles.js resolves DEALS_DIR (and every other
+// database path) at require time. Point them ALL at a temp directory BEFORE the
+// first db/* require so createDealDatabase() below can never create a deal file
+// under the developer's real <repo>/data/deals.
+const ISOLATION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-deal-seed-isolation-'));
+process.env.MA_CONTROL_DB_PATH = path.join(ISOLATION_DIR, 'control.db');
+process.env.MA_RUNTIME_DB_PATH = path.join(ISOLATION_DIR, 'runtime.db');
+process.env.MA_DEMO_DB_PATH = path.join(ISOLATION_DIR, 'demo.db');
+process.env.MA_DEALS_DIR = path.join(ISOLATION_DIR, 'deals');
+process.env.MA_AUDIT_DB_PATH = path.join(ISOLATION_DIR, 'audit.db');
+test.after(() => {
+  try { fs.rmSync(ISOLATION_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
+
 const { ARRAY_COLLECTIONS } = require('../db/collections.js');
 const { DEAL_SEED_COLLECTIONS, createDealDatabase } = require('../db/dealSeed.js');
 
@@ -87,12 +102,11 @@ test('deal-seed', async (t) => {
   fs.mkdirSync(dealsDir, { recursive: true });
   const sourceSettings = buildSyntheticDemoSource(sourcePath);
 
-  // db/dbFiles.js's dealDbPath() always resolves under its OWN fixed
-  // DEALS_DIR (data/deals), which this module has no way to override — so
-  // exercise createDealDatabase() by pointing templateSourcePath at our
-  // synthetic fixture and letting the real dealId->path resolution run
-  // as-is, cleaning up the created file (and its dir if we created it)
-  // afterwards, rather than trying to redirect DEALS_DIR itself.
+  // db/dbFiles.js's dealDbPath() resolves under DEALS_DIR, which the
+  // isolation block at the top of this file redirects (MA_DEALS_DIR) to a temp
+  // directory — so exercise createDealDatabase() by pointing templateSourcePath
+  // at our synthetic fixture and letting the real dealId->path resolution run
+  // as-is, cleaning up the created file afterwards.
   const dbFiles = require('../db/dbFiles.js');
   const dealId = `deal_seedtest${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
   const dealPath = dbFiles.dealDbPath(dealId);
