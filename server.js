@@ -64,6 +64,12 @@ const reportFilename = require('./lib/reportFilename');
 // portal's boot, over one route. It is acquired lazily, on first request, by
 // getReportPack() next to the pack route below.
 
+// [security] D-10-01 (Phase 10): MA_MODE=real prepares its own gitignored,
+// 0700 data directory (account-less control.db + demo.db copy) HERE — before
+// `app` exists and before any database is opened — so no code path can reach a
+// committed data/*.db first. A no-op outside real mode. See db/dbFiles.js for
+// the full mode contract.
+require('./db/realDataDir').ensureRealDataDir();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -242,13 +248,17 @@ function hashPassword(password, saltHex) {
 // deal is NEVER open, regardless of this env flag. Only an unauthenticated
 // request (which always resolves to demo.db, since it carries no deal
 // binding) or a session explicitly bound to demo can ever pass this check.
+// [security] D-10-01: real-deal mode is NEVER open — dbFiles already refuses to
+// boot with MA_MODE=real + DEMO_OPEN=1; this is defence in depth should the
+// env be mutated at runtime.
 function isOpenMode(req) {
-  return process.env.DEMO_OPEN === '1' && req.isDemo === true;
+  return !dbFiles.IS_REAL_MODE && process.env.DEMO_OPEN === '1' && req.isDemo === true;
 }
 
 // The only /api paths reachable without a session — auth bootstrapping itself
-// cannot require a session to exist first.
-const PUBLIC_API_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me']);
+// cannot require a session to exist first. /auth/mode (D-10-01/D-10-08) is the
+// unauthenticated mode probe the login page reads before any session exists.
+const PUBLIC_API_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me', '/auth/mode']);
 
 // Extracts the raw opaque session token from the `ma_session` cookie (replaces
 // the previous HMAC payload decode — the token itself carries no data; it is
@@ -752,6 +762,21 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// D-10-01/D-10-08: unauthenticated mode probe. `accountsWritable` is the
+// client-facing mirror of the committed-control.db refusal (POST /api/deals,
+// POST /api/auth/change-password below) — the SAME predicate, never a second
+// rule — so the UI can hide controls that could only fail. Computed per
+// request because existing tests toggle DEMO_OPEN at runtime.
+app.get('/api/auth/mode', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const demoOpen = !dbFiles.IS_REAL_MODE && process.env.DEMO_OPEN === '1';
+  res.json({
+    mode: dbFiles.IS_REAL_MODE ? 'real' : (demoOpen ? 'demo' : 'dev'),
+    demoOpen,
+    accountsWritable: !dbFiles.isCommittedControlDbActive(),
+  });
+});
+
 app.get('/api/auth/me', (req, res) => {
   // Stays on PUBLIC_API_PATHS by design — this is the client's "am I logged
   // in" probe and must be reachable without a session already existing, so
@@ -764,7 +789,7 @@ app.get('/api/auth/me', (req, res) => {
   const cookieToken = readSessionCookie(req);
   const sess = cookieToken ? sessions.findSession(getRuntimeConnection(), cookieToken) : null;
   const wouldResolveDemo = !sess || !sess.dealId;
-  if (process.env.DEMO_OPEN === '1' && wouldResolveDemo) return res.json({ authEnabled: false, user: null });
+  if (!dbFiles.IS_REAL_MODE && process.env.DEMO_OPEN === '1' && wouldResolveDemo) return res.json({ authEnabled: false, user: null });
   if (!sess) return res.json({ authEnabled: true, user: null });
   const user = controlStore.findUser(sess.username);
   // D-04: dealId is the caller's CURRENT server-side binding (D-01) — the

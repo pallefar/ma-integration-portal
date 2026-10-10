@@ -73,3 +73,7 @@ public/sent_emails/*
 # for FIXED, never-shipped bugs remain tracked.
 .planning/security/RELEASED-TAGS-REVIEW.md
 .planning/security/HISTORY-SUPPLYCHAIN-REVIEW.md
+
+# [security] Real-deal mode (MA_MODE=real) data directory — MNPI: accounts, deal
+# databases, sessions and the audit trail. Never committed (D-10-01).
+data/real/
