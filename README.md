@@ -20,8 +20,16 @@ Either way the server starts on **http://localhost:3000** and your browser opens
 - **Admin console** at **`/admin.html`** — projects, courses, departments, processes, **HTML slides**, menus, **Quick-Nav bookmarks**, employees, banners, translations, and settings.
 - **Client-side AI** (Transformers.js / "smolagents"): the library and ONNX runtime are served **locally** (no CDN). Model weights stream from the Hugging Face Hub on first use, then cache in the browser.
 
+## Three modes
+
+The same codebase runs in three modes, chosen by how it is launched (details and the first-run checklist are in [DEPLOYMENT.md](DEPLOYMENT.md)):
+
+- **demo** — `start.command` / `start.bat` set `DEMO_OPEN=1`; the showcase runs open, with no login, on the committed demo data. Never use it for real deal data.
+- **dev** — plain `node server.js`: sign-in is required, but the host uses the committed `data/*.db` and its published demo passwords, and accounts are read-only. For development and tests only.
+- **real-deal** — `start-real-deal.command` / `start-real-deal.bat` run `MA_MODE=real` on their own gitignored data directory (`data/real`, or `MA_DATA_DIR`) with no demo accounts. Create the first admin with `node scripts/bootstrap-admin.js`, then manage people in the admin console **Users** tab. This is the only mode for MNPI.
+
 ## Notes
 
-- The demo dataset lives in **`db.json`** and ships with the app.
-- To require a token for admin/write API calls (recommended for any public deployment), set the **`ADMIN_TOKEN`** environment variable before starting; while it is unset the API stays open for the demo.
+- The data layer is **SQLite** (`data/*.db`, see `db/store.js`); the demo dataset ships as the committed `data/demo.db`.
+- Per-person accounts replace the shared `ADMIN_TOKEN`; the token still works as an optional, discouraged break-glass (see DEPLOYMENT.md).
 - Override the port with the `PORT` environment variable (defaults to `3000`).
