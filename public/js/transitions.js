@@ -1,4 +1,19 @@
 // ma-fetch-wrapper:begin
+// [security] CONC-02 gap closure (Phase 9, plan 09-08, R7 F-1): the shared
+// client half of the version precondition. A never-edited record carries no
+// `version` field and is version 0 on the server (D-09), so a client that
+// holds one must send 0 — omitting it means the first co-edit of that record
+// cannot be caught and silently clobbers the other writer. Every write/delete
+// call site sends `window.maVersionOf(heldRecord)` unconditionally; the server
+// refuses a missing precondition in a real deal. Defined inside this region so
+// the node:vm harnesses that extract it can exercise it directly.
+(function () {
+  window.maVersionOf = function (rec) {
+    var v = rec && rec.version;
+    return (typeof v === 'number' && Number.isInteger(v) && v >= 0) ? v : 0;
+  };
+})();
+
 // Admin API auth bridge: when the server requires an admin token (production, i.e.
 // ADMIN_TOKEN is set), attach it to same-origin /api requests and prompt for it once
 // on a 401 write. Completely inert in the demo — the server leaves the API open when

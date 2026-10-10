@@ -386,6 +386,15 @@ function conflictBody(detail) {
   };
 }
 
+// [security] CONC-02 gap closure (Phase 9, plan 09-08, R7 F-1, T-09-36/T-09-37):
+// the fixed message of the `versionRequired` 400. A write or delete of an
+// EXISTING versioned record that carries no precondition at all cannot be
+// judged stale, so it is refused rather than treated as "no check" (R1-11).
+// The body is exactly `{ error, versionRequired: true }` — never the record,
+// its version or its attribution — so a refused caller learns nothing it did
+// not already hold.
+const VERSION_REQUIRED_MESSAGE = 'This save did not include the version of the record it was based on. Reload the page and try again.';
+
 // [security] CONC-02 (Phase 9, Plan 02): the SINGLE input-resolution helper
 // for the version precondition — reads `req.body.version` when present (the
 // JSON-body routes this plan and plan 01 wire), and falls back to
@@ -416,10 +425,20 @@ function parseExpectedVersion(req) {
 // read `record` — never a substitute for the WHERE-clause layer in
 // db/store.js's writeDb(), which is the one that is actually race-free
 // against Phase 8's multi-process model (09-RESEARCH.md Pattern 2). Fires
-// ONLY when the client actually supplied a version (via `parseExpectedVersion`
-// above — either `req.body.version` or `req.query.expectedVersion`) — a
-// client that supplies none is not blocked at this layer, the WHERE clause
-// still covers the cross-process case for it.
+// when the client actually supplied a version (via `parseExpectedVersion`
+// above — either `req.body.version` or `req.query.expectedVersion`).
+//
+// CONC-02 gap closure (plan 09-08, GD-1/GD-1b/GD-2): a request that supplies
+// NO precondition is refused 400 `{ error, versionRequired: true }` when the
+// route opted in with `opts.requirePrecondition` AND `req.isDemo !== true` —
+// the fail-closed predicate: every request that is not positively a
+// demo-store request (a deal-bound one, or one with no resolver context at
+// all) is strict; the demo store stays lenient (D-09 lazy adoption). A
+// missing STORED version is still version 0, so a client holding a
+// never-edited record sends `version: 0` and is judged like any other. This
+// is an opt-in per route family during the rollout (plan 09-09 extends it);
+// plan 09-10 folds it into this function unconditionally and deletes the
+// option.
 //
 // `opts.clearanceFilter`, when given, is applied to `record` before it is
 // echoed into the 409 body — the hook plans 04/05 pass the existing
@@ -452,7 +471,13 @@ function conflictIfStale(req, res, record, opts) {
     res.status(400).json({ error: 'expectedVersion must be a non-negative integer.' });
     return true;
   }
-  if (parsed.version === undefined) return false;
+  if (parsed.version === undefined) {
+    if (options.requirePrecondition && record && req.isDemo !== true) {
+      res.status(400).json({ error: VERSION_REQUIRED_MESSAGE, versionRequired: true });
+      return true;
+    }
+    return false;
+  }
   const currentVersion = (record && typeof record.version === 'number') ? record.version : 0;
   if (parsed.version === currentVersion) return false;
   const filtered = options.clearanceFilter ? options.clearanceFilter(record) : record;
@@ -4381,7 +4406,7 @@ app.post('/api/raid', (req, res) => {
     if (!item) return res.status(404).json({ error: 'Entry not found.' });
     // CONC-02 (Phase 9, tracer): the route-level precheck fast path — RAID
     // entries carry no area-clearance gate, so no clearanceFilter is passed.
-    if (conflictIfStale(req, res, item)) return;
+    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
     // Validate before mutating the shared readDb() cache (see task update).
     // VAL-01: status enum membership is now owned exclusively by
     // validators/workstream.js's RaidUpsertSchema (z.enum); the
