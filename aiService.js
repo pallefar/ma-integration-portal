@@ -1,5 +1,17 @@
 const ragService = require('./ragService');
 
+// [security] SAFE-06 / D-13-05 (plan 13-02): backstop for the admin egress
+// switch. server.js installs the real check (lib/egress.js allows('gemini'))
+// once at boot; every Gemini fetch site below takes its existing LOCAL fallback
+// branch when it answers false, so a future caller that forgets the route-level
+// refusal still cannot send portal data to a third party. Default: allowed (a
+// bare require of this module outside server.js keeps today's behaviour).
+let egressCheck = () => true;
+function setEgressCheck(fn) { egressCheck = typeof fn === 'function' ? fn : () => true; }
+function egressAllowsGemini() {
+  try { return egressCheck() !== false; } catch (e) { return false; }
+}
+
 // Generates the M&A Integration Plan using Gemini if API Key exists, otherwise falls back.
 async function generate100DayPlan({ targetCompany, scores, responses, questions, apiKey }) {
   // Dynamically compute the search query for RAG based on high-risk dimensions and legal guardrails
@@ -11,7 +23,7 @@ async function generate100DayPlan({ targetCompany, scores, responses, questions,
   console.log(`Executing backend RAG search for query: "${ragQuery}"...`);
   const ragContext = ragService.retrieveRagContext(ragQuery, 4);
 
-  if (!apiKey || apiKey.trim() === "") {
+  if (!apiKey || apiKey.trim() === "" || !egressAllowsGemini()) {
     console.log("No Gemini API Key found. Generating custom integration plan via local expert engine.");
     return generateLocalFallbackPlan(targetCompany, scores, responses, questions, ragContext.snippets);
   }
@@ -306,6 +318,7 @@ ${ragSection}
 }
 
 module.exports = {
+  setEgressCheck,
   generate100DayPlan,
   generateLocalFallbackPlan,
   reviewPdfContent,
@@ -317,7 +330,7 @@ module.exports = {
  * Uses Gemini API to summarize, categorize, and extract structured RAG chunks.
  */
 async function reviewPdfContent({ pdfText, fileName, apiKey }) {
-  if (!apiKey || apiKey.trim() === "") {
+  if (!apiKey || apiKey.trim() === "" || !egressAllowsGemini()) {
     console.log("No Gemini API Key found. Generating custom PDF summary locally.");
     return generateLocalPdfReview(fileName, pdfText);
   }
@@ -484,7 +497,7 @@ async function generateSmolInsight({ portal, apiKey }) {
   const ragContext = ragService.retrieveRagContext(ragQuery, 3);
 
   // If no API Key or empty, use dynamic expert system heuristics based on portal
-  if (!apiKey || apiKey.trim() === "") {
+  if (!apiKey || apiKey.trim() === "" || !egressAllowsGemini()) {
     console.log(`[aiService] No Gemini API Key active for SmolInsight. Running expert fallback heuristics.`);
     return generateFallbackInsight(portal, ragContext.snippets);
   }

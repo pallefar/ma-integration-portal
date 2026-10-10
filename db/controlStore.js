@@ -665,7 +665,49 @@ function setSecretSettings(patch) {
   return updated;
 }
 
+// --- egressSettings (runtime.db singleton — SAFE-06 / D-13-05) ---------------
+//
+// The instance-level egress switch (lib/egress.js): which third-party channels
+// (gemini / huggingface / youtube) an admin has switched on or off. Stored in
+// runtime.db — gitignored and writable in every mode (the committed control.db
+// refuses writes in dev/demo) — as a singleton of up to three booleans. An
+// absent key means "mode default" (real: off, dev/demo: on); lib/egress.js owns
+// that overlay. Only the three known boolean keys are ever persisted.
+const EGRESS_STORED_KEYS = ['gemini', 'huggingface', 'youtube'];
+
+function getEgressSettings() {
+  const row = runtimeConn().prepare('SELECT data FROM app_state WHERE key = ?').get('egressSettings');
+  if (!row) return {};
+  let parsed;
+  try { parsed = JSON.parse(row.data); } catch (e) { return {}; }
+  const out = {};
+  for (const k of EGRESS_STORED_KEYS) {
+    if (parsed && typeof parsed[k] === 'boolean') out[k] = parsed[k];
+  }
+  return out;
+}
+
+function setEgressSettings(patch) {
+  const updated = getEgressSettings();
+  for (const k of EGRESS_STORED_KEYS) {
+    if (patch && typeof patch[k] === 'boolean') updated[k] = patch[k];
+  }
+  runtimeConn().prepare(
+    `INSERT INTO app_state (key, data) VALUES ('egressSettings', ?)
+     ON CONFLICT(key) DO UPDATE SET data = excluded.data`
+  ).run(JSON.stringify(updated));
+  return updated;
+}
+
+/** Cheap cross-process change token for lib/egress.js's cache (PD-12): SQLite's
+ * `PRAGMA data_version` changes whenever ANOTHER connection commits to
+ * runtime.db. One pragma, no table read. */
+function runtimeDataVersion() {
+  return runtimeConn().pragma('data_version', { simple: true });
+}
+
 module.exports = {
+  getEgressSettings, setEgressSettings, runtimeDataVersion,
   findUser, listUsers, updateUser, getAccount, countAccounts, createAccount,
   publicAccount, listAccounts, updateAccountGuarded,
   getDeal, listDeals, listDealsForUser, isDealMember,

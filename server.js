@@ -190,23 +190,23 @@ app.use(compression());
 // runtime; it still blocks external script injection, arbitrary data exfil
 // (connect-src), object/embed, base-tag hijack, framing and form hijack.
 app.disable('x-powered-by');
-const CSP = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'self'",
-  "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://www.youtube.com https://youtube.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co",
-  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com",
-  "media-src 'self' blob: data: https://*.youtube.com",
-  "worker-src 'self' blob:"
-].join('; ');
+// [security] SAFE-06 / D-13-05: the page CSP is BUILT per request from the admin
+// egress switch (lib/egress.js, runtime.db, re-read on PRAGMA data_version so a
+// toggle reaches every process on its next request) by lib/csp.js. Real mode
+// defaults every channel OFF, so no third-party origin appears in any directive
+// unless an admin switched that channel on; dev/demo default to today's origins.
+const egress = require('./lib/egress').createEgress({
+  version: () => controlStore.runtimeDataVersion(),
+  isReal: dbFiles.IS_REAL_MODE,
+  read: () => controlStore.getEgressSettings(),
+  write: (patch) => controlStore.setEgressSettings(patch),
+});
+const csp = require('./lib/csp');
+aiService.setEgressCheck(() => egress.allows('gemini'));
+const EGRESS_DISABLED_MESSAGE = 'This feature is switched off by your administrator.';
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', CSP);
+  const cspHeaders = csp.headersFor({ egress: egress.current() });
+  for (const name of Object.keys(cspHeaders)) res.setHeader(name, cspHeaders[name]);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -878,6 +878,22 @@ const gatePolicy = {
     return forms.length > 0 && readPolicy.readAllowsForms(role, forms, canonical);
   },
 };
+
+// [security] SAFE-06 / D-13-05 (plan 13-02, PD-15): the "AI training" PDF upload
+// (POST /api/rag/upload) exists only in dev/demo. In real-deal mode the route is
+// answered 404 for EVERY caller - unauthenticated included - BEFORE the /api
+// gate, because an unmounted route would be answered 403 by that gate for an
+// authenticated non-admin (a different, route-revealing status). Matched on
+// every canonical spelling of the path (lib/requestPath.js), so `/api//rag/upload`
+// style spellings cannot slip past.
+app.use((req, res, next) => {
+  if (!dbFiles.IS_REAL_MODE) return next();
+  const r = pathForms(req.path);
+  if (r.ok && r.forms.some((f) => f === '/api/rag/upload')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+});
 
 // ONE consolidated /api gate (replaces the two overlapping middlewares this
 // codebase previously ran — a write/admin-token gate and a separate session
@@ -2561,6 +2577,12 @@ const ragPdfTask = createIsolatedTask({
 
 // POST AI Model RAG PDF Training Upload & AI Insight Review
 app.post('/api/rag/upload', async (req, res, next) => {
+  // [security] SAFE-06 / D-13-05 (PD-14): Gemini switched off -> a 200 marker the
+  // client never retries and no generic hook (503 retry, 409 dialog, 403 denial)
+  // engages on. Checked FIRST: nothing is parsed, leased or written.
+  if (!egress.allows('gemini')) {
+    return res.json({ egressDisabled: 'gemini', message: EGRESS_DISABLED_MESSAGE });
+  }
   // tryAcquire() is synchronous and precedes the base64 decode, so a refused
   // request costs nothing beyond the body the JSON parser already read.
   const lease = ragPdfTask.tryAcquire();
@@ -2821,9 +2843,10 @@ app.get('/api/settings', (req, res) => {
     // shared fields (targetCompany, roleVisibility, ...) instead of a sparse object.
     const custom = { ...(db.settings || {}), ...(db.customSettings || {}), demoMode: false, geminiApiKey: secretGeminiApiKey };
     custom.timeTravelDay = custom.timeTravelDay !== undefined ? custom.timeTravelDay : (db.settings.timeTravelDay || 30);
+    custom.egress = { ...egress.current() };
     res.json(settingsResponseFor(req, custom));
   } else {
-    res.json(settingsResponseFor(req, { ...(db.settings || {}), geminiApiKey: secretGeminiApiKey }));
+    res.json(settingsResponseFor(req, { ...(db.settings || {}), geminiApiKey: secretGeminiApiKey, egress: { ...egress.current() } }));
   }
 });
 
@@ -2887,6 +2910,37 @@ app.post('/api/settings', (req, res) => {
   writeDb(db);
   const responseTarget = db.settings.demoMode === false ? db.customSettings : db.settings;
   res.json({ success: true, settings: publicSettings({ ...responseTarget, geminiApiKey: controlStore.getSecretSettings().geminiApiKey }) });
+});
+
+// [security] SAFE-06 / D-13-05 (plan 13-02): the instance-level egress switch.
+// `/api/admin` is admin-only for EVERY method (ROLE_WRITE_POLICY + the read
+// policy), and the body is a strict schema of optional booleans
+// (validators/settings.js EgressUpdateSchema) - a non-admin can neither read nor
+// change it, an unknown key or a non-boolean is a 400. The switch is
+// instance-level (runtime.db), independent of any deal binding. Every change is
+// a control-plane security event with the before/after booleans and the actor.
+function egressSnapshot() {
+  return { mode: egress.isReal ? 'real' : 'dev', defaults: { ...egress.defaults }, stored: egress.stored(), effective: { ...egress.current() } };
+}
+app.get('/api/admin/egress', (req, res) => {
+  res.json(egressSnapshot());
+});
+app.post('/api/admin/egress', (req, res) => {
+  if (!isAdminRequest(req)) {
+    return res.status(403).json({ error: 'Your role cannot perform this action.' });
+  }
+  const before = { ...egress.current() };
+  egress.set(req.body || {});
+  const snap = egressSnapshot();
+  auditHook.recordSecurityEvent({
+    actor: req.portalUser,
+    action: 'egress-settings-changed',
+    subject: 'egress',
+    before,
+    after: snap.effective,
+    request: requestMeta(req),
+  });
+  res.json(snap);
 });
 
 // POST Reset Custom M&A Wizard state
@@ -3738,6 +3792,10 @@ app.post('/api/admin/users/:username/revoke-sessions', (req, res) => {
 
 // GET AI Insight dynamic RAG portal insight
 app.get('/api/ai/insight', async (req, res, next) => {
+  // [security] SAFE-06 / D-13-05 (PD-14): see POST /api/rag/upload.
+  if (!egress.allows('gemini')) {
+    return res.json({ egressDisabled: 'gemini', message: EGRESS_DISABLED_MESSAGE });
+  }
   const { portal } = req.query;
   if (!portal) {
     return res.status(400).json({ error: 'Portal parameter is required.' });
@@ -3865,7 +3923,9 @@ app.post('/api/assessment', async (req, res, next) => {
       questions: db.questions,
       // ISO-01 (Task 2 cutover): the key is a secret field, sourced from
       // runtime.db's secretSettings singleton regardless of demo/custom lane.
-      apiKey: controlStore.getSecretSettings().geminiApiKey || ''
+      // [security] SAFE-06 / D-13-05 (PD-14): Gemini off -> an empty key, so the
+      // existing local plan is used (refusing would block a core assessment write).
+      apiKey: egress.allows('gemini') ? (controlStore.getSecretSettings().geminiApiKey || '') : ''
     });
   } catch (error) {
     // [security] D-06/CONC-01: async handler — a write-lock contention error
