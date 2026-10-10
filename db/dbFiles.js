@@ -265,6 +265,76 @@ function chmodPrivateFile(file, options) {
   }
 }
 
+// [security] R5-04 / D-12-06 (Phase 12): the test runner must never write the
+// developer's real data files. The review found `node --test` runs appending
+// fabricated security events (2,509 fixture deal ids) to the real append-only
+// data/audit.db, because a suite that required server.js without its MA_* temp
+// overrides silently resolved the default <repo>/data paths. Individual suites
+// were fixed one by one before and regressed; this guard makes a missing
+// override FAIL LOUDLY at the one choke point every open passes through
+// (openDbFile — the same single-choke-point strategy as D-10-01 above).
+//
+// Active ONLY when NODE_TEST_CONTEXT is a non-empty string — the variable Node's
+// test runner sets for every file it runs and for the children those files
+// spawn. node server.js, `npm run soak`, the UAT runners and CLIs never have it,
+// so production behaviour is unchanged. The path is compared by lexical
+// resolution AND by realpath of its nearest existing ancestor, so a
+// `data/../data/x.db` or symlinked spelling cannot slip through.
+function nearestExistingRealpath(p) {
+  let cur = path.resolve(p);
+  const tail = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(cur), ...tail.reverse());
+    } catch (e) {
+      const parent = path.dirname(cur);
+      if (parent === cur) return path.resolve(p);
+      tail.push(path.basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+function isInsideDir(child, dir) {
+  const rel = path.relative(dir, child);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * D-12-06: throw `[test-isolation]` when running under the Node test runner and
+ * `dbFilePath` lies inside the committed <repo>/data directory (data/*.db,
+ * data/deals/, data/real/, ...). Pure apart from read-only realpath lookups;
+ * never opens or creates a file. `env` is injectable for tests.
+ */
+function assertTestIsolation(dbFilePath, env) {
+  const e = env || process.env;
+  if (typeof e.NODE_TEST_CONTEXT !== 'string' || e.NODE_TEST_CONTEXT === '') return;
+  if (typeof dbFilePath !== 'string' || dbFilePath === '') return;
+  const dataDirs = new Set([path.resolve(COMMITTED_DATA_DIR), nearestExistingRealpath(COMMITTED_DATA_DIR)]);
+  const candidates = [path.resolve(dbFilePath), nearestExistingRealpath(dbFilePath)];
+  const inside = candidates.some((c) => [...dataDirs].some((d) => isInsideDir(c, d)));
+  if (!inside) return;
+  // The ONE sanctioned exception: Phase-10 suites (accounts-writable-gate,
+  // real-mode-guards section A) exist to prove that with the committed
+  // data/control.db ACTIVE every account write is refused and the file never
+  // changes. They cannot do that against a copy (the committed-path predicate
+  // compares identities against the committed file itself), so they opt in
+  // with MA_TEST_ALLOW_COMMITTED_CONTROL_DB=1 and hash the committed file
+  // before/after. It exempts exactly data/control.db — never runtime.db,
+  // audit.db, demo.db, deals/ or real/ — the files the R5-04 leak wrote.
+  if (e.MA_TEST_ALLOW_COMMITTED_CONTROL_DB === '1') {
+    const committed = pathIdentities(COMMITTED_CONTROL_DB_PATH);
+    for (const id of pathIdentities(dbFilePath)) {
+      if (committed.has(id)) return;
+    }
+  }
+  const shown = path.relative(REPO_ROOT, path.resolve(dbFilePath)) || path.resolve(dbFilePath);
+  throw new Error(
+    `[test-isolation] node --test may not open ${shown} — set MA_CONTROL_DB_PATH, MA_RUNTIME_DB_PATH, MA_DEMO_DB_PATH, ` +
+    'MA_DEALS_DIR and MA_AUDIT_DB_PATH (or MA_DATA_DIR with MA_MODE=real) to a temp directory before requiring the app'
+  );
+}
+
 const SIDECAR_SUFFIXES = ['-wal', '-shm'];
 
 /** Tighten whichever -wal/-shm sidecars of `dbFilePath` exist right now;
@@ -295,6 +365,9 @@ function openDbFile(dbFilePath, schemaPath) {
       'real acquisition data must never be written into a git-tracked file. Point MA_DATA_DIR / MA_*_PATH at a gitignored directory.'
     );
   }
+  // [security] D-12-06: AFTER the real-mode refusal (real-mode tests still see
+  // `[security]`) and BEFORE ensurePrivateDir so a refused path creates nothing.
+  assertTestIsolation(dbFilePath);
   ensurePrivateDir(path.dirname(dbFilePath));
 
   if (fs.existsSync(dbFilePath)) {
@@ -350,5 +423,6 @@ module.exports = {
   isCommittedControlDbActive,
   ensurePrivateDir,
   chmodPrivateFile,
+  assertTestIsolation,
   openDbFile,
 };
