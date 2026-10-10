@@ -23,7 +23,7 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 ### Concurrency & Data Safety (CONC)
 
 - [x] **CONC-01**: Concurrent writers — overlapping requests in one process or separate processes on one host — serialize safely with no lost updates (immediate write transactions + busy-retry → 503). *(Phase 8, shipped.)*
-- [ ] **CONC-02**: A user whose edit to a co-edited record is based on stale data has that write rejected with a 409 and is offered reload-and-reapply — **including the first co-edit of a record that was never edited before** (every client holding a version-less record sends a precondition) — the page reflects the outcome of a reapplied or force-deleted write, and in real-deal mode an update to an existing versioned record that carries no precondition is refused (400). *(Reopened 2026-10-10: R7 F-1/F-2; Phase 9 gap closure.)*
+- [x] **CONC-02**: A user whose edit to a co-edited record is based on stale data has that write rejected with a 409 and is offered reload-and-reapply — **including the first co-edit of a record that was never edited before** (every client holding a version-less record sends a precondition) — the page reflects the outcome of a reapplied or force-deleted write, and in real-deal mode an update to an existing versioned record that carries no precondition is refused (400). *(Reopened 2026-10-10 by R7 F-1/F-2; closed by Phase 9 gap closure 09-08..09-16 — verified 14/14, security SECURED 61/61.)*
 
 ### Accounts & Identity (ACCT)
 
@@ -163,12 +163,12 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 
 ## Traceability
 
-All 86 requirements (1 complete, 85 pending) mapped to exactly one phase.
+All 86 requirements (2 complete, 84 pending) mapped to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CONC-01 | Phase 8 | Complete |
-| CONC-02 | Phase 9 | Reopened — gap closure |
+| CONC-02 | Phase 9 | Complete |
 | ACCT-01 | Phase 10 | Pending |
 | ACCT-02 | Phase 10 | Pending |
 | ACCT-03 | Phase 10 | Pending |

@@ -48,7 +48,7 @@ phase adds its pages to the browser smoke harness (Phase 12 onward) and is judge
 screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no release).*
 
 - [x] **Phase 8: Concurrency & Storage Foundation** — Serialize concurrent writers with zero lost updates — CONC-01 (completed 2026-08-11)
-- [ ] **Phase 9: Optimistic Locking & Conflict Recovery** — Stale writes caught (409) and recoverable; **gap closure** for the R7 findings — CONC-02
+- [x] **Phase 9: Optimistic Locking & Conflict Recovery** — Stale writes caught (409) and recoverable; **gap closure** for the R7 findings — CONC-02 (completed 2026-10-10)
 - [ ] **Phase 10: Accounts & Identity** — Real people with real accounts; explicit real-deal mode; no published credentials — ACCT-01..07, COLLAB-02, OPS-08
 - [ ] **Phase 11: Authorization & Clean-Room Closure** — Every read and write authorized for who the caller is — AUTHZ-01..05
 - [ ] **Phase 12: Data-Layer Integrity & Performance** — Writes/audit proportional to change; versioned schemas; trustworthy tests — DATA-01..06, QUAL-01/02
@@ -344,7 +344,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Concurrency & Storage Foundation | v3.0 | 5/5 | Complete    | 2026-08-11 |
-| 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | In Progress|  |
+| 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | Complete    | 2026-10-10 |
 | 10. Accounts & Identity | v3.0 | 0/TBD | Not started | - |
 | 11. Authorization & Clean-Room Closure | v3.0 | 0/TBD | Not started | - |
 | 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |

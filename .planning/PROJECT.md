@@ -76,13 +76,12 @@ record's first co-edit). Architecture is unchanged (SQLite, host-local WAL, `rep
 **v3.0 Production-Ready — carried-over foundation (Phases 8–9, built under the v2.2.0 label)**
 
 - ✓ CONC-01: Concurrent writers (overlapping in-process requests or separate processes on one host) serialize safely with zero lost updates — `BEGIN IMMEDIATE` + busy-retry → 503 Retry-After, audit append atomic with the deal commit, client silent retry + honest give-up toast, proven by a real multi-process soak (`npm run soak`) — Phase 8 (2026-08-11)
-- ◆ CONC-02: Optimistic locking (version in the record blob, 409 body, conflict dialog, stale-delete) built and verifier-passed in Phase 9 — **reopened 2026-10-10**: a browser walk (R7) showed the lock does not bite on a record's first co-edit and pages go stale after Apply; closing in Phase 9 gap-closure plans
+- ✓ CONC-02: Optimistic locking — stale co-edited writes rejected 409 with a reload-and-reapply dialog, including the first co-edit of a never-edited record (client sends version 0; real-deal writes without a precondition refused 400); held-promise dialog sessions so pages show the server's outcome; in-app delete confirm; truthful diffs — Phase 9 (2026-10-10, reopened by the R7 browser walk and closed by gap-closure plans 09-08..09-16; verified 14/14, security SECURED 61/61)
 
 ### Active
 
 <!-- v3.0 Production-Ready — 86 requirements across Phases 8–23; full text + traceability in .planning/REQUIREMENTS.md -->
 
-- [ ] CONC-02: first-co-edit protection + page sync after reapply (Phase 9 gap closure)
 - [ ] ACCT + COLLAB-02 + OPS-08: real accounts, explicit real-deal mode, no published credentials (Phase 10)
 - [ ] AUTHZ: read/write policy, admin-only config, clean-room on tasks/RAID (Phase 11)
 - [ ] DATA/QUAL: dirty-row writes + audit, paged reads, schema versions, audit partitions, CPU isolation, deterministic tests, smoke harness (Phase 12)
