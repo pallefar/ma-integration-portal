@@ -333,6 +333,30 @@ Hiding is presentation only. Pages with no page-level role gate (the admin conso
 due-diligence and org pages) can still be *opened* by any signed-in role; the data
 calls that role may not make answer `403` and no record content is shown.
 
+The `access` map is booleans only (no data) and carries two kinds of key. Most keys
+are **read probes** - each is the read-table verdict for one representative route
+(`synergies`, `raid`, `tasks`, `roster`, `communications`, `org`, `dd`, `reports`,
+`hrbps`, `projects`, `processes`, `assessmentsList`, `ai`, `rag`; defined in
+`ACCESS_PROBES` in `lib/readPolicy.js`) and are all `true` on the demo store. The
+keys below do not map to a row of the read table above:
+
+- `assessmentInstances` - may the role read the per-template assessment instance
+  list (`/api/assessment-instances`)? `true` for **admin** only (a read probe of
+  the admin-only row above; the portal falls back to the status rollup without
+  asking when it is `false`).
+- `configWrite` - may the role change instance configuration and content (the
+  admin-only write table above, probed with `POST /api/settings`)? `true` for
+  **admin** only.
+- `helpdesk` - may the role file the employee-portal HR helpdesk ticket
+  (`POST /api/communications/send`)? `true` for **admin**, **Integration Leader**
+  and **Workstream lead**; `false` for **Employee**, so the portal does not draw a
+  form that could only be refused.
+- `timeTravel` - is the demo Day pill / Time Machine usable
+  (`POST /api/settings/time-travel`)? `true` for **admin**, **Integration Leader**
+  and **Workstream lead** only while the session is **not** bound to a real deal
+  (the control is demo-only); always `false` for **Employee** and for any
+  deal-bound session.
+
 ### Refused requests are audited
 
 Every refusal above is a `403`/`404` the server records as an `access-denied` event,

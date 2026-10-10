@@ -145,6 +145,30 @@ function createSoakDeal() {
  * not need to separately manage deal membership; ROLE_WRITE_POLICY already
  * allows admin on every write route this harness drives.
  */
+// The display name a worker's account carries (control.db account `name`).
+// Single source of truth: createWorkerSessions() writes it, the load generator
+// sends it as `employeeName`, and verify() expects it back — in a real deal the
+// server files a pulse under the SESSION ACCOUNT's display name and IGNORES
+// the body's `employeeName` (Phase 11 IN-02, D-11-06), so the account name is
+// the only value the harness may assert for that field.
+function workerAccountName(workerIndex) {
+  return `Soak worker ${workerIndex}`;
+}
+
+// Per-write correlator transport. POST /api/pulses mints its own row id and
+// (real deal) overwrites `employeeName`, so the unique per-write id travels in
+// `comment` — a free-text field the server preserves verbatim for every role.
+// Bounded (well under the 4000-char TEXT_MAX) and ASCII-only.
+const CORRELATOR_COMMENT_PREFIX = 'soak-load|';
+function correlatorComment(correlator) {
+  return CORRELATOR_COMMENT_PREFIX + correlator;
+}
+function correlatorFromComment(comment) {
+  return (typeof comment === 'string' && comment.startsWith(CORRELATOR_COMMENT_PREFIX))
+    ? comment.slice(CORRELATOR_COMMENT_PREFIX.length)
+    : null;
+}
+
 function createWorkerSessions(count, dealId) {
   const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
   const sessions = [];
@@ -156,7 +180,7 @@ function createWorkerSessions(count, dealId) {
     // never sign in) admin account row behind its session.
     if (!controlStore.getAccount(username)) {
       controlStore.createAccount({
-        username, name: `Soak worker ${i}`, role: 'admin', disabled: false,
+        username, name: workerAccountName(i), role: 'admin', disabled: false,
         mustChangePassword: false, createdAt: new Date().toISOString(), createdBy: 'soak-harness',
       });
     }
@@ -258,9 +282,11 @@ function stopChild(child) {
 // co-edit the same collections in production.
 //
 // Every write carries a unique id derived from the worker index and a
-// monotonic per-worker counter (embedded in the required `employeeName`
-// field, since POST /api/pulses mints its own row id server-side — the
-// harness cannot pass one in). Each attempt is recorded into exactly one
+// monotonic per-worker counter (embedded in the `comment` field, since
+// POST /api/pulses mints its own row id server-side — the harness cannot pass
+// one in — and, in a real deal, stamps `employeeName` from the session
+// account rather than the body; `comment` is the field the server preserves
+// verbatim, see correlatorComment()). Each attempt is recorded into exactly one
 // outcome bucket: acknowledged (2xx), cleanly refused (503 carrying
 // Retry-After), or unexpected (anything else — a 500, a network failure, a
 // non-JSON body, a 503 with no Retry-After). [security] T-08-01
@@ -359,9 +385,11 @@ async function runWorkerLoad(workerIndex, port, cookie, durationMs, writeInterva
   async function doWrite(correlator) {
     const seed = Math.abs(hashCode(correlator));
     const payload = {
-      employeeName: correlator,
+      // What the server will stamp (the account's display name) — never the
+      // correlator; see workerAccountName() / Phase 11 IN-02.
+      employeeName: workerAccountName(workerIndex),
       rating: 1 + (seed % 5),
-      comment: 'soak-load',
+      comment: correlatorComment(correlator),
       type: 'general',
     };
     let res;
@@ -383,7 +411,7 @@ async function runWorkerLoad(workerIndex, port, cookie, durationMs, writeInterva
         unexpected.push({ correlator, note: `2xx response with no pulse.id (status=${res.status})` });
         return;
       }
-      acknowledged.push({ correlator, pulseId, payload });
+      acknowledged.push({ correlator, pulseId, payload, workerIndex });
       return;
     }
     if (res.status === 503) {
@@ -480,18 +508,25 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   // Check 1: every acknowledged write present and exact.
   const pulseRows = dealConn.prepare('SELECT id, data FROM pulses').all();
   const pulsesById = new Map();
-  const pulseIdByEmployeeName = new Map();
+  // Refused-write attribution is keyed on the correlator carried in `comment`
+  // (preserved verbatim by the server) — NOT `employeeName`, which a real
+  // deal stamps from the session account (Phase 11 IN-02).
+  const pulseIdByCorrelator = new Map();
   for (const r of pulseRows) {
     const parsed = JSON.parse(r.data);
     pulsesById.set(r.id, parsed);
-    pulseIdByEmployeeName.set(parsed.employeeName, r.id);
+    const rowCorrelator = correlatorFromComment(parsed.comment);
+    if (rowCorrelator) pulseIdByCorrelator.set(rowCorrelator, r.id);
   }
   const missingAck = [];
   const mismatchedAck = [];
   for (const w of acknowledged) {
     const row = pulsesById.get(w.pulseId);
     if (!row) { missingAck.push(w.pulseId); continue; }
-    const exact = row.employeeName === w.payload.employeeName
+    // employeeName is asserted against the worker ACCOUNT's display name (what
+    // the server stamps in a real deal, IN-02); the per-write identity lives in
+    // `comment`, compared exactly below.
+    const exact = row.employeeName === workerAccountName(w.workerIndex)
       && Number(row.rating) === Number(w.payload.rating)
       && row.comment === w.payload.comment
       && row.type === w.payload.type;
@@ -539,7 +574,7 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   const committedButUnaudited = [];
   const committedAndAudited = [];
   for (const w of refused) {
-    const pulseId = pulseIdByEmployeeName.get(w.correlator);
+    const pulseId = pulseIdByCorrelator.get(w.correlator);
     if (!pulseId) continue; // the common, expected case: truly absent
     if (auditRowIdCounts.has(pulseId)) {
       committedAndAudited.push(w.correlator);

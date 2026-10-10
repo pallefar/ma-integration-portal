@@ -16,8 +16,10 @@ node scripts/uat/phase10-walk.js --scenario authzRoleMatrix --scenario cleanRoom
 node scripts/uat/phase10-walk.js --scenario demoShowcaseUnchanged --out $E                                                              # walk.log -> phase11-demo.log
 node scripts/uat/phase10-walk.js --out <scratch dir>                                                                                    # every lane; log -> phase10-walk.log
 node scripts/uat/phase9-walk.js --out <scratch dir>   and   --demo-open                                                                 # -> phase9-walk*.log
-SOAK_DURATION_MS=120000 SOAK_WRITE_INTERVAL_MS=250 npm run soak                                                                         # -> soak.log
+SOAK_DURATION_MS=60000 SOAK_WRITE_INTERVAL_MS=250 npm run soak                                                                          # -> soak.log
 ```
+
+The soak line uses a 60 s run at a 250 ms write interval on purpose: this host's disk is nearly full and each acknowledged write is amplified in the audit file (the default 120 s / 100 ms run writes about 5 GB); Phase 12 DATA-01 removes the amplification.
 
 The runner writes `walk.log` + `results.json` into `--out` on every run; the logs here
 were renamed by hand and `results.json` was dropped (the log carries the same rows).
