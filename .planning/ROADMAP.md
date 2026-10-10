@@ -97,6 +97,24 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
   9. **(gap, R7 docs)** The 09-01 truth list gains per-record, client-precondition and 409-clearance truths (each with a test); the 09-UI-SPEC Copywriting Contract lists the deleted-variant literals; the UAT item-2 expectation is corrected; WINDOWS.md records the org position-edit gap.
 
 **Plans**: 7/7 original plans executed + 9 gap-closure plans (09-08..09-16, 6 waves) planned and checker-passed — execute with `/gsd-execute-phase 9 --gaps-only`
+
+- [x] 09-01-PLAN.md
+- [x] 09-02-PLAN.md
+- [x] 09-03-PLAN.md
+- [x] 09-04-PLAN.md
+- [x] 09-05-PLAN.md
+- [x] 09-06-PLAN.md
+- [x] 09-07-PLAN.md
+- [x] 09-08-PLAN.md
+- [ ] 09-09-PLAN.md
+- [ ] 09-10-PLAN.md
+- [ ] 09-11-PLAN.md
+- [ ] 09-12-PLAN.md
+- [ ] 09-13-PLAN.md
+- [ ] 09-14-PLAN.md
+- [ ] 09-15-PLAN.md
+- [ ] 09-16-PLAN.md
+
 **UI hint**: yes
 
 ### Phase 10: Accounts & Identity
@@ -326,7 +344,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Concurrency & Storage Foundation | v3.0 | 5/5 | Complete    | 2026-08-11 |
-| 9. Optimistic Locking & Conflict Recovery | v3.0 | 7/16 | Gap closure planned (9 plans) | |
+| 9. Optimistic Locking & Conflict Recovery | v3.0 | 8/16 | In Progress|  |
 | 10. Accounts & Identity | v3.0 | 0/TBD | Not started | - |
 | 11. Authorization & Clean-Room Closure | v3.0 | 0/TBD | Not started | - |
 | 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |
