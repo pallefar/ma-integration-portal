@@ -72,3 +72,46 @@ test('slide-sandbox-client (d): the overview deck still frames deck.html itself 
       `${f} must not need same-origin storage/network/parent access (it is framed sandboxed)`);
   }
 });
+
+// ============================================================ Task 3 (admin) ===
+function slideLibraryRegion() {
+  const src = readPublic('js', 'admin-cms.js');
+  const start = src.indexOf('function renderSlides() {');
+  const end = src.indexOf('// ---------- Projects');
+  assert.ok(start > 0 && end > start, 'expected to locate the slide library section of admin-cms.js');
+  return src.slice(start, end);
+}
+
+test('slide-sandbox-client (e): the admin file input accepts exactly the allowlisted slide types', () => {
+  const region = slideLibraryRegion();
+  const m = /<input type="file"[^>]*id="sl-file"[^>]*accept="([^"]*)"/.exec(region);
+  assert.ok(m, 'expected to locate the slide file input');
+  assert.deepStrictEqual(m[1].split(',').sort(), ['.htm', '.html', '.jpeg', '.jpg', '.pdf', '.png', '.webp']);
+  assert.ok(!/svg/i.test(m[1]), 'SVG is never offered');
+});
+
+test('slide-sandbox-client (f): HTML is sent as text, binary types as base64 with the browser type; refusals show the fixed server text via the textContent toast', () => {
+  const region = stripComments(slideLibraryRegion());
+  assert.ok(/\/\\\.html\?\$\/i\.test\(file\.name\)/.test(region), 'HTML is detected by extension');
+  assert.ok(/content: await file\.text\(\)/.test(region), 'HTML keeps the utf8 text contract');
+  assert.ok(/readAsDataURL\(file\)/.test(region), 'binary types are read as a data URL');
+  assert.ok(/encoding: 'base64'/.test(region) && /type: file\.type/.test(region), 'base64 branch sends encoding and the declared type');
+  assert.ok(/dataUrl\.slice\(dataUrl\.indexOf\(','\) \+ 1\)/.test(region), 'only the part after the comma is sent');
+  assert.ok(/!res\.ok \|\| !up \|\| !up\.url/.test(region), 'any non-2xx response is a refusal');
+  assert.ok(/toast\(\(up && typeof up\.error === 'string' && up\.error\) \|\| 'Upload refused\.', true\)/.test(region),
+    'the refusal text falls back to "Upload refused."');
+  assert.ok(!/innerHTML[^;\n]*up\.error/.test(region), 'the server error text is never interpolated into markup');
+  // the toast itself renders with textContent
+  const admin = readPublic('js', 'admin.js');
+  const toast = /function showNotification\(msg, isError = false\) \{([\s\S]*?)\n  \}\n/.exec(admin);
+  assert.ok(toast && /banner\.textContent = msg;/.test(toast[1]) && !/innerHTML/.test(toast[1]), 'adminToast renders via textContent');
+});
+
+test('slide-sandbox-client (g): the slide library list sets label/url/pages via textContent, never interpolating them into markup', () => {
+  const region = stripComments(slideLibraryRegion());
+  const list = region.slice(region.indexOf('function renderSlides() {'), region.indexOf('function editSlide('));
+  assert.ok(/\.cms-row-title'\)\.textContent\s*=/.test(list) && /\.cms-row-sub'\)\.textContent\s*=/.test(list));
+  const tpl = /row\.innerHTML = `([\s\S]*?)`;/.exec(list);
+  assert.ok(tpl, 'expected to locate the row template');
+  assert.ok(!/\$\{/.test(tpl[1]), 'the row template interpolates nothing');
+});
