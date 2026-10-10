@@ -648,6 +648,12 @@ warning at boot.
   AI-Insight wizard — and is **deferred to a follow-up task** (vendoring the
   weights or gating the feature to demo mode). Real-deal hosts that must stay
   fully offline should not use the AI-Insight feature until this is resolved.
+- **A RAID entry or task with a malformed clearance area is hidden from everyone,
+  admin included (fail-closed, accepted).** The app only ever writes a valid
+  clearance area; a value that is not one (only possible by editing the deal file
+  directly) makes the row invisible in every list, export and report rather than
+  risk showing it to someone uncleared. If an admin reports "a row I can't see",
+  check that row's `clearanceArea` in the deal database first.
 - **Client-side XSS sink audit is partial.** The milestone security review
   traced the highest-risk stored-string→`innerHTML` sinks and fixed the
   confirmed ones; the full sink class across the legacy frontend is not
