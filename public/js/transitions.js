@@ -170,19 +170,49 @@
   // no new banner component, per the plan's own instruction to reuse it.
   const CONFLICT_ERROR_REASON_ALREADY_DELETED = 'someone else already deleted this record';
 
-  // Single-instance guard in the shape of activeGiveUpToast above — a
-  // second conflict while one dialog is open replaces its contents rather
-  // than stacking a second overlay.
-  let activeConflictDialog = null;
+  // R7 F-2 / GD-4 (Phase 9 gap closure, plan 09-11): a conflict SESSION.
+  // D-05 means no page wires the dialog itself — the wrapper owns it — which
+  // means no page could ever learn what the user decided: the original fetch
+  // promise used to settle with the 409 the instant the dialog opened, so a
+  // page's own success handler never ran after "Apply my changes anyway" (the
+  // row kept its stale version and false-conflicted on the next click) and
+  // DD's unconditional refresh re-rendered underneath the open dialog. The
+  // fix lives here, at the root: the caller's promise is HELD while the
+  // dialog is open and settles exactly once, with the response that
+  // represents the user's decision —
+  //   Apply / Delete anyway succeeded -> that reapplied 2xx Response, so the
+  //                                      page's existing `res.success` handler
+  //                                      applies the server's resulting state;
+  //   Discard / Escape / overlay / Close / Cancel -> the ORIGINAL 409
+  //                                      Response, body still readable.
+  // A session only ever resolves with a response to ITS OWN request or its own
+  // reapply (T-09-47), and the wrapper still never re-fires a 409 by itself —
+  // the only re-fire path is an explicit click on the session's own button
+  // (D-05/Pitfall 11, T-09-48).
+  //
+  // activeConflictSession is the single-instance guard: the one SHOWN.
+  const CONFLICT_REAPPLY_CONTEXT = { reapply: true };
+  let activeConflictSession = null;
 
-  function closeActiveConflictDialog() {
-    if (activeConflictDialog) {
-      if (activeConflictDialog.overlay.parentNode) {
-        activeConflictDialog.overlay.parentNode.removeChild(activeConflictDialog.overlay);
+  // The one place every dialog exit goes through. A no-op once settled: a
+  // stale or repeated click, or a reapply response that lands after the user
+  // already left, can never resolve a promise twice or hand it a foreign
+  // response.
+  function settleConflictSession(session, response) {
+    if (session.settled) return;
+    session.settled = true;
+    session.inFlight = false;
+    if (activeConflictSession === session) {
+      if (session.overlay && session.overlay.parentNode) {
+        session.overlay.parentNode.removeChild(session.overlay);
       }
-      document.removeEventListener('keydown', activeConflictDialog.onKeydown);
-      activeConflictDialog = null;
+      document.removeEventListener('keydown', session.onKeydown);
+      activeConflictSession = null;
     }
+    session.resolve(response);
+    // The shown session just ended: bring up the next queued conflict (a
+    // function declaration below — hoisted — so ordering in this IIFE is free).
+    openNextQueuedConflict();
   }
 
   // Minute/hour/day granularity relative-time formatter for the attribution
@@ -270,32 +300,73 @@
     return { input: input, init: newInit };
   }
 
-  // T-09-14/T-09-16: a second conflict (or a failed reapply) re-renders THIS
-  // SAME overlay/modal in place rather than closing and recreating it — the
-  // `activeConflictDialog` guard is checked first, and only a brand-new
-  // overlay is built when no dialog is currently open. `errorReason`, when
-  // present, means this call is a re-render triggered by a failed reapply
-  // (a second conflict, a network failure, or a 5xx) — it renders the
-  // inline `.conflict-modal-error` banner above the actions per the
-  // Copywriting Contract; a fresh first-time conflict passes no reason and
-  // gets no banner.
-  function showConflictDialog(body, input, init, url, method, errorReason) {
-    let overlay;
-    let modal;
-    const reusing = !!activeConflictDialog;
-    if (reusing) {
-      overlay = activeConflictDialog.overlay;
-      modal = activeConflictDialog.modal;
-      modal.textContent = ''; // clears all prior children — full rebuild below
-    } else {
-      overlay = document.createElement('div');
-      overlay.className = 'conflict-modal-overlay';
-      modal = document.createElement('div');
-      modal.className = 'conflict-modal';
-      modal.setAttribute('role', 'dialog');
-      modal.setAttribute('aria-modal', 'true');
-      overlay.appendChild(modal);
-    }
+  // The user's own click on "Apply my changes anyway" / "Delete anyway":
+  // reapply the session's ORIGINAL request carrying the fresh version, through
+  // the internal attemptFetch with the reapply context (NOT window.fetch — a
+  // fresh 409 returns to THIS handler and re-renders the session in place
+  // instead of opening a second held session). Outcomes:
+  //   2xx            -> settle the held promise with this Response (unconsumed)
+  //   marker 409     -> adopt the fresh body, re-render in place + banner
+  //   404 (delete)   -> "someone else already deleted this record"
+  //   5xx / other / network failure -> banner; the session stays pending so
+  //                     the user can try again or leave.
+  // inFlight is the double-click guard (HP8): a second click sends nothing.
+  function runConflictReapply(session, btn, inFlightLabel) {
+    if (session.settled || session.inFlight) return;
+    session.inFlight = true;
+    btn.disabled = true;
+    btn.textContent = inFlightLabel;
+    const fresh = withFreshVersion(session.input, session.init, session.url, session.method,
+      session.body && session.body.currentVersion);
+    const freshUrl = (typeof fresh.input === 'string') ? fresh.input : session.url;
+    // A response/failure that lands after the session settled (the user left
+    // mid-flight) is dropped here — it is never handed to any other promise.
+    const rerender = (reason) => {
+      if (session.settled) return;
+      session.inFlight = false;
+      renderConflictSession(session, reason);
+    };
+    attemptFetch(fresh.input, fresh.init, freshUrl, session.method, 0, CONFLICT_REAPPLY_CONTEXT).then((res) => {
+      if (session.settled) return undefined;
+      if (res && res.ok) {
+        settleConflictSession(session, res);
+        return undefined;
+      }
+      if (res && res.status === 409) {
+        return res.clone().json().then((b) => {
+          if (b && b.conflict === true) {
+            // A third writer: adopt the fresh body (new `theirs`, new version
+            // for the NEXT reapply) — `mine` still comes from session.init.
+            session.body = b;
+            rerender(CONFLICT_ERROR_REASON_CONFLICT);
+          } else {
+            rerender(CONFLICT_ERROR_REASON_NETWORK);
+          }
+        }, () => rerender(CONFLICT_ERROR_REASON_NETWORK));
+      }
+      const reason = (res && res.status === 404 && session.method === 'DELETE') ? CONFLICT_ERROR_REASON_ALREADY_DELETED
+        : (res && res.status >= 500) ? CONFLICT_ERROR_REASON_SERVER
+        : CONFLICT_ERROR_REASON_NETWORK;
+      rerender(reason);
+      return undefined;
+    }).catch(() => rerender(CONFLICT_ERROR_REASON_NETWORK));
+  }
+
+  // T-09-14/T-09-16: (re)renders a session's contents into ITS OWN overlay/
+  // modal in place — a second conflict (or a failed reapply) never closes and
+  // recreates the overlay, and never stacks a second one. `errorReason`, when
+  // present, means this is a re-render after a failed reapply (a third-writer
+  // conflict, a network failure, or a 5xx) — it renders the inline
+  // `.conflict-modal-error` banner above the actions per the Copywriting
+  // Contract; a fresh first-time render passes no reason and gets no banner.
+  // Every value comes from `session` — `mine` from the ORIGINAL request body,
+  // `theirs` from the latest conflict body.
+  function renderConflictSession(session, errorReason) {
+    const body = session.body;
+    const method = session.method;
+    const init = session.init;
+    const modal = session.modal;
+    modal.textContent = ''; // clears all prior children — full rebuild below
 
     const head = document.createElement('div');
     head.className = 'conflict-modal-head';
@@ -331,44 +402,21 @@
       cancelBtn.type = 'button';
       cancelBtn.className = 'btn btn-secondary conflict-btn-discard';
       cancelBtn.textContent = CONFLICT_CANCEL_LABEL;
-      cancelBtn.addEventListener('click', closeActiveConflictDialog);
+      // Cancel: the record is kept, nothing is sent — the held promise
+      // settles with the original 409 (the page then re-reads, GD-5).
+      cancelBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
 
       // E3-loading: "Delete anyway" enters a disabled "Deleting…" state
       // during the resubmit; "Cancel" stays enabled throughout. This dialog
       // itself IS the destructive confirmation — no window.confirm() is ever
       // stacked on top of it (D-08, asserted by the grep gate in the test).
+      // E3-error (404 / network / 5xx) and a third-writer 409 are all handled
+      // by runConflictReapply: never a silent success or a silent failure.
       const deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
       deleteBtn.className = 'btn btn-danger conflict-btn-delete';
       deleteBtn.textContent = CONFLICT_DELETE_LABEL;
-      deleteBtn.addEventListener('click', () => {
-        deleteBtn.disabled = true;
-        deleteBtn.textContent = CONFLICT_DELETING_LABEL;
-        const freshVersion = body && body.currentVersion;
-        const fresh = withFreshVersion(input, init, url, method, freshVersion);
-        // Goes through window.fetch, exactly like the edit variant's apply
-        // handler — a genuine second conflict re-enters this SAME wrapper's
-        // 409 branch below and re-renders this overlay in place.
-        window.fetch(fresh.input, fresh.init).then((res) => {
-          if (res && res.ok) {
-            closeActiveConflictDialog();
-            return;
-          }
-          if (!res || res.status !== 409) {
-            // E3-error: a second conflict has already re-rendered this
-            // dialog (via the 409 branch below) as a side effect — this
-            // covers the remaining non-409 outcomes: a not-found (someone
-            // else already completed the delete), a network failure, or a
-            // 5xx. Never a silent success or a silent failure.
-            const reason = (res && res.status === 404) ? CONFLICT_ERROR_REASON_ALREADY_DELETED
-              : (res && res.status >= 500) ? CONFLICT_ERROR_REASON_SERVER
-              : CONFLICT_ERROR_REASON_NETWORK;
-            showConflictDialog(body, input, init, url, method, reason);
-          }
-        }).catch(() => {
-          showConflictDialog(body, input, init, url, method, CONFLICT_ERROR_REASON_NETWORK);
-        });
-      });
+      deleteBtn.addEventListener('click', () => runConflictReapply(session, deleteBtn, CONFLICT_DELETING_LABEL));
 
       actions.appendChild(cancelBtn);
       actions.appendChild(deleteBtn);
@@ -389,7 +437,7 @@
       closeBtn.type = 'button';
       closeBtn.className = 'btn btn-secondary conflict-btn-discard';
       closeBtn.textContent = CONFLICT_CLOSE_LABEL;
-      closeBtn.addEventListener('click', closeActiveConflictDialog);
+      closeBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
       actions.appendChild(closeBtn);
     } else {
       modal.appendChild(intro);
@@ -446,47 +494,20 @@
       discardBtn.type = 'button';
       discardBtn.className = 'btn btn-secondary conflict-btn-discard';
       discardBtn.textContent = CONFLICT_DISCARD_LABEL;
-      discardBtn.addEventListener('click', closeActiveConflictDialog);
+      // Discard: nothing is sent — the held promise settles with the original
+      // 409 and the page keeps/re-reads the server's ("theirs") state.
+      discardBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
 
       // E2-loading: clicking APPLY disables only this button and swaps its
       // label; DISCARD (above) stays enabled the whole time so the user can
-      // change their mind mid-flight.
+      // change their mind mid-flight. The reapply (and every failure/third-
+      // writer outcome, E2-error) lives in runConflictReapply — the "mine"
+      // column is provably untouched, only the banner + button state change.
       const applyBtn = document.createElement('button');
       applyBtn.type = 'button';
       applyBtn.className = 'btn btn-primary conflict-btn-apply';
       applyBtn.textContent = CONFLICT_APPLY_LABEL;
-      applyBtn.addEventListener('click', () => {
-        applyBtn.disabled = true;
-        applyBtn.textContent = CONFLICT_APPLYING_LABEL;
-        const freshVersion = body && body.currentVersion;
-        const fresh = withFreshVersion(input, init, url, method, freshVersion);
-        // Goes through window.fetch (not origFetch) — a genuine second
-        // conflict re-enters THIS SAME wrapper's 409 branch below, which
-        // detects the still-open dialog and re-renders THIS overlay in
-        // place with fresh server values plus the error banner (the
-        // activeConflictDialog guard reuses the element, never stacks a
-        // second overlay). This is correct behavior, not a loop to
-        // suppress — the only re-fire path is this explicit user click.
-        window.fetch(fresh.input, fresh.init).then((res) => {
-          if (res && res.ok) {
-            closeActiveConflictDialog();
-            return;
-          }
-          if (!res || res.status !== 409) {
-            // E2-error, network/5xx branch: no fresh conflict body exists to
-            // render from, so this re-renders the SAME dialog from the
-            // closure's own unchanged body/input/init — the "mine" column
-            // is provably untouched, only the banner + button state change.
-            const reason = (res && res.status >= 500) ? CONFLICT_ERROR_REASON_SERVER : CONFLICT_ERROR_REASON_NETWORK;
-            showConflictDialog(body, input, init, url, method, reason);
-          }
-          // A genuine 409 has already re-rendered this dialog (with the
-          // error banner) as a side effect of the 409 branch below —
-          // nothing further needed here.
-        }).catch(() => {
-          showConflictDialog(body, input, init, url, method, CONFLICT_ERROR_REASON_NETWORK);
-        });
-      });
+      applyBtn.addEventListener('click', () => runConflictReapply(session, applyBtn, CONFLICT_APPLYING_LABEL));
 
       actions.appendChild(discardBtn);
       actions.appendChild(applyBtn);
@@ -502,24 +523,72 @@
     }
 
     modal.appendChild(actions);
+  }
 
-    if (reusing) {
-      // The overlay never left document.body — only its contents were
-      // rebuilt above — so there is nothing further to attach.
-      activeConflictDialog = { overlay, modal, onKeydown: activeConflictDialog.onKeydown };
-      return;
+  // Builds a session's overlay and shows it. Close on overlay-background
+  // click and on Escape, plus each variant's own action — EVERY exit path
+  // goes through settleConflictSession with the original 409 (or, for a
+  // successful reapply, the reapplied response). Nothing on the page is
+  // touched: no field cleared, no form reset, no navigation, no reload.
+  function activateConflictSession(session) {
+    const overlay = document.createElement('div');
+    overlay.className = 'conflict-modal-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'conflict-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    overlay.appendChild(modal);
+    session.overlay = overlay;
+    session.modal = modal;
+    session.onKeydown = (e) => { if (e.key === 'Escape') settleConflictSession(session, session.originalRes); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) settleConflictSession(session, session.originalRes); });
+    activeConflictSession = session;
+    try {
+      renderConflictSession(session, undefined);
+      document.addEventListener('keydown', session.onKeydown);
+      document.body.appendChild(overlay);
+    } catch (e) {
+      // A page's write promise must never hang forever on a rendering
+      // failure: fall back to exactly what the wrapper did before sessions
+      // existed — hand the caller the original 409.
+      document.removeEventListener('keydown', session.onKeydown);
+      settleConflictSession(session, session.originalRes);
     }
+  }
 
-    // Close on overlay-background click, on Escape, and (edit variant) on
-    // the discard action / (deleted variant) on the close action — every
-    // exit path simply removes the overlay. Nothing on the page is
-    // touched: no field cleared, no form reset, no navigation, no reload.
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeActiveConflictDialog(); });
-    const onKeydown = (e) => { if (e.key === 'Escape') closeActiveConflictDialog(); };
-    document.addEventListener('keydown', onKeydown);
+  // Called from the 409 branch of attemptFetch for a marker 409 that is NOT a
+  // dialog reapply. Returns the promise handed back to the caller: it stays
+  // pending until the session settles.
+  //
+  // Ordering: a conflict arriving while another dialog is shown is queued
+  // FIFO — never rendered over the shown one and never mislabelled "the record
+  // changed again" — and opens as a FRESH render (no banner) when the shown
+  // one settles. T-09-46 (DoS bound): the queue holds at most
+  // CONFLICT_QUEUE_CAP sessions; a conflict beyond the cap resolves
+  // immediately with its OWN 409 and opens nothing, so a flood of conflicting
+  // writes can never pin unbounded promises and DOM.
+  const CONFLICT_QUEUE_CAP = 20;
+  const conflictQueue = [];
 
-    document.body.appendChild(overlay);
-    activeConflictDialog = { overlay, modal, onKeydown };
+  function openNextQueuedConflict() {
+    if (activeConflictSession) return;
+    let next = conflictQueue.shift();
+    while (next && next.settled) next = conflictQueue.shift();
+    if (next) activateConflictSession(next);
+  }
+
+  function holdConflict(body, input, init, url, method, res) {
+    if (activeConflictSession && conflictQueue.length >= CONFLICT_QUEUE_CAP) return res;
+    return new Promise((resolve) => {
+      const session = {
+        body, input, init, url, method,
+        originalRes: res, resolve,
+        settled: false, inFlight: false,
+        overlay: null, modal: null, onKeydown: null,
+      };
+      if (activeConflictSession) conflictQueue.push(session);
+      else activateConflictSession(session);
+    });
   }
 
   // D-07: bounded, jittered silent retry for transient write contention (503).
@@ -557,11 +626,14 @@
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const attemptFetch = (input, init, url, method, attempt) => origFetch(input, init).then((res) => {
+  // `ctx` (09-11): CONFLICT_REAPPLY_CONTEXT when this request is a conflict
+  // dialog's own reapply — passed through the 503 retry recursion so the
+  // reapply keeps its identity across a busy retry.
+  const attemptFetch = (input, init, url, method, attempt, ctx) => origFetch(input, init).then((res) => {
     if (res.status === 503 && isApi(url)) {
       if (attempt < BUSY_RETRY_MAX_RETRIES && isRetryableBody(input, init)) {
         const wait = parseRetryAfterMs(res) + Math.floor(Math.random() * BUSY_RETRY_JITTER_MAX_MS);
-        return delay(wait).then(() => attemptFetch(input, init, url, method, attempt + 1));
+        return delay(wait).then(() => attemptFetch(input, init, url, method, attempt + 1, ctx));
       }
       // Retries exhausted (or the body can't be safely re-sent): tell the user
       // plainly and leave the page/form exactly as it is so they can just save
@@ -576,17 +648,14 @@
     // refusal). res.clone().json() mirrors the 401 branch's own pattern
     // below — the ORIGINAL response must still be returned to the caller.
     // This branch never calls delay() and never re-enters attemptFetch();
-    // the ONLY re-fire path is the dialog's own apply action above.
+    // the ONLY re-fire path is the dialog's own action (runConflictReapply).
+    // GD-4: a marker 409 that is NOT a dialog's own reapply opens a session
+    // and returns the HELD promise (see the session comment above); a reapply
+    // (ctx) gets its raw 409 Response back so that session re-renders in place.
     if (res.status === 409 && isApi(url)) {
       return res.clone().json().then((body) => {
-        if (body && body.conflict === true) {
-          // E2-error: a dialog already open when this 409 arrives means
-          // this fetch WAS a reapply attempt from that dialog's own apply
-          // button — a genuine second conflict, not a fresh one. The
-          // errorReason triggers the inline banner on the in-place
-          // re-render (T-09-14/T-09-16: same overlay, never stacked).
-          const reason = activeConflictDialog ? CONFLICT_ERROR_REASON_CONFLICT : undefined;
-          showConflictDialog(body, input, init, url, method, reason);
+        if (body && body.conflict === true && !(ctx && ctx.reapply)) {
+          return holdConflict(body, input, init, url, method, res);
         }
         return res;
       }).catch(() => res);
