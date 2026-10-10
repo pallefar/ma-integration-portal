@@ -835,7 +835,7 @@ test('optimistic-locking-contract (17): a stale-version DD-finding update return
     const { finding } = await createRes.json();
     assert.strictEqual(finding.version, undefined, 'a freshly created finding carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.finding.version, 1);
@@ -871,7 +871,7 @@ test('optimistic-locking-contract (18): a stale-version DD request-item update r
     const { item } = await createRes.json();
     assert.strictEqual(item.version, undefined, 'a freshly created item carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.item.version, 1);
@@ -958,7 +958,7 @@ test('optimistic-locking-contract (21): the DD request-item 409 body\'s currentR
     // every projected shape (including the conflict body) must match exactly.
     assert.ok('overdue' in item, 'the 200-response item must already carry the publicDdItem()-added overdue key');
 
-    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped' });
+    const firstEditRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped', version: 0 });
     const stamped = (await firstEditRes.json()).item;
 
     const staleRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stale attempt', version: 0 });
@@ -1012,7 +1012,7 @@ test('optimistic-locking-contract (23): a stale-version convert returns 409 with
     const { finding } = await createRes.json();
 
     // Stamp version:1 via an ordinary edit (does not touch linkedTaskIds/linkedRaidIds).
-    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).finding.version, 1);
 
     const staleConvertRes = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, token, { toTask: true, toRaid: true, version: 0 });
@@ -1050,7 +1050,7 @@ test('optimistic-locking-contract (24): a current-version convert succeeds, crea
     const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'operations', title: 'Convert current fixture', severity: 'critical', owner: 'Karen' });
     const { finding } = await createRes.json();
 
-    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).finding.version, 1);
 
     const convertRes = await postJSON(base, `/api/dd/findings/${finding.id}/convert`, token, { toTask: true, toRaid: true, version: 1 });
@@ -1606,7 +1606,7 @@ test('optimistic-locking-contract (41): DELETE /api/dd/request-items/:id — sta
 
     const createRes = await postJSON(base, '/api/dd/request-items', token, { area: 'financial', text: 'Delete fixture item' });
     const { item } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/request-items', token, { id: item.id, text: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).item.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/dd/request-items/${item.id}`, token, 0);
@@ -1645,7 +1645,7 @@ test('optimistic-locking-contract (42): DELETE /api/dd/findings/:id — stale de
 
     const createRes = await postJSON(base, '/api/dd/findings', token, { area: 'it', title: 'Delete fixture finding', severity: 'low' });
     const { finding } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/dd/findings', token, { id: finding.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).finding.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/dd/findings/${finding.id}`, token, 0);

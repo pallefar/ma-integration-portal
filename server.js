@@ -5524,6 +5524,7 @@ app.delete('/api/dd/request-items/:id', (req, res) => {
   // documented reasoning applies identically here).
   if (conflictIfStale(req, res, item, {
     clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? publicDdItem(record) : null,
+    requirePrecondition: true,
   })) return;
   db.ddRequestItems = lane.filter((i) => i.id !== req.params.id);
   writeDb(db);
@@ -5558,6 +5559,7 @@ app.post('/api/dd/request-items', (req, res) => {
     // never discloses a wider shape than the route's 200 response would.
     if (conflictIfStale(req, res, item, {
       clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? publicDdItem(record) : null,
+      requirePrecondition: true,
     })) return;
     // Validate everything before mutating the shared readDb() cache (see
     // the task/RAID/synergy handlers' identical ordering comment above).
@@ -5755,6 +5757,7 @@ app.delete('/api/dd/findings/:id', (req, res) => {
   // this route's POST sibling.
   if (conflictIfStale(req, res, finding, {
     clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
+    requirePrecondition: true,
   })) return;
   db.ddFindings = lane.filter((f) => f.id !== req.params.id);
   writeDb(db);
@@ -5785,6 +5788,7 @@ app.post('/api/dd/findings', (req, res) => {
     // learns their write was rejected) but no field value from the finding.
     if (conflictIfStale(req, res, finding, {
       clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
+      requirePrecondition: true,
     })) return;
     // VAL-01: title-required-when-id-absent is owned by the schema's own
     // refine(); this empty-title-on-UPDATE guard stays here because the
@@ -5865,6 +5869,7 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
   // yet. Same clearance-filtered conflict body as POST /api/dd/findings.
   if (conflictIfStale(req, res, finding, {
     clearanceFilter: (record) => (record && accessPolicy.hasAreaGrant(deal, req.portalUser, record.area)) ? record : null,
+    requirePrecondition: true,
   })) return;
 
   const source = 'dd-finding:' + finding.id;
