@@ -360,3 +360,44 @@ test('dd-workspace-batch (e): item/finding create + update, stale 409 filtered e
     server.close();
   }
 });
+
+// ----- (f) DD handlers read only the collections they need -----------------
+
+test('dd-workspace-batch (f): the DD GET handlers and the item/finding upserts load through readCollections, not readDb', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const from = src.indexOf('// Due Diligence workspace (DD-01/DD-04)');
+  const to = src.indexOf('// In-app notifications — computed on demand');
+  assert.ok(from > -1 && to > from, 'both section markers are intact');
+  const section = src.slice(from, to);
+  // Split into per-route chunks at each `app.<verb>('/api/dd/...'`.
+  const re = /^app\.(get|post|delete)\('(\/api\/dd\/[^']*)'/gm;
+  const marks = [];
+  let m;
+  while ((m = re.exec(section))) marks.push({ verb: m[1], route: m[2], at: m.index });
+  const chunks = {};
+  marks.forEach((mk, i) => {
+    // Comments stripped: a route's trailing comment may legitimately name readDb().
+    chunks[mk.verb + ' ' + mk.route] = stripComments(
+      section.slice(mk.at, i + 1 < marks.length ? marks[i + 1].at : undefined));
+  });
+
+  const proportional = [
+    'get /api/dd/areas', 'get /api/dd/workspace', 'get /api/dd/request-items', 'get /api/dd/request-items/:id',
+    'post /api/dd/request-items', 'get /api/dd/vdr-links', 'get /api/dd/request-templates', 'get /api/dd/findings',
+    'get /api/dd/findings/:id', 'post /api/dd/findings', 'get /api/dd/summary',
+  ];
+  for (const key of proportional) {
+    assert.ok(chunks[key], 'route present: ' + key);
+    assert.ok(!/\breadDb\(\)/.test(chunks[key]), key + ' must not call readDb()');
+  }
+  for (const key of ['get /api/dd/workspace', 'get /api/dd/request-items', 'get /api/dd/findings', 'get /api/dd/summary',
+    'post /api/dd/request-items', 'post /api/dd/findings']) {
+    assert.ok(chunks[key].includes('readCollections(DD_READ_SET)'), key + ' loads DD_READ_SET');
+  }
+  // The rare multi-lane / destructive routes deliberately stay on readDb().
+  for (const key of ['delete /api/dd/request-items/:id', 'delete /api/dd/findings/:id',
+    'post /api/dd/request-items/instantiate', 'post /api/dd/findings/:id/convert']) {
+    assert.ok(/\breadDb\(\)/.test(chunks[key]), key + ' stays on readDb()');
+  }
+  assert.ok(src.includes("const DD_READ_SET = ['settings', 'ddRequestItems', 'ddFindings'];"));
+});

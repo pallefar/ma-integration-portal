@@ -6897,7 +6897,7 @@ app.get('/api/dd/workspace', (req, res) => {
 // T-04-01: filterByAreaGrant() runs server-side on EVERY list response — an
 // uncleared area's items are omitted here, never filtered client-side.
 app.get('/api/dd/request-items', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddRequestLane(db);
   let visible = accessPolicy.filterByAreaGrant(lane, deal, req.portalUser);
@@ -6945,13 +6945,16 @@ function ddAreaRefused(req, res, deal, areaId) {
 }
 
 app.get('/api/dd/request-items/:id', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const item = ddRequestLane(db).find((i) => i.id === req.params.id);
   if (ddAreaRefused(req, res, deal, item ? item.area : null)) return;
   res.json(publicDdItem(item));
 });
 
+// D-12-02 (PD-20): DELETE, instantiate and finding convert stay on readDb() —
+// rare, multi-lane (convert/instantiate touch tasks + RAID + templates) and
+// already proportional on WRITE thanks to the dirty-row writeDb (12-02).
 app.delete('/api/dd/request-items/:id', (req, res) => {
   const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
@@ -6980,7 +6983,7 @@ app.delete('/api/dd/request-items/:id', (req, res) => {
 // between areas requires clearance for both sides).
 app.post('/api/dd/request-items', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddRequestLane(db);
 
@@ -7055,7 +7058,7 @@ app.post('/api/dd/request-items', (req, res) => {
 // `links` array) — mirroring GET /api/dd/areas's own D-16 shape, so absence
 // carries no signal about whether the caller is cleared for it.
 app.get('/api/dd/vdr-links', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddRequestLane(db);
   const withLinks = lane.filter((item) => item.vdrLink);
@@ -7077,7 +7080,9 @@ app.get('/api/dd/vdr-links', (req, res) => {
 // list, not deal content — it carries no MNPI, so this list route is
 // unfiltered (no area-grant check), unlike GET /api/dd/request-items above.
 app.get('/api/dd/request-templates', (req, res) => {
-  res.json(readDb().ddRequestTemplates || []);
+  // D-12-02: only the templates collection (not in DD_READ_SET — no other DD
+  // route reads it except instantiate, which stays on readDb()).
+  res.json(readCollections(['ddRequestTemplates']).ddRequestTemplates || []);
 });
 
 // Instantiate a DD request template: every item becomes a live request item
@@ -7146,7 +7151,7 @@ const DD_FINDING_SEVERITIES = ['low', 'medium', 'high', 'critical'];
 const DD_FINDING_STATUSES = ['open', 'mitigating', 'closed'];
 
 app.get('/api/dd/findings', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddFindingsLane(db);
   let visible = accessPolicy.filterByAreaGrant(lane, deal, req.portalUser);
@@ -7167,7 +7172,7 @@ app.get('/api/dd/findings', (req, res) => {
 });
 
 app.get('/api/dd/findings/:id', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const finding = ddFindingsLane(db).find((f) => f.id === req.params.id);
   if (ddAreaRefused(req, res, deal, finding ? finding.area : null)) return;
@@ -7207,7 +7212,7 @@ app.delete('/api/dd/findings/:id', (req, res) => {
 // `area` additionally requires clearance for that NEW area.
 app.post('/api/dd/findings', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const lane = ddFindingsLane(db);
 
@@ -7412,7 +7417,7 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
 // unfiltered by the caller's own grant; this route only ever reports the
 // caller's own view.
 app.get('/api/dd/summary', (req, res) => {
-  const db = readDb();
+  const db = readCollections(DD_READ_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const grantedSet = new Set(accessPolicy.grantedAreas(deal, req.portalUser));
 
