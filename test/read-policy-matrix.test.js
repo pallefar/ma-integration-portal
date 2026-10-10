@@ -213,6 +213,121 @@ test('matrix: /api/pulses — employee reads its own pulse (200) and none of a c
   }
 });
 
+// --- Phase 11 review WR-04 (a): per-role BODY allowlists for the ALL-roles routes ---
+//
+// The matrix above proves every role gets 200 on these routes; it never looked at
+// WHAT came back (that is how CR-01 — the unprojected deal record — passed green).
+// Each row below states, per role, the only shape the body may have, against a deal
+// seeded with MNPI-bearing values on every one of these surfaces.
+const PUBLIC_SETTINGS_KEYS = require('../validators/settings').PUBLIC_SETTINGS_KEYS;
+const DEAL_KEYS_FOR = { pmo: ['id', 'name', 'status', 'targetCompany'], employee: ['id', 'name', 'status'] };
+const LANE_NUDGES = ['tasks_overdue', 'tasks_blocked', 'raid_high'];
+const BODY_ALLOWLIST = [
+  {
+    p: '/api/deals',
+    check(role, body) {
+      assert.ok(Array.isArray(body) && body.length >= 1, `${role}: the caller's deal is listed`);
+      for (const d of body) {
+        if (role === 'admin' || role === 'hrbp') continue; // full record: they run the deal
+        const extra = Object.keys(d).filter((k) => !DEAL_KEYS_FOR[role].includes(k));
+        assert.deepStrictEqual(extra, [], `${role} GET /api/deals: keys outside the allowlist`);
+      }
+      const text = JSON.stringify(body);
+      if (role === 'pmo' || role === 'employee') {
+        for (const k of ['dealSizeM', 'synergyTargetM', 'memberGrants', 'members', 'setup', 'createdBy', 'dealSettings', 'currency', 'day1Date']) {
+          assert.ok(!text.includes(`"${k}"`), `${role} GET /api/deals must not carry ${k}`);
+        }
+      } else {
+        assert.ok(text.includes('"synergyTargetM":77'), `${role} still reads the deal-level values`);
+      }
+    },
+  },
+  {
+    p: '/api/settings',
+    check(role, body) {
+      const keys = Object.keys(body || {});
+      for (const secret of ['geminiApiKey', 'databaseConfig', 'connectionDetails']) {
+        assert.ok(!keys.includes(secret), `${role} GET /api/settings must never carry ${secret}`);
+      }
+      if (role !== 'admin') {
+        const extra = keys.filter((k) => !PUBLIC_SETTINGS_KEYS.includes(k));
+        assert.deepStrictEqual(extra, [], `${role} GET /api/settings: keys outside PUBLIC_SETTINGS_KEYS`);
+      }
+    },
+  },
+  {
+    p: '/api/pulses',
+    check(role, body, self) {
+      assert.ok(Array.isArray(body), `${role}: pulses is a list`);
+      const text = JSON.stringify(body);
+      if (role === 'employee') {
+        assert.ok(body.length >= 1 && body.every((x) => x.authorUsername === self), 'employee: own pulses only');
+        assert.ok(!text.includes('PMO-PULSE-NOTE'), 'employee: no colleague comment');
+      } else if (role === 'pmo') {
+        for (const x of body) {
+          const own = x.authorUsername === self;
+          if (!own) assert.deepStrictEqual(Object.keys(x).sort(), ['day', 'rating', 'type'], 'pmo: others only as aggregates');
+        }
+        assert.ok(!text.includes('EMP-PULSE-NOTE'), 'pmo: no colleague comment');
+      } else {
+        assert.ok(text.includes('EMP-PULSE-NOTE') && text.includes('PMO-PULSE-NOTE'), `${role}: every named pulse`);
+      }
+    },
+  },
+  {
+    p: '/api/notifications',
+    check(role, body) {
+      const types = ((body && body.items) || []).map((i) => i.type);
+      if (role === 'employee') {
+        assert.deepStrictEqual(types.filter((t) => LANE_NUDGES.includes(t)), [], 'employee: no task/RAID nudge');
+      } else {
+        assert.ok(types.includes('tasks_overdue') && types.includes('raid_high'), `${role}: keeps the lane nudges`);
+      }
+      for (const i of (body && body.items) || []) {
+        assert.ok(!/MATRIX-SECRET/.test(JSON.stringify(i)), `${role}: a nudge carries no record content`);
+      }
+    },
+  },
+];
+
+test('matrix (WR-04 a): ALL-roles routes — every role\'s 200 body stays inside its per-role allowlist', async () => {
+  const fx = createDealFixture({
+    controlConn, runtimeConn, dealId: 'deal_rmbody',
+    members: [
+      { username: 'rb-admin', role: 'admin' },
+      { username: 'rb-hrbp', role: 'hrbp' },
+      { username: 'rb-pmo', role: 'pmo' },
+      { username: 'rb-employee', role: 'employee' },
+    ],
+  });
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = async (u, p, body) => {
+      const r = await fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', cookie: fx.cookie(u) }, body: JSON.stringify(body) });
+      const text = await r.text();
+      assert.ok(r.status === 200 || r.status === 201, `fixture ${u} POST ${p} -> ${r.status} ${text}`);
+    };
+    await post('rb-hrbp', '/api/deals/deal_rmbody/setup', { step: 'basics', data: { dealSizeM: 850 } });
+    await post('rb-hrbp', '/api/deals/deal_rmbody/setup', { dealSettings: { synergyTargetM: 77, currency: 'EUR', day1Date: '2026-12-01' } });
+    await post('rb-employee', '/api/pulses', { employeeName: 'x', rating: 2, comment: 'EMP-PULSE-NOTE', type: '30-day' });
+    await post('rb-pmo', '/api/pulses', { employeeName: 'x', rating: 4, comment: 'PMO-PULSE-NOTE', type: '30-day' });
+    await post('rb-admin', '/api/integration-tasks', { title: 'MATRIX-SECRET overdue task', due: '2000-01-01', status: 'todo' });
+    await post('rb-admin', '/api/raid', { title: 'MATRIX-SECRET high risk', type: 'risk', severity: 'high' });
+
+    for (const row of BODY_ALLOWLIST) {
+      for (const role of ALL) {
+        const res = await fetch(base + row.p, { headers: { cookie: fx.cookie('rb-' + role) } });
+        const { json, text } = await readBody(res);
+        assert.strictEqual(res.status, 200, `${role} GET ${row.p} (${text.slice(0, 120)})`);
+        row.check(role, json, 'rb-' + role);
+      }
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('matrix: demo store stays lenient — no role is ever refused by the read gate', async () => {
   const cookies = {};
   for (const role of ALL) {
