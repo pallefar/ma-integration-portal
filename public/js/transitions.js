@@ -146,12 +146,25 @@
   // FA-2 (09-01-PLAN.md): a deliberate extension beyond the signed-off
   // 09-UI-SPEC.md Copywriting Contract — three literals for PD-4's "an
   // UPDATE arrived for a record someone else already deleted" surface,
-  // which the approved UI-SPEC table does not itself enumerate (it only
-  // covers the edit-conflict and D-08 stale-delete variants). Flagged here
-  // for the developer's eye at UAT, per the plan.
-  const CONFLICT_TITLE_DELETED = 'This record was deleted';
+  // which the approved UI-SPEC table did not itself enumerate (it only
+  // covered the edit-conflict and D-08 stale-delete variants). Resolved by
+  // plan 09-13: 09-UI-SPEC.md's "Amendments (2026-10-10" section A1 now lists
+  // these three literals in its Copywriting Contract. GD-10 / R7 F-7: the
+  // title names the actor-less truth ("deleted"), and this variant renders no
+  // attribution line — a deleted row carries no actor/time to attribute.
+  const CONFLICT_TITLE_DELETED = 'Someone else deleted this';
   const CONFLICT_DELETED_INTRO = 'Someone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.';
   const CONFLICT_CLOSE_LABEL = 'Close';
+  // R7 F-4 / GD-7 (SC6): the server withholds `currentRecord` (null) when the
+  // record is outside the caller's clearance (CR-01). Rendering that as an
+  // empty diff with an "Apply" action was misleading and the follow-up 403
+  // was reported as a network error. The honest variant states the one thing
+  // known, offers no action that cannot succeed, and shows no field value.
+  const CONFLICT_WITHHELD_TEXT = 'This record is no longer within your clearance; your change cannot be applied.';
+  // Reason used when a refused reapply (a 4xx other than a marker 409) carries
+  // no readable `error` text of its own.
+  const CONFLICT_ERROR_REASON_REFUSED = 'the server refused the change';
+  const CONFLICT_ERROR_REASON_MAX_CHARS = 200;
 
   // D-08 (Phase 9, Plan 06): the stale-delete confirmation variant, taken
   // when the intercepted request's method is DELETE — distinct from
@@ -426,6 +439,18 @@
     return { input: input, init: newInit };
   }
 
+  // [security] T-09-52: the reason for a refused reapply is the server's own
+  // `error` string to THIS caller (no new data), but it lands in the dialog, so
+  // it is normalised before use — trimmed, one trailing period removed (the
+  // banner's suffix supplies the sentence break), capped at
+  // CONFLICT_ERROR_REASON_MAX_CHARS — and only ever set via textContent.
+  // Anything that is not a non-empty string falls back to the fixed reason.
+  function conflictServerReason(body) {
+    const raw = body && typeof body.error === 'string' ? body.error.trim() : '';
+    const text = raw.replace(/\.$/, '').slice(0, CONFLICT_ERROR_REASON_MAX_CHARS).trim();
+    return text || CONFLICT_ERROR_REASON_REFUSED;
+  }
+
   // The user's own click on "Apply my changes anyway" / "Delete anyway":
   // reapply the session's ORIGINAL request carrying the fresh version, through
   // the internal attemptFetch with the reapply context (NOT window.fetch — a
@@ -434,8 +459,12 @@
   //   2xx            -> settle the held promise with this Response (unconsumed)
   //   marker 409     -> adopt the fresh body, re-render in place + banner
   //   404 (delete)   -> "someone else already deleted this record"
-  //   5xx / other / network failure -> banner; the session stays pending so
-  //                     the user can try again or leave.
+  //   5xx            -> "the server reported an error"
+  //   other 4xx / marker-less 409 -> the server's own `error` text (R7 F-4),
+  //                     else "the server refused the change"
+  //   network failure -> "a network error occurred"
+  //   (each a banner; the session stays pending so the user can try again or
+  //   leave.)
   // inFlight is the double-click guard (HP8): a second click sends nothing.
   function runConflictReapply(session, btn, inFlightLabel) {
     if (session.settled || session.inFlight) return;
@@ -466,14 +495,28 @@
             session.body = b;
             rerender(CONFLICT_ERROR_REASON_CONFLICT);
           } else {
-            rerender(CONFLICT_ERROR_REASON_NETWORK);
+            // A marker-less 409 (a business-rule refusal such as an
+            // unrecognized stage): the server's own words, not "network".
+            rerender(conflictServerReason(b));
           }
-        }, () => rerender(CONFLICT_ERROR_REASON_NETWORK));
+        }, () => rerender(CONFLICT_ERROR_REASON_REFUSED));
       }
-      const reason = (res && res.status === 404 && session.method === 'DELETE') ? CONFLICT_ERROR_REASON_ALREADY_DELETED
-        : (res && res.status >= 500) ? CONFLICT_ERROR_REASON_SERVER
-        : CONFLICT_ERROR_REASON_NETWORK;
-      rerender(reason);
+      if (res && res.status === 404 && session.method === 'DELETE') {
+        rerender(CONFLICT_ERROR_REASON_ALREADY_DELETED);
+        return undefined;
+      }
+      if (res && res.status >= 500) {
+        rerender(CONFLICT_ERROR_REASON_SERVER);
+        return undefined;
+      }
+      if (res && res.status >= 400) {
+        // R7 F-4: any other 4xx (a 403 for a clearance change, a 400 for a
+        // validation refusal) is the server REFUSING — never "a network
+        // error". It tells the caller why, in its own `error` field.
+        return res.clone().json().then((b) => rerender(conflictServerReason(b)),
+          () => rerender(CONFLICT_ERROR_REASON_REFUSED));
+      }
+      rerender(CONFLICT_ERROR_REASON_NETWORK);
       return undefined;
     }).catch(() => rerender(CONFLICT_ERROR_REASON_NETWORK));
   }
@@ -518,8 +561,30 @@
     // above for why 'deleted' can never arise here).
     const isDelete = method === 'DELETE';
     const isDeleted = !isDelete && body && body.conflictKind === 'deleted';
+    // GD-7: a version conflict whose record the server withheld (clearance).
+    // Strictly `=== null` — an absent field is not the server's withheld
+    // signal. Checked BEFORE the delete/edit variants: for a withheld record
+    // neither "Delete anyway" nor "Apply my changes anyway" can succeed, so
+    // neither may be offered (T-09-51).
+    const isWithheld = !!body && body.conflictKind !== 'deleted' && body.currentRecord === null;
 
-    if (isDelete) {
+    if (isWithheld) {
+      modal.appendChild(intro);
+      title.textContent = CONFLICT_TITLE_EDIT;
+      intro.textContent = CONFLICT_WITHHELD_TEXT;
+      // Who/when still shows (T-09-17 accepted in 09-REVIEW IN-01): never what.
+      renderConflictAttribution(attribution, body);
+      head.appendChild(attribution);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'btn btn-secondary conflict-btn-discard';
+      closeBtn.textContent = CONFLICT_CLOSE_LABEL;
+      // Close settles the held promise with the original 409; the page's
+      // re-read (09-12) then drops the record through the clearance-filtered GET.
+      closeBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
+      actions.appendChild(closeBtn);
+    } else if (isDelete) {
       // UI-SPEC E3: "No collection inside this variant — content is title +
       // attribution + actions, all static or covered by E4 rules." No intro
       // paragraph, no diff list — the title question IS the confirmation.
@@ -560,8 +625,8 @@
       modal.appendChild(intro);
       title.textContent = CONFLICT_TITLE_DELETED;
       intro.textContent = CONFLICT_DELETED_INTRO;
-      renderConflictAttribution(attribution, body);
-      head.appendChild(attribution);
+      // No attribution line (GD-10 / R7 F-7): the deleted row has no actor or
+      // time to attribute, and the fallback sentence would contradict the title.
 
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';

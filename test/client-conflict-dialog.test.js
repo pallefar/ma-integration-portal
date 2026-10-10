@@ -978,6 +978,113 @@ test('DT14: neutral panel + a body with no attribution -> the fallback sentence 
   assert.strictEqual(await p, first);
 });
 
+const WITHHELD = 'This record is no longer within your clearance; your change cannot be applied.';
+
+test('DT8: a withheld record (currentRecord null) on a POST -> attribution + the clearance sentence, no rows, no Apply, one Close that settles with the original 409', async () => {
+  const { p, first, fake, document } = await openDialogFor('/api/raid', { id: 'rec1', version: 1, status: 'doing' },
+    { currentRecord: null, changedBy: 'karen', changedAt: new Date().toISOString() });
+
+  const text = MODAL_TEXT(document);
+  assert.ok(text.includes(WITHHELD), 'withheld sentence');
+  assert.ok(text.includes('Changed by karen'), 'attribution stays visible (T-09-17 accepted)');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-row').length, 0, 'T-09-51: no field values');
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-apply').length, 0, 'no Apply');
+  const buttons = document.querySelectorAll('.btn');
+  assert.strictEqual(buttons.length, 1, 'exactly one button');
+  assert.strictEqual(buttons[0].textContent, 'Close');
+  buttons[0].click();
+  assert.strictEqual(await p, first, 'the held promise settles with the original 409');
+  assert.strictEqual(fake.calls.length, 1, 'nothing re-sent');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('DT9: the same withheld body on a DELETE -> withheld sentence, no Delete anyway, one Close', async () => {
+  const { p, first, document } = await openDialogFor('/api/raid/rec1?expectedVersion=1', undefined,
+    { currentRecord: null, changedBy: 'karen', changedAt: new Date().toISOString() }, 'DELETE');
+
+  assert.ok(MODAL_TEXT(document).includes(WITHHELD));
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-delete').length, 0, 'T-09-51: no destructive action');
+  const buttons = document.querySelectorAll('.btn');
+  assert.strictEqual(buttons.length, 1);
+  assert.strictEqual(buttons[0].textContent, 'Close');
+  buttons[0].click();
+  assert.strictEqual(await p, first);
+});
+
+// A reapply answered by `reapplyRes`, after a first marker 409 on /api/raid.
+async function reapplyWith(reapplyRes) {
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : reapplyRes));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+  return { p, outcome, fake, document };
+}
+
+test('DT10: Apply refused with 403 {error} -> banner carries the server reason (trailing period removed); a 403 is not a network error; promise still pending', async () => {
+  const { p, outcome, document } = await reapplyWith(makeResponse({ status: 403, body: { error: 'You are not cleared for that due-diligence area.' } }));
+
+  const banner = document.querySelectorAll('.conflict-modal-error')[0];
+  assert.ok(banner, 'banner expected');
+  assert.strictEqual(banner.textContent,
+    "That didn't go through — You are not cleared for that due-diligence area. Your edits are still here; review the fresh values below and try again.");
+  assert.ok(!/network error/.test(banner.textContent));
+  assert.strictEqual(outcome.settled, false, 'the caller stays held');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await p;
+});
+
+test('DT11: Apply refused with a 4xx carrying no error text -> "the server refused the change"', async () => {
+  const { p, document } = await reapplyWith(makeResponse({ status: 400, body: {} }));
+
+  const banner = document.querySelectorAll('.conflict-modal-error')[0];
+  assert.strictEqual(banner.textContent,
+    "That didn't go through — the server refused the change. Your edits are still here; review the fresh values below and try again.");
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await p;
+});
+
+test('DT12: Apply answered by a 409 WITHOUT the marker -> that error text in the banner; no second session opens', async () => {
+  const { p, fake, document } = await reapplyWith(makeResponse({ status: 409, body: { error: 'Unrecognized stage.' } }));
+
+  const banner = document.querySelectorAll('.conflict-modal-error')[0];
+  assert.ok(banner && banner.textContent.includes('Unrecognized stage. Your edits are still here'), banner && banner.textContent);
+  assert.ok(!/network error/.test(banner.textContent));
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'still one dialog');
+  assert.strictEqual(fake.calls.length, 2);
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await p;
+});
+
+test('DT12b: the server reason is capped at 200 characters and rendered as text', async () => {
+  const long = '<b>' + 'x'.repeat(400) + '</b>';
+  const { p, document } = await reapplyWith(makeResponse({ status: 400, body: { error: long } }));
+
+  const banner = document.querySelectorAll('.conflict-modal-error')[0];
+  const reason = banner.textContent.slice("That didn't go through — ".length, banner.textContent.length - '. Your edits are still here; review the fresh values below and try again.'.length);
+  assert.ok(reason.length <= 200, 'reason length ' + reason.length);
+  assert.ok(reason.startsWith('<b>xxx'), 'markup is shown as literal text');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await p;
+});
+
+test('DT13: a conflictKind "deleted" 409 on a POST -> title "Someone else deleted this", the existing intro, no attribution element, one Close', async () => {
+  const { p, first, document } = await openDialogFor('/api/raid', { id: 'rec1', version: 1, status: 'doing' },
+    { conflictKind: 'deleted', currentRecord: null, changedBy: null, changedAt: null });
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-title')[0].textContent, 'Someone else deleted this');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-attribution').length, 0, 'a deleted row carries no actor/time to attribute');
+  assert.ok(MODAL_TEXT(document).includes('Someone else deleted this record before your change could be saved.'), 'existing intro kept');
+  assert.ok(!MODAL_TEXT(document).includes(NEUTRAL), 'no contradictory fallback line');
+  const buttons = document.querySelectorAll('.btn');
+  assert.strictEqual(buttons.length, 1);
+  assert.strictEqual(buttons[0].textContent, 'Close');
+  buttons[0].click();
+  assert.strictEqual(await p, first);
+});
+
 test('DT-src: the retired empty-diff sentence occurs nowhere in the wrapper region source', () => {
   assert.ok(!WRAPPER_SRC.includes('No conflicting fields'), 'sentence start must be gone');
   assert.ok(!WRAPPER_SRC.includes('without affecting anything you edited'), 'sentence middle must be gone');

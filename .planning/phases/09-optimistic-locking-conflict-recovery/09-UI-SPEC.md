@@ -85,7 +85,14 @@ Secondary structural color note: `--te-dark-teal` (`#244C5A`) is available (used
 | Dialog title (stale delete, D-08) | "Someone else updated this — still delete it?" |
 | Attribution line | "Changed by **{name}**, {relative time}" — e.g. "Changed by karen, 2 min ago" (sourced from the 409 body's actor/time fields; textContent only, never innerHTML) |
 | Body intro (edit conflict) | "Your changes are still here. Review what changed below, then decide how to proceed." |
-| Field-diff empty fallback | "No conflicting fields — the record's version changed without affecting anything you edited. Apply your changes to continue." (covers the empty-diff-list edge case, see UI Considerations) |
+| ~~Field-diff empty fallback~~ | **Superseded by Amendment A3 (2026-10-10).** The sentence "No conflicting fields — the record's version changed without affecting anything you edited. Apply your changes to continue." is retired and is never rendered by any branch; see "Neutral panel" below. |
+| Neutral panel (no payload field maps to a record field — A3) | "This record changed since you loaded it." — one sentence, shown in place of the diff rows; "Apply my changes anyway" and "Discard mine, keep theirs" are still offered |
+| Dialog title (update landed on a deleted record — A1) | "Someone else deleted this" (`CONFLICT_TITLE_DELETED`) |
+| Body intro (deleted variant — A1) | "Someone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was." (`CONFLICT_DELETED_INTRO`); no attribution line is rendered in this variant |
+| Single action (deleted and withheld variants — A1, A2) | "Close" (`CONFLICT_CLOSE_LABEL`) — settles with the original 409, sends nothing |
+| Withheld-record sentence (409 body `currentRecord` is null — A2) | "This record is no longer within your clearance; your change cannot be applied." (`CONFLICT_WITHHELD_TEXT`) — title "Someone else updated this", attribution as normal, no diff rows, no Apply / Delete anyway, one "Close" |
+| Reapply refused (4xx other than a marker 409 — A6) | Banner reason is the server's own `error` text (trimmed, one trailing period removed, at most 200 characters), else "the server refused the change" (`CONFLICT_ERROR_REASON_REFUSED`); a 403/400 is never reported as "a network error occurred" |
+| Diff label (A5) | A display label from a fixed table (e.g. "Realized (M)", "Due date", "Reports to", "Stage"); an unknown key is humanised ("someNewField" becomes "Some new field"); per-month phasing cells read "Target (M) · 2026-03". No CSS case transform |
 | Primary CTA (edit conflict) | "Apply my changes anyway" |
 | Secondary action (edit conflict) | "Discard mine, keep theirs" |
 | Primary CTA (stale delete) | "Delete anyway" |
@@ -107,7 +114,7 @@ Probe run 2026-08-11 (ui-consideration-probe, 4 elements: E1 conflict-field-diff
 
 | Category | Element | Resolution |
 |----------|---------|------------|
-| empty | E1 field-diff-list | Zero conflicting rows (e.g. version-only ping) renders the field-diff empty-fallback copy (Copywriting Contract) instead of an empty box, and still offers "Apply my changes anyway" |
+| empty | E1 field-diff-list | Zero rows (no payload field maps to a record field, e.g. confirm-current, convert, re-baseline, cost-entry add) renders the neutral panel "This record changed since you loaded it." (Amendment A3 — the old "No conflicting fields…" sentence is retired) instead of an empty box, and still offers "Apply my changes anyway" |
 | populated | E1 field-diff-list | Typical case: 1–4 changed fields, each a stacked two-column row ("mine" left, orange accent border; "theirs" right, neutral background) with the field's display label above |
 | partial | E1 field-diff-list | A changed field whose value (mine or theirs) is empty/null renders an explicit italic "(empty)" placeholder in that value box — never blank whitespace, which would read as a rendering bug |
 | overflow | E1 field-diff-list | Many changed fields (8+ full-form edit) scrolls the diff-list body internally within a `max-height`; dialog header and action footer stay pinned, non-scrolling — dialog never grows past the viewport |
@@ -118,7 +125,7 @@ Probe run 2026-08-11 (ui-consideration-probe, 4 elements: E1 conflict-field-diff
 | loading | E3 stale-delete dialog | "Delete anyway" enters a disabled "Deleting…" label state during the resubmit; "Cancel" stays enabled |
 | error | E3 stale-delete dialog | "Delete anyway" resubmitting into a second conflict (record changed again, or already deleted) re-renders the same dialog shell with refreshed attribution/values — never silently succeeds or silently fails |
 | partial | E3 stale-delete dialog | Attribution with missing actor/time follows the E4 fallback rule below |
-| empty | E4 header/attribution | 409 body lacking actor **and** time renders the attribution-fallback copy "This record changed since you loaded it." — never a blank line |
+| empty | E4 header/attribution | 409 body lacking actor **and** time renders the attribution-fallback copy "This record changed since you loaded it." — never a blank line. Amendments A1/A7: the deleted variant renders no attribution line at all, and when the neutral panel already shows that sentence the attribution element is omitted so it never appears twice in one dialog |
 | partial | E4 header/attribution | 409 body lacking actor **or** time (D-09 lazy-stamped v0 records, script-mutated data) renders the same fallback copy — never "Changed by undefined" |
 | long-text | E4 header/attribution | Long display names wrap onto a second line via `textContent`; the name is never truncated — the user must be able to identify the other editor |
 
@@ -137,6 +144,22 @@ Probe run 2026-08-11 (ui-consideration-probe, 4 elements: E1 conflict-field-diff
 | loading | E4 header/attribution | Rendered synchronously from the 409 body — nothing to load |
 | error | E4 header/attribution | No failure mode of its own; a malformed timestamp falls back per the E4-partial rule |
 | overflow | E4 header/attribution | The wrap rule (E4 long-text) handles width pressure; header height may grow by one line, no clipping |
+
+---
+
+## Amendments (2026-10-10 — Phase 9 gap closure, plans 09-13/09-14)
+
+Source: `.planning/reviews/v3.0/R7-phase9-uat.md` (F-3, F-4, F-5, F-7) and gap decisions GD-6..GD-10 in `09-08-PLAN.md`. R7's verdict (item 6) was that these are tweaks to a signed contract, not a new design, so no re-approval cycle is run; they are recorded here, dated, so the contract is explicit rather than silently drifted. All new literals stay **hardcoded English via `textContent`** (the i18n decision above is unchanged; Phase 19 owns localisation of runtime copy). Plan 09-14 adds A8 (the in-app delete confirm).
+
+| # | Amendment | Source |
+|---|-----------|--------|
+| A1 | **Deleted variant.** An update that lands on a record someone else already deleted is titled "Someone else deleted this" (was "This record was deleted"), keeps the intro "Someone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was." and the single "Close" action, and renders **no attribution line**: a deleted row carries no actor or time, so D-04's attribution has nothing true to say. This also resolves FA-2 — the three literals (`CONFLICT_TITLE_DELETED` / `CONFLICT_DELETED_INTRO` / `CONFLICT_CLOSE_LABEL`) are now in the Copywriting Contract. | R7 F-7, GD-10 |
+| A2 | **Withheld-record variant.** A version-conflict body whose `currentRecord` is `null` (the record is outside the caller's clearance) renders: the edit title "Someone else updated this", the attribution as normal, the sentence "This record is no longer within your clearance; your change cannot be applied.", **no diff rows, no "Apply my changes anyway", no "Delete anyway"**, and one "Close" action that settles with the original 409. Attribution (who/when) stays visible — the disclosure was accepted as T-09-17 / 09-REVIEW IN-01 — but never a field value. | R7 F-4, GD-7 |
+| A3 | **Neutral panel replaces the empty-diff fallback.** When no payload key maps to a record field (`{}` confirm-current, `{toTask,toRaid}` convert, `{reason}` re-baseline, a cost-entry add) the diff area shows "This record changed since you loaded it." and still offers both actions. The sentence "No conflicting fields — the record's version changed without affecting anything you edited…" is **retired** and is never rendered by any branch — the client cannot know the change was irrelevant to the user's edit. | R7 F-3, GD-6 |
+| A4 | **Per-route field mapping.** The diff compares what the user edited with what the server holds through a declarative per-route table: a payload key may be an alias for a record field (`targetStage` is `stage`), a cell of an array (a per-month phasing edit compares the same month's `targetM`/`realizedM`, never the initiative total, and is labelled "Label · YYYY-MM"; a month missing on the server shows "(empty)"), or an ignored action parameter. A mapped field whose mine and theirs values are equal is still rendered with both values. | R7 F-3, GD-6 |
+| A5 | **Display labels.** Diff row labels come from a fixed display-label table ("Realized (M)", "Due date", "Reports to", "Stage", …) with a deterministic humanised fallback for an unknown key ("someNewField" becomes "Some new field"; a trailing "Id" after a lowercase letter is dropped; a final standalone "M" renders "(M)"). Labels are rendered via `textContent` with **no CSS case transform**. | R7 F-5, GD-8 |
+| A6 | **Reapply-failure reason for a 4xx.** A reapply refused with a 4xx other than a marker 409 (a 403 for a clearance change, a 400 refusal, a marker-less 409) shows the server's own `error` text in the banner — trimmed, one trailing period removed, at most 200 characters — or "the server refused the change" when there is none. A 4xx is never reported as "a network error occurred". 5xx and genuine network failures keep their existing reasons. | R7 F-4, GD-7 |
+| A7 | **One sentence, once.** The same sentence is never rendered twice in one dialog: when the neutral panel already shows "This record changed since you loaded it." the attribution element is omitted rather than repeating it as its fallback. | R7 F-7, GD-6 |
 
 ---
 
