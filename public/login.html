@@ -19,12 +19,14 @@
     .lg-btn{ width:100%; padding:.7rem; border:none; border-radius:8px; background:var(--te-orange,#E98300); color:#fff; font-family:inherit; font-size:.95rem; font-weight:800; cursor:pointer; }
     .lg-btn:hover{ filter:brightness(1.05); }
     .lg-err{ display:none; color:#C0392B; font-size:.82rem; font-weight:700; margin-top:.8rem; }
+    .login-card p.lg-err{ color:#C0392B; font-size:.82rem; margin:.8rem 0 0; }
     .lg-demo{ border-top:1px dashed var(--border-color,#dde3e6); margin-top:1.5rem; padding-top:1.1rem; }
     .lg-demo-title{ font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--text-dim,#7a848a); margin-bottom:.5rem; }
     .lg-demo-row{ display:block; width:100%; text-align:left; background:var(--bg-subtle,#f4f7f8); border:1px solid var(--border-color,#dde3e6); border-radius:8px; padding:.45rem .7rem; margin-bottom:.35rem; font-family:inherit; font-size:.82rem; color:var(--text-primary,#1c2b33); cursor:pointer; }
     .lg-demo-row:hover{ border-color:var(--te-orange,#E98300); }
     .lg-demo-pw{ font-size:.72rem; color:var(--text-dim,#7a848a); margin-top:.45rem; line-height:1.5; }
     .lg-demo-pw code{ background:var(--bg-subtle,#f4f7f8); border:1px solid var(--border-color,#dde3e6); border-radius:4px; padding:.05rem .35rem; font-size:.72rem; }
+    .lg-demo-open{ display:block; margin-top:.7rem; font-size:.78rem; color:var(--te-dark-teal,#244C5A); font-weight:700; }
   </style>
 </head>
 <body>
@@ -36,41 +38,13 @@
       <div class="lg-field"><label for="lg-user">Username</label><input id="lg-user" type="text" autocomplete="username" autofocus></div>
       <div class="lg-field"><label for="lg-pass">Password</label><input id="lg-pass" type="password" autocomplete="current-password"></div>
       <button class="lg-btn" type="submit">Sign in</button>
-      <div class="lg-err" id="lg-err">Invalid username or password.</div>
+      <p id="lg-notice" class="lg-err" role="alert"></p>
     </form>
-    <div class="lg-demo">
-      <div class="lg-demo-title">Demo accounts (for testing)</div>
-      <button type="button" class="lg-demo-row" data-user="admin"><strong>admin</strong> · Portal Admin</button>
-      <button type="button" class="lg-demo-row" data-user="karen"><strong>karen</strong> · Integration Leader</button>
-      <button type="button" class="lg-demo-row" data-user="pmo"><strong>pmo</strong> · PMO Lead</button>
-      <div class="lg-demo-pw">Password for all: <code>TEdemo!2026</code> — click an account to fill the form. Change these before real use.</div>
-    </div>
+    <!-- [security] D-10-08c: the demo-account panel is NOT markup. public/js/login.js
+         builds it only when GET /api/auth/mode says dev or demo-open, so a real-deal
+         host's page source and DOM never carry a credential. -->
+    <div id="lg-demo-slot"></div>
   </div>
-  <script>
-    // If auth is disabled (local demo) there is nothing to sign in to.
-    fetch('/api/auth/me').then(function (r) { return r.json(); }).then(function (me) {
-      if (!me.authEnabled || me.user) window.location.href = '/';
-    }).catch(function () {});
-    document.getElementById('login-form').addEventListener('submit', function (e) {
-      e.preventDefault();
-      var err = document.getElementById('lg-err');
-      err.style.display = 'none';
-      fetch('/api/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: document.getElementById('lg-user').value, password: document.getElementById('lg-pass').value })
-      }).then(function (r) { return r.json(); }).then(function (res) {
-        if (res && res.success) window.location.href = '/';
-        else err.style.display = 'block';
-      }).catch(function () { err.style.display = 'block'; });
-    });
-    // Demo-account quick fill
-    document.querySelectorAll('.lg-demo-row').forEach(function (b) {
-      b.addEventListener('click', function () {
-        document.getElementById('lg-user').value = b.getAttribute('data-user');
-        document.getElementById('lg-pass').value = 'TEdemo!2026';
-        document.getElementById('lg-pass').focus();
-      });
-    });
-  </script>
+  <script src="/js/login.js?v=1791700104"></script>
 </body>
 </html>
