@@ -176,6 +176,41 @@ test('matrix: real deal — role x route (PRD acceptance 1); a refusal is the fi
   }
 });
 
+// PRD acceptance 1, pulse rows (plan 11-05 / D-11-06): the route stays readable by
+// every role (the matrix row above), but the BODY is personal-data-projected —
+// an employee gets 200 with its own pulse and nothing of a colleague's.
+test('matrix: /api/pulses — employee reads its own pulse (200) and none of a colleague\'s named data', async () => {
+  const fx = createDealFixture({
+    controlConn, runtimeConn, dealId: 'deal_rmpulses',
+    members: [
+      { username: 'rp-hrbp', role: 'hrbp' },
+      { username: 'rp-emp1', role: 'employee' },
+      { username: 'rp-emp2', role: 'employee' },
+    ],
+  });
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = (u, body) => fetch(base + '/api/pulses', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', cookie: fx.cookie(u) }, body: JSON.stringify(body),
+    });
+    assert.strictEqual((await post('rp-emp1', { employeeName: 'Emma One', rating: 5, comment: 'emma-note' })).status, 201);
+    assert.strictEqual((await post('rp-emp2', { employeeName: 'Eli Two', rating: 1, comment: 'eli-note' })).status, 201);
+
+    const own = await fetch(base + '/api/pulses', { headers: { cookie: fx.cookie('rp-emp1') } });
+    const ownText = await own.text();
+    assert.strictEqual(own.status, 200, 'own pulse: 200');
+    assert.ok(ownText.includes('emma-note'), 'own pulse present');
+    assert.ok(!ownText.includes('eli-note') && !ownText.includes('Eli Two'), 'a colleague\'s pulse is absent');
+
+    const lead = await fetch(base + '/api/pulses', { headers: { cookie: fx.cookie('rp-hrbp') } });
+    const leadText = await lead.text();
+    assert.ok(leadText.includes('emma-note') && leadText.includes('eli-note'), 'hrbp still reads every named pulse');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('matrix: demo store stays lenient — no role is ever refused by the read gate', async () => {
   const cookies = {};
   for (const role of ALL) {

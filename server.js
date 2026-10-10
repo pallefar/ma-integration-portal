@@ -6996,13 +6996,29 @@ app.get('/api/notifications', (req, res) => {
   // an uncleared viewer learns only a count, never which task or entry it
   // is. Do not "fix" this to reportTaskRows() without also revisiting the
   // raidHigh precedent it mirrors.
-  const tasks = taskLane(db);
-  const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
-  if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
-  const blocked = tasks.filter(t => t.status === 'blocked');
-  if (blocked.length) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blocked.length, href: '/execution.html', severity: 'medium' });
-  const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && (r.severity === 'high' || r.severity === 'critical'));
-  if (raidHigh.length) items.push({ id: 'raid_high', type: 'raid_high', count: raidHigh.length, href: '/execution.html', severity: 'high' });
+  //
+  // [security] D-11-01 / T-11-43 (Phase 11 plan 05) extends the residual: the
+  // counts stay unfiltered by CLEARANCE for roles that may read the lanes, but
+  // are withheld ENTIRELY from a role the read matrix refuses the lane — an
+  // employee must not learn task/RAID figures the lane routes would 403. One
+  // source of truth: lib/readPolicy.js (no second role list here). The demo
+  // store (req.isDemo === true) and an unauthenticated demo-open request are
+  // not "strict" and keep today's response for every role.
+  const readPolicy = require('./lib/readPolicy');
+  const strict = req.isDemo !== true && req.portalUser;
+  const mayReadTasks = !strict || readPolicy.roleAllowedForRead(req.portalUser.role, '/api/integration-tasks');
+  const mayReadRaid = !strict || readPolicy.roleAllowedForRead(req.portalUser.role, '/api/raid');
+  if (mayReadTasks) {
+    const tasks = taskLane(db);
+    const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
+    if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
+    const blocked = tasks.filter(t => t.status === 'blocked');
+    if (blocked.length) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blocked.length, href: '/execution.html', severity: 'medium' });
+  }
+  if (mayReadRaid) {
+    const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && (r.severity === 'high' || r.severity === 'critical'));
+    if (raidHigh.length) items.push({ id: 'raid_high', type: 'raid_high', count: raidHigh.length, href: '/execution.html', severity: 'high' });
+  }
   res.json({ success: true, items });
 });
 
@@ -7796,7 +7812,19 @@ app.get('/api/pulses', (req, res) => {
   // Append stored pulses (seeded + live submissions from the employee portal)
   // so POSTed feedback actually surfaces on the dashboard change curve.
   const stored = (db.pulses || []).filter(p => !scaled.some(s => s.id === p.id));
-  res.json([...scaled, ...stored]);
+  const all = [...scaled, ...stored];
+  // [security] D-11-06 / R1-15 (Phase 11 plan 05): in a REAL deal a pulse is
+  // personal data about a named colleague. admin/hrbp read everything, the
+  // author reads its own, pmo gets own + aggregate rows (rating/type/day only),
+  // employee gets own only — see lib/pulseView.js. The demo store (req.isDemo
+  // === true) is never projected: the showcase library + stored feedback is
+  // served exactly as demonstrated.
+  if (req.isDemo !== true) {
+    const { pulsesFor } = require('./lib/pulseView');
+    const caller = req.portalUser || {};
+    return res.json(pulsesFor(caller.role, caller.username, all));
+  }
+  res.json(all);
 });
 
 // POST Pulse
@@ -7812,7 +7840,11 @@ app.post('/api/pulses', (req, res) => {
     rating: parseInt(rating) || 3,
     comment: comment || '',
     timestamp: new Date().toISOString(),
-    type: type || '30-day'
+    type: type || '30-day',
+    // [security] D-11-06 / T-11-41: authorship is stamped from the SESSION, never
+    // from the body (employeeName is free text any caller can type). GET
+    // /api/pulses matches "own" pulses on this field only.
+    authorUsername: req.portalUser ? req.portalUser.username : null
   };
 
   db.pulses.push(newPulse);
