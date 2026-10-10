@@ -18,6 +18,7 @@ const { createThrottle } = require('./lib/loginThrottle');
 const { createLockdown, lockdownMiddleware } = require('./lib/credentialLockdown');
 const { pathForms } = require('./lib/requestPath');
 const readPolicy = require('./lib/readPolicy');
+const { createDenialAuditor } = require('./lib/denialAudit');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -241,7 +242,10 @@ if (dbFiles.IS_REAL_MODE) {
     );
   }
 }
-app.use(lockdownMiddleware(credentialLockdown));
+// D-11-05: a refusal here (every non-allowlisted path while the lockdown is
+// active) is a `credential-lockdown` denial — anonymous (no identity is
+// resolved before this point), rate-bounded by the same auditor as the gate.
+app.use(lockdownMiddleware(credentialLockdown, (req, status) => recordDenial(req, status, 'credential-lockdown')));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -815,6 +819,9 @@ app.use('/api', (req, res, next) => {
     req.portalUser = resolveSessionIdentity(readSessionCookie(req)); // may be null here — see step (c) above
   }
 
+  // [security] D-11-05: the resolver stays audit-free (same isolation rule as
+  // db/accessPolicy.js); it reports a refused deal bind through this callback.
+  const onResolverDenied = (status, reason) => recordDenial(req, status, reason);
   resolver.dealResolverMiddleware(req, res, () => {
     // CR-02: DEMO_OPEN=1 documents itself as disabling auth/authz only — it
     // must NOT also bypass VAL-01/VAL-02 shape-validation and sanitization,
@@ -826,7 +833,7 @@ app.use('/api', (req, res, next) => {
       return validators.validationMiddleware(req, res, next);
     }
 
-    if (!req.portalUser) return res.status(401).json({ error: 'Login required.', authRequired: true });
+    if (!req.portalUser) return denyAt(req, res, 401, 'no-session', { error: 'Login required.', authRequired: true });
 
     // NOTE: req.path is mount-relative inside the consolidated /api gate above
     // (e.g. '/pulses', not '/api/pulses') — ROLE_WRITE_POLICY's/DEMO_ONLY_PREFIXES'
@@ -849,14 +856,14 @@ app.use('/api', (req, res, next) => {
     // paths that returned at the top of this gate and never reach it. Placed
     // before the demo-only and role checks so no other refusal can mask it.
     if (req.portalUser.mustChangePassword === true && !gatePolicy.mustChangeAllows(forms)) {
-      return res.status(403).json({
+      return denyAt(req, res, 403, 'must-change-password', {
         error: 'You must change your password before continuing.',
         mustChangePassword: true,
       });
     }
 
     if (gatePolicy.isDemoOnly(forms, req.method) && !req.isDemo) {
-      return res.status(403).json({ error: 'This showcase-only feature is unavailable inside a real deal.' });
+      return denyAt(req, res, 403, 'demo-only', { error: 'This showcase-only feature is unavailable inside a real deal.' });
     }
 
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
@@ -869,7 +876,7 @@ app.use('/api', (req, res, next) => {
     // session-existence alone (D-05) — this carve-out is admin-prefix-only.
     const requiresRoleCheck = isWrite || gatePolicy.isAdminPath(forms);
     if (requiresRoleCheck && !gatePolicy.roleAllows(req.portalUser.role, forms, req.method)) {
-      return res.status(403).json({ error: 'Your role cannot perform this action.' });
+      return denyAt(req, res, 403, 'role-write', { error: 'Your role cannot perform this action.' });
     }
     // [security] D-11-01 / AUTHZ-01 / R1-05 (Phase 11): reads are role-gated by
     // the explicit ROLE_READ_POLICY (lib/readPolicy.js) — before this, any
@@ -883,7 +890,7 @@ app.use('/api', (req, res, next) => {
     // mirrors conflictIfStale's GD-1b predicate). A fixed error string, no data.
     if (!isWrite && req.isDemo !== true
       && !gatePolicy.readAllows(req.portalUser.role, forms, req.gatePathCanonical)) {
-      return res.status(403).json({ error: 'Your role cannot view this information.' });
+      return denyAt(req, res, 403, 'role-read', { error: 'Your role cannot view this information.' });
     }
     // VAL-01/VAL-02: shape-validate, strip unknown keys, and sanitize
     // HTML-tagged fields — LAST in this gate, after identity resolution, the
@@ -892,7 +899,7 @@ app.use('/api', (req, res, next) => {
     // payload parsed at all. validators/index.js#validationMiddleware is a
     // no-op for non-write methods (GET/HEAD/OPTIONS pass straight through).
     validators.validationMiddleware(req, res, next);
-  });
+  }, onResolverDenied);
 });
 
 // True when the deployment is locked down at all (i.e. NOT demo-open) — used
@@ -1531,6 +1538,72 @@ function requestMeta(req) {
   return { method: req.method, path: (req.baseUrl || '') + (req.path || ''), ip: req.ip };
 }
 
+// [security] D-11-05 / AUTHZ-05 (Phase 11, plan 11-04): every authorization
+// denial — a 401/403 from the consolidated /api gate or the deal resolver, and
+// every clearance-404 — is recorded as an `access-denied` security event,
+// RATE-BOUNDED by lib/denialAudit.js (<= 1 audit row per actor + method +
+// route TEMPLATE + reason per 60 s; folded denials counted and written as the
+// next row, because audit.db rows can never be updated — AUD-02). The route
+// template is resolved from the registered /api route layers, so probing a
+// thousand random ids on `DELETE /api/raid/:id` is ONE key, never a thousand.
+// A busy audit.db is NOT swallowed (Phase 8 contract): the refusal still
+// happens, as the central 503.
+let denialRouteLayers = null;
+function denialTemplateFor(canonicalPath, method) {
+  if (!denialRouteLayers) {
+    // Computed lazily — every route is registered by the time a request arrives.
+    // `layer.regexp.test`, NOT `layer.match()`: Express 4's Layer#match writes
+    // `layer.params`/`layer.path` on the SHARED layer object, which the router
+    // itself reads while dispatching.
+    denialRouteLayers = ((app._router && app._router.stack) || [])
+      .filter((l) => l.route && typeof l.route.path === 'string' && l.route.path.startsWith('/api') && l.regexp)
+      .map((l) => ({ regexp: l.regexp, path: l.route.path, methods: l.route.methods || {} }));
+  }
+  const verb = String(method || '').toLowerCase();
+  const wanted = verb === 'head' ? 'get' : verb;
+  let anyMatch = null;
+  for (const layer of denialRouteLayers) {
+    if (!layer.regexp.test(canonicalPath)) continue;
+    if (layer.methods[wanted] || layer.methods._all) return layer.path;
+    if (!anyMatch) anyMatch = layer.path;
+  }
+  return anyMatch;
+}
+const denialAuditor = createDenialAuditor({
+  write: (event) => auditHook.recordSecurityEvent(event),
+  templateFor: denialTemplateFor,
+});
+// Exposed on the app object (not module.exports) so a test can flush/inspect
+// the window state without touching the module's export tail.
+app.denialAuditor = denialAuditor;
+
+function canonicalPathOf(req) {
+  if (typeof req.gatePathCanonical === 'string' && req.gatePathCanonical) return req.gatePathCanonical;
+  const shape = pathForms((req.baseUrl || '') + (req.path || ''));
+  return shape.ok ? shape.canonical : '';
+}
+
+/** Record ONE denial (rate-bounded) — shared by the gate, resolver, lockdown and the 404 branch. */
+function recordDenial(req, status, reason, route) {
+  denialAuditor.startSweeper(); // idempotent, unref'd — see lib/denialAudit.js
+  denialAuditor.record({
+    actor: req.portalUser || null,
+    method: req.method,
+    path: canonicalPathOf(req),
+    reason,
+    status,
+    route: route || undefined,
+    dealId: (req.dealContext && req.dealContext.dealId) || (req.portalUser && req.portalUser.dealId) || null,
+    request: requestMeta(req),
+  });
+}
+
+/** Audit the refusal, then answer it with the SAME status/body the caller always sent. */
+function denyAt(req, res, status, reason, body) {
+  recordDenial(req, status, reason);
+  return res.status(status).json(body);
+}
+
 // =====================================================================
 // Deal registry (ISO-01/D-01/D-02/D-03) — the control-plane surface on top
 // of Plan 03's resolver. Every route below is a CONTROL_PLANE_PATH
@@ -1824,7 +1897,7 @@ app.get('/api/deals/:id/grants', (req, res) => {
   // broader '/api/deals' entry, so the read is never more permissive than
   // the write for this control-plane surface.
   if (req.portalUser.role !== 'admin' && req.portalUser.role !== 'hrbp') {
-    return res.status(403).json({ error: 'Your role cannot view deal grants.' });
+    return denyAt(req, res, 403, 'role-inline', { error: 'Your role cannot view deal grants.' });
   }
   const dealId = req.params.id;
   const deal = controlStore.getDeal(dealId);
@@ -8185,6 +8258,14 @@ app.get('*', (req, res, next) => {
 app.use((err, req, res, next) => {
   if (err instanceof RecordNotFoundError) {
     if (res.headersSent) return next(err);
+    // [security] D-11-05 / AUTHZ-05: only a CLEARANCE refusal is a denial worth
+    // an audit row — a genuinely missing id is not (and recording it would let
+    // id-probing mint rows). Keyed on the route TEMPLATE, never the id. A busy
+    // audit.db throws from here and is mapped to the central 503 by the
+    // handler below — the refusal is never converted into a success.
+    if (err.reason === 'clearance') {
+      recordDenial(req, 404, 'clearance-404', req.route && typeof req.route.path === 'string' ? req.route.path : undefined);
+    }
     return res.status(404).json({ error: 'Not found' });
   }
   next(err);

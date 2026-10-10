@@ -19,8 +19,28 @@
 const test = require('node:test');
 const { listenLocal } = require('./helpers/listen-local');
 const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// Phase 11 / 11-04 (D-11-05): every 401 this suite provokes is now recorded as
+// an `access-denied` security event, so the databases are isolated to temp
+// files (MA_* paths, set BEFORE server.js is required) — the developer's
+// data/audit.db must receive zero denial rows from a suite run. The assertions
+// below are unchanged.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-auth-route-inventory-'));
+process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
+process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
+process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
+process.env.MA_AUDIT_DB_PATH = path.join(TMP_DIR, 'audit.db');
+process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
+for (const key of ['MA_MODE', 'MA_DATA_DIR']) delete process.env[key];
 
 const app = require('../server.js');
+
+test.after(() => {
+  try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
 
 // The only /api paths reachable without a session — auth bootstrapping itself
 // cannot require a session to already exist.
