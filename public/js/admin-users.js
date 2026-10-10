@@ -261,7 +261,8 @@
   // node:vm fake DOM). Exposes nothing a console user could not already do.
   window.maAdminUsersModal = {
     openTempPasswordModal: openTempPasswordModal,
-    isOpen: function () { return !!activeModal; }
+    isOpen: function () { return !!activeModal; },
+    loadUsers: function () { return loadUsers(); }
   };
 
   // ------------------------------------------------------------ add user
@@ -534,12 +535,24 @@
     });
   }
 
+  // IN-C03: a load requested while another is in flight is QUEUED, not dropped —
+  // a create/edit/reset that lands during the initial (slow, 503-retried) load
+  // would otherwise never be re-fetched. One trailing reload covers any number
+  // of requests made meanwhile; it runs after the in-flight load settles.
+  var inFlight = null;
   function loadUsers() {
     var host = document.getElementById('users-list');
-    if (!host || state.loading) return Promise.resolve();
+    if (!host) return Promise.resolve();
+    if (state.loading) {
+      state.pending = true;
+      return inFlight || Promise.resolve();
+    }
     state.loading = true;
-    return request('GET', '/api/admin/users').then(function (res) {
+    state.pending = false;
+    inFlight = request('GET', '/api/admin/users').then(function (res) {
       state.loading = false;
+      inFlight = null;
+      if (state.pending) { state.pending = false; return loadUsers(); }
       if (res.status === 200 && res.body) {
         state.users = Array.isArray(res.body) ? res.body : (Array.isArray(res.body.users) ? res.body.users : []);
         state.loaded = true;
@@ -549,12 +562,16 @@
       while (host.firstChild) host.removeChild(host.firstChild);
       host.appendChild(el('p', 'deal-modal-error', errorText(res, 'Could not load users')));
     });
+    return inFlight;
   }
 
   // ---------------------------------------------------------------- boot
+  // IN-C03: the first click probes the mode and loads; every later click on the
+  // Users tab re-fetches the list, so the operator always has an in-page
+  // refresh path without reloading the whole console.
   var opened = false;
   function openTab() {
-    if (opened) return;
+    if (opened) { loadUsers(); return; }
     opened = true;
     request('GET', '/api/auth/mode').then(function (res) {
       state.writable = policy.accountWritesAllowed(res.status === 200 ? res.body : null);

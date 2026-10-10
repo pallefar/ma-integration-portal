@@ -128,6 +128,34 @@ test('admin-users-ui (WR-C01): the temp-password modal survives Escape and scrim
   assert.strictEqual(document.activeElement, trigger, 'focus returns to the trigger');
 });
 
+test('admin-users-ui (IN-C03): a load requested while one is in flight is queued (one trailing reload), never dropped', async () => {
+  const document = fakeDom();
+  const host = document.createElement('div');
+  host.id = 'users-list';
+  document.body.appendChild(host);
+  const pending = [];
+  const fetch = () => new Promise((resolve) => pending.push(resolve));
+  const sandbox = { window: {}, document, navigator: {}, setTimeout, Promise, fetch };
+  vm.runInNewContext(usersJs, sandbox);
+  const api = sandbox.window.maAdminUsersModal;
+  const settle = () => new Promise((r) => setImmediate(r));
+  const respond = async () => {
+    pending.shift()({ status: 500, json: () => Promise.resolve({ error: 'x' }) });
+    await settle(); await settle(); await settle();
+  };
+
+  const first = api.loadUsers();
+  api.loadUsers(); // e.g. the create that landed during the initial load
+  api.loadUsers();
+  assert.strictEqual(pending.length, 1, 'only one request in flight');
+  await respond();
+  assert.strictEqual(pending.length, 1, 'the queued request runs after the in-flight one settles');
+  await respond();
+  await first;
+  assert.strictEqual(pending.length, 0, 'one trailing reload covers every queued request');
+  assert.match(usersJs, /if \(opened\) \{ loadUsers\(\); return; \}/, 'a later Users-tab click refreshes the list');
+});
+
 test('admin-users-ui (WR-C01): a non-sticky modal (confirm) still closes on Escape — stickiness is opt-in', () => {
   assert.match(usersJs, /if \(sticky\) \{ e\.preventDefault\(\); return; \}/);
   assert.match(usersJs, /e\.target === overlay && !sticky/);
