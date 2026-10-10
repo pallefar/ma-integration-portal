@@ -333,3 +333,126 @@ test('read-sets-org (POST positions): uncleared caller refused 403; stale update
     });
   });
 });
+
+// ---- Task 3: reports export + pack model on REPORT_SET ------------------
+function seedReports(dealId) {
+  inDeal(dealId, () => {
+    const db = store.readDb();
+    db.checklistTemplates = [{ id: 'ct_1', name: 'T', workstreams: [{ id: 'ws_imo', label: 'IMO' }, { id: 'ws_hr', label: 'HR' }] }];
+    db.ddFindings = [
+      { id: 'f_legal', area: 'legal', title: 'Legal finding', severity: 'high', status: 'open' },
+      { id: 'f_hr', area: 'hr', title: 'HR finding', severity: 'low', status: 'open' },
+    ];
+    db.customIntegrationTasks = [
+      { id: 'tk_1', title: 'Open task', workstreamId: 'ws_imo', phase: 'day1', status: 'done', owner: 'a', due: '', source: '' },
+      { id: 'tk_2', title: 'Blocked task', workstreamId: 'ws_imo', phase: 'd30', status: 'blocked', owner: 'b', due: '', source: '' },
+      { id: 'tk_hr', title: 'Retention task', workstreamId: 'ws_hr', phase: 'day1', status: 'todo', owner: 'c', due: '', source: 'org-flightrisk:fr_1', clearanceArea: 'hr' },
+      { id: 'tk_leg', title: 'Legal follow-up', workstreamId: 'ws_imo', phase: 'd60', status: 'todo', owner: 'd', due: '', source: 'dd-finding:f_legal' },
+    ];
+    db.customRaidEntries = [
+      { id: 'rd_1', type: 'risk', title: 'Open risk', severity: 'high', owner: 'a', workstreamId: 'ws_imo', status: 'open', notes: '', source: '' },
+      { id: 'rd_hr', type: 'risk', title: 'Retention risk', severity: 'high', owner: 'b', workstreamId: 'ws_hr', status: 'open', notes: '', source: 'org-flightrisk:fr_1', clearanceArea: 'hr' },
+      { id: 'rd_f', type: 'issue', title: 'From HR finding', severity: 'low', owner: 'c', workstreamId: 'ws_hr', status: 'open', notes: '', source: 'dd-finding:f_hr' },
+    ];
+    db.customSynergyInitiatives = [
+      { id: 'sy_1', title: 'Procurement', category: 'cost', stage: 'validated', targetM: 5, realizedM: 1, owner: 'a', workstreamId: 'ws_imo', taskIds: ['tk_1', 'tk_hr'], costEntries: [{ id: 'ce_1', date: '2026-02-01', amountM: 0.2 }, { id: 'ce_2', date: '2026-03-01', amountM: 0.1 }], baselines: [], createdAt: '2026-01-01T00:00:00.000Z', lastConfirmedAt: '2026-01-10T00:00:00.000Z' },
+      { id: 'sy_2', title: 'Facilities', category: 'cost', stage: 'identified', targetM: 2, realizedM: 0, owner: 'b', workstreamId: 'ws_imo', taskIds: [], costEntries: [], baselines: [], createdAt: '2026-01-02T00:00:00.000Z' },
+    ];
+    store.writeDb(db);
+  });
+}
+function packCtx(dealId, ident) {
+  const deal = require('../db/controlStore.js').getDeal(dealId);
+  return {
+    req: { portalUser: { username: ident.name, role: ident.role }, dealContext: { dealId }, isDemo: false },
+    deal, language: 'en', generatedAt: new Date('2026-10-10T12:00:00.000Z'), nowMs: Date.parse('2026-10-10T12:00:00.000Z'),
+  };
+}
+function pickIdents(...names) { return IDENTITIES.filter((i) => names.includes(i.name)); }
+
+test('read-sets-reports (pack): buildPackModel(readCollections(REPORT_SET)) deep-equals buildPackModel(readDb()) per identity', () => {
+  const dealId = makeFixture();
+  seedReports(dealId);
+  for (const ident of IDENTITIES) {
+    inDeal(dealId, () => {
+      const ctx = packCtx(dealId, ident);
+      const full = app.buildPackModel(store.readDb(), ctx);
+      const part = app.buildPackModel(store.readCollections(app.REPORT_SET), ctx);
+      assert.deepStrictEqual(part, full, ident.name);
+      assert.ok(full.hasAnyData);
+      assert.strictEqual(JSON.stringify(part.model), JSON.stringify(full.model));
+    });
+  }
+  // the clearance filter is doing real work in this fixture
+  inDeal(dealId, () => {
+    const hr = app.buildPackModel(store.readDb(), packCtx(dealId, IDENTITIES[1]));
+    const it = app.buildPackModel(store.readDb(), packCtx(dealId, IDENTITIES[3]));
+    assert.ok(hr.counts.tasks > it.counts.tasks && hr.counts.raid > it.counts.raid, 'uncleared caller sees fewer rows');
+    assert.ok(!JSON.stringify(it.model).includes('Retention'), 'no hr MNPI in an uncleared model');
+  });
+});
+
+test('read-sets-reports (pack): the entirely empty deal still answers hasAnyData:false with a null model', () => {
+  const dealId = makeFixture();
+  inDeal(dealId, () => {
+    const db = store.readDb();
+    db.checklistTemplates = [];
+    store.writeDb(db);
+    const out = app.buildPackModel(store.readCollections(app.REPORT_SET), packCtx(dealId, IDENTITIES[1]));
+    assert.strictEqual(out.hasAnyData, false);
+    assert.strictEqual(out.model, null);
+  });
+});
+
+test('read-sets-reports (export): every dataset x format x identity serves the full-read rows; csv is the same rows; audit row unchanged', async () => {
+  const dealId = makeFixture();
+  seedReports(dealId);
+  await withServer(async (base) => {
+    for (const ident of pickIdents('karen', 'pmo_it', 'pmo_hr')) {
+      const token = newSession(ident.name, ident.role, dealId);
+      const reference = inDeal(dealId, () => app.buildPackModel(store.readDb(), packCtx(dealId, ident)).model);
+      const expectedJson = {
+        workstreams: JSON.stringify(reference.workstreams),
+        tasks: JSON.stringify(reference.tasks),
+        raid: JSON.stringify(reference.raid),
+        synergies: JSON.stringify(reference.synergies.map((s) => { const c = Object.assign({}, s); delete c.stageAtBaseline; return c; })),
+      };
+      for (const dataset of ['workstreams', 'tasks', 'raid', 'synergies']) {
+        const auditBefore = countByAction(dealId, 'report-export');
+        const j = await httpGet(base, `/api/reports/export?dataset=${dataset}&format=json`, token);
+        assert.strictEqual(j.status, 200, `${ident.name} ${dataset} json`);
+        assert.strictEqual(j.text, expectedJson[dataset], `${ident.name} ${dataset} json bytes`);
+        const c = await httpGet(base, `/api/reports/export?dataset=${dataset}&format=csv`, token);
+        assert.strictEqual(c.status, 200);
+        const rows = JSON.parse(expectedJson[dataset]);
+        // header + one line per row (no embedded newlines in this fixture)
+        assert.strictEqual(c.text.trim().split(/\r?\n/).length, rows.length + 1, `${ident.name} ${dataset} csv rows`);
+        for (const row of rows) assert.ok(c.text.includes(String(row.id)), `${dataset} csv carries ${row.id}`);
+        assert.strictEqual(countByAction(dealId, 'report-export') - auditBefore, 2, 'one export audit row per request');
+      }
+    }
+    // an uncleared caller never receives the hr-stamped rows in any dataset
+    const itToken = newSession('pmo_it', 'pmo', dealId);
+    for (const dataset of ['tasks', 'raid']) {
+      const r = await httpGet(base, `/api/reports/export?dataset=${dataset}&format=csv`, itToken);
+      assert.ok(!/tk_hr|rd_hr|Retention/.test(r.text), `${dataset} export leaks no hr row`);
+    }
+    // an unknown dataset (org/talent has no export surface) is still 400
+    const bad = await httpGet(base, '/api/reports/export?dataset=orgPositions&format=csv', itToken);
+    assert.strictEqual(bad.status, 400);
+  });
+});
+
+test('read-sets-reports (pack route): still a PDF over the partial read set; empty deal still 409', async () => {
+  const dealId = makeFixture();
+  seedReports(dealId);
+  await withServer(async (base) => {
+    const token = newSession('karen', 'hrbp', dealId);
+    const res = await fetch(`${base}/api/reports/pack?lang=en`, { headers: { Cookie: `ma_session=${token}` } });
+    if (res.status === 503) return; // canvas binding absent on this host: the portability gate answers first
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.headers.get('content-type'), 'application/pdf');
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert.strictEqual(buf.slice(0, 5).toString('latin1'), '%PDF-');
+  });
+});
