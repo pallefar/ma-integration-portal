@@ -335,6 +335,15 @@ test('CR-01 live: ROLE_READ_POLICY x variants — a refused role is refused unde
             assert.ok([401, 403, 404].includes(res.status), `${role} GET ${v} -> ${res.status} (rule ${rule.prefix} refuses ${role})`);
             continue;
           }
+          // [security] Only the spellings the router actually dispatches to the
+          // handler (trailing slash / `//` — they collapse to the canonical form)
+          // must keep working for an allowed role. A case / %-encoded spelling
+          // is NOT routable (case sensitive routing, no path decoding at match
+          // time), so refusing it 403 instead of 404 is the safe direction of
+          // the most-restrictive verdict (e.g. `/api/employees/Get-or-create`
+          // matches the broader STAFF `/api/employees` rule) and costs nothing.
+          const routable = v.replace(/\/{2,}/g, '/').replace(/\/+$/, '') === sample;
+          if (!routable) continue;
           let refusedByGate = false;
           if (res.status === 403) {
             try { refusedByGate = GATE_REFUSALS.includes(JSON.parse(text).error); } catch (e) { /* not JSON */ }

@@ -210,9 +210,12 @@ test('org-positions (e): GET with no query, from a member with NO area grants, r
 
     // A member of this deal with no explicit memberGrants entry at all —
     // 'pmo' above was granted 'hr'; use a second, uncleared pmo-role member.
-    const uncleared = newSession('supporting', 'employee'); bindDeal(uncleared, deal.id);
+    // D-11-01: the uncleared member is a pmo-role account (as the comment above
+    // says) — an `employee`-role member is refused the org family outright.
+    const uncleared = newSession('pmo-uncleared', 'pmo'); bindDeal(uncleared, deal.id);
+    const employeeMember = newSession('supporting', 'employee'); bindDeal(employeeMember, deal.id);
     controlConn.prepare('UPDATE deals SET data = ? WHERE id = ?')
-      .run(JSON.stringify({ ...deal, members: [...deal.members, 'supporting'] }), deal.id);
+      .run(JSON.stringify({ ...deal, members: [...deal.members, 'pmo-uncleared', 'supporting'] }), deal.id);
     try {
       const res = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(uncleared) } });
       assert.strictEqual(res.status, 200);
@@ -220,8 +223,14 @@ test('org-positions (e): GET with no query, from a member with NO area grants, r
       assert.ok(list.every((p) => p.state === 'current'), 'no target-state row may be present');
       assert.ok(list.some((p) => p.title === 'Current position'));
       assert.ok(!list.some((p) => p.title === 'Target position'));
+
+      const empRes = await fetch(`${base}/api/org/positions`, { headers: { Cookie: cookieHeader(employeeMember) } });
+      assert.strictEqual(empRes.status, 403, 'an employee-role deal member is refused the org family');
+      const empText = await empRes.text();
+      assert.ok(!empText.includes('Current position'), 'the 403 body must contain no position data');
     } finally {
       sessionsDb.deleteSession(runtimeConn, uncleared);
+      sessionsDb.deleteSession(runtimeConn, employeeMember);
     }
   } finally {
     sessionsDb.deleteSession(runtimeConn, pmoToken);
@@ -231,12 +240,14 @@ test('org-positions (e): GET with no query, from a member with NO area grants, r
 });
 
 test('org-positions (f): GET ?state=target from an uncleared member returns 403 and no row data', async () => {
-  const deal = freshDeal('deal_orgf', { memberGrants: { pmo: { ddAreas: ['hr'] } }, members: ['pmo', 'admin', 'supporting'] });
+  const deal = freshDeal('deal_orgf', { memberGrants: { pmo: { ddAreas: ['hr'] } }, members: ['pmo', 'admin', 'pmo-uncleared'] });
   registerDeal(deal);
   createDealDatabase(deal.id, { name: deal.name, targetCompany: deal.targetCompany });
 
   const pmoToken = newSession('pmo', 'pmo'); bindDeal(pmoToken, deal.id);
-  const uncleared = newSession('supporting', 'employee'); bindDeal(uncleared, deal.id);
+  // pmo-role (passes the D-11-01 read gate) so the 403 below is the clearance
+  // check this test is about, not the role gate.
+  const uncleared = newSession('pmo-uncleared', 'pmo'); bindDeal(uncleared, deal.id);
   const server = await listenLocal(app);
   try {
     const { port } = server.address();

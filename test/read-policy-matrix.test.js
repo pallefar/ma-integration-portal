@@ -88,3 +88,135 @@ test('readAllowsForms is canonical-anchored: no-rule spellings inherit the canon
   assert.strictEqual(readAllowsForms('admin', pathForms('/api/zz-unlisted').forms, '/api/zz-unlisted'), false);
   assert.strictEqual(roleAllowedForRead('employee', '/api/synergies'), false);
 });
+
+// --- the PRD matrix (acceptance 1), table-driven --------------------------------
+//
+// `deny`: the roles the real-deal gate refuses with the fixed 403 body.
+// `ok200`: the path answers 200 (not merely "not gate-refused") for allowed roles
+// with no query string; rows needing a query keep ok200 false and assert only
+// that the READ GATE did not refuse (the handler may 400/404 on its own terms).
+const ALL = ['admin', 'hrbp', 'pmo', 'employee'];
+const NON_ADMIN = ['hrbp', 'pmo', 'employee'];
+const MATRIX = [
+  // deal data: staff only
+  { p: '/api/synergies', deny: ['employee'], ok200: true },
+  { p: '/api/synergies/rollup', deny: ['employee'], ok200: true },
+  { p: '/api/raid', deny: ['employee'], ok200: true },
+  { p: '/api/integration-tasks', deny: ['employee'], ok200: true },
+  { p: '/api/checklist-templates', deny: ['employee'], ok200: true },
+  { p: '/api/employees', deny: ['employee'], ok200: true },
+  { p: '/api/communications', deny: ['employee'], ok200: true },
+  { p: '/api/org/positions', deny: ['employee'], ok200: true },
+  { p: '/api/org/summary', deny: ['employee'], ok200: true },
+  { p: '/api/dd/areas', deny: ['employee'], ok200: true },
+  { p: '/api/dd/summary', deny: ['employee'], ok200: true },
+  { p: '/api/reports/export?dataset=raid&format=json', deny: ['employee'], ok200: true },
+  { p: '/api/projects', deny: ['employee'], ok200: true },
+  { p: '/api/processes', deny: ['employee'], ok200: true },
+  { p: '/api/assessments', deny: ['employee'], ok200: true },
+  { p: '/api/ai/insight', deny: ['employee'], ok200: false },
+  { p: '/api/rag/search?q=integration', deny: ['employee'], ok200: false },
+  // admin / lead only
+  { p: '/api/assessment-instances', deny: NON_ADMIN, ok200: true },
+  { p: '/api/hrbps', deny: ['pmo', 'employee'], ok200: true },
+  { p: '/api/deals/x/grants', deny: ['pmo', 'employee'], ok200: false },
+  { p: '/api/admin/users', deny: NON_ADMIN, ok200: true },
+  // every role
+  { p: '/api/courses', deny: [], ok200: true },
+  { p: '/api/lessons', deny: [], ok200: true },
+  { p: '/api/notifications', deny: [], ok200: true },
+  { p: '/api/settings', deny: [], ok200: true },
+  { p: '/api/menus', deny: [], ok200: true },
+  { p: '/api/pages', deny: [], ok200: true },
+  { p: '/api/i18n', deny: [], ok200: true },
+  { p: '/api/slides', deny: [], ok200: true },
+  { p: '/api/departments', deny: [], ok200: true },
+  { p: '/api/questions', deny: [], ok200: true },
+  { p: '/api/assessment-templates', deny: [], ok200: true },
+  { p: '/api/assessment/latest', deny: [], ok200: true },
+  { p: '/api/alerts', deny: [], ok200: true },
+  { p: '/api/pulses', deny: [], ok200: true },
+  { p: '/api/deals', deny: [], ok200: true },
+  { p: '/api/auth/sessions', deny: [], ok200: true },
+  { p: '/api/employees/get-or-create?empId=x', deny: [], ok200: false },
+];
+const READ_GATE_ERROR = 'Your role cannot view this information.';
+
+async function readBody(res) {
+  const text = await res.text();
+  try { return { text, json: JSON.parse(text) }; } catch (e) { return { text, json: null }; }
+}
+
+test('matrix: real deal — role x route (PRD acceptance 1); a refusal is the fixed body with no data', async () => {
+  const fx = realDeal('deal_rmmatrix');
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    let checked = 0;
+    for (const row of MATRIX) {
+      for (const role of ALL) {
+        const res = await fetch(base + row.p, { headers: { cookie: fx.cookie('rm-' + role) } });
+        const { json } = await readBody(res);
+        checked++;
+        if (row.deny.includes(role)) {
+          assert.strictEqual(res.status, 403, `${role} GET ${row.p}`);
+          if (!row.p.startsWith('/api/admin') && !row.p.startsWith('/api/deals/')) {
+            assert.deepStrictEqual(json, DENIED, `${role} GET ${row.p} refusal body`);
+          }
+        } else if (row.ok200) {
+          assert.strictEqual(res.status, 200, `${role} GET ${row.p}`);
+        } else {
+          assert.ok(!(res.status === 403 && json && json.error === READ_GATE_ERROR), `${role} GET ${row.p} must pass the read gate`);
+        }
+      }
+    }
+    assert.ok(checked >= MATRIX.length * 4);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('matrix: demo store stays lenient — no role is ever refused by the read gate', async () => {
+  const cookies = {};
+  for (const role of ALL) {
+    cookies[role] = demoSession({ controlConn, runtimeConn, username: 'rm-demo-' + role, role });
+  }
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    // Control-plane paths (/api/deals*, /api/admin*, /api/auth/sessions) resolve
+    // to the control store even for an unbound session (db/resolver.js), so they
+    // are strict by design (fail-closed) and keep TODAY's refusals for the same
+    // roles (the handler's own inline guard / the CR-02 admin carve-out).
+    const isControlPlane = (p) => /^\/api\/(deals|admin|auth\/sessions)(\/|$|\?)/.test(p);
+    for (const row of MATRIX) {
+      for (const role of ALL) {
+        const res = await fetch(base + row.p, { headers: { cookie: cookies[role] } });
+        const { json } = await readBody(res);
+        const refusedByReadGate = res.status === 403 && json && json.error === READ_GATE_ERROR;
+        if (isControlPlane(row.p)) {
+          if (row.deny.includes(role)) assert.strictEqual(res.status, 403, `demo ${role} GET ${row.p} keeps today's 403`);
+          else assert.ok(!refusedByReadGate, `demo ${role} GET ${row.p} must pass the read gate`);
+        } else {
+          // The temp demo.db is empty, so a handler may 500 on its own terms;
+          // what is asserted is that the READ GATE never refuses the demo store.
+          assert.ok(!refusedByReadGate, `demo store ${role} GET ${row.p} must not be refused by the read gate`);
+        }
+      }
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('matrix: the final table denies exactly the PRD rows (unit)', () => {
+  const p = require('../lib/readPolicy');
+  assert.strictEqual(p.roleAllowedForRead('employee', '/api/raid'), false);
+  assert.strictEqual(p.roleAllowedForRead('pmo', '/api/hrbps'), false);
+  assert.strictEqual(p.roleAllowedForRead('hrbp', '/api/hrbps'), true);
+  assert.strictEqual(p.roleAllowedForRead('employee', '/api/courses'), true);
+  assert.strictEqual(p.roleAllowedForRead('employee', '/api/employees/get-or-create'), true);
+  assert.deepStrictEqual(p.accessSummaryFor('employee', false).roster, true, 'demo store: everything true');
+  assert.deepStrictEqual(p.accessSummaryFor('employee', true).roster, false);
+  assert.deepStrictEqual(p.accessSummaryFor('pmo', true).roster, true);
+});
