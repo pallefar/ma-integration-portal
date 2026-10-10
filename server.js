@@ -15,6 +15,7 @@ const dbFiles = require('./db/dbFiles');
 // legacy hashes still verify).
 const passwords = require('./lib/passwords');
 const { createThrottle } = require('./lib/loginThrottle');
+const { createLockdown, lockdownMiddleware } = require('./lib/credentialLockdown');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -188,6 +189,31 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// [security] D-10-08b / T-10-34 (plan 10-05): demo-credential lockdown. In
+// real-deal mode, if any enabled account still verifies a published demo
+// password (a hand-copied committed control.db, or an account edited into that
+// state), the server serves only the login page + its assets, /api/auth/* and
+// /healthz until every offender has changed its password. The scan runs HERE,
+// synchronously, before the app can serve its first request; the middleware is
+// mounted before the body parsers, '/' and express.static so nothing is
+// reachable around it. The static allowlist lives only in
+// lib/credentialLockdown.js (LOCKDOWN_STATIC_ALLOWLIST).
+const credentialLockdown = createLockdown({ enabled: dbFiles.IS_REAL_MODE });
+if (dbFiles.IS_REAL_MODE) {
+  credentialLockdown.scanAccounts(
+    controlStore.listUsers(), passwords.verifyPasswordSync, passwords.KNOWN_DEMO_PASSWORDS
+  );
+  if (credentialLockdown.isActive()) {
+    console.warn(
+      '[security] CREDENTIAL LOCKDOWN — these accounts still accept a published demo password: ' +
+      credentialLockdown.offenders().join(', ') + '. The server serves only the login page, /api/auth/* and /healthz ' +
+      'until each has changed its password: sign in as each account and change the password, or start from a fresh ' +
+      'data directory (empty MA_DATA_DIR) and run scripts/bootstrap-admin.js.'
+    );
+  }
+}
+app.use(lockdownMiddleware(credentialLockdown));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -904,6 +930,15 @@ app.post('/api/auth/login', async (req, res, next) => {
     // A correct password ends the account's backoff episode; the source window
     // keeps sliding on its own.
     accountThrottle.clear(accountKey);
+    // [security] D-10-08b login-time detection (real mode only): a sign-in
+    // that succeeded with a PUBLISHED demo password puts the account in the
+    // lockdown offender set and forces rotation, whatever the boot scan saw —
+    // the 403 gate then fences the session to change-password.
+    if (dbFiles.IS_REAL_MODE && passwords.isKnownDemoPassword(password)) {
+      credentialLockdown.noteDemoLogin(user.username);
+      controlStore.updateUser(user.username, { mustChangePassword: true });
+      user.mustChangePassword = true;
+    }
     // [security] D-10-05 lazy rehash: a legacy / low-cost hash is replaced with
     // the current-cost format on the first successful sign-in, BEFORE the
     // session exists. Never against the committed control.db (D-10-01: a
@@ -1051,6 +1086,9 @@ app.post('/api/auth/change-password', async (req, res, next) => {
     controlStore.updateUser(user.username, {
       hash: await passwords.hashPassword(newPassword), salt: null, mustChangePassword: false,
     });
+    // D-10-08b: this account no longer accepts a published password — it
+    // leaves the lockdown offender set (the lockdown lifts when none remain).
+    credentialLockdown.clear(user.username);
     // D-08: a password change is a control-plane security event — the actor
     // and the subject are the SAME user here (self-service), which is exactly
     // why it must still be recorded: a session that changed its own password
@@ -7911,3 +7949,6 @@ module.exports.getReportPack = getReportPack;
 module.exports.throttleOptionsFor = throttleOptionsFor;
 module.exports.isSecureCookieContext = isSecureCookieContext;
 module.exports.ADMIN_MAX_BACKOFF_MS = ADMIN_MAX_BACKOFF_MS;
+// [security] D-10-08b (plan 10-05): exposed so tests (and a future health
+// probe) can read the lockdown state without an HTTP round-trip.
+module.exports.isCredentialLockdownActive = () => credentialLockdown.isActive();
