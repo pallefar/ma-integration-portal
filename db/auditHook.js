@@ -406,6 +406,7 @@ function countAudit({ dealId, rowId, collection, action } = {}) {
 
 module.exports = {
   AUDITED_DB_KINDS,
+  AuditPartitionSealedError: auditChain.AuditPartitionSealedError,
   getAuditConnection, closeAuditConnection, isAuditOpen,
   getPartitionConnection, closePartitionConnection,
   writeAuditBatch, appendWriteAudit, recordSecurityEvent, queryAudit, countAudit,

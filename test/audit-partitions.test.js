@@ -327,3 +327,117 @@ test('partitions (g): PD-29 — getPartitionConnection never first-opens audit.d
   assert.strictEqual(rows[0].row_id, rowId);
   assert.strictEqual(rows[0].prev_hash, auditChain.genesisHash(dealId));
 });
+
+// --- Task 2: viewer across partitions, control rows, sealed backstop, modes ----
+
+function plantSeal(dealId) {
+  const conn = auditHook.getPartitionConnection(dealId);
+  auditChain.appendChained(conn, [{
+    ts: new Date().toISOString(), actor_username: 'admin', actor_role: 'admin', deal_id: dealId,
+    db_kind: 'deal', action: auditChain.SEAL_ACTION,
+  }], { partitionId: dealId });
+}
+
+test('partitions (h): the viewer returns a deal\'s partition rows UNION its control rows, each tagged; no partition is created by a probe', () => {
+  auditHook.getAuditConnection();
+  const dealId = registerDeal('Part Deal H');
+  const rowId = randId('alert_ph');
+  insertAlert(dealId, rowId, 'viewer row');
+
+  const ghost = 'deal_ghostprobe';
+  auditHook.recordSecurityEvent({
+    actor: { username: 'prober', role: 'employee' }, action: 'access-denied', dealId: ghost, subject: 'GET /api/x',
+  });
+  auditHook.recordSecurityEvent({
+    actor: { username: 'admin', role: 'admin' }, action: 'access-denied', dealId, subject: 'GET /api/raid',
+  });
+  assert.ok(!fs.existsSync(dbFiles.auditPartitionPath(ghost)), 'a denial for a never-written deal creates no partition');
+
+  const rows = auditHook.queryAudit({ dealId });
+  const partitionRow = rows.find((r) => r.row_id === rowId);
+  const controlRow = rows.find((r) => r.action === 'access-denied');
+  assert.ok(partitionRow && controlRow);
+  assert.strictEqual(partitionRow.partition, dealId);
+  assert.strictEqual(controlRow.partition, 'control');
+  assert.strictEqual(controlRow.deal_id, dealId);
+  assert.ok(rows.every((r) => r.deal_id === dealId), 'the deal filter never leaks another deal\'s rows');
+
+  // The ghost deal's denial is reachable through its own deal filter, from audit.db only.
+  const ghostRows = auditHook.queryAudit({ dealId: ghost });
+  assert.strictEqual(ghostRows.length, 1);
+  assert.strictEqual(ghostRows[0].partition, 'control');
+
+  // Ordering: ts DESC (then id DESC), limit/offset semantics unchanged.
+  for (let i = 1; i < rows.length; i++) assert.ok(rows[i - 1].ts >= rows[i].ts, 'ts DESC');
+  assert.strictEqual(auditHook.queryAudit({ dealId, limit: 1 }).length, 1);
+  assert.strictEqual(auditHook.queryAudit({ dealId, limit: 1, offset: 1 }).length, 1);
+  assert.strictEqual(auditHook.queryAudit({ dealId, offset: 999999999 }).length, 0, 'an absurd offset is capped, not an error');
+  assert.strictEqual(auditHook.queryAudit({ dealId, actor: 'karen' }).every((r) => r.actor_username === 'karen'), true);
+
+  // Without a deal filter, every partition is consulted.
+  const all = auditHook.queryAudit({ limit: 500 });
+  assert.ok(all.some((r) => r.partition === dealId) && all.some((r) => r.partition === 'control'));
+  assert.ok(auditHook.countAudit({}) >= auditHook.countAudit({ dealId }));
+});
+
+test('partitions (i): a SEALED partition refuses the deal write (rolled back) and the route answers 409 with the fixed body', async () => {
+  const { listenLocal } = require('./helpers/listen-local');
+  const { createDealFixture } = require('./helpers/deal-fixture');
+  const app = require('../server.js');
+  const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+  const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+  const dealId = 'deal_sealedhttp';
+  const fixture = createDealFixture({ controlConn, runtimeConn, dealId, members: [{ username: 'karen', role: 'hrbp' }] });
+  auditHook.getAuditConnection();
+
+  // Store level first: the write throws AuditPartitionSealedError and nothing persists.
+  insertAlert(dealId, randId('alert_pre'), 'before the seal');
+  plantSeal(dealId);
+  const idsBefore = alertIds(dealId);
+  const rowsBefore = partitionRows(dealId).length;
+  const sealedId = randId('alert_sealed');
+  assert.throws(
+    () => insertAlert(dealId, sealedId, 'after the seal'),
+    (e) => e instanceof auditChain.AuditPartitionSealedError && e instanceof auditHook.AuditPartitionSealedError
+  );
+  assert.deepStrictEqual(alertIds(dealId), idsBefore, 'the deal write rolled back');
+  assert.strictEqual(partitionRows(dealId).length, rowsBefore, 'and the partition gained nothing');
+  const conn = dbFiles.openDbFileReadOnly(dbFiles.auditPartitionPath(dealId));
+  try {
+    assert.strictEqual(auditChain.verifyChain(conn, dealId).sealed, true);
+    assert.strictEqual(auditChain.verifyChain(conn, dealId).ok, true);
+  } finally { conn.close(); }
+
+  // HTTP level: a member's write on the sealed deal is a 409 with the fixed body.
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const res = await fetch(`${base}/api/raid`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: fixture.cookie('karen') },
+      body: JSON.stringify({ type: 'risk', title: 'Refused by seal', severity: 'low' }),
+    });
+    assert.strictEqual(res.status, 409);
+    const body = await res.json();
+    assert.deepStrictEqual(body, { error: 'This deal is closed: its audit trail is sealed.' });
+    assert.ok(!('conflict' in body), 'no conflict marker — the Phase 9 dialog must never open');
+    assert.strictEqual(partitionRows(dealId).length, rowsBefore, 'the refused HTTP write left no audit row');
+  } finally {
+    server.close();
+    try { if (app.denialAuditor && app.denialAuditor.stopSweeper) app.denialAuditor.stopSweeper(); } catch (e) { /* ignore */ }
+  }
+});
+
+test('partitions (j): chmodPrivateFile is tightening-only (0400 stays 0400, 0644 -> 0600)', { skip: process.platform === 'win32' }, () => {
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'modes-'));
+  const sealed = path.join(dir, 'sealed.db');
+  const loose = path.join(dir, 'loose.db');
+  fs.writeFileSync(sealed, 'x');
+  fs.writeFileSync(loose, 'x');
+  fs.chmodSync(sealed, 0o400);
+  fs.chmodSync(loose, 0o644);
+  dbFiles.chmodPrivateFile(sealed);
+  dbFiles.chmodPrivateFile(loose);
+  assert.strictEqual(fs.statSync(sealed).mode & 0o777, 0o400, 'a sealed 0400 file is never re-opened writable');
+  assert.strictEqual(fs.statSync(loose).mode & 0o777, 0o600);
+});
