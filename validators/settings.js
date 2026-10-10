@@ -222,6 +222,18 @@ const MigrateDbSchema = z.object({
 });
 registerSchema('POST', '/api/admin/migrate-db', MigrateDbSchema);
 
+// ---------------------------------------------------------------------------
+// POST /api/admin/egress — SAFE-06 / D-13-05: the instance egress switch. A
+// STRICT object of optional booleans: an unknown key or a non-boolean is a 400,
+// never silently stripped (a typo must not look like it worked).
+// ---------------------------------------------------------------------------
+const EgressUpdateSchema = z.object({
+  gemini: z.boolean().optional(),
+  huggingface: z.boolean().optional(),
+  youtube: z.boolean().optional(),
+}).strict();
+registerSchema('POST', '/api/admin/egress', EgressUpdateSchema);
+
 registerSchema('POST', '/api/admin/users/:username/revoke-sessions', EmptyBodySchema);
 
 module.exports = {
@@ -232,4 +244,5 @@ module.exports = {
   ProjectCreateSchema,
   RagUploadSchema,
   MigrateDbSchema,
+  EgressUpdateSchema,
 };
