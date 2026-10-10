@@ -198,7 +198,7 @@ test('whole app: version-0 runtime.db and demo.db migrate at boot (data intact)'
   assert.strictEqual(r.exitCode, 0, r.stderr);
   assert.strictEqual(r.results[0].status, 200);
   assert.strictEqual(userVersion(paths.MA_RUNTIME_DB_PATH), 1);
-  assert.strictEqual(userVersion(paths.MA_DEMO_DB_PATH), 1);
+  assert.strictEqual(userVersion(paths.MA_DEMO_DB_PATH), migrate.latestVersion('deal')); // 13-05: deal latest is 2 (resanitize-html)
   const demo = new Database(paths.MA_DEMO_DB_PATH, { readonly: true });
   assert.strictEqual(demo.prepare('SELECT COUNT(*) AS n FROM alerts').get().n, 1);
   demo.close();

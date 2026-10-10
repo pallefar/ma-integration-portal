@@ -94,7 +94,7 @@ function registerDeal(c, id, status) {
     .run(id, null, 1, status, JSON.stringify({ id, name: `Deal ${id}`, status, members: ['admin'] }));
 }
 
-test('boot sweep: a registered version-0 deal file is at version 1 after boot with no request; absent files are skipped, archived ones migrated', async () => {
+test('boot sweep: a registered version-0 deal file is at the latest deal version after boot with no request; absent files are skipped, archived ones migrated', async () => {
   const dir = tmp('sweep');
   const paths = isolatedPaths(dir);
   const active = 'deal_sweepactive1';
@@ -116,7 +116,7 @@ test('boot sweep: a registered version-0 deal file is at version 1 after boot wi
   assert.strictEqual(r.results[0].status, 200);
   for (const id of [active, archived]) {
     const file = path.join(paths.MA_DEALS_DIR, `${id}.db`);
-    assert.strictEqual(userVersion(file), 1, `${id} migrated at boot`);
+    assert.strictEqual(userVersion(file), migrate.latestVersion('deal'), `${id} migrated at boot`); // 13-05: deal latest is 2 (resanitize-html)
     const c = new Database(file, { readonly: true });
     assert.strictEqual(c.prepare('SELECT COUNT(*) AS n FROM alerts').get().n, 1, 'deal data intact');
     c.close();
@@ -124,7 +124,7 @@ test('boot sweep: a registered version-0 deal file is at version 1 after boot wi
   assert.strictEqual(fs.existsSync(path.join(paths.MA_DEALS_DIR, `${absent}.db`)), false, 'boot never creates a deal file');
   assert.match(r.stdout, /\[readiness\] deal sweep: 2 opened, 0 not ready, \d+ ms/);
   assert.ok(!r.stdout.includes('deal_sweep') && !r.stderr.includes('deal_sweep'), 'the sweep log names no deal id');
-  assert.strictEqual(r.results[0].body.readiness.versions.deal.version, 1);
+  assert.strictEqual(r.results[0].body.readiness.versions.deal.version, migrate.latestVersion('deal')); // 13-05: was literal 1
 });
 
 test('boot sweep: a corrupt registered deal file is not-ready immediately after boot; a request bound to it is a non-retryable 503', async () => {
