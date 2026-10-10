@@ -256,4 +256,112 @@ test('sanitize-html policy: the table never allows the PRD never-list', () => {
   assert.ok(!('position' in policy.ALLOWED_STYLES['*']));
 });
 
-// gsd:task2-append-point
+// ---------------------------------------------------------------------------
+// Task 2 — D-13-07 corpus: inertness + idempotency, one subtest per category.
+// ---------------------------------------------------------------------------
+const CORPUS = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'xss-corpus.json'), 'utf8'));
+const CATEGORIES = [
+  'attribute-separator', 'entity-scheme', 'whitespace-scheme', 'nested-reconstruction', 'namespace-confusion',
+  'mxss', 'frame-and-form', 'css', 'unicode', 'event-and-clobber',
+];
+
+test('xss corpus: >= 200 vectors, ten categories with >= 15 each, the four R1-03 payloads verbatim', () => {
+  assert.ok(CORPUS.length >= 200, `corpus has ${CORPUS.length} vectors`);
+  const by = {};
+  CORPUS.forEach((v) => { by[v.category] = (by[v.category] || 0) + 1; });
+  assert.deepStrictEqual(Object.keys(by).sort(), CATEGORIES.slice().sort());
+  CATEGORIES.forEach((c) => assert.ok(by[c] >= 15, `${c} has ${by[c]} (< 15)`));
+  const ids = new Set(CORPUS.map((v) => v.id));
+  assert.strictEqual(ids.size, CORPUS.length, 'ids are unique');
+  for (const [id, payload] of Object.entries(R1_03)) {
+    const v = CORPUS.find((x) => x.id === id);
+    assert.ok(v, `${id} present`);
+    assert.strictEqual(v.input, payload, `${id} is verbatim`);
+  }
+});
+
+for (const category of CATEGORIES) {
+  test(`xss corpus [${category}]: every vector is inert after sanitizeHtml and sanitizeHtml is idempotent`, () => {
+    const vectors = CORPUS.filter((v) => v.category === category);
+    assert.ok(vectors.length >= 15);
+    for (const v of vectors) {
+      const once = sanitizeHtml(v.input);
+      assert.deepStrictEqual(inertViolations(once), [], `${v.id} ${JSON.stringify(v.input)} -> ${JSON.stringify(once)}`);
+      const twice = sanitizeHtml(once);
+      assert.strictEqual(twice, once, `${v.id} not idempotent: ${JSON.stringify(once)} -> ${JSON.stringify(twice)}`);
+      // The data-layer contract: sanitizing already-stored output never changes it.
+      assert.strictEqual(typeof once, 'string');
+    }
+  });
+}
+
+test('xss corpus: PD-3 escaped-text fallbacks stay <= 5% of the corpus (count printed)', () => {
+  const before = sanitizeHtml.escapedFallbacks;
+  CORPUS.forEach((v) => sanitizeHtml(v.input));
+  const used = sanitizeHtml.escapedFallbacks - before;
+  console.log(`# PD-3 escaped-text fallbacks over ${CORPUS.length} vectors: ${used}`);
+  assert.ok(used <= Math.floor(CORPUS.length * 0.05), `${used} fallbacks`);
+});
+
+test('xss corpus: a non-converging parser result fails closed to inert, idempotent escaped text (PD-3)', () => {
+  // Load a private copy of lib/sanitizeHtml.js whose vendored parser never
+  // reaches a fixed point (each pass appends a character), then restore the
+  // module cache so the rest of the suite sees the real sanitizer.
+  const libPath = require.resolve('../lib/sanitizeHtml.js');
+  const parserPath = require.resolve('sanitize-html');
+  const savedLib = require.cache[libPath];
+  const savedParser = require.cache[parserPath];
+  try {
+    require.cache[parserPath] = { id: parserPath, filename: parserPath, loaded: true, exports: (s) => s + 'x' };
+    delete require.cache[libPath];
+    const broken = require('../lib/sanitizeHtml.js').sanitizeHtml;
+    const out = broken('<script>alert(1)</script> & "q"');
+    assert.strictEqual(broken.escapedFallbacks, 1);
+    assert.strictEqual(out, '&lt;script&gt;alert(1)&lt;/script&gt; &amp; "q"');
+    // The fallback value is a fixed point of the REAL sanitizer.
+    assert.strictEqual(sanitizeHtml(out), out);
+    assert.deepStrictEqual(inertViolations(out), []);
+  } finally {
+    require.cache[parserPath] = savedParser;
+    require.cache[libPath] = savedLib;
+  }
+});
+
+test('xss corpus: the structural checker itself detects violations (negative control)', () => {
+  assert.ok(inertViolations('<script>alert(1)</script>').length > 0);
+  assert.ok(inertViolations('<img src="x" onerror="alert(1)">').length > 0);
+  assert.ok(inertViolations('<a href="java\tscript:alert(1)">x</a>').length > 0);
+  assert.ok(inertViolations('<p style="position:fixed">x</p>').length > 0);
+  assert.ok(inertViolations('<img src="data:image/svg+xml;base64,AAAA">').length > 0);
+  assert.ok(inertViolations('<p id="x">x</p>').length > 0);
+  assert.deepStrictEqual(inertViolations('<p class="a">ok <a href="https://te.com" rel="noopener noreferrer">l</a></p>'), []);
+});
+
+// ---------------------------------------------------------------------------
+// Task 2 — golden: the committed demo content is unchanged by the sanitizer.
+// ---------------------------------------------------------------------------
+const GOLDEN = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'cms-golden.json'), 'utf8'));
+
+test('cms golden: every htmlField value in the committed demo round-trips byte-identical', () => {
+  assert.ok(GOLDEN.tagged.length >= 40, `golden has ${GOLDEN.tagged.length} tagged values`);
+  const kinds = new Set(GOLDEN.tagged.map((t) => t.kind));
+  assert.ok(kinds.has('pages.body') && kinds.has('courses.lesson.body'));
+  for (const t of GOLDEN.tagged) {
+    assert.strictEqual(sanitizeHtml(t.value), t.value, `${t.kind} ${t.rowId} ${t.locator} changed`);
+  }
+});
+
+test('cms golden: banner title/message stay outside the tagged set (never sanitized) and keep plain text byte-identical through the route schema', () => {
+  assert.ok(GOLDEN.untagged.length >= 2);
+  const { BannerUpsertSchema } = require('../validators/cms.js');
+  const { applySanitization } = require('../validators/index.js');
+  const probe = { title: 'Q&A <b>note</b>', message: 'a < b && c > d <script>x</script>' };
+  const parsed = BannerUpsertSchema.parse(probe);
+  const after = applySanitization(BannerUpsertSchema, parsed);
+  assert.strictEqual(after.title, probe.title, 'banner title must not be sanitized');
+  assert.strictEqual(after.message, probe.message, 'banner message must not be sanitized');
+  for (const u of GOLDEN.untagged) {
+    const s = applySanitization(BannerUpsertSchema, { title: u.value });
+    assert.strictEqual(s.title, u.value);
+  }
+});
