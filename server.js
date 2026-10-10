@@ -2279,6 +2279,152 @@ app.get('/api/admin/audit', (req, res) => {
   }));
 });
 
+// ---------------------------------------------------------------------------
+// [security] D-12-04 / PD-7 / PD-8 (Phase 12, plan 12-12): the audit-partition
+// LIFECYCLE — seal, status, export, purge of ONE deal's hash-chained audit
+// partition. Deliberately NOT under /api/admin/audit*: test/audit-security-
+// events.test.js (e) locks that prefix to GET-only. These routes live under
+// /api/admin/deals/:id/audit…, which db/resolver.js already treats as
+// control-plane (never deal-bound, never open under DEMO_OPEN) and which the
+// `/api/admin` rows of ROLE_WRITE_POLICY / ROLE_READ_POLICY make admin-only.
+// Every step is a control-plane event in audit.db (via the injected recorder),
+// and nothing here ever runs on a timer: seal and purge are explicit, confirmed
+// admin actions (T-12-111). The orchestration lives in db/auditLifecycle.js so
+// this route and scripts/audit-admin.js can never word or order a step
+// differently.
+const auditLifecycle = require('./db/auditLifecycle');
+
+/** A deal id or exactly `legacy` (db/dbFiles.js auditPartitionPath's own rule); 400 otherwise. */
+function auditPartitionIdOf(req, res) {
+  const id = req.params.id;
+  if (typeof id === 'string' && (dbFiles.DEAL_ID_RE.test(id) || id === 'legacy')) return id;
+  res.status(400).json({ error: 'Invalid deal id.' });
+  return null;
+}
+
+/** The injected collaborators db/auditLifecycle.js needs (it never requires auditHook). */
+function auditLifecycleDeps(req, id) {
+  const user = req.portalUser || {};
+  return {
+    dealState: () => {
+      const deal = controlStore.getDeal(id);
+      if (!deal) return 'absent';
+      return deal.status === 'archived' ? 'archived' : 'active';
+    },
+    findEvents: (actions) => auditHook.findControlEvents({ dealId: id, action: actions }),
+    recordEvent: (ev) => auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: ev.action, dealId: id, subject: id, after: ev.after, request: requestMeta(req),
+    }),
+    closeConnection: () => auditHook.closePartitionConnection(id),
+    actor: { username: user.username, role: user.role, sessionId: user.sessionId },
+    now: auditLifecycleNow(),
+    env: process.env,
+  };
+}
+
+// The retention clock. `app.auditClock` is a TEST-ONLY seam (a function
+// returning a Date) so a suite can prove "retention elapsed" without waiting
+// days; it is ignored outright in real-deal mode, where only the wall clock
+// counts (T-12-111).
+function auditLifecycleNow() {
+  if (!dbFiles.IS_REAL_MODE && typeof app.auditClock === 'function') {
+    const t = app.auditClock();
+    if (t instanceof Date && Number.isFinite(t.getTime())) return t;
+  }
+  return new Date();
+}
+
+// GET status: existence, rows, head, seal time/hash, whether the file still
+// matches the seal, recorded exports, retention, purge eligibility and the
+// partition's lifecycle events. READ-ONLY (no-get-mutates, 11-06): the
+// partition is opened read-only and audit.db is only SELECTed.
+app.get('/api/admin/deals/:id/audit', (req, res) => {
+  const id = auditPartitionIdOf(req, res);
+  if (!id) return;
+  const deps = auditLifecycleDeps(req, id);
+  const status = auditLifecycle.lifecycleStatus(id, deps);
+  res.set('Cache-Control', 'no-store');
+  res.json(Object.assign({ dealState: deps.dealState() }, status));
+});
+
+// [security] T-12-113: the export carries the FULL MNPI trail out of the host.
+// Admin-only (the /api/admin rows), sealed-only, an attachment with
+// `Cache-Control: no-store`, and its SHA-256 is recorded as a control event
+// AFTER the last byte (an aborted client records nothing).
+app.get('/api/admin/deals/:id/audit/export', async (req, res, next) => {
+  const id = auditPartitionIdOf(req, res);
+  if (!id) return;
+  let aborted = false;
+  res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  try {
+    const deps = auditLifecycleDeps(req, id);
+    deps.shouldAbort = () => aborted;
+    deps.write = (chunk) => (res.write(chunk) ? undefined : new Promise((resolve) => {
+      res.once('drain', resolve);
+      res.once('close', resolve);
+    }));
+    deps.onReady = () => {
+      res.set('Content-Type', 'application/x-ndjson; charset=utf-8');
+      res.set('Cache-Control', 'no-store');
+      res.set('Content-Disposition', `attachment; filename="audit-${id}.jsonl"`);
+    };
+    const result = await auditLifecycle.exportPartition(id, deps);
+    if (result.outcome === 'refused') {
+      return res.status(409).json({ error: auditLifecycle.REFUSAL_MESSAGES[result.reason], reason: result.reason });
+    }
+    if (result.outcome === 'aborted') return undefined;
+    return res.end();
+  } catch (e) {
+    if (isBusyError(e) && !res.headersSent) return next(e); // central 503 + Retry-After
+    // Mid-stream (or the event could not be recorded after the last byte): never
+    // end a response whose export has no control event — drop the connection so
+    // the client sees an incomplete download rather than a clean one.
+    if (res.headersSent) { res.destroy(); return undefined; }
+    return next(e);
+  }
+});
+
+// [security] T-12-111: purge is an explicit, confirmed, admin-only action and is
+// refused unless the partition is sealed, unmodified since the seal, has a
+// recorded export of exactly that sealed state, and the retention period
+// (MA_AUDIT_RETENTION_DAYS, default never) has elapsed. NOTHING calls it on a
+// timer (test/audit-lifecycle-routes.test.js scans for exactly that).
+app.post('/api/admin/deals/:id/audit/purge', (req, res) => {
+  const id = auditPartitionIdOf(req, res);
+  if (!id) return;
+  if (req.body.confirm !== id) {
+    return res.status(400).json({ error: 'Confirmation value must exactly match the deal id.' });
+  }
+  const result = auditLifecycle.purgePartition(id, auditLifecycleDeps(req, id));
+  if (result.outcome === 'refused') {
+    const body = { error: auditLifecycle.REFUSAL_MESSAGES[result.reason], reason: result.reason };
+    if (result.eligibleAt) body.eligibleAt = result.eligibleAt;
+    return res.status(409).json(body);
+  }
+  if (result.outcome === 'failed') {
+    return res.status(500).json({ error: 'The audit trail could not be removed. See the server log.' });
+  }
+  res.json({
+    success: true, purged: true, sealedSha256: result.sealedSha256, rows: result.rows,
+    headHash: result.headHash, exportSha256: result.exportSha256,
+  });
+});
+
+app.post('/api/admin/deals/:id/audit/seal', (req, res) => {
+  const id = auditPartitionIdOf(req, res);
+  if (!id) return;
+  if (req.body.confirm !== id) {
+    return res.status(400).json({ error: 'Confirmation value must exactly match the deal id.' });
+  }
+  const result = auditLifecycle.sealPartition(id, auditLifecycleDeps(req, id));
+  if (result.outcome === 'refused') {
+    return res.status(409).json({ error: auditLifecycle.REFUSAL_MESSAGES[result.reason], reason: result.reason });
+  }
+  res.json({
+    success: true, sha256: result.sha256, rows: result.rows, headHash: result.headHash, alreadySealed: result.alreadySealed,
+  });
+});
+
 // Strip server-only secrets from any settings object before returning it to a
 // client. The real API key / DB connection string must never leave the server;
 // the client only needs to know WHETHER a key is configured.
