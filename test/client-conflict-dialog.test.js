@@ -128,6 +128,8 @@ function makeDocument() {
       if (docListeners[type]) docListeners[type] = docListeners[type].filter((f) => f !== fn);
     },
     dispatchEvent(evt) { (docListeners[evt.type] || []).forEach((fn) => fn(evt)); },
+    // 09-11 (HP12): how many listeners of a type are currently attached.
+    listenerCount(type) { return (docListeners[type] || []).length; },
     // Supports only simple ".class" selectors — the only shape this dialog's
     // markup (or these tests) ever need.
     querySelectorAll(selector) {
@@ -179,13 +181,43 @@ function makeFakeFetch(responses) {
     const idx = Math.min(calls.length - 1, responses.length - 1);
     return Promise.resolve(responses[idx]);
   };
-  return { calls, impl };
+  return { calls, impl, responses };
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 async function flushAll(times) {
   for (let i = 0; i < (times || 6); i++) await flush();
 }
+
+// 09-11: the caller's promise is now HELD while the dialog is open (GD-4), so
+// a test must capture it, interact with the dialog, then await the outcome.
+// track() records whether/with-what the promise settled and how many times.
+function track(p) {
+  const state = { settled: false, value: undefined, error: undefined, count: 0 };
+  p.then((v) => { state.settled = true; state.value = v; state.count++; },
+    (e) => { state.settled = true; state.error = e; state.count++; });
+  return state;
+}
+
+// A fetch fake routed by a handler(callIndex, input, init) -> Response | Promise
+// (rejecting for a network failure); records every call.
+function makeRoutedFetch(handler) {
+  const calls = [];
+  const impl = (input, init) => {
+    const idx = calls.length;
+    calls.push({ input, init: init || {} });
+    try { return Promise.resolve(handler(idx, input, init || {})); } catch (e) { return Promise.reject(e); }
+  };
+  return { calls, impl };
+}
+
+const conflictOf = (over) => Object.assign({
+  conflict: true,
+  currentVersion: 4,
+  currentRecord: { id: 'rec1', title: 'Their title' },
+  changedBy: 'karen',
+  changedAt: new Date().toISOString(),
+}, over || {});
 
 test('client-conflict-dialog: a 409 with the conflict marker renders exactly one overlay; the wrapper makes no retry attempt of its own', async () => {
   const conflictBody = {
@@ -198,10 +230,17 @@ test('client-conflict-dialog: a 409 with the conflict marker renders exactly one
   const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  const p = sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  const outcome = track(p);
+  await flushAll();
 
   assert.strictEqual(fake.calls.length, 1, 'D-05/Pitfall 11: the wrapper must never itself re-fire a 409 request — the only re-fire path is a user click');
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+  assert.strictEqual(outcome.settled, false, 'GD-4: the caller\'s promise is held while the dialog is open');
+
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  const res = await p;
+  assert.strictEqual(res, fake.responses[0], 'discard resolves the caller with the original 409');
 });
 
 test('client-conflict-dialog: a 409 without the conflict marker renders no dialog and returns the response untouched', async () => {
@@ -231,11 +270,13 @@ test('client-conflict-dialog: clicking apply issues exactly one further fetch, c
   ]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify(originalPayload) });
+  const p = sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify(originalPayload) });
+  await flushAll();
   const applyBtn = document.querySelectorAll('.conflict-btn-apply')[0];
   assert.ok(applyBtn, 'expected an apply button on the rendered dialog');
   applyBtn.click();
   await flushAll();
+  assert.strictEqual(await p, fake.responses[1], 'apply resolves the caller with the reapplied 2xx response');
 
   assert.strictEqual(fake.calls.length, 2, 'expected exactly one further fetch after the apply click');
   const firstBody = JSON.parse(fake.calls[0].init.body);
@@ -261,10 +302,12 @@ test('client-conflict-dialog: apply on a query-parameter route rewrites expected
   ]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/widgets/rec1?expectedVersion=3', { method: 'PATCH', body: JSON.stringify({ title: 'My title' }) });
+  const p = sandbox.window.fetch('/api/widgets/rec1?expectedVersion=3', { method: 'PATCH', body: JSON.stringify({ title: 'My title' }) });
+  await flushAll();
   const applyBtn = document.querySelectorAll('.conflict-btn-apply')[0];
   applyBtn.click();
   await flushAll();
+  assert.strictEqual(await p, fake.responses[1]);
 
   assert.strictEqual(fake.calls.length, 2);
   assert.strictEqual(fake.calls[1].input, '/api/widgets/rec1?expectedVersion=7', 'the fresh version must land in the URL query parameter');
@@ -282,12 +325,14 @@ test('client-conflict-dialog: clicking discard issues no further fetch and remov
   const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  const p = sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  await flushAll();
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
 
   const discardBtn = document.querySelectorAll('.conflict-btn-discard')[0];
   discardBtn.click();
   await flushAll();
+  assert.strictEqual(await p, fake.responses[0], 'discard resolves the caller with the original 409');
 
   assert.strictEqual(fake.calls.length, 1, 'discard must never issue a further fetch');
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, 'discard must remove the overlay');
@@ -314,11 +359,14 @@ test('client-conflict-dialog: a second conflict on reapply leaves exactly one ov
   ]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  const p = sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'rec1', version: 1, title: 'My title' }) });
+  const outcome = track(p);
+  await flushAll();
   const applyBtn = document.querySelectorAll('.conflict-btn-apply')[0];
   applyBtn.click();
   await flushAll();
 
+  assert.strictEqual(outcome.settled, false, 'the caller stays held through a second conflict');
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'T-09-14/T-09-16: a second conflict must never stack a second overlay');
   const mine = document.querySelectorAll('.conflict-diff-mine')[0];
   const theirs = document.querySelectorAll('.conflict-diff-theirs')[0];
@@ -327,6 +375,9 @@ test('client-conflict-dialog: a second conflict on reapply leaves exactly one ov
   assert.strictEqual(theirs.textContent, 'Their v4 title', 'the server-side column must refresh to the newest conflict data');
   const banner = document.querySelectorAll('.conflict-modal-error');
   assert.strictEqual(banner.length, 1, 'the inline error banner must appear on the re-rendered dialog');
+
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, fake.responses[0], 'discard after a re-render still resolves the ORIGINAL 409');
 });
 
 // ---------------------------------------------------------------------------
@@ -348,7 +399,8 @@ test('client-conflict-dialog: a 409 on a DELETE renders the destructive stale-de
   const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  await flushAll();
 
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
   assert.strictEqual(document.querySelectorAll('.conflict-diff-row').length, 0, 'the stale-delete variant must render no diff-list rows');
@@ -358,6 +410,8 @@ test('client-conflict-dialog: a 409 on a DELETE renders the destructive stale-de
   const cancelBtn = document.querySelectorAll('.conflict-btn-discard');
   assert.strictEqual(cancelBtn.length, 1);
   assert.strictEqual(cancelBtn[0].textContent, 'Cancel');
+  cancelBtn[0].click();
+  assert.strictEqual(await p, fake.responses[0]);
 });
 
 test('client-conflict-dialog: clicking "Delete anyway" issues exactly one further fetch, whose URL carries the fresh expectedVersion and is otherwise unchanged', async () => {
@@ -375,11 +429,13 @@ test('client-conflict-dialog: clicking "Delete anyway" issues exactly one furthe
   ]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  await flushAll();
   const deleteBtn = document.querySelectorAll('.conflict-btn-delete')[0];
   assert.ok(deleteBtn, 'expected a delete button on the rendered dialog');
   deleteBtn.click();
   await flushAll();
+  assert.strictEqual(await p, fake.responses[1], 'Delete anyway resolves the caller with the DELETE response');
 
   assert.strictEqual(fake.calls.length, 2, 'expected exactly one further fetch after the delete click');
   assert.strictEqual(fake.calls[1].input, '/api/raid/rec1?expectedVersion=6', 'the fresh version must land in the URL query parameter, every other part of the URL unchanged');
@@ -399,12 +455,14 @@ test('client-conflict-dialog: clicking "Cancel" on the stale-delete variant issu
   const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  await flushAll();
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
 
   const cancelBtn = document.querySelectorAll('.conflict-btn-discard')[0];
   cancelBtn.click();
   await flushAll();
+  assert.strictEqual(await p, fake.responses[0], 'Cancel resolves the caller with the original 409');
 
   assert.strictEqual(fake.calls.length, 1, 'cancel must never issue a further fetch — the record is kept, nothing is sent');
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0, 'cancel must remove the overlay');
@@ -427,15 +485,21 @@ test('client-conflict-dialog: a second conflict on the delete resubmission leave
   ]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const outcome = track(p);
+  await flushAll();
   const deleteBtn = document.querySelectorAll('.conflict-btn-delete')[0];
   deleteBtn.click();
   await flushAll();
 
+  assert.strictEqual(outcome.settled, false, 'the caller stays held through a second conflict on the delete');
   assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'a second conflict on the delete resubmission must never stack a second overlay');
   assert.strictEqual(document.querySelectorAll('.conflict-btn-delete').length, 1, 'the re-rendered dialog must still be the destructive variant');
   const banner = document.querySelectorAll('.conflict-modal-error');
   assert.strictEqual(banner.length, 1, 'the inline error banner must appear on the re-rendered dialog');
+
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p, fake.responses[0]);
 });
 
 test('client-conflict-dialog: a stale-delete 409 body with no actor and no time renders the attribution fallback sentence', async () => {
@@ -447,11 +511,233 @@ test('client-conflict-dialog: a stale-delete 409 body with no actor and no time 
   const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictBody })]);
   const { sandbox, document } = buildSandbox(fake.impl);
 
-  await sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+  await flushAll();
 
   const attribution = document.querySelectorAll('.conflict-modal-attribution')[0];
   assert.ok(attribution, 'expected an attribution element');
   assert.strictEqual(attribution.textContent, 'This record changed since you loaded it.');
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await p;
+});
+
+// ---------------------------------------------------------------------------
+// GD-4 / D-03 / D-05 (Phase 9 gap closure, plan 09-11): HELD-PROMISE conflict
+// sessions. The caller's fetch promise stays pending while the dialog is open
+// and settles exactly once with the outcome of the user's decision — so every
+// page's existing success handler reflects the server's state (R7 F-2).
+// ---------------------------------------------------------------------------
+
+const RAID_FLIP = (v) => ({ method: 'POST', body: JSON.stringify({ id: 'rec1', version: v === undefined ? 1 : v, status: 'doing' }) });
+
+test('HP1: a marker 409 holds the caller\'s promise pending with exactly one overlay', async () => {
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictOf() })]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const outcome = track(sandbox.window.fetch('/api/raid', RAID_FLIP()));
+  await flushAll();
+
+  assert.strictEqual(outcome.settled, false, 'the promise must not settle while the dialog is open');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+});
+
+test('HP2: Apply success resolves the ORIGINAL promise with the reapplied 200 Response (identity); exactly 2 fetches', async () => {
+  const ok = makeResponse({ status: 200, body: { success: true, entry: { id: 'rec1', status: 'doing', version: 5 } } });
+  const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictOf() }), ok]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  const res = await p;
+
+  assert.strictEqual(res, ok, 'the caller must receive the very Response the reapply produced');
+  assert.strictEqual((await res.json()).entry.version, 5, 'the body must still be readable by the page handler');
+  assert.strictEqual(fake.calls.length, 2);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('HP3: Discard resolves the ORIGINAL 409 Response (body still readable); exactly 1 fetch', async () => {
+  const first = makeResponse({ status: 409, body: conflictOf({ currentVersion: 2 }) });
+  const fake = makeFakeFetch([first]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  const res = await p;
+
+  assert.strictEqual(res, first);
+  assert.strictEqual((await res.json()).conflict, true, 'the conflict body must still be readable');
+  assert.strictEqual(fake.calls.length, 1);
+});
+
+test('HP4: Escape and an overlay-background click each resolve the held promise with the original 409', async () => {
+  for (const how of ['escape', 'overlay']) {
+    const first = makeResponse({ status: 409, body: conflictOf() });
+    const fake = makeFakeFetch([first]);
+    const { sandbox, document } = buildSandbox(fake.impl);
+
+    const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+    await flushAll();
+    if (how === 'escape') {
+      document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    } else {
+      const overlay = document.querySelectorAll('.conflict-modal-overlay')[0];
+      overlay.dispatchEvent({ type: 'click', target: overlay });
+    }
+    assert.strictEqual(await p, first, how + ' must resolve with the original 409');
+    assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+    assert.strictEqual(fake.calls.length, 1);
+  }
+});
+
+test('HP5: DELETE — Delete anyway resolves with the DELETE Response; Cancel resolves with the original 409', async () => {
+  {
+    const okDel = makeResponse({ status: 200, body: { success: true } });
+    const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictOf({ conflictKind: 'version' }) }), okDel]);
+    const { sandbox, document } = buildSandbox(fake.impl);
+    const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+    await flushAll();
+    document.querySelectorAll('.conflict-btn-delete')[0].click();
+    assert.strictEqual(await p, okDel);
+    assert.strictEqual(fake.calls.length, 2);
+    assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+  }
+  {
+    const first = makeResponse({ status: 409, body: conflictOf({ conflictKind: 'version' }) });
+    const fake = makeFakeFetch([first]);
+    const { sandbox, document } = buildSandbox(fake.impl);
+    const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+    await flushAll();
+    document.querySelectorAll('.conflict-btn-discard')[0].click();
+    assert.strictEqual(await p, first);
+    assert.strictEqual(fake.calls.length, 1);
+  }
+});
+
+test('HP6 (third writer): Apply -> fresh 409 re-renders in place with the banner, promise stays pending; next Apply resolves once', async () => {
+  const third = makeResponse({ status: 409, body: conflictOf({ currentVersion: 6, currentRecord: { id: 'rec1', status: 'blocked' } }) });
+  const ok = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch((i) => [
+    makeResponse({ status: 409, body: conflictOf({ currentVersion: 4, currentRecord: { id: 'rec1', status: 'open' } }) }),
+    third, ok,
+  ][i]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+
+  assert.strictEqual(outcome.settled, false);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-error').length, 1, 'the changed-again banner must be present');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-error')[0].textContent,
+    "That didn't go through — the record changed again. Your edits are still here; review the fresh values below and try again.");
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-theirs')[0].textContent, 'blocked', 'theirs must show the newest value');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-mine')[0].textContent, 'doing', 'mine must be unchanged');
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  const res = await p;
+  assert.strictEqual(res, ok);
+  assert.strictEqual(JSON.parse(fake.calls[2].init.body).version, 6, 'the second reapply carries the NEWEST version');
+  assert.strictEqual(outcome.count, 1, 'settled exactly once');
+});
+
+test('HP7 (network retry): Apply -> fetch rejects -> network banner, still pending, Apply enabled again; next Apply resolves once', async () => {
+  const ok = makeResponse({ status: 200, body: { success: true } });
+  const fake = makeRoutedFetch((i) => {
+    if (i === 0) return makeResponse({ status: 409, body: conflictOf() });
+    if (i === 1) throw new Error('network down');
+    return ok;
+  });
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await flushAll();
+
+  assert.strictEqual(outcome.settled, false);
+  const banner = document.querySelectorAll('.conflict-modal-error')[0];
+  assert.ok(banner && /a network error occurred/.test(banner.textContent), 'network banner expected');
+  const apply2 = document.querySelectorAll('.conflict-btn-apply')[0];
+  assert.strictEqual(apply2.disabled, false, 'Apply must be enabled again');
+  apply2.click();
+  assert.strictEqual(await p, ok);
+  assert.strictEqual(outcome.count, 1);
+});
+
+test('HP8 (double click): two synchronous Apply clicks send exactly one extra fetch; same for Delete anyway', async () => {
+  {
+    const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictOf() }), makeResponse({ status: 200, body: {} })]);
+    const { sandbox, document } = buildSandbox(fake.impl);
+    const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+    await flushAll();
+    const btn = document.querySelectorAll('.conflict-btn-apply')[0];
+    btn.click();
+    btn.click();
+    await p;
+    await flushAll();
+    assert.strictEqual(fake.calls.length, 2, 'a second Apply click while in flight must send nothing');
+  }
+  {
+    const fake = makeFakeFetch([makeResponse({ status: 409, body: conflictOf({ conflictKind: 'version' }) }), makeResponse({ status: 200, body: {} })]);
+    const { sandbox, document } = buildSandbox(fake.impl);
+    const p = sandbox.window.fetch('/api/raid/rec1?expectedVersion=1', { method: 'DELETE' });
+    await flushAll();
+    const btn = document.querySelectorAll('.conflict-btn-delete')[0];
+    btn.click();
+    btn.click();
+    await p;
+    await flushAll();
+    assert.strictEqual(fake.calls.length, 2, 'a second Delete anyway click while in flight must send nothing');
+  }
+});
+
+test('HP11 (settle-once): a stale Apply/Discard handler of an already-settled session sends nothing and does not resolve again', async () => {
+  const first = makeResponse({ status: 409, body: conflictOf() });
+  const fake = makeFakeFetch([first]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  const applyBtn = document.querySelectorAll('.conflict-btn-apply')[0];
+  const discardBtn = document.querySelectorAll('.conflict-btn-discard')[0];
+  discardBtn.click();
+  await flushAll();
+  assert.strictEqual(outcome.count, 1);
+
+  applyBtn.click();
+  discardBtn.click();
+  document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  await flushAll();
+
+  assert.strictEqual(fake.calls.length, 1, 'a stale handler must send nothing');
+  assert.strictEqual(outcome.count, 1, 'must not resolve again');
+  assert.strictEqual(outcome.value, first);
+});
+
+test('HP13 (deleted variant): a conflictKind "deleted" 409 on a POST -> Close resolves with the original 409', async () => {
+  const first = makeResponse({ status: 409, body: conflictOf({ conflictKind: 'deleted' }) });
+  const fake = makeFakeFetch([first]);
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  assert.strictEqual(outcome.settled, false);
+  assert.strictEqual(document.querySelectorAll('.conflict-btn-apply').length, 0, 'the deleted variant has no Apply');
+  const close = document.querySelectorAll('.conflict-btn-discard')[0];
+  assert.strictEqual(close.textContent, 'Close');
+  close.click();
+
+  assert.strictEqual(await p, first);
+  assert.strictEqual(fake.calls.length, 1);
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
 });
 
 test('client-conflict-dialog: a 503 on a same-origin /api write still takes the pre-existing busy-retry path, undisturbed by the 409 work', async () => {
