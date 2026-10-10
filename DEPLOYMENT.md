@@ -437,6 +437,163 @@ request bodies, passwords or record content.
   "unknown id" and "uncleared area" remain separate rows. Every rate key also
   includes the deal, so a refusal in one deal is never counted under another.
 
+## Audit trail: partitions, seal, export, purge and retention
+
+Real acquisition data is MNPI, so the audit trail is both a compliance record and
+itself sensitive: it holds full before/after snapshots of deal records. From the
+Phase 12 release the trail is split per deal so that one deal's history can be
+closed out — sealed, exported, and eventually purged — without touching any other
+deal's, and so that tampering is detectable.
+
+### 1. Layout
+
+All three live inside the data directory (`data/real` or `MA_DATA_DIR`), files
+`0600` in directories `0700`, gitignored and excluded from the in-app download —
+**include the `audit/` directory in your backups** next to `audit.db`.
+
+- `audit.db` — the **control-plane** log: deal create / archive / delete, member
+  and grant changes, user and credential events, read audits, `access-denied`
+  refusals, CLI and break-glass-token use, and the lifecycle records of the
+  partitions themselves (seal, export, purge).
+- `audit/<dealId>.db` — one deal's **record history** (every audited write to that
+  deal's data), hash-chained.
+- `audit/legacy.db` — rows of deals that were already deleted before the upgrade.
+  The upgrade seals it (read-only, SHA-256 recorded); it is never written again.
+
+The Admin console **Audit** tab and `GET /api/admin/audit` read all of them
+together; each row is tagged with its partition.
+
+### 2. Tamper evidence
+
+Every row of `audit.db` and of every partition is linked to the one before it by a
+SHA-256 hash that covers the whole row (including the previous hash). An edited,
+deleted or reordered row breaks every link after it. Check a host at any time:
+
+```
+node scripts/audit-verify.js --all          # audit.db + every partition (exit 0 = all OK)
+node scripts/audit-verify.js --deal <dealId>
+node scripts/audit-verify.js --jsonl <export.jsonl>   # an exported trail, standalone
+```
+
+A sealed partition is additionally compared with the SHA-256 its seal event
+recorded in `audit.db` (`sealed-sha=match`); a flipped byte reports `MISMATCH`.
+A row inserted without a hash (for example by an older release run after a
+rollback) is reported once as `unchained-row` and exits `1`.
+
+**Residual.** The chain detects edits, deletions and reordering inside a file. It
+cannot detect *truncation of the tail* of a partition that is not sealed yet (a
+shorter, still valid chain), and a whole file replaced by an older valid copy is
+only caught once the partition has been sealed and its hash recorded. Sealing at
+deal end is therefore what makes the trail evidence. Someone with write access
+to the data directory *and* the ability to re-compute every hash after an edit is
+outside this control; keep the data directory private to the service user.
+
+### 3. Deal-end path for MNPI (seal → export → verify → purge)
+
+1. **Archive the deal** (Admin console). Only a closed deal's trail can be sealed;
+   an active deal is still being written.
+2. **Seal** it: Admin console deal audit panel, or
+   `node scripts/audit-admin.js seal <dealId> --confirm <dealId>`. The partition
+   gets a final chained `partition-seal` row, becomes read-only (`0400`) and its
+   SHA-256 is written to `audit.db` as an `audit-partition-sealed` event. There is
+   no unseal. A seal refused with `checkpoint-busy` means another process still
+   holds the file open; retry once it is gone.
+3. **Export** it as JSONL: panel, or
+   `node scripts/audit-admin.js export <dealId> --out <file.jsonl>` (a new `0600`
+   file, never overwritten). Store the export under TE's records policy — it
+   contains the full MNPI history.
+4. **Verify** the export: `node scripts/audit-verify.js --jsonl <file.jsonl>`. It
+   prints the file's SHA-256, which is also recorded in the
+   `audit-partition-exported` event.
+5. **Purge** after the retention period (below):
+   `node scripts/audit-admin.js purge <dealId> --confirm <dealId>`. A purge is
+   refused unless the partition is sealed, still matches its seal, an export of
+   exactly that sealed state is on record, and the retention period has elapsed.
+   Every refusal and the purge itself are control events.
+6. **Delete the deal** (Admin console) once its trail is purged or exported.
+
+### 4. Retention is TE legal's decision and is never automatic
+
+`MA_AUDIT_RETENTION_DAYS` sets the period, counted from the seal event.
+**Unset, empty or `never` (the default) means a partition is never purged** — the
+purge is always refused with `retention-never`. A value that is not a positive
+integer is treated as `never` (and warned once), so a typo can never shorten
+retention. **TE legal owns the period**: the number is not chosen by this
+software or by IT, and nothing in the system purges on a timer. A purge is only
+ever an explicit, confirmed admin or CLI action.
+
+### 5. What remains in `audit.db` after a purge
+
+Purging removes a deal's partition file; it does **not** rewrite `audit.db`
+(append-only by design — it is the evidence that the lifecycle happened). Still
+present afterwards:
+
+- the deal registry snapshots in the `deal-create`, archive and delete events
+  (deal codename and target company name);
+- member and grant changes naming the deal;
+- read audits and `access-denied` events that name the deal id;
+- the seal, export and purge events themselves (hashes, row counts, timestamps).
+
+Whether that residue is acceptable after the retention period is a **TE legal
+decision**; this release does not purge it. Raise it before the first real deal
+ends.
+
+### 6. The upgrade (migration #1) — backup, disk rule, duration, rollback
+
+On the first boot of this release against an existing `audit.db` the server runs
+**migration #1** *before it starts listening*: it takes a backup, moves each
+deal's rows into `audit/<dealId>.db` (rows of deals already deleted go to the
+sealed `legacy.db`), and rebuilds `audit.db` as the chained control log with the
+original row ids preserved. Counts are asserted per partition (no row lost or
+duplicated) and both chains are verified before it commits; a failure changes
+nothing in `audit.db`.
+
+- **Backup:** `audit.db.pre-v1.bak` (mode `0600`, same MNPI handling as
+  `audit.db`) is written first, WAL-aware. Delete it only after you have
+  verified the upgraded host and your own backups cover the new layout.
+- **Disk rule:** the upgrade refuses to start the migration (instance not-ready,
+  reason `insufficient-disk-for-migration`, nothing written) unless the data
+  volume has at least **3 × the `audit.db` size + 64 MB** free.
+- **Not-ready until done:** the process does not accept connections while the
+  migration runs; set the supervisor's start timeout accordingly. If the migration
+  fails the instance *does* listen but `GET /healthz` answers `503` with
+  `family: audit, migration: 001-partition-legacy, reason: migration-failed`
+  (no path, no deal id) and every request fails closed. A re-run after the cause
+  is fixed completes without duplicating a row; it never opens the sealed
+  `legacy.db` for writing.
+- **Measured cost** (synthetic legacy file, `node scripts/perf/legacy-audit-migration.js`;
+  never run on real data): 150,000 rows, 158 MB source file, 1,000 deals of which
+  800 existed → boot with migration **6.4 s** (≈ 6.3 s of migration), peak WAL
+  5.3 MB, peak scratch 512 MB in total (the source file, the `.bak`, the
+  partitions and their sidecars; about 354 MB — 2.2 × the file — on top of the
+  source, inside the 3 × rule), 114,105 rows into 800 partitions, 28,270 into
+  `legacy.db`, 7,625 kept. **Extrapolated, not measured:** a 5 GB legacy file
+  scales to roughly 3–4 minutes of migration and ≈ 16 GB peak scratch
+  (the linear extrapolation overstates the fixed per-partition overhead, so the
+  real figure is lower); the disk rule needs ≥ 15.1 GB free for that size.
+- **Rollback:** the forward step is one-way, recovery is a restore. Stop the
+  service; copy `audit.db.pre-v1.bak` over `audit.db` (control events written
+  since the upgrade exist only in the file you replace — keep a copy); remove
+  `audit.db-wal` and `audit.db-shm`; start the previous release. Partition files
+  created by the migration are left in place, never deleted, and stay readable
+  with any SQLite tool. The previous release does not read partitions, so a deal's
+  record history is not visible in its audit viewer until you upgrade again.
+
+### 7. Windows
+
+A purge deletes the partition files, so **no other process may hold them open**
+(stop any SQLite browser or backup job that has the file open, then retry). A seal refused `checkpoint-busy` is retried once the other
+reader is gone. POSIX file modes do not apply on Windows; the sealed file is
+protected by its read-only attribute and the user-profile ACLs.
+
+### Residuals of this section
+
+- Tail truncation of an unsealed partition and replacement by an older valid file
+  are detectable only after sealing (see 2).
+- A crash can lose at most the denial counts of one open rate window (Denial audit
+  above); it never loses the first denial of a window.
+- A purge does not remove the control-plane residue listed in 5.
+
 ## ADMIN_TOKEN (optional break-glass, discouraged)
 
 `ADMIN_TOKEN` is an optional shared secret: a request carrying it in the

@@ -25,8 +25,8 @@
 // did not happen). A crash in the narrow window between the two commits can
 // lose that ONE audit entry while the underlying write still lands; this is
 // the accepted trade-off for this milestone (D-09's own checkpoint context)
-// — tamper-evidence and hash-chaining are explicitly deferred to the
-// shared-host milestone (v2). What this module DOES guarantee: an audit
+// — (tamper-evidence and hash-chaining, once deferred to the shared-host
+// milestone, arrived in Phase 12: see PHASE 12 below). What this module DOES guarantee: an audit
 // write that itself throws is NEVER swallowed — db/store.js's writeDb()
 // lets it propagate, so a silently-missing entry can never look like an
 // action that never happened.
@@ -52,7 +52,11 @@
 // reads, `access-denied`) with its deal_id. queryAudit()/countAudit() read both.
 // The "tamper-evidence deferred" remark above is superseded for deal data: a
 // partition's chain makes an edited, deleted or reordered row detectable
-// (scripts/audit-verify.js); chaining audit.db itself is plan 12-13.
+// (scripts/audit-verify.js). From plan 12-13 audit.db itself is chained too:
+// every control-plane row (recordSecurityEvent, control-kind writeAuditBatch,
+// hence also Phase 11's `access-denied` rows) is appended through
+// db/auditChain.js appendChained(…, { partitionId: 'control' }) — the head read
+// under BEGIN IMMEDIATE linearises concurrent appenders from several processes.
 
 const fs = require('fs');
 const path = require('path');
@@ -155,10 +159,6 @@ function closePartitionConnection(dealId) {
   try { conn.close(); } catch (e) { /* ignore */ }
 }
 
-const INSERT_SQL = `INSERT INTO audit_log
-  (ts, actor_username, actor_role, session_id, deal_id, db_kind, action, collection, row_id, before_json, after_json, request_method, request_path, ip)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-
 /**
  * D-11: write ONE batch of before/after row deltas for a single writeDb()
  * call, in ONE transaction on `conn` (the audit.db connection — never a
@@ -205,19 +205,29 @@ function writeAuditBatch(conn, { actor, dealId, dbKind, request, ts, rows }) {
   // "nothing persisted," so the 503-then-retry the client already performs
   // (D-07) costs nothing beyond the wait, and duplicates the row only if a
   // FRESH write, not a retry of an already-committed one.
-  const insert = conn.prepare(INSERT_SQL);
-  const runBatch = conn.transaction((entries) => {
-    for (const row of entries) {
-      insert.run(
-        ts, actor.username, actor.role || null, actor.sessionId || null,
-        dealId || null, dbKind || null, row.action, row.collection || null, row.rowId || null,
-        row.before === undefined ? null : row.before,
-        row.after === undefined ? null : row.after,
-        (request && request.method) || null, (request && request.path) || null, (request && request.ip) || null
-      );
-    }
-  }).immediate;
-  runBatch(rows);
+  //
+  // [security] D-12-04 (plan 12-13): the batch is appended HASH-CHAINED
+  // (genesis 'control'). appendChained is one `.immediate` transaction on this
+  // connection — same lock, same busy_timeout, same no-swallow propagation as
+  // before — and reads the chain head under that lock, so two processes can
+  // never fork the control chain.
+  const entries = rows.map((row) => ({
+    ts,
+    actor_username: actor.username,
+    actor_role: actor.role || null,
+    session_id: actor.sessionId || null,
+    deal_id: dealId || null,
+    db_kind: dbKind || null,
+    action: row.action,
+    collection: row.collection || null,
+    row_id: row.rowId || null,
+    before_json: row.before === undefined ? null : row.before,
+    after_json: row.after === undefined ? null : row.after,
+    request_method: (request && request.method) || null,
+    request_path: (request && request.path) || null,
+    ip: (request && request.ip) || null,
+  }));
+  auditChain.appendChained(conn, entries, { partitionId: 'control' });
 }
 
 /**
@@ -286,13 +296,26 @@ function recordSecurityEvent({ actor, action, dealId, subject, before, after, re
     throw new Error('db/auditHook.js: recordSecurityEvent() requires an action name');
   }
   const conn = getAuditConnection();
-  conn.prepare(INSERT_SQL).run(
-    new Date().toISOString(), actor.username, actor.role || null, actor.sessionId || null,
-    dealId || null, 'control', action, null, subject === undefined || subject === null ? null : String(subject),
-    before === undefined || before === null ? null : JSON.stringify(before),
-    after === undefined || after === null ? null : JSON.stringify(after),
-    (request && request.method) || null, (request && request.path) || null, (request && request.ip) || null
-  );
+  // [security] D-12-04 (plan 12-13): chained append (genesis 'control'). Phase
+  // 11's denial auditor writes through this function (server.js `write:`), so
+  // its rate-bounded `access-denied` rows from several processes are chained
+  // with no edit to lib/denialAudit.js.
+  auditChain.appendChained(conn, [{
+    ts: new Date().toISOString(),
+    actor_username: actor.username,
+    actor_role: actor.role || null,
+    session_id: actor.sessionId || null,
+    deal_id: dealId || null,
+    db_kind: 'control',
+    action,
+    collection: null,
+    row_id: subject === undefined || subject === null ? null : String(subject),
+    before_json: before === undefined || before === null ? null : JSON.stringify(before),
+    after_json: after === undefined || after === null ? null : JSON.stringify(after),
+    request_method: (request && request.method) || null,
+    request_path: (request && request.path) || null,
+    ip: (request && request.ip) || null,
+  }], { partitionId: 'control' });
 }
 
 // D-12-04: partition file names a reader may open — a deal id or `legacy`.

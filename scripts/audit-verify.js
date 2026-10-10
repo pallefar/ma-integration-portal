@@ -10,8 +10,10 @@
 //   --jsonl <f>   verify an exported partition on its own (header + chained
 //                 rows; prints the file's SHA-256 for the export event)
 //   --deal <id>   data/audit/<id>.db (the resolved audit directory)
-//   --all         every partition in the audit directory (deal_*.db, legacy.db);
-//                 audit.db is reported `unchained` until plan 12-13 chains it
+//   --all         every partition in the audit directory (deal_*.db, legacy.db)
+//                 AND audit.db, the control-plane log (genesis 'control' — chained
+//                 from migration #1, plan 12-13). The sealed `legacy` partition's
+//                 bytes are compared with its `audit-partition-sealed` event.
 //
 // The audit directory is resolved exactly as the server resolves it
 // (db/dbFiles.js AUDIT_DIR: MA_AUDIT_DIR, else next to MA_AUDIT_DB_PATH, else
@@ -25,7 +27,8 @@
 // For a SEALED partition (plan 12-12) the file's SHA-256 is compared with the
 // latest `audit-partition-sealed` control event in audit.db (read-only): a
 // flipped byte exits 1 with sealed-sha=MISMATCH.
-//   UNCHAINED <file> (pre-12-13)       (audit.db before plan 12-13)
+//   UNCHAINED <file> (pre-12-13)       (a version-0 audit file that migration #1 has not
+//                                      processed yet, e.g. a `.pre-v1.bak` backup)
 // Exit code: 0 every file verified, 1 at least one FAIL, 2 usage / unreadable file.
 //
 // [security] Files are opened READ-ONLY with no chmod, schema exec or migration
