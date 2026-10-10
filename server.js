@@ -2279,6 +2279,62 @@ app.get('/api/admin/audit', (req, res) => {
   }));
 });
 
+// ---------------------------------------------------------------------------
+// [security] D-12-04 / PD-7 / PD-8 (Phase 12, plan 12-12): the audit-partition
+// LIFECYCLE — seal, status, export, purge of ONE deal's hash-chained audit
+// partition. Deliberately NOT under /api/admin/audit*: test/audit-security-
+// events.test.js (e) locks that prefix to GET-only. These routes live under
+// /api/admin/deals/:id/audit…, which db/resolver.js already treats as
+// control-plane (never deal-bound, never open under DEMO_OPEN) and which the
+// `/api/admin` rows of ROLE_WRITE_POLICY / ROLE_READ_POLICY make admin-only.
+// Every step is a control-plane event in audit.db (via the injected recorder),
+// and nothing here ever runs on a timer: seal and purge are explicit, confirmed
+// admin actions (T-12-111). The orchestration lives in db/auditLifecycle.js so
+// this route and scripts/audit-admin.js can never word or order a step
+// differently.
+const auditLifecycle = require('./db/auditLifecycle');
+
+/** A deal id or exactly `legacy` (db/dbFiles.js auditPartitionPath's own rule); 400 otherwise. */
+function auditPartitionIdOf(req, res) {
+  const id = req.params.id;
+  if (typeof id === 'string' && (dbFiles.DEAL_ID_RE.test(id) || id === 'legacy')) return id;
+  res.status(400).json({ error: 'Invalid deal id.' });
+  return null;
+}
+
+/** The injected collaborators db/auditLifecycle.js needs (it never requires auditHook). */
+function auditLifecycleDeps(req, id) {
+  const user = req.portalUser || {};
+  return {
+    dealState: () => {
+      const deal = controlStore.getDeal(id);
+      if (!deal) return 'absent';
+      return deal.status === 'archived' ? 'archived' : 'active';
+    },
+    findEvents: (actions) => auditHook.findControlEvents({ dealId: id, action: actions }),
+    recordEvent: (ev) => auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: ev.action, dealId: id, subject: id, after: ev.after, request: requestMeta(req),
+    }),
+    closeConnection: () => auditHook.closePartitionConnection(id),
+    actor: { username: user.username, role: user.role, sessionId: user.sessionId },
+  };
+}
+
+app.post('/api/admin/deals/:id/audit/seal', (req, res) => {
+  const id = auditPartitionIdOf(req, res);
+  if (!id) return;
+  if (req.body.confirm !== id) {
+    return res.status(400).json({ error: 'Confirmation value must exactly match the deal id.' });
+  }
+  const result = auditLifecycle.sealPartition(id, auditLifecycleDeps(req, id));
+  if (result.outcome === 'refused') {
+    return res.status(409).json({ error: auditLifecycle.REFUSAL_MESSAGES[result.reason], reason: result.reason });
+  }
+  res.json({
+    success: true, sha256: result.sha256, rows: result.rows, headHash: result.headHash, alreadySealed: result.alreadySealed,
+  });
+});
+
 // Strip server-only secrets from any settings object before returning it to a
 // client. The real API key / DB connection string must never leave the server;
 // the client only needs to know WHETHER a key is configured.

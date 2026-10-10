@@ -132,6 +132,10 @@ registerSchema('POST', '/api/deals/:id/grants', DealGrantsSchema);
 registerSchema('POST', '/api/deals/:id/vdr-grants', VdrGrantSchema);
 registerSchema('POST', '/api/admin/deals/:id/archive', DeleteConfirmSchema);
 registerSchema('DELETE', '/api/admin/deals/:id', DeleteConfirmSchema);
+// D-12-04 / PD-8 (Phase 12, plan 12-12): the audit-partition lifecycle's
+// destructive actions (seal, purge) take the same typed confirmation as
+// archive/delete — `confirm` must equal the deal id (compared by the route).
+registerSchema('POST', '/api/admin/deals/:id/audit/seal', DeleteConfirmSchema);
 
 module.exports = {
   CreateDealSchema, SelectDealSchema, DealMembersSchema, DealGrantsSchema, VdrGrantSchema, DeleteConfirmSchema,

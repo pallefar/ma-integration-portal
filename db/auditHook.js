@@ -416,10 +416,52 @@ function countAudit({ dealId, rowId, collection, action } = {}) {
   }
 }
 
+/**
+ * D-12-04 / plan 12-12: read the control-plane events of audit.db for one
+ * partition id (a deal id or `legacy`) and, optionally, one action or a list of
+ * actions. Read-only (SELECT on the cached connection), ordered oldest first;
+ * every row carries its `after_json` parsed as `after` (null when absent or not
+ * valid JSON). The lifecycle uses this for the seal / export / tamper events —
+ * audit.db is append-only, so a recorded seal hash can never be edited away.
+ */
+function findControlEvents({ dealId, action } = {}) {
+  const clauses = ["db_kind = 'control'"];
+  const params = [];
+  if (dealId) { clauses.push('deal_id = ?'); params.push(dealId); }
+  const actions = Array.isArray(action) ? action : (action ? [action] : []);
+  if (actions.length) {
+    clauses.push(`action IN (${actions.map(() => '?').join(', ')})`);
+    params.push(...actions);
+  }
+  const rows = getAuditConnection()
+    .prepare(`SELECT * FROM audit_log WHERE ${clauses.join(' AND ')} ORDER BY id ASC`)
+    .all(...params);
+  for (const row of rows) {
+    let after = null;
+    if (typeof row.after_json === 'string') {
+      try { after = JSON.parse(row.after_json); } catch (e) { after = null; }
+    }
+    row.after = after;
+  }
+  return rows;
+}
+
+/**
+ * D-12-04 / plan 12-12: the partition ids that currently have a file in
+ * AUDIT_DIR (deal ids and `legacy`), sorted. Never creates the directory (a GET
+ * must not write, 11-06).
+ */
+function listPartitions() {
+  let listing = [];
+  try { listing = fs.readdirSync(dbFiles.AUDIT_DIR); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  return listing.filter((name) => PARTITION_FILE_RE.test(name)).sort().map((name) => name.replace(/\.db$/i, ''));
+}
+
 module.exports = {
   AUDITED_DB_KINDS,
   AuditPartitionSealedError: auditChain.AuditPartitionSealedError,
   getAuditConnection, closeAuditConnection, isAuditOpen,
   getPartitionConnection, closePartitionConnection,
   writeAuditBatch, appendWriteAudit, recordSecurityEvent, queryAudit, countAudit,
+  findControlEvents, listPartitions,
 };
