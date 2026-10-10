@@ -179,7 +179,12 @@ function verifyJsonl(file) {
     }
     if (!Number.isInteger(row.id) || row.id <= lastId) return fail(i + 1, 'id-order');
     if (row.prev_hash !== prev) return fail(i + 1, 'prev-link-broken');
-    if (auditChain.rowHash(row, row.prev_hash) !== row.row_hash) return fail(i + 1, 'row-hash-mismatch');
+    let h;
+    try { h = auditChain.rowHash(row, row.prev_hash); } catch (e) {
+      if (auditChain.isInvalidLegacyId(e)) return fail(i + 1, 'invalid-legacy-id');
+      throw e;
+    }
+    if (h !== row.row_hash) return fail(i + 1, 'row-hash-mismatch');
     prev = row.row_hash;
     lastId = row.id;
     rows += 1;
