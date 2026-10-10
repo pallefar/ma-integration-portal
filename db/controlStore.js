@@ -58,6 +58,45 @@ function findUser(username) {
 }
 
 /**
+ * D-10-02/D-10-03: single primary-key lookup for one account — the lookup the
+ * bootstrap CLI and (later) user CRUD use instead of scanning listUsers(). The
+ * invariant `users.id === data.username` holds for every existing row and is
+ * enforced for every row createAccount() inserts.
+ */
+function getAccount(username) {
+  if (!username) return null;
+  const row = controlConn().prepare('SELECT data FROM users WHERE id = ?').get(String(username));
+  return row ? JSON.parse(row.data) : null;
+}
+
+/** Number of account rows (the bootstrap CLI's create-if-none check). */
+function countAccounts() {
+  return controlConn().prepare('SELECT COUNT(*) AS n FROM users').get().n;
+}
+
+/**
+ * D-10-02/D-10-03: insert a NEW account. `id` is the username (the PK
+ * invariant above) and `seq` is allocated as MAX(seq)+1 inside the same
+ * `.immediate` transaction, so two concurrent creates cannot take the same
+ * ordinal. A duplicate username raises SQLITE_CONSTRAINT_PRIMARYKEY, which is
+ * deliberately NOT swallowed — callers map it to their own "already exists"
+ * response. Deliberately not an upsert (see updateUser()).
+ */
+function createAccount(account) {
+  if (!account || typeof account.username !== 'string' || account.username === '') {
+    throw new Error('db/controlStore.js: createAccount() requires an account with a non-empty username');
+  }
+  const conn = controlConn();
+  const apply = conn.transaction((acct) => {
+    const seqRow = conn.prepare('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM users').get();
+    conn.prepare('INSERT INTO users (id, project_id, seq, data) VALUES (?, NULL, ?, ?)')
+      .run(acct.username, seqRow.nextSeq, JSON.stringify(acct));
+    return acct;
+  }).immediate;
+  return apply(account);
+}
+
+/**
  * Merge `patch` onto the existing account row for `username` and persist.
  * Throws if no such account exists — this is deliberately NOT an upsert:
  * user-CRUD (creating new accounts) is out of scope this milestone (D-09),
@@ -520,7 +559,7 @@ function setSecretSettings(patch) {
 }
 
 module.exports = {
-  findUser, listUsers, updateUser,
+  findUser, listUsers, updateUser, getAccount, countAccounts, createAccount,
   getDeal, listDeals, listDealsForUser, isDealMember,
   createDeal, createDealDeduped, updateDealMembers, archiveDeal, deleteDeal,
   setDealMemberGrants, getDealMemberGrants,

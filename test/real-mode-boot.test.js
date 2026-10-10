@@ -18,11 +18,19 @@ const Database = require('better-sqlite3');
 const { listenLocal } = require('./helpers/listen-local');
 
 const REPO = path.join(__dirname, '..');
-const COMMITTED = ['control.db', 'control.db-wal', 'control.db-shm', 'demo.db', 'demo.db-wal', 'demo.db-shm']
+// -shm is deliberately excluded: it is the volatile wal-index SQLite maintains
+// for any reader and carries no database content.
+const COMMITTED = ['control.db', 'control.db-wal', 'demo.db', 'demo.db-wal']
   .map((n) => path.join(REPO, 'data', n));
 
+// An absent file and a zero-length one are the same state: a sibling test
+// process (dev mode, run in parallel by `node --test`) may legitimately OPEN the
+// committed demo.db read-side and leave an empty -wal sidecar behind. What
+// this test guards is CONTENT — a real write lands as non-empty bytes.
 function sha256OrAbsent(file) {
-  try { return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch (e) { return 'absent'; }
+  let buf;
+  try { buf = fs.readFileSync(file); } catch (e) { return 'empty'; }
+  return buf.length === 0 ? 'empty' : crypto.createHash('sha256').update(buf).digest('hex');
 }
 const BEFORE = COMMITTED.map(sha256OrAbsent);
 

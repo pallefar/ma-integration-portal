@@ -10,6 +10,10 @@ const ragService = require('./ragService');
 // accessor, and the shared database-path/schema-path constants — see the
 // consolidated /api gate below for how these three modules plug together.
 const dbFiles = require('./db/dbFiles');
+// D-10-05 (Phase 10): the single password-hashing module — login and
+// change-password verify/hash only through it (self-describing scrypt hashes,
+// legacy hashes still verify).
+const passwords = require('./lib/passwords');
 const controlStore = require('./db/controlStore');
 const resolver = require('./db/resolver');
 const { createDealDatabase } = require('./db/dealSeed');
@@ -235,10 +239,6 @@ function timingSafeEqualStr(a, b) {
 // effect immediately instead of waiting out an unrevocable signed cookie.
 const PORTAL_AUTH = process.env.PORTAL_AUTH === '1'; // vestigial; not used to gate anything below
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
-
-function hashPassword(password, saltHex) {
-  return crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 32).toString('hex');
-}
 
 // isOpenMode(req) is the ONE seam that decides whether this request may skip
 // the session gate entirely (D-02, the demo showcase). D-03 (Phase 3):
@@ -710,47 +710,65 @@ function loginThrottled(ip) {
   slot.count++;
   return slot.count > 8;
 }
-const DUMMY_SALT = crypto.randomBytes(16).toString('hex');
-
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body || {};
-  // D-01: login is now ALWAYS available (no more "disabled unless PORTAL_AUTH=1") —
-  // it is the sole path into a mandatory-by-default app.
-  if (loginThrottled(req.ip || req.socket.remoteAddress || '?')) {
-    return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
+// D-10-05: async handler — scrypt now runs on the libuv threadpool
+// (passwords.verifyPassword) instead of blocking the event loop. Any thrown
+// error (including an isBusyError() from the control/runtime stores) is
+// forwarded to next(err) so it reaches the central 503 middleware.
+app.post('/api/auth/login', async (req, res, next) => {
+  try {
+    const { username, password } = req.body || {};
+    // D-01: login is now ALWAYS available (no more "disabled unless PORTAL_AUTH=1") —
+    // it is the sole path into a mandatory-by-default app.
+    if (loginThrottled(req.ip || req.socket.remoteAddress || '?')) {
+      return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
+    }
+    // ISO-01 (Task 2 cutover): accounts moved OUT of the request-bound
+    // readDb()/writeDb() model into control.db, reached only through
+    // db/controlStore.js — a deal-bound request can never read/write the
+    // account store through its own connection (T-03-16).
+    const user = controlStore.findUser(String(username || '').trim().toLowerCase());
+    // Always run one scrypt derivation (dummyVerify for unknown/disabled
+    // accounts) so response time never reveals whether the username exists
+    // or is enabled (T-10-08).
+    let ok = false;
+    if (user && user.disabled !== true) {
+      ok = (await passwords.verifyPassword(password || '', user)).ok;
+    } else {
+      await passwords.dummyVerify(password || '');
+    }
+    if (!ok) {
+      return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
+    }
+    // Opportunistic cleanup, not a security mechanism — piggyback on the
+    // low-frequency login path rather than adding an interval timer (this
+    // codebase has none). Sessions live in runtime.db (D-07), not the
+    // request-bound connection (this route bypasses the resolver entirely —
+    // PUBLIC_API_PATHS).
+    sessions.pruneExpiredSessions(getRuntimeConnection());
+    const token = sessions.createSession(getRuntimeConnection(), {
+      username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
+      userAgent: req.get('user-agent'), ip: req.ip,
+    });
+    // SameSite=Strict (was Lax, D-08) — this app has no cross-site inbound-link
+    // flow that depends on Lax's top-level-navigation carve-out, and every
+    // write is already same-origin JSON fetch() (no classic <form> posts, no
+    // CORS headers ever set), so Strict closes the CSRF gap with no functional
+    // impact.
+    const cookie = ['ma_session=' + token, 'Path=/', 'HttpOnly', 'SameSite=Strict',
+      'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
+    if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
+    res.setHeader('Set-Cookie', cookie.join('; '));
+    res.json({
+      success: true,
+      user: { username: user.username, name: user.name || user.username, role: user.role },
+      mustChangePassword: user.mustChangePassword === true,
+    });
+  } catch (err) {
+    // isBusyError() reaches the central 503 + Retry-After middleware; every
+    // other failure reaches the generic 500 handler — both only via next().
+    if (isBusyError(err)) return next(err);
+    next(err);
   }
-  // ISO-01 (Task 2 cutover): accounts moved OUT of the request-bound
-  // readDb()/writeDb() model into control.db, reached only through
-  // db/controlStore.js — a deal-bound request can never read/write the
-  // account store through its own connection (T-03-16).
-  const user = controlStore.findUser(String(username || '').trim().toLowerCase());
-  // Always run scrypt (dummy salt for unknown users) so response time never
-  // reveals whether the username exists.
-  const computed = hashPassword(password || '', user && user.salt ? user.salt : DUMMY_SALT);
-  const ok = !!(user && user.hash && timingSafeEqualStr(computed, user.hash));
-  if (!ok) {
-    return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
-  }
-  // Opportunistic cleanup, not a security mechanism — piggyback on the
-  // low-frequency login path rather than adding an interval timer (this
-  // codebase has none). Sessions live in runtime.db (D-07), not the
-  // request-bound connection (this route bypasses the resolver entirely —
-  // PUBLIC_API_PATHS).
-  sessions.pruneExpiredSessions(getRuntimeConnection());
-  const token = sessions.createSession(getRuntimeConnection(), {
-    username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
-    userAgent: req.get('user-agent'), ip: req.ip,
-  });
-  // SameSite=Strict (was Lax, D-08) — this app has no cross-site inbound-link
-  // flow that depends on Lax's top-level-navigation carve-out, and every
-  // write is already same-origin JSON fetch() (no classic <form> posts, no
-  // CORS headers ever set), so Strict closes the CSRF gap with no functional
-  // impact.
-  const cookie = ['ma_session=' + token, 'Path=/', 'HttpOnly', 'SameSite=Strict',
-    'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
-  if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
-  res.setHeader('Set-Cookie', cookie.join('; '));
-  res.json({ success: true, user: { username: user.username, name: user.name || user.username, role: user.role } });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -813,54 +831,63 @@ app.get('/api/auth/me', (req, res) => {
 // PUBLIC_API_PATHS), verifies the CURRENT password with the same
 // scrypt+constant-time-compare primitive login uses (401 on mismatch), then
 // rotates to a fresh 16-byte salt before persisting the new hash.
-app.post('/api/auth/change-password', (req, res) => {
-  if (!req.portalUser) return res.status(401).json({ error: 'Login required.' });
-  // WR-02: reuse the same throttle /api/auth/login uses — scrypt is
-  // deliberately expensive, and a caller who already holds a valid session
-  // (e.g. a stolen cookie without the password) must not get unlimited
-  // current-password guesses just because change-password skips login.
-  // Keyed by username (a session already proves who the caller claims to be)
-  // rather than IP, so one throttled user cannot lock out others behind the
-  // same proxy/NAT.
-  if (loginThrottled('change-password:' + req.portalUser.username)) {
-    return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
+app.post('/api/auth/change-password', async (req, res, next) => {
+  try {
+    if (!req.portalUser) return res.status(401).json({ error: 'Login required.' });
+    // WR-02: reuse the same throttle /api/auth/login uses — scrypt is
+    // deliberately expensive, and a caller who already holds a valid session
+    // (e.g. a stolen cookie without the password) must not get unlimited
+    // current-password guesses just because change-password skips login.
+    // Keyed by username (a session already proves who the caller claims to be)
+    // rather than IP, so one throttled user cannot lock out others behind the
+    // same proxy/NAT.
+    if (loginThrottled('change-password:' + req.portalUser.username)) {
+      return res.status(429).json({ error: 'Too many attempts — try again in a minute.' });
+    }
+    // VAL-01: the type/shape check is owned by validators/settings.js's
+    // ChangePasswordSchema (min 8); the real-mode policy (min 12, no
+    // published demo password) is passwords.checkNewPassword() below.
+    const { currentPassword, newPassword } = req.body || {};
+    const user = controlStore.findUser(req.portalUser.username);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const verdict = await passwords.verifyPassword(currentPassword || '', user);
+    if (!verdict.ok) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    const problem = passwords.checkNewPassword(newPassword, { realMode: dbFiles.IS_REAL_MODE });
+    if (problem) return res.status(400).json({ error: problem });
+    controlStore.updateUser(user.username, {
+      hash: await passwords.hashPassword(newPassword), salt: null, mustChangePassword: false,
+    });
+    // D-08: a password change is a control-plane security event — the actor
+    // and the subject are the SAME user here (self-service), which is exactly
+    // why it must still be recorded: a session that changed its own password
+    // is meaningfully different from one that never did.
+    auditHook.recordSecurityEvent({
+      actor: req.portalUser, action: 'password-change', subject: user.username,
+      request: requestMeta(req),
+    });
+    // WR-01: rotating a credential must revoke every OTHER outstanding session
+    // for this user (db/sessions.js's own docstring calls this "Admin
+    // offboarding action", but the same primitive applies here) — otherwise a
+    // token an attacker already stole via a leaked cookie remains valid for up
+    // to SESSION_TTL_MS after the password that would have invalidated it is
+    // changed. Re-issue a fresh session for the CURRENT caller only, so they
+    // are not logged out by their own password change.
+    sessions.deleteAllSessionsForUser(getRuntimeConnection(), user.username);
+    const newToken = sessions.createSession(getRuntimeConnection(), {
+      username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
+      userAgent: req.get('user-agent'), ip: req.ip,
+    });
+    const cookie = ['ma_session=' + newToken, 'Path=/', 'HttpOnly', 'SameSite=Strict',
+      'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
+    if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
+    res.setHeader('Set-Cookie', cookie.join('; '));
+    res.json({ success: true });
+  } catch (err) {
+    if (isBusyError(err)) return next(err); // central 503 + Retry-After
+    next(err);
   }
-  // VAL-01: the length/type check this line used to carry is now owned
-  // exclusively by validators/settings.js's ChangePasswordSchema.
-  const { currentPassword, newPassword } = req.body || {};
-  const user = controlStore.findUser(req.portalUser.username);
-  if (!user) return res.status(404).json({ error: 'User not found.' });
-  const computed = hashPassword(currentPassword || '', user.salt);
-  if (!user.hash || !timingSafeEqualStr(computed, user.hash)) {
-    return res.status(401).json({ error: 'Current password is incorrect.' });
-  }
-  const newSalt = crypto.randomBytes(16).toString('hex');
-  controlStore.updateUser(user.username, { salt: newSalt, hash: hashPassword(newPassword, newSalt) });
-  // D-08: a password change is a control-plane security event — the actor
-  // and the subject are the SAME user here (self-service), which is exactly
-  // why it must still be recorded: a session that changed its own password
-  // is meaningfully different from one that never did.
-  auditHook.recordSecurityEvent({
-    actor: req.portalUser, action: 'password-change', subject: user.username,
-    request: requestMeta(req),
-  });
-  // WR-01: rotating a credential must revoke every OTHER outstanding session
-  // for this user (db/sessions.js's own docstring calls this "Admin
-  // offboarding action", but the same primitive applies here) — otherwise a
-  // token an attacker already stole via a leaked cookie remains valid for up
-  // to SESSION_TTL_MS after the password that would have invalidated it is
-  // changed. Re-issue a fresh session for the CURRENT caller only, so they
-  // are not logged out by their own password change.
-  sessions.deleteAllSessionsForUser(getRuntimeConnection(), user.username);
-  const newToken = sessions.createSession(getRuntimeConnection(), {
-    username: user.username, role: user.role, ttlMs: SESSION_TTL_MS,
-    userAgent: req.get('user-agent'), ip: req.ip,
-  });
-  const cookie = ['ma_session=' + newToken, 'Path=/', 'HttpOnly', 'SameSite=Strict',
-    'Max-Age=' + Math.floor(SESSION_TTL_MS / 1000)];
-  if (process.env.ENABLE_HSTS === '1') cookie.push('Secure');
-  res.setHeader('Set-Cookie', cookie.join('; '));
-  res.json({ success: true });
 });
 
 // Lightweight health check for uptime monitors and platform probes
