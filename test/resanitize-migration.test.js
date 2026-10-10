@@ -119,11 +119,11 @@ test('a v1 file: malicious page bodies are cleaned and benign rows are byte-iden
   assert.deepStrictEqual(Object.keys(a).sort(), Object.keys(JSON.parse(before.A)).sort(), 'no key added or dropped');
   assert.ok(!('version' in a), 'pages are not versioned collections — the store rule stamps no version, none is invented');
 
-  const summary = lines.find((l) => l.includes('deal/002 resanitize-html deal.db:'));
+  const summary = lines.find((l) => /deal\/002 resanitize-html deal-file#[0-9a-f]{8}: /.test(l));
   assert.ok(summary && /2 value\(s\) changed in 2 row\(s\)/.test(summary), `summary line: ${lines.join(' | ')}`);
   const hashLines = lines.filter((l) => /pages\/[AB] .* sha256 [0-9a-f]{64} -> [0-9a-f]{64}$/.test(l));
   assert.strictEqual(hashLines.length, 2);
-  assert.ok(lines.every((l) => !l.includes('onerror') && !l.includes('onclick')), 'no stored content is logged (MNPI)');
+  assert.ok(lines.every((l) => !l.includes('onerror') && !l.includes('onclick') && !l.includes('deal.db')), 'no stored content and no file name is logged (MNPI)');
 
   // Idempotent: re-open does nothing — a payload planted AFTER the stamp survives the reopen
   // (proves up() did not run again) and every other byte stays identical.

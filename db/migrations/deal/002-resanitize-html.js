@@ -33,7 +33,7 @@
 // deal write transaction; it is a system-actor repair, not an edit. What it
 // leaves behind is one log line per file plus, per changed value,
 // collection/id/path with sha256 of the value before and after — never the
-// content itself (MNPI). Rollback is the pre-upgrade data-directory backup
+// content itself (MNPI), and never a deal id (files are tagged by name digest). Rollback is the pre-upgrade data-directory backup
 // (DEPLOYMENT.md §6): migrations are forward-only and this one sets no
 // `backup: true` (a VACUUM INTO of every deal file for a rewrite expected to
 // touch ~0 values).
@@ -159,7 +159,11 @@ function up(conn, ctx) {
     }
   }
 
-  const where = ctx && ctx.file ? path.basename(ctx.file) : '(unknown file)';
+  // The boot sweep's log contract names no deal id (test/healthz-readiness.test.js):
+  // the committed demo file is named, every other file only by a short digest of its name.
+  const base = ctx && ctx.file ? path.basename(ctx.file) : '';
+  const where = base === 'demo.db' ? 'demo.db'
+    : `deal-file#${crypto.createHash('sha256').update(base).digest('hex').slice(0, 8)}`;
   console.log(`[migrate] deal/002 resanitize-html ${where}: ${changedValues} value(s) changed in ${changedRows} row(s)`);
   for (const l of lines) console.log(l);
 }
