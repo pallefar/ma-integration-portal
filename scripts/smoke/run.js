@@ -56,7 +56,10 @@ function readPackage(dir, name) {
 //   2. opts.searchDirs — extra node_modules dirs (used by tests)
 //   3. <home>/.npm/_npx/*/node_modules/<name> — the local npx cache
 //   4. the global npm root (`npm root -g`); skipped when opts.globalRoot === null
-// Every candidate must be a directory whose package.json `name` is the tool.
+// Every candidate must be a directory whose package.json `name` is the tool
+// and, when opts.verify is given, pass verify(dir) (a partially-installed npx
+// cache entry has a package.json but cannot be loaded — it is skipped, with
+// opts.onSkip(dir, source) told about it).
 // Returns { dir, version, source } or null. Never installs anything and never
 // looks in this repo's node_modules.
 function resolveTool(name, opts) {
@@ -83,9 +86,27 @@ function resolveTool(name, opts) {
   }
   for (const c of candidates) {
     const pkg = readPackage(c.dir, name);
-    if (pkg) return { dir: c.dir, version: pkg.version || 'unknown', source: c.source };
+    if (!pkg) continue;
+    let usable = true;
+    if (typeof o.verify === 'function') {
+      try { usable = o.verify(c.dir) === true; } catch (e) { usable = false; }
+    }
+    if (!usable) { if (typeof o.onSkip === 'function') o.onSkip(c.dir, c.source); continue; }
+    return { dir: c.dir, version: pkg.version || 'unknown', source: c.source };
   }
   return null;
+}
+
+// Loadability checks the CLI applies on top of the package-name check.
+const VERIFY = {
+  playwright: (dir) => typeof require(dir).chromium === 'object',
+  'axe-core': (dir) => fs.statSync(path.join(dir, 'axe.min.js')).isFile(),
+};
+function resolveForCli(name) {
+  return resolveTool(name, {
+    verify: VERIFY[name],
+    onSkip: (dir, source) => console.warn(`smoke: skipping ${name} at ${tildePath(dir)} (via ${source}): present but not loadable`),
+  });
 }
 
 function tildePath(p) {
@@ -374,8 +395,8 @@ async function main() {
   const entries = registry.filter((p) => wanted.includes(p.name));
 
   // --- tools (outside the repo; never installed here)
-  const pw = resolveTool('playwright');
-  const axeTool = resolveTool('axe-core');
+  const pw = resolveForCli('playwright');
+  const axeTool = resolveForCli('axe-core');
   const missing = [];
   if (!pw) missing.push('Playwright (set PLAYWRIGHT_PATH)');
   if (!axeTool) missing.push('axe-core (set AXE_CORE_PATH)');
@@ -429,7 +450,12 @@ async function main() {
     });
     if (bs.status !== 0) throw new Error('bootstrap-admin failed: ' + redact(String(bs.stderr)).slice(0, 300));
 
-    state.browser = await chromium.launch({ headless: !args.headed });
+    // handleSIG*: false — Playwright's own signal handlers call process.exit()
+    // immediately, which would pre-empt OUR async cleanup (server child + temp
+    // dir). Ours close the browser, stop the server, remove the temp dir, then exit.
+    state.browser = await chromium.launch({
+      headless: !args.headed, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false,
+    });
     const browser = state.browser;
 
     const needIl = entries.some((e) => e.as === 'il');
@@ -513,6 +539,7 @@ if (require.main === module) {
   const onSignal = (code) => () => { cleanup().then(() => process.exit(code), () => process.exit(code)); };
   process.once('SIGINT', onSignal(130));
   process.once('SIGTERM', onSignal(143));
+  process.once('SIGHUP', onSignal(129));
   main().then((code) => process.exit(code), (e) => {
     console.error('smoke: unexpected failure: ' + redact(String(e && e.stack ? e.stack : e)).split('\n').slice(0, 4).join('\n'));
     cleanup().then(() => process.exit(1), () => process.exit(1));
