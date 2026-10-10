@@ -150,6 +150,16 @@ function createWorkerSessions(count, dealId) {
   const sessions = [];
   for (let i = 0; i < count; i++) {
     const username = `soak-worker-${i}`;
+    // Phase 10 (D-10-04, COLLAB-02): a session's identity is re-read from
+    // control.db on EVERY request, so a session whose account does not exist
+    // is a 401. The worker therefore needs a real (credential-less, so it can
+    // never sign in) admin account row behind its session.
+    if (!controlStore.getAccount(username)) {
+      controlStore.createAccount({
+        username, name: `Soak worker ${i}`, role: 'admin', disabled: false,
+        mustChangePassword: false, createdAt: new Date().toISOString(), createdBy: 'soak-harness',
+      });
+    }
     const token = sessionsDb.createSession(runtimeConn, {
       username, role: 'admin', ttlMs: 6 * 60 * 60 * 1000,
     });
