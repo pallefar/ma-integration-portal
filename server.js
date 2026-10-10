@@ -463,6 +463,12 @@ const ROLE_WRITE_POLICY = [
   { prefix: '/api/pulses', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/employees/complete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   { prefix: '/api/employees/uncomplete-lesson', roles: ['admin', 'hrbp', 'pmo', 'employee'] },
+  // [security] D-11-04 / AUTHZ-04 (R3 F-2): get-or-create was a GET (so it
+  // bypassed this table and validationMiddleware) reachable by every role; it
+  // is now an exact, POST-only self-service rule — no widening, and no other
+  // method or sibling path inherits it. The handler scopes what a role the
+  // read policy refuses /api/employees can actually resolve (own record only).
+  { prefix: '/api/employees/get-or-create', exact: true, methods: ['POST'], roles: ['admin', 'hrbp', 'pmo', 'employee'] },
   // Boundary-safe AND POST-only: covers only `POST /api/assessment` (own
   // submission) and `POST /api/assessment-instances` (self-submission).
   // `DELETE /api/assessments/:id` and `DELETE /api/assessment-instances/:id`
@@ -7542,21 +7548,55 @@ function calculateBadge(completedCount) {
   return "New Recruit";
 }
 
-// GET or Create Employee (For tracking welcome page URLs & progress)
-app.get('/api/employees/get-or-create', (req, res) => {
-  const { empId, name, role, department, company, isLeader, leaderRole, buddyName, buddyEmail } = req.query;
+// [security] D-11-04 / AUTHZ-04 / amendment 5 (Phase 11): the caller's OWN
+// roster record id, derived from the authenticated session identity — never
+// from anything the client supplies. A roster-refused role (employee in a real
+// deal) resolves ONLY this record through get-or-create, so the route cannot be
+// used as a lookup of a colleague's record by empId or by name. A one-way hash
+// of the username keeps the id stable per account (one row per account, not one
+// per supplied empId) and keeps the username itself out of roster ids/URLs.
+function selfRosterId(username) {
+  return 'emp_acct_' + crypto.createHash('sha256').update('roster-self:' + String(username || '')).digest('hex').slice(0, 20);
+}
+
+// Find or create an employee profile (tracks welcome-page progress).
+// [security] R3 F-2 (D-11-04): this was `GET /api/employees/get-or-create` — a
+// GET that wrote roster rows, so it skipped ROLE_WRITE_POLICY and
+// validationMiddleware and could be fired by a cross-site link. It is a POST
+// with a zod-validated body now; the GET route no longer exists.
+app.post('/api/employees/get-or-create', (req, res) => {
+  const body = req.body || {};
+  const { empId, name, role, department, company, isLeader, leaderRole, buddyName, buddyEmail } = body;
   const db = readDb();
   const isCustom = db.settings && db.settings.demoMode === false;
   const targetCompany = isCustom ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || "NewCo Ltd.") : (db.settings.targetCompany || "NewCo Ltd.");
-  
+
   let employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
 
-  let found = null;
-  if (empId) {
-    found = employeesList.find(e => e.id === empId);
+  // [security] AUTHZ-01 bypass guard: outside the demo store, a role the read
+  // policy refuses `/api/employees` (employee in a real deal) must not be able
+  // to read the named roster through this route. Such a caller is "restricted":
+  // the lookup key is the id derived from the session (selfRosterId), a supplied
+  // empId / name is never used to find a record, and the caller's self-declared
+  // leader/buddy attributes are not honoured. The demo store and every role the
+  // read policy allows the roster keep the original behaviour unchanged.
+  const restricted = req.isDemo !== true
+    && !(req.portalUser && readPolicy.roleAllowedForRead(req.portalUser.role, '/api/employees'));
+  if (restricted && !req.portalUser) {
+    return res.status(403).json({ error: 'Your role cannot view this information.' });
   }
-  if (!found && name) {
-    found = employeesList.find(e => e.name && e.name.toLowerCase() === name.toLowerCase());
+  const ownId = restricted ? selfRosterId(req.portalUser.username) : null;
+
+  let found = null;
+  if (restricted) {
+    found = employeesList.find(e => e.id === ownId) || null;
+  } else {
+    if (empId) {
+      found = employeesList.find(e => e.id === empId);
+    }
+    if (!found && name) {
+      found = employeesList.find(e => e.name && e.name.toLowerCase() === name.toLowerCase());
+    }
   }
 
   if (found) {
@@ -7577,8 +7617,9 @@ app.get('/api/employees/get-or-create', (req, res) => {
 
   // Create new profile dynamically
   const newEmployee = {
-    id: empId || newId('emp'),
-    name: name || "Valued Team Member",
+    id: restricted ? ownId : (empId || newId('emp')),
+    // restricted: the authoritative display name from the account, not a claim
+    name: restricted ? (req.portalUser.name || req.portalUser.username) : (name || "Valued Team Member"),
     role: role || "Specialist",
     department: department || "Operations",
     company: company || targetCompany || 'NextGen Sensors Ltd.',
@@ -7586,10 +7627,10 @@ app.get('/api/employees/get-or-create', (req, res) => {
     points: 0,
     badge: "New Recruit",
     bonusPoints: 0,
-    isLeader: isLeader === true || isLeader === 'true' || false,
-    leaderRole: leaderRole || 'None',
-    buddyName: buddyName || '',
-    buddyEmail: buddyEmail || ''
+    isLeader: restricted ? false : (isLeader === true || isLeader === 'true' || false),
+    leaderRole: restricted ? 'None' : (leaderRole || 'None'),
+    buddyName: restricted ? '' : (buddyName || ''),
+    buddyEmail: restricted ? '' : (buddyEmail || '')
   };
 
   if (isCustom) {
