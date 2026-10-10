@@ -1203,6 +1203,10 @@ app.get('/api/auth/sessions', (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');
     const rows = sessions.listSessionsForUser(getRuntimeConnection(), req.portalUser.username);
+    // IN-01: req.portalUser.sessionId IS the stored token hash (db/sessions.js
+    // findSession) — so `current` compares like with like. `tokenHash` stays
+    // server-side: only the derived public `id` is ever serialised (T-10-19;
+    // pinned by test/self-sessions.test.js).
     res.json(rows.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,

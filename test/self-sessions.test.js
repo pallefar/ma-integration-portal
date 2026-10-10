@@ -194,3 +194,20 @@ test('GET /api/auth/sessions never carries a token hash or secret', async () => 
   }
   assert.ok(!text.includes(t), 'the raw cookie value must never be echoed');
 });
+
+// IN-01 (Phase 10 review): the `current` flag compares a stored token hash with
+// req.portalUser.sessionId — correct only because findSession() reports the
+// token HASH as sessionId. Pin that invariant so a refactor that changes it
+// cannot silently turn `current` into "never" (or leak the hash as the id).
+test('IN-01: findSession().sessionId is the stored token hash; the public id is derived from it and never equal', async () => {
+  const token = mint('in01-user', 'pmo', 'UA in01');
+  const found = sessionsDb.findSession(runtimeConn, token);
+  assert.strictEqual(found.sessionId, sessionsDb.hashToken(token));
+  const listed = sessionsDb.listSessionsForUser(runtimeConn, 'in01-user');
+  assert.strictEqual(listed.length, 1);
+  assert.strictEqual(listed[0].tokenHash, found.sessionId);
+  assert.strictEqual(listed[0].id, sessionsDb.publicSessionId(found.sessionId));
+  assert.notStrictEqual(listed[0].id, found.sessionId);
+  const res = await api('GET', '/api/auth/sessions', token);
+  assert.deepStrictEqual(res.json.map((s) => [s.id, s.current, 'tokenHash' in s]), [[listed[0].id, true, false]]);
+});
