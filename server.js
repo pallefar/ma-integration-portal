@@ -6066,9 +6066,14 @@ app.get('/api/dd/summary', (req, res) => {
 // not the wall clock — otherwise seeded due dates go permanently overdue and
 // ignore time travel. Custom projects use the real date.
 const DEMO_ARC_START_MS = Date.parse('2026-05-01T09:00:00.000Z');
-function portalNowMs(db) {
+function portalNowMs(db, req) {
+  // v3.0 R4 F2 (IL-03 server half): a REAL deal carries no `demoMode` flag in
+  // its settings singleton, so the old test (`demoMode === false`) fell through
+  // to the frozen demo arc and every real deal's overdue signal ran on 2026-05-30.
+  // A deal-bound request (not the demo store) always uses the wall clock.
+  const isRealDeal = !!(req && req.isDemo === false);
   const isCustom = db.settings && db.settings.demoMode === false;
-  if (isCustom) return Date.now();
+  if (isCustom || isRealDeal) return Date.now();
   const day = (db.settings && db.settings.timeTravelDay) || 30;
   return DEMO_ARC_START_MS + (day - 1) * 86400000;
 }
@@ -6082,7 +6087,7 @@ app.get('/api/notifications', (req, res) => {
       items.push({ id: 'assess_' + t.id, type: 'assessment_pending', titleKey: t.titleKey || '', title: t.title || '', href: '/assessments.html', severity: 'high' });
     }
   });
-  const nowMs = portalNowMs(db);
+  const nowMs = portalNowMs(db, req);
   const ilTpl = (db.assessmentTemplates || []).find(t => t.subject === 'integration-leader' && t.published !== false);
   if (ilTpl) {
     const latest = latestAssessInstanceFor(visible, ilTpl.id, 'self');
@@ -6105,7 +6110,7 @@ app.get('/api/notifications', (req, res) => {
   if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
   const blocked = tasks.filter(t => t.status === 'blocked');
   if (blocked.length) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blocked.length, href: '/execution.html', severity: 'medium' });
-  const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && r.severity === 'high');
+  const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && (r.severity === 'high' || r.severity === 'critical'));
   if (raidHigh.length) items.push({ id: 'raid_high', type: 'raid_high', count: raidHigh.length, href: '/execution.html', severity: 'high' });
   res.json({ success: true, items });
 });
