@@ -130,7 +130,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
   4. Eight wrong passwords from one user do not lock out a colleague behind the same proxy; temporary passwords force a change at first login; stored hashes upgrade transparently; any user changes their password and ends their own sessions from the UI.
   5. New database files are `0600` in a `0700` directory under any umask.
 
-**Plans**: 4/9 plans executed (5 waves; server.js-touching plans 10-01 → 10-03 → 10-05 are one per wave)
+**Plans**: 6/9 plans executed (5 waves; server.js-touching plans 10-01 → 10-03 → 10-05 are one per wave)
 **Wave 1**
 
 - [x] 10-01-PLAN.md — W1 tracer: MA_MODE=real mode contract, own data dir seeded without demo accounts, bootstrap-admin CLI, new scrypt hash format, committed-file guards
@@ -143,8 +143,8 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 10-05-PLAN.md — W3: forced rotation gate, lazy rehash, per-account/per-source throttle, Secure cookie/HSTS, demo-credential lockdown
-- [ ] 10-06-PLAN.md — W3: mode-aware login page, change-password screen, header-menu Change password / My sessions, WINDOWS #4 loop fix, Playwright runner
+- [x] 10-05-PLAN.md — W3: forced rotation gate, lazy rehash, per-account/per-source throttle, Secure cookie/HSTS, demo-credential lockdown
+- [x] 10-06-PLAN.md — W3: mode-aware login page, change-password screen, header-menu Change password / My sessions, WINDOWS #4 loop fix, Playwright runner
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -369,7 +369,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 |-------|-----------|----------------|--------|-----------|
 | 8. Concurrency & Storage Foundation | v3.0 | 5/5 | Complete    | 2026-08-11 |
 | 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | Complete    | 2026-10-10 |
-| 10. Accounts & Identity | v3.0 | 4/9 | In Progress|  |
+| 10. Accounts & Identity | v3.0 | 6/9 | In Progress|  |
 | 11. Authorization & Clean-Room Closure | v3.0 | 0/TBD | Not started | - |
 | 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |
 | 13. Content Safety | v3.0 | 0/TBD | Not started | - |
