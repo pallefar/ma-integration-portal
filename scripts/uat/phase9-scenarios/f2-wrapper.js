@@ -154,9 +154,19 @@ async function deleteAnywayAt(ctx, viewport, tag) {
   await a.click(`.raid-row[data-raid="${entry.id}"] .raid-status`);
   await ctx.sleep(600);
 
-  // The harness accepts the native confirm (the in-app confirm replaces it in plan 09-14).
+  // 09-14 (R7 F-6): the delete asks with the in-app confirm first (no native
+  // dialog); its 'Delete' sends the request and the SAME overlay becomes the
+  // stale-delete state.
   await b.click(`.raid-row[data-raid="${entry.id}"] .ex-del`);
-  const dlg = await ctx.waitDialog(b);
+  const confirm = await ctx.waitDialog(b);
+  ctx.check('in-app confirm shown first (' + tag + ')', !!confirm && confirm.overlays === 1 && confirm.title === 'Delete this entry?', confirm && confirm.title);
+  await b.click('.conflict-modal .conflict-btn-delete');
+  await b.waitForFunction(() => {
+    const t = document.querySelector('.conflict-modal-title');
+    return !!t && /still delete it/.test(t.textContent);
+  }, null, { timeout: 5000 });
+  await ctx.sleep(150);
+  const dlg = await ctx.readDialog(b);
   const isStaleDelete = !!dlg && dlg.overlays === 1 && dlg.buttons.some((x) => /conflict-btn-delete/.test(x.cls));
   ctx.check('stale-delete dialog shown (' + tag + ')', isStaleDelete, dlg && { title: dlg.title, overlays: dlg.overlays });
   const fit = await ctx.fitCheck(b);
@@ -169,6 +179,7 @@ async function deleteAnywayAt(ctx, viewport, tag) {
   const inDom = await b.evaluate((rid) => !!document.querySelector(`.raid-row[data-raid="${rid}"]`), entry.id);
   const server = await getRaid(ctx, entry.id);
   ctx.check('row removed after Delete anyway (' + tag + ')', !inDom && !server, { inDom, serverHasEntry: !!server });
+  ctx.check('native dialogs: 0 (' + tag + ')', b.nativeDialogs.length === 0, b.nativeDialogs);
 }
 
 async function thirdWriterAt(ctx, viewport, tag) {

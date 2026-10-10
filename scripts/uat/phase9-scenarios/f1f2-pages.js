@@ -282,8 +282,9 @@ module.exports = {
   },
 
   // R7 F-2c: position delete -> stale-delete dialog -> Delete anyway -> the
-  // node is gone from B's DOM and from the API (native confirm still present
-  // until 09-14; the harness accepts it).
+  // node is gone from B's DOM and from the API. 09-14: the in-app confirm
+  // comes first and the SAME overlay becomes the stale-delete state; no
+  // native dialog is ever shown.
   async 'org-delete-anyway-f2'(ctx) {
     const pos = await seedPosition(ctx, 'F-2c delete anyway position');
     const stamp = await ctx.api(ctx.seeder.cookie, 'POST', '/api/org/positions', { id: pos.id, level: 'L4', version: 0 });
@@ -299,12 +300,20 @@ module.exports = {
     ctx.check('A edit 200', edit.status === 200, edit.status);
 
     await b.locator(node).locator('.org-node-delete').first().click();
-    const dlg = await ctx.waitDialog(b);
+    const confirm = await ctx.waitDialog(b);
+    ctx.check('in-app confirm shown first', !!confirm && confirm.overlays === 1 && confirm.title === 'Delete position? This cannot be undone.', confirm && confirm.title);
+    await b.click('.conflict-modal .conflict-btn-delete');
+    await b.waitForFunction(() => {
+      const t = document.querySelector('.conflict-modal-title');
+      return !!t && /still delete it/.test(t.textContent);
+    }, null, { timeout: 5000 });
+    await ctx.sleep(150);
+    const dlg = await ctx.readDialog(b);
     const del = lastRequest(b, 'DELETE', '/api/org/positions');
     ctx.check('DELETE carries expectedVersion=1', !!del && /[?&]expectedVersion=1(&|$)/.test(del.url), del && del.url);
     ctx.check('409 stale-delete dialog', !!dlg && dlg.overlays === 1 && dlg.buttons.some((x) => /conflict-btn-delete/.test(x.cls)),
       dlg && { title: dlg.title, overlays: dlg.overlays });
-    const errShown = await b.evaluate(() => !!document.querySelector('.org-delete-error') && document.querySelector('.org-delete-error').style.display !== 'none' && !!document.querySelector('.org-delete-error').textContent);
+    const errShown = await b.evaluate(() => { const e = document.getElementById('org-delete-error'); return !!e && e.style.display !== 'none' && !!e.textContent; });
     ctx.check('no inline org error alongside the dialog (WR-02)', !errShown);
     await ctx.shot(b, 'org-delete-anyway-f2-1440.png');
 
@@ -314,6 +323,7 @@ module.exports = {
     const inDom = await b.evaluate((sel) => !!document.querySelector(sel), node);
     const server = await getPosition(ctx, pos.id);
     ctx.check('node gone from DOM and API', !inDom && !server, { inDom, serverHasPosition: !!server });
+    ctx.check('native dialogs: 0', b.nativeDialogs.length === 0, b.nativeDialogs);
   },
 
   // GD-1: from ONE tab, two writes in a row to a never-edited record on a

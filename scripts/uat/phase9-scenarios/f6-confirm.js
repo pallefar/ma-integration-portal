@@ -279,7 +279,7 @@ module.exports = {
     ctx.check('refusal: dialog closes', await ctx.waitNoDialog(org));
     await ctx.sleep(400);
     const err = await org.evaluate(() => {
-      const e = document.querySelector('.org-delete-error');
+      const e = document.getElementById('org-delete-error');
       return e && e.style.display !== 'none' ? e.textContent : null;
     });
     ctx.check('refusal: inline error carries the server message', !!err && /direct report/.test(err), err);
