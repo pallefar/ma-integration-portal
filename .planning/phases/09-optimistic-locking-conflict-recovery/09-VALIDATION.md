@@ -27,7 +27,7 @@ executed shape diverged from 09-RESEARCH.md's own Validation Architecture sectio
 | **Config file** | none — `node --test` auto-discovers `test/*.test.js`; no `.mocharc`/`jest.config` in this repo |
 | **Quick run command** | `node --test test/optimistic-locking-contract.test.js` |
 | **Full suite command** | `npm test` (`node --test`, discovers every `test/*.test.js`) |
-| **Estimated runtime** | quick command ~1s (964ms observed, 52 subtests); full suite ~9.5s (9551ms observed, 775/775); `npm run soak` ~15-20s at `SOAK_DURATION_MS=15000` (smoke config) or ~2min at the default `SOAK_PROCESSES=3`/`SOAK_DURATION_MS=120000` release-gate config |
+| **Estimated runtime** | quick command ~1s (964ms observed, 52 subtests); full suite ~9.7s (9691ms observed, 861/861 after the gap closure; 9.5s and 775/775 before it); `npm run soak` ~15-20s at `SOAK_DURATION_MS=15000` (smoke config) or ~2min at the default `SOAK_PROCESSES=3`/`SOAK_DURATION_MS=120000` release-gate config; the full browser walk (`scripts/uat/phase9-walk.js`, 25 scenarios + integrity) takes a few minutes and the demo run well under a minute (the walk is a phase-gate proof, not part of the commit loop) |
 
 ---
 
@@ -225,20 +225,44 @@ or is an explicitly recorded exception with a stated proof route.
 
 ---
 
+## Final gate — 2026-10-10 (plan 09-16 Task 3, on the final tree, base `2b4ef69` + the 09-16 commits)
+
+| Check | Result |
+|-------|--------|
+| `npm test` | **861 tests, 861 pass, 0 fail**, 9691 ms (before the gap closure: 779). Run once; no failure, so the 09-08 known-flake rule was not needed |
+| `node --test test/optimistic-locking-cross-process.test.js` (file unmodified since 09-07, `5d188f8`) + `test/asset-cache-bust.test.js` | 18/18 pass (7 spawned-process cases + 11 stamp tests), 0 fail |
+| `npm run soak` (default: 3 real server processes, 120 s) | **PASS.** acknowledged = 4097, refused (clean 503) = 18 (0.4 %), unexpected = 0; every acknowledged write present and exact (missing 0, mismatched 0); committed-but-unaudited = 0; audit trail 1:1 (4097 rows, missing 0, duplicate 0, extra 0); `PRAGMA integrity_check` ok on deal, control and audit; conflict lane: acknowledged 407, **409 = 909**, 503 = 2, probe record version reconciles exactly (1 -> 408) and final content matches the highest acknowledged write |
+| Browser walk, real-deal instance (committed `walk-evidence/results.json`) | **350 PASS / 0 FAIL** across the 25 registered scenarios, `one-tab-no-self-conflict` and `data-integrity`; one earlier run had a single `dialog-widths` FAIL, classified as a scenario defect and fixed (see As-executed notes), then the whole walk re-run clean |
+| Browser walk, `--demo-open` (committed `walk-evidence/demo/results.json`) | 18 PASS / 0 FAIL (`demo-smoke`, `data-integrity`) |
+| `git status --porcelain data/` after tests, soak and both walks | prints nothing — committed databases untouched |
+| Screenshot review | Every screenshot the walk produced (33 at the real-deal walk, 2 in the demo run) was opened and judged: in all 10 narrow (390 px) captures the modal sits inside the viewport with both actions visible (Discard/Apply, Cancel/Delete anyway, Close); the 1440 px captures show the same dialogs at desktop width. The 390 px set and the demo pair are committed; the 1440 px set (23 files, 4.5 MB) is kept out of git per the plan's size rule |
+
+---
+
 ## Validation Sign-Off
 
-- [x] All tasks have `<automated>` verify or Wave 0 dependencies — 17 of 18 tasks carry an
-      `<automated>` command; the 18th (09-03-03) is the phase's one
-      `type="checkpoint:human-verify" gate="blocking"` task, by design not automatable, and is
-      APPROVED.
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies — 43 of 44 tasks carry an
+      `<automated>` command (the 18 original tasks: 17; the 26 gap-closure tasks: 26); the one
+      without (09-03-03) is the phase's `type="checkpoint:human-verify" gate="blocking"` task, by
+      design not automatable, APPROVED by the user 2026-08-11 and replayed by the walk scenarios.
 - [x] Sampling continuity: no 3 consecutive tasks without automated verify — see the note under
       the Per-Task Verification Map above.
 - [x] Wave 0 covers all MISSING references — all three test files 09-RESEARCH.md's own Wave 0
-      Gaps section named were created inside this phase (see Wave 0 Requirements above).
+      Gaps section named were created inside this phase, and the gap closure's own new files
+      (precondition test, client-precondition test, held-version helper, cache-bust test, walk
+      harness) are listed under "Gap-closure additions" (see Wave 0 Requirements above).
+- [x] Every UAT gap (1-7) and every ROADMAP success criterion SC4-SC9 maps to a green test and a
+      PASS walk scenario from the 2026-10-10 evidence run (see "Gap closure coverage").
+- [x] Final gate on the final tree is green: 861/861, cross-process unmodified 18/18 with the
+      cache-bust test, soak PASS (0 lost, 0 committed-but-unaudited), `data/` untouched (see
+      "Final gate — 2026-10-10").
 - [x] No watch-mode flags — every `<automated>` command in this phase is a one-shot `node --test`
       or `npm test`/`npm run soak` invocation; none use `--watch`.
 - [x] Feedback latency < 10s (commit-loop cadence; the phase-gate soak is a separate, slower,
       intentionally-real-time proof, not part of the per-task/per-wave sampling loop).
 - [x] `nyquist_compliant: true` set in frontmatter.
 
-**Approval:** approved 2026-08-11
+**Approval:** approved 2026-08-11; re-signed 2026-10-10 after the gap closure (09-08..09-16) against the
+committed walk evidence and the final gate above. Two exceptions are recorded rather than hidden: the
+org.html position-edit surface does not exist (WINDOWS #3, proven at the API instead) and the walk does
+not exercise a 1024 px width (1440 and 390 bracket the single responsive dialog shell).
