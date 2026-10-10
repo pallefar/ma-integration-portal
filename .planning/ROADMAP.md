@@ -222,7 +222,7 @@ Plans:
 - [ ] 12-08-PLAN.md
 - [x] 12-09-PLAN.md
 - [x] 12-10-PLAN.md
-- [ ] 12-11-PLAN.md
+- [x] 12-11-PLAN.md
 - [ ] 12-12-PLAN.md
 - [ ] 12-13-PLAN.md
 - [ ] 12-14-PLAN.md
@@ -424,7 +424,7 @@ Items a closed phase deferred or accepted, owned by a later phase (full table wi
 | 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | Complete    | 2026-10-10 |
 | 10. Accounts & Identity | v3.0 | 9/9 | Complete    | 2026-10-10 |
 | 11. Authorization & Clean-Room Closure | v3.0 | 10/8 | Complete    | 2026-10-10 |
-| 12. Data-Layer Integrity & Performance | v3.0 | 10/16 | In Progress|  |
+| 12. Data-Layer Integrity & Performance | v3.0 | 11/16 | In Progress|  |
 | 13. Content Safety | v3.0 | 0/TBD | Not started | - |
 | 14. Deal Files, Limits & Legacy Hazards | v3.0 | 0/TBD | Not started | - |
 | 15. Module Control — Core | v3.0 | 0/TBD | Not started | - |
