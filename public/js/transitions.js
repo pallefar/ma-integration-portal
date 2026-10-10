@@ -242,6 +242,11 @@
     else session.resolve(response);
     // The shown session just ended: bring up the next queued conflict (a
     // function declaration below — hoisted — so ordering in this IIFE is free).
+    // IN-02 (09-REVIEW round 2): this runs synchronously, BEFORE the settled
+    // page's own `.then` handlers (microtasks) — so a page's post-conflict
+    // re-read may render underneath the NEXT queued dialog. The contract is
+    // "after ITS OWN dialog closed", not "while no dialog is open"; the queued
+    // session renders only from its own request/409 bodies, so it is unaffected.
     openNextQueuedConflict();
   }
 

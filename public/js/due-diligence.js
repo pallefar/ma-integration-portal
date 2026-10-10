@@ -114,7 +114,11 @@
   // refuses an absent version in a real deal. The unconditional
   // `.then(refresh)` below is correct because the shared fetch wrapper holds
   // this promise while the conflict dialog is open (09-11) — refresh() runs
-  // only after the dialog has closed, never underneath it.
+  // only after ITS OWN dialog has closed. (IN-02, 09-REVIEW round 2: if a
+  // second conflict is queued, the wrapper opens it synchronously as this
+  // one settles, so refresh() may re-render underneath that NEXT dialog —
+  // harmless, since the queued session renders from its own request and
+  // 409 bodies, not from the page.)
   function updateItem(item, patch) {
     var body = Object.assign({ id: item.id }, patch);
     body.version = window.maVersionOf(item);
