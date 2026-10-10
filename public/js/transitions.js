@@ -143,6 +143,9 @@
   const CONFLICT_ERROR_REASON_CONFLICT = 'the record changed again';
   const CONFLICT_ERROR_REASON_NETWORK = 'a network error occurred';
   const CONFLICT_ERROR_REASON_SERVER = 'the server reported an error';
+  // IN-05 (09-REVIEW round 2) / UI-SPEC A11: a reapply whose Phase-8 busy
+  // retries ran out (503) — said in the dialog banner instead of the toast.
+  const CONFLICT_ERROR_REASON_BUSY = 'the server is busy';
   const conflictErrorMessage = (reason) => CONFLICT_ERROR_PREFIX + reason + CONFLICT_ERROR_SUFFIX;
   // FA-2 (09-01-PLAN.md): a deliberate extension beyond the signed-off
   // 09-UI-SPEC.md Copywriting Contract — three literals for PD-4's "an
@@ -546,6 +549,12 @@
       }
       if (res && res.status === 404 && session.method === 'DELETE') {
         rerender(CONFLICT_ERROR_REASON_ALREADY_DELETED);
+        return undefined;
+      }
+      if (res && res.status === 503) {
+        // IN-05 / A11: busy retries exhausted — the dialog's banner is the
+        // ONE surface (attemptFetch skipped the give-up toast for a reapply).
+        rerender(CONFLICT_ERROR_REASON_BUSY);
         return undefined;
       }
       if (res && res.status >= 500) {
@@ -1016,7 +1025,13 @@
       // Retries exhausted (or the body can't be safely re-sent): tell the user
       // plainly and leave the page/form exactly as it is so they can just save
       // again — nothing is discarded, cleared, or re-navigated (D-08).
-      showBusyGiveUpToast();
+      // IN-05 (09-REVIEW round 2) / UI-SPEC A11: a conflict dialog's own
+      // reapply ("Apply my changes anyway" / "Delete anyway") gets NO toast —
+      // the dialog stays open and says so in its own banner ("the server is
+      // busy", runConflictReapply), so the user sees one message pointing at
+      // one control. The in-app delete confirm's first DELETE (ctx carries
+      // confirmSession) closes the dialog on a 503, so it keeps the toast.
+      if (!(ctx && ctx.reapply && !ctx.confirmSession)) showBusyGiveUpToast();
       return res;
     }
     // CONC-02/D-05/Pitfall 1 (Phase 9): a same-origin /api 409 is checked

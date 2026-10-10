@@ -1331,6 +1331,46 @@ test('IN03: apply on a route with ?expectedVersion= AND a body version rewrites 
     'the body version must move in step with the query, never stay stale');
 });
 
+// ---- IN-05 (09-REVIEW round 2) / UI-SPEC A11: a reapply whose 503 retries
+// run out says so ONCE, in the dialog banner — no give-up toast on top. ----
+
+const BUSY_TOAST_TEXT = 'Server is busy — your change was not saved. Please try again.';
+const toastCount = (document) => document.body.children.filter((c) => c.textContent === BUSY_TOAST_TEXT).length;
+// Retries fire at once; the toast's 5s self-removal timer is NOT run, so a
+// toast that was ever shown is still countable at the end of the test.
+const fastRetries = (sandbox) => { sandbox.setTimeout = (fn, ms) => (ms >= 5000 ? 0 : setTimeout(fn, 0)); };
+
+test('IN05a: Apply exhausting its 503 retries -> banner "the server is busy", no toast, promise still pending', async () => {
+  const busy = () => makeResponse({ status: 503, headers: new Headers({ 'Retry-After': '0' }) });
+  const fake = makeRoutedFetch((i) => (i === 0 ? makeResponse({ status: 409, body: conflictOf() }) : busy()));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  fastRetries(sandbox);
+
+  const p = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  const outcome = track(p);
+  await flushAll();
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  // The retries ride real (0 ms) timers — give them wall-clock time, then drain.
+  for (let i = 0; i < 4; i++) { await new Promise((r) => setTimeout(r, 15)); await flushAll(); }
+
+  assert.strictEqual(fake.calls.length, 4, 'the original write + the reapply and its 2 busy retries');
+  const banner = document.querySelectorAll('.conflict-modal-error')[0];
+  assert.ok(banner, 'the dialog banner is shown');
+  assert.strictEqual(banner.textContent,
+    "That didn't go through — the server is busy. Your edits are still here; review the fresh values below and try again.");
+  assert.strictEqual(toastCount(document), 0, 'no give-up toast on top of the dialog banner');
+  assert.strictEqual(outcome.settled, false);
+});
+
+test('IN05b: an ordinary write exhausting its 503 retries still shows the give-up toast (Phase 8 D-08 unchanged)', async () => {
+  const fake = makeRoutedFetch(() => makeResponse({ status: 503, headers: new Headers({ 'Retry-After': '0' }) }));
+  const { sandbox, document } = buildSandbox(fake.impl);
+  fastRetries(sandbox);
+  const res = await sandbox.window.fetch('/api/pulses', { method: 'POST', body: '{}' });
+  assert.strictEqual(res.status, 503);
+  assert.strictEqual(toastCount(document), 1);
+});
+
 // ---- IN-04 (09-REVIEW round 2) / UI-SPEC A10: keyboard focus is trapped in
 // the dialog, so Tab + Enter can no longer reach a page control behind the
 // overlay (whose maConfirmDelete would then refuse silently). ----
