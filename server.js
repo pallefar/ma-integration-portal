@@ -7654,7 +7654,19 @@ app.get('/api/pulses', (req, res) => {
   // Append stored pulses (seeded + live submissions from the employee portal)
   // so POSTed feedback actually surfaces on the dashboard change curve.
   const stored = (db.pulses || []).filter(p => !scaled.some(s => s.id === p.id));
-  res.json([...scaled, ...stored]);
+  const all = [...scaled, ...stored];
+  // [security] D-11-06 / R1-15 (Phase 11 plan 05): in a REAL deal a pulse is
+  // personal data about a named colleague. admin/hrbp read everything, the
+  // author reads its own, pmo gets own + aggregate rows (rating/type/day only),
+  // employee gets own only — see lib/pulseView.js. The demo store (req.isDemo
+  // === true) is never projected: the showcase library + stored feedback is
+  // served exactly as demonstrated.
+  if (req.isDemo !== true) {
+    const { pulsesFor } = require('./lib/pulseView');
+    const caller = req.portalUser || {};
+    return res.json(pulsesFor(caller.role, caller.username, all));
+  }
+  res.json(all);
 });
 
 // POST Pulse
@@ -7670,7 +7682,11 @@ app.post('/api/pulses', (req, res) => {
     rating: parseInt(rating) || 3,
     comment: comment || '',
     timestamp: new Date().toISOString(),
-    type: type || '30-day'
+    type: type || '30-day',
+    // [security] D-11-06 / T-11-41: authorship is stamped from the SESSION, never
+    // from the body (employeeName is free text any caller can type). GET
+    // /api/pulses matches "own" pulses on this field only.
+    authorUsername: req.portalUser ? req.portalUser.username : null
   };
 
   db.pulses.push(newPulse);

@@ -1063,7 +1063,9 @@ function initDemoDashboard() {
           const card = document.createElement('div');
           card.className = 'pulse-comment-card';
           
-          const dateStr = new Date(p.timestamp).toLocaleDateString(undefined, {
+          // Phase 11 (D-11-06): a pmo caller in a real deal gets aggregate rows
+          // with a calendar `day` and no timestamp/name/comment (lib/pulseView.js).
+          const dateStr = new Date(p.timestamp || p.day).toLocaleDateString(undefined, {
             month: 'short',
             day: 'numeric',
             year: 'numeric'
@@ -1073,7 +1075,7 @@ function initDemoDashboard() {
 
           card.innerHTML = `
             <div class="pulse-comment-header">
-              <span style="color: var(--te-dark-teal); font-weight: 700;">${escapeHtml(p.employeeName)}</span>
+              <span style="color: var(--te-dark-teal); font-weight: 700;">${escapeHtml(p.employeeName || 'Anonymous')}</span>
               <span>${dateStr}</span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
