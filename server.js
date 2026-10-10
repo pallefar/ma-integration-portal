@@ -6264,8 +6264,14 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   // An existing record outside the converter's clearance answers the central
   // 404 — never returned as `task`/`raid` in the 200 body (a leak) and never
   // silently duplicated.
-  const existingTask = b.toTask ? (taskLane(db).find((t) => t.source === source) || null) : null;
-  const existingRaid = b.toRaid ? (raidLane(db).find((r) => r.source === source) || null) : null;
+  // [security] WR-02 (Phase 11 review): adopt an existing record only when it
+  // ALSO carries this route's server-side `clearanceArea: 'hr'` stamp — the
+  // upsert schemas strip clearanceArea and refuse reserved sources, so only a
+  // genuine conversion can carry both; a record planted with a matching
+  // `source` is never handed back as the conversion.
+  const isOwnConversion = (rec) => rec.source === source && rec.clearanceArea === 'hr';
+  const existingTask = b.toTask ? (taskLane(db).find(isOwnConversion) || null) : null;
+  const existingRaid = b.toRaid ? (raidLane(db).find(isOwnConversion) || null) : null;
   if (existingTask) assertRecordVisibleOr404(req, db, deal, existingTask);
   if (existingRaid) assertRecordVisibleOr404(req, db, deal, existingRaid);
 
@@ -6920,8 +6926,16 @@ app.post('/api/dd/findings/:id/convert', (req, res) => {
   // its first conversion — clearanceArea is deliberately sticky) must never
   // be handed back in the 200 body to a caller not cleared for the STAMPED
   // area. It answers the central 404 — never a leak, never a duplicate.
-  const existingTask = b.toTask ? (taskLane(db).find((t) => t.source === source) || null) : null;
-  const existingRaid = b.toRaid ? (raidLane(db).find((r) => r.source === source) || null) : null;
+  // [security] WR-02 (Phase 11 review): adopt an existing record only when it
+  // ALSO carries a server-side `clearanceArea` stamp (any DD area — the stamp
+  // is deliberately sticky across a re-pointed finding, see above). The
+  // upsert schemas strip clearanceArea and refuse reserved sources, so a
+  // record planted with a matching `source` can never be adopted as the
+  // finding's conversion; the genuine record is minted instead.
+  const isOwnConversion = (rec) => rec.source === source
+    && typeof rec.clearanceArea === 'string' && accessPolicy.DD_AREA_IDS.includes(rec.clearanceArea);
+  const existingTask = b.toTask ? (taskLane(db).find(isOwnConversion) || null) : null;
+  const existingRaid = b.toRaid ? (raidLane(db).find(isOwnConversion) || null) : null;
   if (existingTask) assertRecordVisibleOr404(req, db, deal, existingTask);
   if (existingRaid) assertRecordVisibleOr404(req, db, deal, existingRaid);
 
