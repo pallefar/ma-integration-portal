@@ -4060,9 +4060,18 @@ app.delete('/api/assessment-instances/:id', (req, res) => {
 // on the list" append-at-end branch instead of sorting third).
 const WIZARD_ASSESSMENT_SUBJECTS = ['acquirer-org', 'target-org', 'integration-leader'];
 
-// GET the readiness rollup — single source of truth for every gate point in the UI
-app.get('/api/assessment-status', (req, res) => {
-  const db = readDb();
+// D-12-02 (Phase 12, plan 12-09): the collections the readiness rollup reads —
+// settings (lane choice + time travel), customSettings (target company), the
+// templates and BOTH instance lanes (assessLane() assigns whichever it does
+// not return). A collection missed here throws CollectionNotLoadedError.
+const ASSESSMENT_STATUS_SET = ['settings', 'customSettings', 'assessmentTemplates', 'assessmentInstances', 'customAssessmentInstances'];
+
+// The pure response builder: (db, ctx) -> body, where ctx carries the two
+// request-derived facts the rollup needs — `stripNames` (a locked-down posture
+// for a non-admin) and `portalUser`. Exposed as app.assessmentStatusBody so
+// the readCollections data path can be tested against the readDb() one.
+function assessmentStatusBody(db, ctx) {
+  const portalUser = ctx.portalUser;
   const templates = (db.assessmentTemplates || []).filter(t => t.published !== false);
   const visible = visibleAssessInstances(db);
   const required = [];
@@ -4072,7 +4081,7 @@ app.get('/api/assessment-status', (req, res) => {
   // In any locked-down posture the status rollup carries scores/bands only —
   // no respondent names (leader ratings are personal data) — unless the
   // requester is an admin.
-  const stripNames = lockedDown(req) && !isAdminRequest(req);
+  const stripNames = ctx.stripNames;
   const statusInstance = (inst) => {
     const pub = publicAssessInstance(inst);
     if (pub && stripNames) delete pub.respondentName;
@@ -4103,8 +4112,8 @@ app.get('/api/assessment-status', (req, res) => {
         // act on a pending row, so leaking the id alone no longer enables
         // fabricating a completion.
         const ownerTrim = String(i.owner || '').trim();
-        const isElevated = !!req.portalUser && ['admin', 'hrbp'].includes(req.portalUser.role);
-        const isOwner = !!req.portalUser && !!ownerTrim && ownerTrim === req.portalUser.username;
+        const isElevated = !!portalUser && ['admin', 'hrbp'].includes(portalUser.role);
+        const isOwner = !!portalUser && !!ownerTrim && ownerTrim === portalUser.username;
         const showOwner = !stripNames || isElevated || isOwner;
         return { id: i.id, owner: showOwner ? (i.owner || '') : '', dueDate: i.dueDate || '' };
       });
@@ -4176,7 +4185,20 @@ app.get('/api/assessment-status', (req, res) => {
   const targetCompany = isCustomStatus
     ? ((db.customSettings && db.customSettings.targetCompany) || db.settings.targetCompany || '')
     : ((db.settings && db.settings.targetCompany) || '');
-  res.json({ success: true, targetCompany, required, bySubject, gatesSummary, compatibility });
+  return { success: true, targetCompany, required, bySubject, gatesSummary, compatibility };
+}
+app.assessmentStatusBody = assessmentStatusBody;
+
+// GET the readiness rollup — single source of truth for every gate point in the UI
+app.get('/api/assessment-status', (req, res) => {
+  const db = readCollections(ASSESSMENT_STATUS_SET);
+  // In any locked-down posture the status rollup carries scores/bands only —
+  // no respondent names (leader ratings are personal data) — unless the
+  // requester is an admin.
+  res.json(assessmentStatusBody(db, {
+    stripNames: lockedDown(req) && !isAdminRequest(req),
+    portalUser: req.portalUser,
+  }));
 });
 
 // =====================================================================
@@ -4464,8 +4486,13 @@ app.post('/api/integration-tasks/from-remediation', (req, res) => {
   res.json({ success: true, created: created.length });
 });
 
+// D-12-02 (12-09): reads exactly one collection.
+function checklistTemplatesBody(db) {
+  return db.checklistTemplates || [];
+}
+app.checklistTemplatesBody = checklistTemplatesBody;
 app.get('/api/checklist-templates', (req, res) => {
-  res.json(readDb().checklistTemplates || []);
+  res.json(checklistTemplatesBody(readCollections(['checklistTemplates'])));
 });
 
 // =====================================================================
@@ -4896,14 +4923,23 @@ function synergyLinksVisibleTo(req, db) {
   };
 }
 
-app.get('/api/synergies', (req, res) => {
-  const db = readDb();
+// D-12-02 (Phase 12, plan 12-09): the collections the synergy reads need —
+// settings (lane choice + staleness threshold), both synergy lanes
+// (synergyLane() assigns the one it does not return), the task lanes and
+// ddFindings (synergyLinksVisibleTo -> taskLane + recordVisibleTo ->
+// resolveTaskClearanceArea -> ddFindingsLane). The rollup needs only the first
+// three; a collection missed throws CollectionNotLoadedError.
+const SYNERGY_ROLLUP_SET = ['settings', 'synergyInitiatives', 'customSynergyInitiatives'];
+const SYNERGY_READ_SET = SYNERGY_ROLLUP_SET.concat(['integrationTasks', 'customIntegrationTasks', 'ddFindings']);
+
+// Pure response builder (db, req, nowMs) -> body; exposed as app.synergiesBody.
+function synergiesBody(db, req, nowMs) {
   const lane = synergyLane(db);
   // SYN-05: ctx built ONCE per request — every item in this response is
   // judged against the identical clock and threshold.
-  const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
+  const ctx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs };
   const visibleLinks = synergyLinksVisibleTo(req, db); // IN-01
-  res.json(lane.map((raw) => {
+  return lane.map((raw) => {
     const item = visibleLinks(raw);
     const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
     // SYN-02: newest-date-first, a STABLE sort (Array.prototype.sort() is
@@ -4912,7 +4948,12 @@ app.get('/api/synergies', (req, res) => {
     // and the stored array itself is never reordered.
     const sortedCostEntries = entries.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     return Object.assign({}, enrichSynergy(item, ctx), { costEntries: sortedCostEntries });
-  }));
+  });
+}
+app.synergiesBody = synergiesBody;
+
+app.get('/api/synergies', (req, res) => {
+  res.json(synergiesBody(readCollections(SYNERGY_READ_SET), req, Date.now()));
 });
 
 // SYN-05/D-18/D-19/D-21: a single server-computed object a report can read
@@ -4979,15 +5020,15 @@ function computeSynergyRollupSplit(enrichedItems) {
   return { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount, unconfirmedRealizedM };
 }
 
-app.get('/api/synergies/rollup', (req, res) => {
-  const db = readDb();
+// Pure response builder (db, req, nowMs) -> body; exposed as app.synergyRollupBody.
+function synergyRollupBody(db, req, nowMs) {
   const lane = synergyLane(db);
   // SYN-05: the SAME single-clock ctx pattern as GET /api/synergies above —
   // one captured instant, reused for every item this rollup sums.
   // D-11-02: the deal-level values (staleness threshold, synergy target)
   // come from the bound deal's own record; null on the demo store.
   const dealSettings = dealSettingsFor(req);
-  const ctx = { staleDays: synergyStaleDays(db, dealSettings), nowMs: Date.now() };
+  const ctx = { staleDays: synergyStaleDays(db, dealSettings), nowMs };
   const enriched = lane.map((item) => enrichSynergy(item, ctx));
 
   const split = computeSynergyRollupSplit(enriched);
@@ -5004,7 +5045,7 @@ app.get('/api/synergies/rollup', (req, res) => {
   const myUsername = String((req.portalUser && req.portalUser.username) || '').trim();
   const mineStaleCount = enriched.filter((i) => i.stale && String(i.owner || '').trim() === myUsername).length;
 
-  res.json({
+  return {
     grossRealizedM,
     unphasedRealizedM,
     costIncurredM,
@@ -5019,7 +5060,12 @@ app.get('/api/synergies/rollup', (req, res) => {
     unconfirmedRealizedM,
     staleCount,
     mine: { staleCount: mineStaleCount },
-  });
+  };
+}
+app.synergyRollupBody = synergyRollupBody;
+
+app.get('/api/synergies/rollup', (req, res) => {
+  res.json(synergyRollupBody(readCollections(SYNERGY_ROLLUP_SET), req, Date.now()));
 });
 
 app.post('/api/synergies', (req, res) => {
@@ -7614,7 +7660,10 @@ function portalNowMs(db, req) {
 }
 
 app.get('/api/notifications', (req, res) => {
-  const db = readDb();
+  // D-12-02 (12-09): assessment templates/instances + settings (clock, lane
+  // choice) are read whole; the task and RAID counts below come from the
+  // light projection (status/due/severity only) — no row is parsed.
+  const db = readCollections(['settings', 'assessmentTemplates', 'assessmentInstances', 'customAssessmentInstances']);
   const items = [];
   const visible = visibleAssessInstances(db);
   (db.assessmentTemplates || []).filter(t => t.published !== false && t.required).forEach(t => {
@@ -7652,15 +7701,30 @@ app.get('/api/notifications', (req, res) => {
   const strict = req.isDemo !== true && req.portalUser;
   const mayReadTasks = !strict || readPolicy.roleAllowedForRead(req.portalUser.role, '/api/integration-tasks');
   const mayReadRaid = !strict || readPolicy.roleAllowedForRead(req.portalUser.role, '/api/raid');
+  // A projected scalar is trusted only when it is a string (or absent); any
+  // other stored type falls back to the row's own JSON so the verdict equals
+  // the one the full-row filter gave.
+  const projected = (row, name) => {
+    const v = row.f[name];
+    return (v === null || typeof v === 'string') ? v : JSON.parse(row.raw)[name];
+  };
   if (mayReadTasks) {
-    const tasks = taskLane(db);
-    const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
-    if (overdue.length) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdue.length, href: '/execution.html', severity: 'high' });
-    const blocked = tasks.filter(t => t.status === 'blocked');
-    if (blocked.length) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blocked.length, href: '/execution.html', severity: 'medium' });
+    const tasks = readProjection(taskLaneName(db.settings), ['status', 'due']);
+    let overdueCount = 0, blockedCount = 0;
+    tasks.forEach((row) => {
+      const status = projected(row, 'status');
+      const due = projected(row, 'due');
+      if (status !== 'done' && due && due < today) overdueCount++;
+      if (status === 'blocked') blockedCount++;
+    });
+    if (overdueCount) items.push({ id: 'tasks_overdue', type: 'tasks_overdue', count: overdueCount, href: '/execution.html', severity: 'high' });
+    if (blockedCount) items.push({ id: 'tasks_blocked', type: 'tasks_blocked', count: blockedCount, href: '/execution.html', severity: 'medium' });
   }
   if (mayReadRaid) {
-    const raidHigh = raidLane(db).filter(r => r.status !== 'closed' && (r.severity === 'high' || r.severity === 'critical'));
+    const raidHigh = readProjection(raidLaneName(db.settings), ['status', 'severity']).filter((row) => {
+      const severity = projected(row, 'severity');
+      return projected(row, 'status') !== 'closed' && (severity === 'high' || severity === 'critical');
+    });
     if (raidHigh.length) items.push({ id: 'raid_high', type: 'raid_high', count: raidHigh.length, href: '/execution.html', severity: 'high' });
   }
   res.json({ success: true, items });
@@ -8121,8 +8185,13 @@ app.delete('/api/modules/:id', (req, res) => {
 });
 
 // GET Employees
-app.get('/api/employees', (req, res) => {
-  const db = readDb();
+// D-12-02 (Phase 12, plan 12-09): settings (lane choice, time travel day) and
+// both roster lanes; `courses` only when the showcase scaling can run — a
+// deal-bound request (req.isDemo false) always returns its stored rows
+// unscaled, so it never touches the course catalog.
+const EMPLOYEES_READ_SET = ['settings', 'employees', 'customEmployees'];
+// Pure response builder (db, req) -> body; exposed as app.employeesBody.
+function employeesBody(db, req) {
   const day = db.settings.timeTravelDay || 30;
   const isCustom = db.settings && db.settings.demoMode === false;
   const employeesList = isCustom ? (db.customEmployees || []) : (db.employees || []);
@@ -8132,8 +8201,12 @@ app.get('/api/employees', (req, res) => {
   // leaderboard / dashboard roster / signage. ISO-02: the showcase scaling must ALSO
   // never apply outside the resolved demo database — a deal-bound request always sees
   // its own stored rows unscaled, routed through the single req.isDemo predicate.
-  const result = (isCustom || !req.isDemo) ? employeesList : scaleEmployeesForDay(employeesList, day, getCatalogLessonIds(db));
-  res.json(result);
+  return (isCustom || !req.isDemo) ? employeesList : scaleEmployeesForDay(employeesList, day, getCatalogLessonIds(db));
+}
+app.employeesBody = employeesBody;
+app.get('/api/employees', (req, res) => {
+  const set = req.isDemo ? EMPLOYEES_READ_SET.concat(['courses']) : EMPLOYEES_READ_SET;
+  res.json(employeesBody(readCollections(set), req));
 });
 
 // POST Employee
