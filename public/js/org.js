@@ -588,10 +588,11 @@
       deleteBtn.disabled = true;
       // CONC-02/D-08 (Phase 9, Plan 06): the version this page currently
       // holds for this position, taken from the in-memory node it was
-      // rendered from — never a re-fetch. Omitted entirely when the held
-      // position has no version yet (D-09 lazy adoption).
-      var delUrl = '/api/org/positions/' + node.position.id;
-      if (node.position.version !== undefined) delUrl += '?expectedVersion=' + encodeURIComponent(node.position.version);
+      // rendered from — never a re-fetch. ALWAYS sent: window.maVersionOf()
+      // yields 0 for a never-edited position (D-09 / GD-1), and the strict
+      // server refuses a delete that carries no precondition.
+      var delUrl = '/api/org/positions/' + node.position.id
+        + '?expectedVersion=' + encodeURIComponent(window.maVersionOf(node.position));
       fetch(delUrl, { method: 'DELETE' })
         .then(function (r) {
           return r.json().then(function (data) { return { ok: r.ok, data: data }; });
@@ -605,9 +606,21 @@
             // the user sees two contradictory messages for one refusal.
             if (!(result.data && result.data.conflict === true)) {
               showDeleteError((result.data && result.data.error) || 'Could not delete that position.');
+              deleteBtn.disabled = false;
+              return;
             }
+            // GD-5 (09-12, R7 F-2c / T-09-49): the dialog settled WITHOUT
+            // deleting (Cancel/Escape/close) — or the position was withheld
+            // from this caller meanwhile. Re-read the server state with the
+            // same re-render the success path uses, so the tree shows what is
+            // actually there (a record no longer cleared simply disappears,
+            // T-09-38) instead of a stale node.
             deleteBtn.disabled = false;
-            return;
+            return reloadPositionsForViewState().then(function () {
+              renderTree();
+              renderUnassigned();
+              renderAddForm();
+            });
           }
           return reloadPositionsForViewState().then(function () {
             renderTree();
@@ -901,13 +914,13 @@
       // `entry` this row was rendered from — the closed-over variable, not
       // a re-fetched copy — mirroring public/js/due-diligence.js's
       // convertFinding() call sites.
-      taskBtn.addEventListener('click', function () { convertFlightRisk(entry.id, true, false, entry.version); });
+      taskBtn.addEventListener('click', function () { convertFlightRisk(entry.id, true, false, window.maVersionOf(entry)); });
       convertRow.appendChild(taskBtn);
 
       var raidBtn = el('button', { className: 'btn btn-secondary', text: 'Create RAID entry' });
       raidBtn.type = 'button';
       raidBtn.disabled = hasRaid;
-      raidBtn.addEventListener('click', function () { convertFlightRisk(entry.id, false, true, entry.version); });
+      raidBtn.addEventListener('click', function () { convertFlightRisk(entry.id, false, true, window.maVersionOf(entry)); });
       convertRow.appendChild(raidBtn);
     }
 
@@ -953,11 +966,13 @@
       // countermeasure (Copywriting Contract).
       errorEl.style.display = 'block';
     }
-    // CONC-02 (Phase 9, Plan 05): sends the version only when the caller's
-    // in-memory entry actually carries one (a freshly created entry hasn't
-    // been stamped yet, per D-09 lazy adoption) — never a synthesized 0.
-    var payload = { toTask: toTask, toRaid: toRaid };
-    if (version !== undefined) payload.version = version;
+    // CONC-02 (Phase 9, Plan 05 / 09-12 GD-1): the version is ALWAYS sent. The
+    // callers pass window.maVersionOf(entry), which is 0 for a never-stamped
+    // entry (D-09 — version-less IS version 0): a synthesized 0 is now the
+    // contract, because the strict server refuses an absent precondition and
+    // a 0 is exactly what lets it catch a stale convert of a never-edited
+    // entry (R7 F-1).
+    var payload = { toTask: toTask, toRaid: toRaid, version: version };
     fetch('/api/org/flight-risk/' + entryId + '/convert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -971,8 +986,12 @@
         // position-delete handler above.
         if (!(result.data && result.data.conflict === true)) {
           showConvertError((result.data && result.data.error) || 'Could not convert that flight-risk entry.');
+          return;
         }
-        return;
+        // GD-5 (09-12, T-09-49): the dialog settled without converting —
+        // fall through to the SAME refetch + re-render the success path uses
+        // so the register shows the server's state (T-09-38: a withheld
+        // entry disappears via the normal clearance-filtered GET).
       }
       return fetch('/api/org/flight-risk').then(function (r2) { return r2.json(); }).then(function (risks) {
         state.flightRisks = Array.isArray(risks) ? risks : [];

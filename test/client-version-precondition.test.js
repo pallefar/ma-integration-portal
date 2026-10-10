@@ -112,17 +112,78 @@ function handlerAfter(src, anchor) {
 }
 
 // A conditional-version idiom: an `if (... version !== undefined ...)` guard
-// whose consequent assigns into a request body or URL.
+// whose consequent assigns into a request body or URL. The consequent is the
+// brace-matched block when the guard is followed by `{`, otherwise the single
+// statement up to its `;`.
 function conditionalVersionIdioms(src) {
   const out = [];
-  const guard = /if\s*\(([^)]*version\s*!==\s*undefined[^)]*)\)\s*([^;\n{]*;?)/g;
+  const guard = /if\s*\(([^)]*version\s*!==\s*undefined[^)]*)\)\s*/g;
+  const intoRequest = /\b(?:body|payload|[A-Za-z]*Body)\.version\s*=|expectedVersion|\b(?:url|[A-Za-z]*Url|path|href)\s*\+=/;
   let m;
   while ((m = guard.exec(src)) !== null) {
-    const consequent = m[2] || '';
-    if (/\.version\s*=|\bversion\s*:|expectedVersion|(url|path|href)\s*\+=/i.test(consequent)) out.push(m[0]);
+    const rest = m.index + m[0].length;
+    let consequent;
+    if (src[rest] === '{') {
+      const close = braceMatch(src, rest);
+      consequent = src.slice(rest, close === -1 ? rest + 400 : close + 1);
+    } else {
+      const semi = src.indexOf(';', rest);
+      consequent = src.slice(rest, semi === -1 ? rest + 200 : semi + 1);
+    }
+    if (intoRequest.test(consequent)) out.push(m[0] + consequent.slice(0, 80));
   }
   return out;
 }
+
+function countOf(src, token) {
+  return (src.match(new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+}
+
+test('client-version-precondition (C3): no conditional-version idiom in execution.js / org.js / due-diligence.js, and maVersionOf at every call site', () => {
+  // Lines such as `if (res.initiative && res.initiative.version !== undefined) item.version = res.initiative.version;`
+  // sync held STATE from a response and are not violations (C3 header).
+  const files = ['execution.js', 'org.js', 'due-diligence.js'];
+  files.forEach((f) => {
+    const src = readPublicJs(f);
+    assert.deepStrictEqual(conditionalVersionIdioms(src), [], `${f}: a conditional version idiom omits the precondition for a never-edited record (R7 F-1, D-02, D-09)`);
+  });
+  const exec = countOf(readPublicJs('execution.js'), 'maVersionOf(');
+  const org = countOf(readPublicJs('org.js'), 'maVersionOf(');
+  const dd = countOf(readPublicJs('due-diligence.js'), 'maVersionOf(');
+  assert.ok(exec >= 13, `execution.js must call maVersionOf( at >= 13 sites (found ${exec})`);
+  assert.ok(org >= 2, `org.js must call maVersionOf( at >= 2 sites (found ${org})`);
+  assert.ok(dd >= 4, `due-diligence.js must call maVersionOf( at >= 4 sites (found ${dd})`);
+});
+
+test('client-version-precondition (C4): no other public/js file writes to an existing versioned record', () => {
+  // Every (file, endpoint) pair outside the three swept pages must be classified
+  // here. All four are create / read only (no edit or delete of an existing
+  // record). A new writer elsewhere fails until it is added AND swept.
+  const allow = [
+    'deal-home.js::/api/synergies/rollup',
+    'deal-wizard.js::/api/integration-tasks/instantiate',
+    'deal-wizard.js::/api/dd/request-items/instantiate',
+    'assessments.js::/api/integration-tasks/from-remediation'
+  ];
+  const swept = new Set(['execution.js', 'org.js', 'due-diligence.js']);
+  const endpoint = /\/api\/(?:raid|integration-tasks|synergies|org\/positions|org\/flight-risk|dd\/request-items|dd\/findings|dd\/vdr-links)[A-Za-z0-9_\-/.]*/g;
+  const found = new Set();
+  (function walk(dir, rel) {
+    fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => {
+      if (e.isDirectory()) {
+        if (e.name === 'vendor') return;
+        walk(path.join(dir, e.name), rel + e.name + '/');
+      } else if (e.name.endsWith('.js') && !swept.has(rel + e.name)) {
+        const src = fs.readFileSync(path.join(dir, e.name), 'utf8');
+        (src.match(endpoint) || []).forEach((m) => found.add(rel + e.name + '::' + m));
+      }
+    });
+  })(PUBLIC_JS, '');
+  const unclassified = Array.from(found).filter((p) => allow.indexOf(p) === -1).sort();
+  assert.deepStrictEqual(unclassified, [], 'a public/js file outside the three swept pages references a versioned route; classify it (read/create only) or sweep it onto window.maVersionOf');
+  const stale = allow.filter((p) => !found.has(p));
+  assert.deepStrictEqual(stale, [], 'allow-list entries that no longer exist should be removed so the guard stays exact');
+});
 
 test('client-version-precondition (C3a): the task status-flip handler sends maVersionOf unconditionally and re-reads after a conflict', () => {
   const src = readPublicJs('execution.js');

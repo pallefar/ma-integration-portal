@@ -107,13 +107,17 @@
   // CONC-02 (Phase 9, Plan 04): `item` is the in-memory record this row was
   // rendered from (state.itemsByArea, populated by the most recent load()/
   // refresh() — never a re-fetch), so `item.version` is exactly the version
-  // this user's edit form was built against. Sent only when the held record
-  // actually has one (D-09: a never-yet-edited item carries no version
-  // field at all) — omitting it here, rather than coercing to some default,
-  // is what keeps a first-ever edit exempt from the precondition.
+  // this user's edit form was built against. ALWAYS sent (09-12 / GD-1):
+  // window.maVersionOf() yields 0 for a never-yet-edited item (D-09 — a
+  // version-less record IS version 0), so even a first-ever edit carries a
+  // precondition. Omission is no longer an exemption: the strict server
+  // refuses an absent version in a real deal. The unconditional
+  // `.then(refresh)` below is correct because the shared fetch wrapper holds
+  // this promise while the conflict dialog is open (09-11) — refresh() runs
+  // only after the dialog has closed, never underneath it.
   function updateItem(item, patch) {
     var body = Object.assign({ id: item.id }, patch);
-    if (item.version !== undefined) body.version = item.version;
+    body.version = window.maVersionOf(item);
     return fetch('/api/dd/request-items', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(refresh);
@@ -171,8 +175,7 @@
   // in-memory record renderVdrLinkEditor() was called with — the same
   // record the rest of this row's edit controls thread version from.
   function updateVdrLink(item, vdrLink) {
-    var body = { id: item.id, vdrLink: vdrLink };
-    if (item.version !== undefined) body.version = item.version;
+    var body = { id: item.id, vdrLink: vdrLink, version: window.maVersionOf(item) };
     return fetch('/api/dd/request-items', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -247,7 +250,7 @@
   // rationale above.
   function updateFinding(finding, patch) {
     var body = Object.assign({ id: finding.id }, patch);
-    if (finding.version !== undefined) body.version = finding.version;
+    body.version = window.maVersionOf(finding); // always sent; 0 when never edited (GD-1)
     return fetch('/api/dd/findings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(refresh);
@@ -262,8 +265,7 @@
   // precondition as updateFinding() above — threaded from the SAME
   // in-memory `finding` record this button was rendered from.
   function convertFinding(finding, toTask, toRaid) {
-    var body = { toTask: toTask, toRaid: toRaid };
-    if (finding.version !== undefined) body.version = finding.version;
+    var body = { toTask: toTask, toRaid: toRaid, version: window.maVersionOf(finding) }; // always sent (GD-1)
     return fetch('/api/dd/findings/' + encodeURIComponent(finding.id) + '/convert', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
