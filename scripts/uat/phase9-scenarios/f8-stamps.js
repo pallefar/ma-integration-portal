@@ -23,15 +23,23 @@ const PUBLIC = path.join(__dirname, '..', '..', '..', 'public');
 
 // asset URL path -> highest pre-gap-closure stamp (must be exceeded).
 const ASSETS = {
+  '/css/style.css': 1784600001,
   '/js/transitions.js': 1784900002,
+  '/js/execution.js': 1786433369,
+  '/js/org.js': 1786433369,
+  '/js/due-diligence.js': 1786427686,
 };
 
 // page -> assets that page must request under the new stamp.
 const PAGES = {
-  '/execution.html': ['/js/transitions.js'],
-  '/org.html': ['/js/transitions.js'],
-  '/due-diligence.html': ['/js/transitions.js'],
+  '/execution.html': ['/css/style.css', '/js/transitions.js', '/js/execution.js'],
+  '/org.html': ['/css/style.css', '/js/transitions.js', '/js/org.js'],
+  '/due-diligence.html': ['/css/style.css', '/js/transitions.js', '/js/due-diligence.js'],
+  // login.html does not load transitions.js; it is opened WITHOUT a session
+  // (a signed-in session redirects away from it) in a fresh context.
+  '/login.html': ['/css/style.css'],
 };
+const ANONYMOUS = { '/login.html': true };
 
 function diskStamp(page, asset) {
   const html = fs.readFileSync(path.join(PUBLIC, page.replace(/^\//, '')), 'utf8');
@@ -43,7 +51,15 @@ function diskStamp(page, asset) {
 module.exports = {
   'asset-stamps': async (ctx) => {
     for (const pagePath of Object.keys(PAGES)) {
-      const page = await ctx.openTab({ user: 'karen' });
+      let page = await ctx.openTab({ user: 'karen' });
+      if (ANONYMOUS[pagePath]) {
+        const browser = page.context().browser();
+        await page.context().close();
+        const anonCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+        page = await anonCtx.newPage();
+        page.pageErrors = [];
+        page.on('pageerror', (e) => page.pageErrors.push(String(e)));
+      }
       const seen = []; // { url, status }
       page.on('response', (r) => {
         const u = r.url();

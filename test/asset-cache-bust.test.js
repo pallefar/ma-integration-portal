@@ -38,7 +38,12 @@ const PUBLIC = path.join(ROOT, 'public');
 // asset -> frozen pre-gap-closure stamps. `v21` = value(s) at tag v2.1.0,
 // `before` = value(s) in the tree just before the 09-15 bump.
 const FROZEN = {
+  // login.html carried its own older style.css stamp (1784500010) at v2.1.0.
+  '/css/style.css': { v21: [1784600001, 1784500010], before: [1784600001, 1784500010] },
   '/js/transitions.js': { v21: [1784900002], before: [1784900002] },
+  '/js/execution.js': { v21: [1786250900], before: [1786433369] },
+  '/js/org.js': { v21: [1784900011], before: [1786433369] },
+  '/js/due-diligence.js': { v21: [1784800006], before: [1786427686] },
 };
 
 function walk(dir, out) {
