@@ -507,3 +507,165 @@ test('clearance-write-paths (Task 2): in the demo store (no deal) a clearance-st
     server.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Task 3: store-layer fail-closed backstop (09-SECURITY UF-2) + the structural
+// gate for every clearance-carrying collection.
+// ---------------------------------------------------------------------------
+const collections = require('../db/collections.js');
+
+test('clearance-write-paths (Task 3): CLEARANCE_SCOPED_COLLECTIONS covers the four task/RAID lanes, the DD lanes and the org lanes; PROVENANCE_SCOPED is its task/RAID subset; both stay within VERSIONED_COLLECTIONS', () => {
+  const scoped = collections.CLEARANCE_SCOPED_COLLECTIONS;
+  for (const k of ['ddFindings', 'ddRequestItems', 'integrationTasks', 'customIntegrationTasks', 'raidEntries', 'customRaidEntries', 'orgPositions', 'orgFlightRisks']) {
+    assert.ok(scoped.has(k), `${k} must be clearance-scoped`);
+    assert.ok(collections.VERSIONED_COLLECTIONS.has(k), `${k} must be versioned`);
+  }
+  assert.deepStrictEqual(
+    [...collections.PROVENANCE_SCOPED_COLLECTIONS].sort(),
+    ['customIntegrationTasks', 'customRaidEntries', 'integrationTasks', 'raidEntries']
+  );
+  for (const k of collections.PROVENANCE_SCOPED_COLLECTIONS) assert.ok(scoped.has(k));
+  // The synergy lanes are NOT clearance-scoped (deal-wide-visible by design).
+  assert.ok(!scoped.has('synergyInitiatives') && !scoped.has('customSynergyInitiatives'));
+});
+
+test('clearance-write-paths (Task 3): hasRestrictedProvenance — stamp, dd-finding and flight-risk sources are restricted; manual, empty, absent and other sources are not', () => {
+  const r = collections.hasRestrictedProvenance;
+  assert.strictEqual(r({ id: 'a', clearanceArea: 'hr' }), true);
+  assert.strictEqual(r({ id: 'a', source: 'dd-finding:ddfind_1' }), true);
+  assert.strictEqual(r({ id: 'a', source: 'org-flightrisk:risk_1' }), true);
+  assert.strictEqual(r({ id: 'a', source: '' }), false);
+  assert.strictEqual(r({ id: 'a' }), false);
+  assert.strictEqual(r({ id: 'a', source: 'manual' }), false);
+  assert.strictEqual(r({ id: 'a', source: 'template:tpl:item' }), false);
+  assert.strictEqual(r({ id: 'a', source: 'remediation:tpl:dim' }), false);
+  assert.strictEqual(r(null), false);
+  assert.strictEqual(r(undefined), false);
+  // Parity with the server resolvers: a record the resolver restricts is
+  // never reported unrestricted here (store is the more conservative side).
+  const db = { ddFindings: [{ id: 'ddfind_1', area: 'legal' }] };
+  for (const rec of [
+    { clearanceArea: 'financial' }, { source: 'dd-finding:ddfind_1' }, { source: 'org-flightrisk:x' },
+  ]) {
+    assert.notStrictEqual(app.resolveTaskClearanceArea(rec, db), null);
+    assert.strictEqual(r(rec), true);
+    assert.notStrictEqual(app.resolveRaidEntryClearanceArea(rec, db), null);
+  }
+});
+
+// A WHERE-layer conflict (CR-01 (a) pattern) on `collection`, with the request
+// db context given by `armedFilter` (undefined = nothing armed). Returns the
+// thrown conflict detail.
+function whereConflict(dealId, collection, record, armedFilter) {
+  const conn = store.getOrOpenConnection(dbFiles.dealDbPath(dealId), dbFiles.DEAL_SCHEMA_PATH);
+  const ctx = { conn, kind: 'demo', dealId: null, dbPath: null };
+  if (armedFilter) ctx.areaClearanceFilter = armedFilter;
+  let detail = null;
+  store.runWithDb(ctx, () => {
+    const create = store.readDb();
+    create[collection] = create[collection] || [];
+    create[collection].push(Object.assign({}, record));
+    store.writeDb(create);
+    const stamp = store.readDb();
+    stamp[collection].find((r) => r.id === record.id).title = 'v1';
+    store.writeDb(stamp);
+    const snapA = store.readDb();
+    const snapB = store.readDb();
+    snapB[collection].find((r) => r.id === record.id).title = 'v2 (other writer)';
+    store.writeDb(snapB);
+    snapA[collection].find((r) => r.id === record.id).title = 'stale attempt';
+    try { store.writeDb(snapA); } catch (e) {
+      assert.ok(store.isConflictError(e), 'the stale write must raise the typed conflict error');
+      detail = e.conflictDetail;
+    }
+  });
+  assert.ok(detail, 'a conflict must have been raised');
+  return detail;
+}
+
+test('clearance-write-paths (Task 3): store WHERE-layer conflict with NO armed filter withholds currentRecord for restricted task/RAID provenance on all four lanes, echoes ordinary records, and keeps version + attribution', () => {
+  const deal = makeDeal('deal_cwpstore');
+  let n = 0;
+  for (const collection of ['integrationTasks', 'customIntegrationTasks', 'raidEntries', 'customRaidEntries']) {
+    const restricted = [
+      { clearanceArea: 'hr' },
+      { source: 'dd-finding:ddfind_unarmed' },
+      { source: 'org-flightrisk:risk_unarmed' },
+    ];
+    for (const extra of restricted) {
+      const d = whereConflict(deal.id, collection, Object.assign({ id: `cwps_${n++}`, title: 'HR-SECRET v0' }, extra));
+      assert.strictEqual(d.conflictKind, 'version');
+      assert.strictEqual(d.currentRecord, null, `${collection} ${JSON.stringify(extra)}: restricted provenance must not be echoed`);
+      assert.ok(Number.isInteger(d.currentVersion), 'the version is still disclosed');
+      assert.ok(d.recordId);
+    }
+    for (const extra of [{}, { source: '' }, { source: 'manual' }, { source: 'template:t:i' }]) {
+      const d = whereConflict(deal.id, collection, Object.assign({ id: `cwps_${n++}`, title: 'ordinary v0' }, extra));
+      assert.ok(d.currentRecord, `${collection} ${JSON.stringify(extra)}: an ordinary record still echoes (Phase 9 dialog unchanged)`);
+      assert.strictEqual(d.currentRecord.title, 'v2 (other writer)');
+    }
+  }
+});
+
+test('clearance-write-paths (Task 3): ddFindings/ddRequestItems/orgPositions/orgFlightRisks with no filter armed still fail closed; an ARMED filter decides for every collection', () => {
+  const deal = makeDeal('deal_cwpstore2');
+  let n = 0;
+  for (const collection of ['ddFindings', 'ddRequestItems', 'orgPositions', 'orgFlightRisks']) {
+    const d = whereConflict(deal.id, collection, { id: `cwps2_${n++}`, area: 'legal', title: 'MNPI v0' });
+    assert.strictEqual(d.currentRecord, null, `${collection}: unarmed must fail closed`);
+  }
+  for (const collection of ['integrationTasks', 'customRaidEntries', 'ddFindings', 'orgPositions']) {
+    const granting = (key, rec) => ({ id: rec.id, projected: true });
+    const g = whereConflict(deal.id, collection, { id: `cwps2_${n++}`, clearanceArea: 'hr', area: 'hr', title: 'v0' }, granting);
+    assert.strictEqual(g.currentRecord.projected, true, `${collection}: the armed filter's projection is what is echoed`);
+    const denying = () => null;
+    const x = whereConflict(deal.id, collection, { id: `cwps2_${n++}`, title: 'ordinary v0' }, denying);
+    assert.strictEqual(x.currentRecord, null, `${collection}: an armed denying filter withholds even an ordinary record`);
+  }
+});
+
+test('clearance-write-paths (Task 3, structural gate): every conflictIfStale() caller whose route works on a clearance-scoped lane passes a clearanceFilter — a new unfiltered caller fails the suite', () => {
+  const raw = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  // Strip whole-line `//` comments so a mention in prose cannot classify a route.
+  const src = raw.split('\n').map((l) => (/^\s*\/\//.test(l) ? '' : l)).join('\n');
+  const headerRe = /^app\.(get|post|put|patch|delete)\('([^']+)'/gm;
+  const headers = [];
+  let m;
+  while ((m = headerRe.exec(src))) headers.push({ index: m.index, method: m[1].toUpperCase(), route: m[2] });
+  assert.ok(headers.length > 100, 'sanity: the route scan found the route table');
+
+  const SCOPED_LANE_HELPERS = ['taskLane(', 'raidLane(', 'ddFindingsLane(', 'ddRequestLane(', 'orgPositionsLane(', 'orgFlightRiskLane('];
+  const found = [];
+  const unfiltered = [];
+  headers.forEach((h, i) => {
+    // The handler ends at the first column-0 `});` after its header — NOT at
+    // the next route header, which would sweep in any helper function
+    // (`function raidLane(db) {...}`) defined between two routes.
+    const close = src.indexOf('\n});', h.index);
+    const nextHeader = i + 1 < headers.length ? headers[i + 1].index : src.length;
+    const text = src.slice(h.index, close >= 0 ? Math.min(close, nextHeader) : nextHeader);
+    const scopedRoute = SCOPED_LANE_HELPERS.some((helper) => text.includes(helper));
+    let from = 0;
+    for (;;) {
+      const at = text.indexOf('conflictIfStale(req, res', from);
+      if (at < 0) break;
+      from = at + 1;
+      const tail = text.slice(at);
+      const stop = tail.indexOf(')) return');
+      const call = stop < 0 ? tail.slice(0, 400) : tail.slice(0, stop);
+      if (!scopedRoute) continue;
+      found.push(`${h.method} ${h.route}`);
+      if (!call.includes('clearanceFilter')) unfiltered.push(`${h.method} ${h.route}`);
+    }
+  });
+  assert.deepStrictEqual(unfiltered, [], `these conflictIfStale() callers work on a clearance-scoped lane and pass no clearanceFilter: ${unfiltered.join(', ')}`);
+  const expected = [
+    'POST /api/integration-tasks', 'DELETE /api/integration-tasks/:id',
+    'POST /api/raid', 'DELETE /api/raid/:id',
+    'POST /api/dd/request-items', 'DELETE /api/dd/request-items/:id',
+    'POST /api/dd/findings', 'DELETE /api/dd/findings/:id', 'POST /api/dd/findings/:id/convert',
+    'POST /api/org/positions', 'DELETE /api/org/positions/:id',
+    'POST /api/org/flight-risk', 'DELETE /api/org/flight-risk/:id', 'POST /api/org/flight-risk/:id/convert',
+  ];
+  for (const e of expected) assert.ok(found.includes(e), `the structural scan must see ${e} (scan sanity — it would otherwise pass vacuously)`);
+});

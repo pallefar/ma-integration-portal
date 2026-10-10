@@ -161,11 +161,64 @@ for (const key of VERSIONED_COLLECTIONS) {
 // filter is armed, the WHERE-layer conflict throw withholds currentRecord
 // entirely rather than echoing an unfiltered record across a clean-room
 // boundary.
-const CLEARANCE_SCOPED_COLLECTIONS = new Set(['ddFindings', 'ddRequestItems']);
+//
+// [security] D-11-03 / 09-SECURITY UF-2 (Phase 11): the four task/RAID lanes
+// join this set. Their records are only RESTRICTED when they carry restricted
+// provenance (see PROVENANCE_SCOPED_COLLECTIONS / hasRestrictedProvenance()
+// below) — a manually created task or RAID entry is ordinary content and
+// keeps echoing on a conflict so the Phase 9 compare dialog is unchanged for
+// it. db/store.js conflictVisibleRecord() applies the provenance split.
+//
+// orgPositions / orgFlightRisks join too: every route that edits or deletes
+// one of their rows is gated whole-route on the single `hr` area grant and now
+// arms server.js's hrClearanceFilter on conflictIfStale(), so listing them
+// changes nothing for a cleared caller and makes the WHERE layer fail closed
+// if a future route reaches those rows without arming a filter.
+//
+// The structural gate in test/clearance-write-paths.test.js fails the suite
+// when a server.js conflictIfStale() caller on any of these lanes omits a
+// `clearanceFilter`.
+const CLEARANCE_SCOPED_COLLECTIONS = new Set([
+  'ddFindings', 'ddRequestItems',
+  'integrationTasks', 'customIntegrationTasks',
+  'raidEntries', 'customRaidEntries',
+  'orgPositions', 'orgFlightRisks',
+]);
 for (const key of CLEARANCE_SCOPED_COLLECTIONS) {
   if (!VERSIONED_COLLECTIONS.has(key)) {
     throw new Error(`db/collections.js: CLEARANCE_SCOPED_COLLECTIONS entry '${key}' must be a VERSIONED_COLLECTIONS member`);
   }
+}
+
+// [security] D-11-03 (Phase 11): the CLEARANCE_SCOPED_COLLECTIONS members whose
+// per-record restriction is derived from PROVENANCE rather than a stored
+// `area` field — the task and RAID lanes (both demo and custom). For these
+// the unarmed store-layer fallback is provenance-aware: restricted
+// provenance withholds the echoed record, ordinary records are echoed.
+const PROVENANCE_SCOPED_COLLECTIONS = new Set([
+  'integrationTasks', 'customIntegrationTasks',
+  'raidEntries', 'customRaidEntries',
+]);
+for (const key of PROVENANCE_SCOPED_COLLECTIONS) {
+  if (!CLEARANCE_SCOPED_COLLECTIONS.has(key)) {
+    throw new Error(`db/collections.js: PROVENANCE_SCOPED_COLLECTIONS entry '${key}' must be a CLEARANCE_SCOPED_COLLECTIONS member`);
+  }
+}
+
+// [security] D-11-03 (Phase 11): true when a task/RAID record is, or may be,
+// clearance-restricted — it carries a stamped `clearanceArea`, or its
+// `source` names a restricted origin (`dd-finding:<id>` / `org-flightrisk:`).
+// This is the SAME provenance rule as server.js's resolveTaskClearanceArea() /
+// resolveRaidEntryClearanceArea() (stamp first, then dd-finding / flight-risk
+// source prefix), minus the live finding lookup: the store layer has no deal
+// context and no finding lane, so it is deliberately CONSERVATIVE — a record
+// whose finding has since been deleted (server resolver: unrestricted) still
+// counts as restricted here and simply has its field values withheld from a
+// WHERE-layer conflict echo (version + attribution are still disclosed). Keep
+// the two prefixes in lockstep with the server resolvers.
+function hasRestrictedProvenance(rec) {
+  return !!(rec && (rec.clearanceArea
+    || (typeof rec.source === 'string' && /^(dd-finding:|org-flightrisk:)/.test(rec.source))));
 }
 
 // ISO-01 / D-07: the two credential-bearing settings field PATHS (dotted,
@@ -190,4 +243,4 @@ function comparableVersion(v) {
   return (Number.isSafeInteger(v) && v >= 0) ? v : 0;
 }
 
-module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS, comparableVersion };
+module.exports = { ARRAY_COLLECTIONS, SINGLETON_KEYS, COLLECTION_TARGETS, SECRET_SETTINGS_FIELDS, VERSIONED_COLLECTIONS, CLEARANCE_SCOPED_COLLECTIONS, PROVENANCE_SCOPED_COLLECTIONS, hasRestrictedProvenance, comparableVersion };

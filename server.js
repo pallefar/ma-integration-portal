@@ -5268,6 +5268,18 @@ function recordClearanceFilter(req, db, deal) {
   return (rec) => (recordVisibleTo(req, db, deal, rec) ? rec : null);
 }
 
+// [security] D-11-03 (Phase 11): the org-design lanes (orgPositions /
+// orgFlightRisks) are writable only by callers holding the `hr` area grant —
+// every handler checks it at the top, before any record is resolved. This
+// filter restates that single fact for the conflict body and arms the
+// WHERE-layer hook, so those lanes can sit in CLEARANCE_SCOPED_COLLECTIONS
+// (db/collections.js: fail closed when no filter is armed) without changing
+// anything for a cleared caller, and a future route that forgets the
+// whole-route gate can never echo an org record across the boundary.
+function hrClearanceFilter(req, deal) {
+  return (rec) => (rec && accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr') ? rec : null);
+}
+
 app.get('/api/raid', (req, res) => {
   const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
@@ -5466,11 +5478,12 @@ app.post('/api/org/positions', (req, res) => {
     // the stored row before either refusal, per that comment's own rule. A
     // request that is BOTH stale AND structurally invalid gets the
     // conflict, not the 400 — the conflict is the actionable one for the
-    // user. No clearanceFilter: the whole route is gated on a single `hr`
-    // area grant checked at the top, so a caller reaching this path is
-    // already cleared for every record the route can resolve — a
-    // per-record filter would be a second, parallel check of the same fact.
-    if (conflictIfStale(req, res, item)) return;
+    // user. The whole route is gated on a single `hr` area grant checked at
+    // the top, so a caller reaching this path is already cleared for every
+    // record the route can resolve; `hrClearanceFilter` restates that one
+    // fact on the 409 body and arms the WHERE layer (D-11-03: orgPositions
+    // is a CLEARANCE_SCOPED_COLLECTIONS member, fail closed when unarmed).
+    if (conflictIfStale(req, res, item, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
     // Evaluate a shallow merge of the existing row and the incoming keys
     // BEFORE any field of the stored row is mutated — readDb() hands back a
     // shared cache, so a mutation followed by a refusal would stick.
@@ -5596,7 +5609,7 @@ app.delete('/api/org/positions/:id', (req, res) => {
   // a delete that is both stale AND blocked by direct reports returns 409,
   // not 400, so the caller learns their view is stale (the more fundamental
   // problem) before the business-rule refusal.
-  if (conflictIfStale(req, res, target)) return;
+  if (conflictIfStale(req, res, target, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
   const directReports = lane.filter((p) => p.reportsToId === target.id);
   if (directReports.length) {
     return res.status(400).json({ error: `This position has ${directReports.length} direct report(s) — reassign them before deleting.` });
@@ -6002,9 +6015,9 @@ app.post('/api/org/flight-risk', (req, res) => {
     }
     // CONC-02 (Phase 9, Plan 05): same placement as POST /api/org/positions
     // above — after the not-found guard and the employee-existence check,
-    // before the first field of the stored row is mutated. No
-    // clearanceFilter, for the same reason given there.
-    if (conflictIfStale(req, res, item)) return;
+    // before the first field of the stored row is mutated. The same
+    // `hrClearanceFilter` is armed, for the reason given there.
+    if (conflictIfStale(req, res, item, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
     if (b.employeeId !== undefined) item.employeeId = b.employeeId;
     if (b.riskLevel !== undefined) item.riskLevel = b.riskLevel;
     // WR-02 (06-REVIEW.md): a blank/whitespace-only owner defaults to the
@@ -6068,7 +6081,7 @@ app.delete('/api/org/flight-risk/:id', (req, res) => {
   const item = lane.find((r) => r.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Flight-risk entry not found.' });
   // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
   db.orgFlightRisks = lane.filter((r) => r.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
@@ -6105,9 +6118,10 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   // derived and before the task/RAID lanes are touched, so a stale-version
   // conflict leaves the entry, the task lane and the RAID lane all
   // untouched (Pitfall 6) — nothing here has mutated anything yet. No
-  // clearanceFilter, for the same reason given on the sibling routes above:
-  // the whole route is already gated on a single `hr` area grant.
-  if (conflictIfStale(req, res, entry)) return;
+  // clearanceFilter beyond the `hr` restatement: the whole route is already
+  // gated on a single `hr` area grant, so `hrClearanceFilter` (D-11-03) only
+  // arms the WHERE layer the same way the sibling routes above do.
+  if (conflictIfStale(req, res, entry, { clearanceFilter: hrClearanceFilter(req, deal) })) return;
 
   const source = 'org-flightrisk:' + entry.id;
   const employee = employeeRosterLane(db).find((e) => e.id === entry.employeeId);
