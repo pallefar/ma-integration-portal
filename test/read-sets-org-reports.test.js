@@ -1,0 +1,194 @@
+// D-12-02 / DATA-02 (Phase 12, plan 12-11): the org-design family and the
+// reports export + pack data assembly read only the collections they need.
+//
+// Equality is asserted at the handler boundary: the HTTP body (served from
+// readCollections(SET), where an unloaded collection is a THROWING accessor)
+// must equal the pure builder run over a full readDb() for every identity the
+// route distinguishes (admin, hrbp, hr-granted pmo, un-granted pmo) and every
+// state — and the read / denial audit rows must be exactly what they were
+// before the conversion. A route that forgot a collection fails loudly on the
+// accessor instead of answering an empty lane (T-12-103).
+//
+// Boots the REAL requireable app against an ISOLATED temp control/runtime/
+// demo/deals/audit set (never data/*.db). node:test; run
+// `node --test test/read-sets-org-reports.test.js`.
+
+const test = require('node:test');
+const { listenLocal } = require('./helpers/listen-local');
+const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-read-sets-org-'));
+process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
+process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
+process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
+process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
+process.env.MA_AUDIT_DB_PATH = path.join(TMP_DIR, 'audit.db');
+process.env.ADMIN_TOKEN = 'gsd-read-sets-org-test-token';
+
+const store = require('../db/store.js');
+const dbFiles = require('../db/dbFiles.js');
+const resolver = require('../db/resolver.js');
+const sessionsDb = require('../db/sessions.js');
+const { ensureUser } = require('./helpers/seed-identity.js');
+const { createDealDatabase } = require('../db/dealSeed.js');
+const auditHook = require('../db/auditHook.js');
+
+const app = require('../server.js');
+require('./helpers/held-version.js').installHeldVersionFetch();
+
+const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+
+const fixtureUsers = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'db.json'), 'utf8')).users || [];
+fixtureUsers.forEach((user, i) => {
+  controlConn.prepare('INSERT INTO users (id, project_id, seq, data) VALUES (?, ?, ?, ?)')
+    .run(user.username, null, i, JSON.stringify(user));
+});
+
+test.after(() => {
+  try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
+});
+
+// ---- harness -----------------------------------------------------------
+let dealSeq = 0;
+function registerDeal(deal) {
+  controlConn.prepare('INSERT INTO deals (id, project_id, seq, status, data) VALUES (?, NULL, ?, ?, ?)')
+    .run(deal.id, dealSeq++, deal.status || 'active', JSON.stringify(deal));
+}
+function newSession(username, role, dealId) {
+  ensureUser(controlConn, { username, role });
+  const token = sessionsDb.createSession(runtimeConn, { username, role, ttlMs: 12 * 60 * 60 * 1000 });
+  sessionsDb.bindSessionDeal(runtimeConn, token, dealId);
+  return token;
+}
+function dealContext(dealId) {
+  const fakeReq = { baseUrl: '/api', path: '/whatever', portalUser: { username: 'admin', role: 'admin', dealId, sessionId: 'sess_admin' } };
+  const resolved = resolver.resolveDatabase(fakeReq);
+  const conn = store.getOrOpenConnection(resolved.dbPath, resolved.schemaPath);
+  return {
+    conn, kind: resolved.kind, dealId: resolved.dealId, dbPath: resolved.dbPath,
+    actor: { username: 'admin', role: 'admin', sessionId: 'sess_admin' },
+    request: { method: 'TEST', path: fakeReq.path, ip: null },
+  };
+}
+function inDeal(dealId, fn) { return store.runWithDb(dealContext(dealId), fn); }
+function countByAction(dealId, action) {
+  return auditHook.queryAudit({ dealId, limit: 500 }).filter((r) => r.action === action).length;
+}
+
+// Four-identity roster: admin, karen (hrbp, reaches hr by role), an
+// hr-granted pmo and an un-granted pmo.
+const IDENTITIES = [
+  { name: 'admin', role: 'admin', hr: true },
+  { name: 'karen', role: 'hrbp', hr: true },
+  { name: 'pmo_hr', role: 'pmo', hr: true },
+  { name: 'pmo_it', role: 'pmo', hr: false },
+];
+
+let fixtureCounter = 0;
+function makeFixture() {
+  fixtureCounter += 1;
+  const id = `deal_rso${String.fromCharCode(96 + fixtureCounter)}`;
+  registerDeal({
+    id, name: id, targetCompany: `${id} Co`,
+    members: IDENTITIES.map((i) => i.name),
+    memberGrants: { pmo_hr: { ddAreas: ['hr'] }, pmo_it: { ddAreas: ['it'] } },
+    status: 'active', createdBy: 'admin', createdAt: new Date().toISOString(),
+  });
+  createDealDatabase(id, { name: id, targetCompany: `${id} Co` });
+  inDeal(id, () => {
+    const db = store.readDb();
+    db.settings = Object.assign({}, db.settings, { demoMode: false, dealName: id });
+    db.customEmployees = [
+      { id: 'emp_1', name: 'Ada Lovelace', role: 'Engineer', department: 'Eng' },
+      { id: 'emp_2', name: 'Grace Hopper', role: 'Engineer', department: 'Eng' },
+      { id: 'emp_3', name: 'Alan Turing', role: 'Analyst', department: 'Ops' },
+    ];
+    db.orgPositions = [
+      { id: 'pos_c1', title: 'Head of Eng', level: 'L5', reportsToId: null, employeeId: 'emp_1', state: 'current', createdAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'pos_c2', title: 'Staff Eng', level: 'L4', reportsToId: 'pos_c1', employeeId: 'emp_2', state: 'current', createdAt: '2026-01-02T00:00:00.000Z' },
+      { id: 'pos_c3', title: 'Open Role', level: 'L3', reportsToId: 'pos_c1', employeeId: null, state: 'current', createdAt: '2026-01-03T00:00:00.000Z' },
+      { id: 'pos_t1', title: 'VP Eng', level: 'L6', reportsToId: null, employeeId: 'emp_1', state: 'target', createdAt: '2026-01-04T00:00:00.000Z' },
+      { id: 'pos_t2', title: 'Director', level: 'L5', reportsToId: 'pos_t1', employeeId: null, state: 'target', createdAt: '2026-01-05T00:00:00.000Z' },
+    ];
+    db.orgDecisions = [
+      { id: 'od_1', positionId: 'pos_c2', employeeId: 'emp_2', type: 'retain', rationale: 'key', decidedBy: 'admin', decidedAt: '2026-02-01T00:00:00.000Z', effectiveDate: null },
+      { id: 'od_2', positionId: 'pos_c2', employeeId: 'emp_2', type: 'redeploy', rationale: 'moved', decidedBy: 'karen', decidedAt: '2026-03-01T00:00:00.000Z', effectiveDate: null },
+      { id: 'od_3', positionId: 'pos_c1', employeeId: 'emp_1', type: 'in-selection', rationale: 'sel', decidedBy: 'admin', decidedAt: '2026-02-15T00:00:00.000Z', effectiveDate: null },
+    ];
+    db.orgFlightRisks = [
+      { id: 'fr_1', employeeId: 'emp_1', riskLevel: 'high', mitigation: '', owner: 'karen', notes: '', linkedTaskIds: [], linkedRaidIds: [] },
+      { id: 'fr_2', employeeId: 'emp_2', riskLevel: 'critical', mitigation: 'retention bonus', owner: 'admin', notes: '', linkedTaskIds: [], linkedRaidIds: [] },
+      { id: 'fr_3', employeeId: 'emp_3', riskLevel: 'low', mitigation: '', owner: 'karen', notes: '', linkedTaskIds: [], linkedRaidIds: [] },
+    ];
+    store.writeDb(db);
+  });
+  return id;
+}
+
+async function withServer(fn) {
+  const server = await listenLocal(app);
+  try { return await fn(`http://127.0.0.1:${server.address().port}`); } finally { server.close(); }
+}
+async function httpGet(base, urlPath, token) {
+  const res = await fetch(`${base}${urlPath}`, { headers: { Cookie: `ma_session=${token}` } });
+  const text = await res.text();
+  return { status: res.status, text, headers: res.headers };
+}
+
+// ---- Task 1: GET /api/org/positions ------------------------------------
+test('read-sets-org (positions): body === builder(readDb()) for every identity x state; audit events exactly as before', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    for (const ident of IDENTITIES) {
+      const token = newSession(ident.name, ident.role, dealId);
+      for (const state of ['current', 'target']) {
+        const readsBefore = countByAction(dealId, 'org-positions-target-read');
+        const deniedBefore = countByAction(dealId, 'org-positions-target-access-denied');
+        const q = state === 'target' ? '?state=target' : '?state=current';
+        const r = await httpGet(base, `/api/org/positions${q}`, token);
+        if (state === 'target' && !ident.hr) {
+          assert.strictEqual(r.status, 403, `${ident.name} target must be refused`);
+          assert.strictEqual(countByAction(dealId, 'org-positions-target-access-denied') - deniedBefore, 1, 'one bounded denial row');
+          assert.strictEqual(countByAction(dealId, 'org-positions-target-read') - readsBefore, 0);
+          assert.ok(!r.text.includes('VP Eng'), 'the refusal must not carry target rows');
+          continue;
+        }
+        assert.strictEqual(r.status, 200, `${ident.name} ${state}`);
+        const expected = inDeal(dealId, () => JSON.stringify(app.orgPositionsBody(store.readDb(), state)));
+        assert.strictEqual(r.text, expected, `${ident.name} ${state} body must equal the full-read builder`);
+        assert.strictEqual(
+          countByAction(dealId, 'org-positions-target-read') - readsBefore,
+          state === 'target' ? 1 : 0,
+          'target read audited once; current reads stay silent'
+        );
+      }
+    }
+  });
+});
+
+test('read-sets-org (positions): a malformed / array-shaped state resolves to current and never reaches the target branch', async () => {
+  const dealId = makeFixture();
+  await withServer(async (base) => {
+    const token = newSession('pmo_it', 'pmo', dealId);
+    const expected = inDeal(dealId, () => JSON.stringify(app.orgPositionsBody(store.readDb(), 'current')));
+    for (const q of ['?state=TARGET', '?state=target&state=target', '?state=', '']) {
+      const r = await httpGet(base, `/api/org/positions${q}`, token);
+      assert.strictEqual(r.status, 200, q);
+      assert.strictEqual(r.text, expected, q);
+    }
+  });
+});
+
+test('read-sets-org (positions): the converted route cannot touch an unloaded collection (throwing accessor proves the read set)', () => {
+  const dealId = makeFixture();
+  inDeal(dealId, () => {
+    const part = store.readCollections(['orgPositions']);
+    assert.strictEqual(app.orgPositionsBody(part, 'current').length, 3);
+    assert.throws(() => part.orgDecisions, (e) => e.code === 'COLLECTION_NOT_LOADED');
+    assert.throws(() => part.customEmployees, (e) => e.code === 'COLLECTION_NOT_LOADED');
+  });
+});

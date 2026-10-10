@@ -5828,8 +5828,22 @@ function orgFlightRiskLane(db) {
 // exact match; anything else (absent, a padded/cased variant, an array-
 // shaped query value) resolves to the current string — so a malformed
 // query can never accidentally reach the restricted branch un-gated.
+// D-12-02 (12-11): the org-design family reads only its own collections.
+// ORG_READ_SET is the union of the three org lanes; each route below names the
+// narrowest subset it actually touches (a throwing accessor proves a miss).
+const ORG_READ_SET = ['orgPositions', 'orgDecisions', 'orgFlightRisks'];
+const ORG_POSITIONS_SET = ['orgPositions'];
+// Pure body builder for GET /api/org/positions (exposed as
+// app.orgPositionsBody so test/read-sets-org-reports can assert it equals the
+// HTTP body over readDb() and over readCollections()). Clearance and audit
+// stay in the route, before this runs.
+function orgPositionsBody(db, requestedState) {
+  return orgPositionsLane(db).filter((p) => p.state === requestedState);
+}
+app.orgPositionsBody = orgPositionsBody;
+
 app.get('/api/org/positions', (req, res) => {
-  const db = readDb();
+  const db = readCollections(ORG_POSITIONS_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const requestedState = req.query.state === orgValidators.ORG_STATE_TARGET
     ? orgValidators.ORG_STATE_TARGET
@@ -5859,8 +5873,7 @@ app.get('/api/org/positions', (req, res) => {
       subject: null, before: null, after: null, request: requestMeta(req),
     });
   }
-  const lane = orgPositionsLane(db);
-  res.json(lane.filter((p) => p.state === requestedState));
+  res.json(orgPositionsBody(db, requestedState));
 });
 
 // D-05/D-06: refuses a `reportsToId` that is self-referential, unknown,
