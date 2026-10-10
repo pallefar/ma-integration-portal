@@ -86,6 +86,7 @@ const dbFiles = require('../db/dbFiles.js');
 const controlStore = require('../db/controlStore.js');
 const sessionsDb = require('../db/sessions.js');
 const auditHook = require('../db/auditHook.js');
+const auditChain = require('../db/auditChain.js');
 const { createDealDatabase } = require('../db/dealSeed.js');
 
 function cleanupDbFile(dbPath) {
@@ -485,6 +486,10 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   const dealConn = store.getOrOpenConnection(dealDbPath, dbFiles.DEAL_SCHEMA_PATH);
   const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
   const auditConn = auditHook.getAuditConnection();
+  // D-12-04 (PD-21 / PD-29): deal audit rows live in the deal's own hash-chained
+  // partition. Taken AFTER getAuditConnection() above — the partition accessor
+  // refuses to run before audit.db is open in this process.
+  const partitionConn = auditHook.getPartitionConnection(dealId);
 
   const touchedFiles = [
     { name: 'deal', conn: dealConn },
@@ -494,6 +499,7 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   for (const f of touchedFiles) {
     f.conn.pragma('wal_checkpoint(TRUNCATE)');
   }
+  partitionConn.pragma('wal_checkpoint(TRUNCATE)');
 
   // Check 0 (not one of the named five, but required by the plan's own
   // action text): no unexpected outcome occurred during the load phase.
@@ -539,7 +545,7 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   });
 
   // Audit rows, loaded once and reused by checks 2 and 4.
-  const auditRows = auditConn.prepare(
+  const auditRows = partitionConn.prepare(
     "SELECT row_id FROM audit_log WHERE deal_id = ? AND collection = 'pulses' AND action = 'insert'"
   ).all(dealId);
   const auditRowIdCounts = new Map();
@@ -679,7 +685,7 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   // trail (nothing acknowledged is missing), and no CONFLICTED (409-
   // rejected) write's marker may EVER appear there (nothing conflicted
   // secretly committed) — exactly the guarantee T-09-34 exists to prove.
-  const raidUpdateAuditRows = auditConn.prepare(
+  const raidUpdateAuditRows = partitionConn.prepare(
     "SELECT after_json FROM audit_log WHERE deal_id = ? AND collection = 'raidEntries' AND row_id = ? AND action = 'update'"
   ).all(dealId, sharedRaidId);
   const auditedNotes = new Set();
@@ -702,6 +708,20 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
     ok: true,
     detail: `conflict409=${conflictConflicted.length} conflictRefused503=${conflictRefused.length} conflictAcknowledged=${conflictAcknowledged.length}`,
   });
+
+  // Check 10 (D-12-04 / T-12-72): the deal's audit partition is ONE valid hash
+  // chain after real multi-process appends — several server processes each
+  // appended to it under BEGIN IMMEDIATE, so a forked or broken chain here
+  // means the head read was not linearised.
+  const chain = auditChain.verifyChain(partitionConn, dealId);
+  checks.push({
+    name: 'audit partition hash chain verifies after multi-process appends',
+    ok: chain.ok,
+    detail: chain.ok
+      ? `rows=${chain.rows} head=${chain.headHash.slice(0, 12)}...`
+      : `rows=${chain.rows} firstBadId=${chain.badId} reason=${chain.reason} problems=${chain.problems.length}`,
+  });
+  auditHook.closePartitionConnection(dealId);
 
   return checks;
 }

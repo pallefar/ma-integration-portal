@@ -109,11 +109,22 @@ const RUNTIME_DB_PATH = process.env.MA_RUNTIME_DB_PATH || path.join(DATA_DIR, 'r
 const AUDIT_DB_PATH = process.env.MA_AUDIT_DB_PATH || path.join(DATA_DIR, 'audit.db');
 const DEMO_DB_PATH = process.env.MA_DEMO_DB_PATH || path.join(DATA_DIR, 'demo.db');
 const DEALS_DIR = process.env.MA_DEALS_DIR || path.join(DATA_DIR, 'deals');
+// D-12-04 / PD-4: where the per-deal audit partitions live. MA_AUDIT_DIR wins;
+// otherwise, when only MA_AUDIT_DB_PATH is overridden (every isolated suite, the
+// soak, the UAT lanes), the partitions sit in an `audit` directory NEXT TO that
+// file so an isolated audit.db isolates its partitions with no further edit;
+// otherwise <data dir>/audit (data/real/audit in real mode).
+const AUDIT_DIR = process.env.MA_AUDIT_DIR
+  || (process.env.MA_AUDIT_DB_PATH
+    ? path.join(path.dirname(path.resolve(process.env.MA_AUDIT_DB_PATH)), 'audit')
+    : path.join(DATA_DIR, 'audit'));
 
 // --- Schema file paths ---------------------------------------------------
 const CONTROL_SCHEMA_PATH = path.join(__dirname, 'control-schema.sql');
 const RUNTIME_SCHEMA_PATH = path.join(__dirname, 'runtime-schema.sql');
 const AUDIT_SCHEMA_PATH = path.join(__dirname, 'audit-schema.sql');
+// D-12-04: per-deal audit partitions (hash-chained, see db/auditChain.js).
+const AUDIT_PARTITION_SCHEMA_PATH = path.join(__dirname, 'audit-partition-schema.sql');
 // Per D-06 ("same schema as demo"), a real deal's per-deal database and the
 // demo database share the existing Phase-1 schema — no new deal-specific
 // schema file.
@@ -126,6 +137,19 @@ const DEAL_SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 // path.join() below, which is the only thing standing between a caller-
 // supplied string and an arbitrary filesystem write (T-03-03).
 const DEAL_ID_RE = /^deal_[a-z0-9]+$/i;
+
+/**
+ * D-12-04: the on-disk path of one audit partition. Accepts exactly a deal id
+ * (same shape rule as dealDbPath(), so a separator or `..` can never escape
+ * AUDIT_DIR) or the literal `legacy` (plan 12-13's pre-partition rows). Throws
+ * for anything else — never sanitises.
+ */
+function auditPartitionPath(partitionId) {
+  if (typeof partitionId !== 'string' || !(DEAL_ID_RE.test(partitionId) || partitionId === 'legacy')) {
+    throw new Error(`db/dbFiles.js: auditPartitionPath() rejected invalid partition id: ${JSON.stringify(partitionId)}`);
+  }
+  return path.join(AUDIT_DIR, `${partitionId}.db`);
+}
 
 /**
  * Build the on-disk path for a single deal's database file. Throws (does not
@@ -249,7 +273,11 @@ function chmodPrivateFile(file, options) {
   const strict = opts.strict === undefined ? IS_REAL_MODE : opts.strict === true;
   let st;
   try { st = fs.statSync(file); } catch (e) { return; } // missing: nothing to tighten
-  if (process.platform !== 'win32' && (st.mode & 0o777) === 0o600) return;
+  // [security] PD-7 (Phase 12): TIGHTENING-ONLY. A file with no group/other bits
+  // and the owner-read bit is already private and is left exactly as it is — a
+  // sealed audit partition is 0400 and must never be re-opened writable by the
+  // 0600 normalisation. Only a file other accounts can reach is chmodded.
+  if (process.platform !== 'win32' && (st.mode & 0o077) === 0 && (st.mode & 0o400) !== 0) return;
   try {
     fs.chmodSync(file, 0o600);
   } catch (e) {
@@ -355,6 +383,7 @@ const SCHEMA_FAMILIES = new Map([
   [path.resolve(RUNTIME_SCHEMA_PATH), 'runtime'],
   [path.resolve(DEAL_SCHEMA_PATH), 'deal'],
   [path.resolve(AUDIT_SCHEMA_PATH), 'audit'],
+  [path.resolve(AUDIT_PARTITION_SCHEMA_PATH), 'audit-partition'],
 ]);
 
 function familyForSchema(schemaPath) {
@@ -400,7 +429,7 @@ function prepareVersionedFile(conn, { family, dbFilePath, schema }) {
     migrate.runMigrations(conn, { family, file: dbFilePath, fresh: true });
     return;
   }
-  if (family !== 'audit' && !quickCheckOk(conn)) {
+  if (family !== 'audit' && family !== 'audit-partition' && !quickCheckOk(conn)) {
     throw readiness.markNotReady({ family, file: dbFilePath, reason: readiness.REASONS.INTEGRITY_FAILED });
   }
   migrate.runMigrations(conn, { family, file: dbFilePath, committed: isCommittedDbPath(dbFilePath) });
@@ -489,6 +518,23 @@ function openDbFile(dbFilePath, schemaPath) {
   return conn;
 }
 
+/**
+ * D-12-04: open an existing database file READ-ONLY for a viewer or verifier.
+ * No chmod, no schema exec, no migration, no directory creation, never creates
+ * the file (fileMustExist) — so it is safe inside a GET handler (11-06's
+ * no-get-mutates) and never re-opens a sealed 0400 partition writable.
+ */
+function openDbFileReadOnly(dbFilePath) {
+  const conn = new Database(dbFilePath, { readonly: true, fileMustExist: true });
+  try {
+    conn.pragma('busy_timeout = 1000');
+  } catch (e) {
+    try { conn.close(); } catch (closeErr) { /* surface the original error */ }
+    throw e;
+  }
+  return conn;
+}
+
 module.exports = {
   resolveModeConfig,
   MODE,
@@ -502,17 +548,22 @@ module.exports = {
   AUDIT_DB_PATH,
   DEMO_DB_PATH,
   DEALS_DIR,
+  AUDIT_DIR,
   CONTROL_SCHEMA_PATH,
   RUNTIME_SCHEMA_PATH,
   AUDIT_SCHEMA_PATH,
   DEAL_SCHEMA_PATH,
+  AUDIT_PARTITION_SCHEMA_PATH,
+  DEAL_ID_RE,
   dealDbPath,
+  auditPartitionPath,
   isCommittedDbPath,
   isCommittedControlDbActive,
   ensurePrivateDir,
   chmodPrivateFile,
   assertTestIsolation,
   openDbFile,
+  openDbFileReadOnly,
   // D-12-03: test-only reset of the sticky not-ready cache.
   _clearNotReadyForTests: () => notReadyPaths.clear(),
 };

@@ -805,8 +805,9 @@ function writeDb(data) {
     // [security] AUD-01/D-09/D-11/CR-01 (Phase 8 review fix): the audit
     // append now runs as the FINAL STEP of THIS transaction, not as a
     // separate, later transaction dispatched only after this one had already
-    // committed. It writes to a DIFFERENT connection (audit.db, via
-    // auditHook.getAuditConnection()) than `conn` (this deal/control/demo
+    // committed. It writes to a DIFFERENT connection (the deal's audit
+    // partition for a deal, audit.db for control — via auditHook.
+    // appendWriteAudit()) than `conn` (this deal/control/demo
     // file's connection) — better-sqlite3's no-nested-transactions rule
     // applies per-connection, so acquiring audit.db's own `.immediate` lock
     // from inside `conn`'s transaction body is not a nested transaction and
@@ -855,12 +856,30 @@ function writeDb(data) {
       // existing no-swallow error contract, so a silently-missing audit
       // entry can never look like an action that never happened, and a
       // rolled-back write can never look like it succeeded.
-      auditHook.writeAuditBatch(auditHook.getAuditConnection(), {
+      // D-12-04 (PD-1): for a deal this append targets the deal's OWN hash-
+      // chained partition (data/audit/<dealId>.db) — same invariant, same
+      // residual as described above: the partition append is its own
+      // BEGIN IMMEDIATE on the partition's own connection and is the last
+      // statement of this transaction, so a partition that cannot append
+      // (busy, sealed, I/O) rolls the deal write back. A control-kind write
+      // still lands in audit.db. audit.db was opened BEFORE this transaction
+      // (see the pre-open just before applyWrite(data) below).
+      auditHook.appendWriteAudit({
         actor, dealId: scoped.dealId || null, dbKind: auditKind,
         request: scoped.request || null, ts: new Date().toISOString(), rows: deltas,
       });
     }
   }).immediate; // D-03/CONC-01: BEGIN IMMEDIATE — see comment above applyWrite's declaration
+
+  // [security] D-12-04 / PD-29 (checker B-1): audit.db is opened HERE, outside
+  // the deal's transaction, whenever the write is audited. A first open runs the
+  // audit family's schema/migrations; if it happened inside applyWrite() (the
+  // append is the transaction's last step) a migration would run while the deal
+  // write lock is held. In a server process this is a cache hit (the server
+  // opens audit.db at boot); in a CLI, a store-level test or a soak child it is
+  // the first open — and it happens before BEGIN IMMEDIATE. Demo writes
+  // (`deltas === null`) never touch audit.db.
+  if (deltas !== null) auditHook.getAuditConnection();
 
   applyWrite(data);
 

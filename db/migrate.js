@@ -80,7 +80,8 @@ const fs = require('fs');
 const path = require('path');
 const readiness = require('./readiness');
 
-const FAMILIES = Object.freeze(['control', 'runtime', 'deal', 'audit']);
+// 'audit-partition' (D-12-04, plan 12-08): data/audit/<dealId>.db and legacy.db.
+const FAMILIES = Object.freeze(['control', 'runtime', 'deal', 'audit', 'audit-partition']);
 const BUILTIN_ROOT = path.join(__dirname, 'migrations');
 const MIN_FREE_FLOOR_BYTES = 64 * 1024 * 1024; // PD-28
 const FREE_SPACE_MULTIPLIER = 3;               // backup + partition copy + rebuilt file/WAL at peak

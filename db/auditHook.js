@@ -42,7 +42,11 @@
 // cross-database link mechanism (verified by test/audit-log.test.js's own
 // source-grep acceptance criterion).
 
+const fs = require('fs');
+const path = require('path');
 const dbFiles = require('./dbFiles');
+const auditChain = require('./auditChain');
+const readiness = require('./readiness');
 
 // D-08: which resolved db/resolver.js `kind` values are audited via
 // db/store.js's writeDb() hook. 'demo' is deliberately excluded (demo writes
@@ -55,6 +59,11 @@ const dbFiles = require('./dbFiles');
 const AUDITED_DB_KINDS = new Set(['deal', 'control']);
 
 let auditConn = null;
+
+// D-12-04: one cached read-write connection per deal partition, owned by THIS
+// module exactly like auditConn (never db/store.js's cache — that would be a
+// circular require). partitionId -> better-sqlite3 connection.
+const partitionConns = new Map();
 
 /**
  * Lazily open (or reuse) THIS module's own connection to audit.db —
@@ -69,15 +78,69 @@ function getAuditConnection() {
 }
 
 /**
+ * D-12-04 / PD-29: true once getAuditConnection() has succeeded in this
+ * process (false again after closeAuditConnection()). db/store.js's writeDb()
+ * opens audit.db BEFORE its transaction so a partition append can rely on
+ * audit.db already being open.
+ */
+function isAuditOpen() {
+  return auditConn !== null;
+}
+
+/**
  * Test-only teardown: close and drop the cached connection so a fresh test
  * file gets a fresh handle to its own temp audit.db, mirroring
- * db/store.js's closeAllConnections() test-only export.
+ * db/store.js's closeAllConnections() test-only export. Partition handles are
+ * dropped with it (they are only valid while audit.db is open — PD-29).
  */
 function closeAuditConnection() {
+  for (const id of [...partitionConns.keys()]) closePartitionConnection(id);
   if (auditConn) {
     try { auditConn.close(); } catch (e) { /* ignore */ }
     auditConn = null;
   }
+}
+
+/**
+ * D-12-04: the cached read-write connection of one deal's audit partition,
+ * created (0600 file in a 0700 directory, hash-chain schema, stamped at the
+ * family's version) on first use.
+ *
+ * [security] PD-29 (checker B-1): this function is NEVER the first opener of
+ * audit.db. Opening audit.db runs the audit family's migrations, and a first
+ * open reached from here would run them nested INSIDE the deal's `.immediate`
+ * transaction — a migration under the deal write lock. db/store.js's writeDb()
+ * opens audit.db before BEGIN IMMEDIATE and the server opens it at boot, so in
+ * every supported path it is already open; if it is not, that is an invariant
+ * breach and this throws a DbNotReadyError (reason 'audit-not-open', NOT
+ * recorded via markNotReady — it is not a file failure) WITHOUT creating any
+ * file. The partition file itself may be first-opened inside the deal
+ * transaction: lock order deal -> partition is the established order and the
+ * partition family has only the stamp-only baseline.
+ *
+ * [security] T-12-74: a partition file exists only because an audited write in
+ * a resolved deal context asked for it — auditPartitionPath() validates the id
+ * (throws for anything but a deal id or `legacy`) before any path is built, and
+ * recordSecurityEvent() never reaches this function.
+ */
+function getPartitionConnection(dealId) {
+  if (!isAuditOpen()) {
+    throw new readiness.DbNotReadyError({ family: 'audit', reason: 'audit-not-open' });
+  }
+  const cached = partitionConns.get(dealId);
+  if (cached) return cached;
+  const file = dbFiles.auditPartitionPath(dealId); // throws on a malformed id
+  const conn = dbFiles.openDbFile(file, dbFiles.AUDIT_PARTITION_SCHEMA_PATH);
+  partitionConns.set(dealId, conn);
+  return conn;
+}
+
+/** Close and forget one partition connection (a no-op for an unknown id). */
+function closePartitionConnection(dealId) {
+  const conn = partitionConns.get(dealId);
+  if (!conn) return;
+  partitionConns.delete(dealId);
+  try { conn.close(); } catch (e) { /* ignore */ }
 }
 
 const INSERT_SQL = `INSERT INTO audit_log
@@ -146,6 +209,55 @@ function writeAuditBatch(conn, { actor, dealId, dbKind, request, ts, rows }) {
 }
 
 /**
+ * D-12-04: the ONE entry point db/store.js's writeDb() uses for an audited
+ * write's rows. Same actor-required contract as writeAuditBatch() (D-11).
+ *
+ *   dbKind 'deal'  -> the deal's own hash-chained partition (data/audit/<id>.db),
+ *                     each row carrying deal_id = dealId;
+ *   anything else  -> audit.db via writeAuditBatch(), unchanged.
+ *
+ * [security] PD-1 (the atomicity seam): for a deal the append is executed as
+ * its OWN `BEGIN IMMEDIATE` on the partition's OWN connection — exactly the
+ * Phase 8 CR-01 mechanism audit.db used, no cross-file link — and db/store.js
+ * calls this as the FINAL statement inside the deal file's `.immediate`
+ * transaction. Anything thrown here (SQLITE_BUSY*, a sealed partition, an I/O
+ * error, an invalid deal id) propagates out of the deal transaction body before
+ * the deal file commits, so the deal write rolls back too: a 503/409 still
+ * means "nothing persisted" and the client's identical retry cannot duplicate a
+ * row. Never wrapped in try/catch (no-swallow contract, see header). Lock
+ * order is always deal file -> partition, with the partition innermost; seal
+ * and migration take only partition/audit locks, so no wait cycle can form.
+ */
+function appendWriteAudit({ actor, dealId, dbKind, request, ts, rows }) {
+  if (!actor || !actor.username) {
+    throw new Error('db/auditHook.js: appendWriteAudit() called with no resolved actor — refusing to write an anonymous audit row (D-11)');
+  }
+  if (!rows || rows.length === 0) return;
+  if (dbKind !== 'deal') {
+    writeAuditBatch(getAuditConnection(), { actor, dealId, dbKind, request, ts, rows });
+    return;
+  }
+  const conn = getPartitionConnection(dealId);
+  const entries = rows.map((row) => ({
+    ts,
+    actor_username: actor.username,
+    actor_role: actor.role || null,
+    session_id: actor.sessionId || null,
+    deal_id: dealId,
+    db_kind: dbKind,
+    action: row.action,
+    collection: row.collection || null,
+    row_id: row.rowId || null,
+    before_json: row.before === undefined ? null : row.before,
+    after_json: row.after === undefined ? null : row.after,
+    request_method: (request && request.method) || null,
+    request_path: (request && request.path) || null,
+    ip: (request && request.ip) || null,
+  }));
+  auditChain.appendChained(conn, entries, { partitionId: dealId });
+}
+
+/**
  * D-08: write exactly ONE row for a named control-plane security event (deal
  * create/archive/delete, membership changes, password changes, session
  * revocations, break-glass token use). `before`/`after` may be any
@@ -171,22 +283,63 @@ function recordSecurityEvent({ actor, action, dealId, subject, before, after, re
   );
 }
 
+// D-12-04: partition file names a reader may open — a deal id or `legacy`.
+const PARTITION_FILE_RE = /^(deal_[a-z0-9]+|legacy)\.db$/i;
+const MAX_AUDIT_OFFSET = 100000; // a viewer can never force an unbounded merge window
+
 /**
- * D-10: the admin audit viewer's read path. Ordered by the autoincrement id
- * DESCENDING — offset=0 (the tab's default, initial load) is the 50 MOST
- * RECENT rows, which is what an admin investigating recent activity (the
- * primary use case for a compliance/audit viewer) needs to see first (WR-01
- * fix). Descending id is still the schema's specified stable readback order
- * for rows that share a timestamp — only the direction changed, not the tie-
- * break rule. `limit` is clamped to a sane default (100) and a hard maximum
- * (500) so a caller can never force an unbounded table scan through this
- * endpoint. Increasing `offset` moves toward OLDER rows (paginating "Older
- * →"); decreasing it moves toward the most recent ("← Newer") — see
- * public/js/admin.js's btn-audit-prev/btn-audit-next wiring, which is
- * already written with this direction in mind.
+ * Read sources for one query: audit.db (tag 'control', the live connection)
+ * plus the partitions that can hold matching rows, each opened READ-ONLY. When
+ * `dealId` is given only that deal's partition and `legacy.db` (whose rows keep
+ * their original deal_id) are consulted; otherwise every partition in
+ * AUDIT_DIR. Never creates a directory or a file (11-06: a GET must not write).
+ * Returns `{ sources: [{ partition, conn, owned }], close() }`.
+ */
+function openReadSources(dealId) {
+  const sources = [{ partition: 'control', conn: getAuditConnection(), owned: false }];
+  const names = [];
+  if (dealId) {
+    if (dbFiles.DEAL_ID_RE.test(dealId)) names.push(`${dealId}.db`);
+    names.push('legacy.db');
+  } else {
+    let listing = [];
+    try { listing = fs.readdirSync(dbFiles.AUDIT_DIR); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    for (const name of listing.sort()) if (PARTITION_FILE_RE.test(name)) names.push(name);
+  }
+  for (const name of names) {
+    const file = path.join(dbFiles.AUDIT_DIR, name);
+    if (!fs.existsSync(file)) continue;
+    sources.push({ partition: name.replace(/\.db$/i, ''), conn: dbFiles.openDbFileReadOnly(file), owned: true });
+  }
+  return {
+    sources,
+    close() {
+      for (const src of sources) {
+        if (src.owned) { try { src.conn.close(); } catch (e) { /* ignore */ } }
+      }
+    },
+  };
+}
+
+/**
+ * D-10: the admin audit viewer's read path. Rows are ordered `ts DESC, id DESC`
+ * — offset=0 (the tab's default, initial load) is the MOST RECENT rows, which is
+ * what an admin investigating recent activity (the primary use case for a
+ * compliance/audit viewer) needs to see first (WR-01 fix). `id DESC` is still
+ * the stable readback order for rows that share a timestamp. `limit` is clamped
+ * to a sane default (100) and a hard maximum (500), `offset` to 100000, so a
+ * caller can never force an unbounded scan through this endpoint. Increasing
+ * `offset` moves toward OLDER rows (paginating "Older ->"); decreasing it moves
+ * toward the most recent ("<- Newer") — see public/js/admin.js's
+ * btn-audit-prev/btn-audit-next wiring.
+ *
+ * D-12-04: spans audit.db (control-plane events, including Phase 11
+ * `access-denied` rows) and every deal partition, merged by ts DESC; each row
+ * is tagged `partition` ('control', a deal id, or 'legacy'). `dealId` returns
+ * that deal's partition rows UNION the control rows carrying that deal_id. Row
+ * ids are per file, so `(partition, id)` is a row's identity.
  */
 function queryAudit({ dealId, actor, from, to, limit, offset } = {}) {
-  const conn = getAuditConnection();
   const clauses = [];
   const params = [];
   if (dealId) { clauses.push('deal_id = ?'); params.push(dealId); }
@@ -198,9 +351,28 @@ function queryAudit({ dealId, actor, from, to, limit, offset } = {}) {
   const parsedLimit = parseInt(limit, 10);
   const lim = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 500) : 100;
   const parsedOffset = parseInt(offset, 10);
-  const off = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
+  const off = Number.isFinite(parsedOffset) && parsedOffset > 0 ? Math.min(parsedOffset, MAX_AUDIT_OFFSET) : 0;
 
-  return conn.prepare(`SELECT * FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, lim, off);
+  const reader = openReadSources(dealId);
+  try {
+    const merged = [];
+    for (const src of reader.sources) {
+      const rows = src.conn
+        .prepare(`SELECT * FROM audit_log ${where} ORDER BY ts DESC, id DESC LIMIT ?`)
+        .all(...params, off + lim);
+      for (const row of rows) { row.partition = src.partition; merged.push(row); }
+    }
+    // Every source is already sorted (ts DESC, id DESC); sorting the bounded
+    // union by the same key is the k-way merge result.
+    merged.sort((a, b) => {
+      if (a.ts !== b.ts) return a.ts < b.ts ? 1 : -1;
+      if (a.id !== b.id) return b.id - a.id;
+      return 0;
+    });
+    return merged.slice(off, off + lim);
+  } finally {
+    reader.close();
+  }
 }
 
 /**
@@ -213,7 +385,6 @@ function queryAudit({ dealId, actor, from, to, limit, offset } = {}) {
  * optional and parameterised.
  */
 function countAudit({ dealId, rowId, collection, action } = {}) {
-  const conn = getAuditConnection();
   const clauses = [];
   const params = [];
   if (dealId) { clauses.push('deal_id = ?'); params.push(dealId); }
@@ -221,11 +392,21 @@ function countAudit({ dealId, rowId, collection, action } = {}) {
   if (collection) { clauses.push('collection = ?'); params.push(collection); }
   if (action) { clauses.push('action = ?'); params.push(action); }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  return conn.prepare(`SELECT COUNT(*) AS n FROM audit_log ${where}`).get(...params).n;
+  const reader = openReadSources(dealId);
+  try {
+    let total = 0;
+    for (const src of reader.sources) {
+      total += src.conn.prepare(`SELECT COUNT(*) AS n FROM audit_log ${where}`).get(...params).n;
+    }
+    return total;
+  } finally {
+    reader.close();
+  }
 }
 
 module.exports = {
   AUDITED_DB_KINDS,
-  getAuditConnection, closeAuditConnection,
-  writeAuditBatch, recordSecurityEvent, queryAudit, countAudit,
+  getAuditConnection, closeAuditConnection, isAuditOpen,
+  getPartitionConnection, closePartitionConnection,
+  writeAuditBatch, appendWriteAudit, recordSecurityEvent, queryAudit, countAudit,
 };
