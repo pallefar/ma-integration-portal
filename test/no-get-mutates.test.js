@@ -476,3 +476,48 @@ test('static: no app.get() handler in server.js calls writeDb()', () => {
   assert.ok(checked >= 58, `scanned ${checked} app.get handlers`);
   assert.deepStrictEqual(offenders, [], 'a GET handler calls writeDb() — state changes must be POST/PUT/PATCH/DELETE (AUTHZ-04)');
 });
+
+// ---------------------------------------------------------------------------
+// Task 3 — AUTHZ-04's second clause: every state-changing route is a write
+// method AND passes write validation.
+//
+// test/write-validation-coverage.test.js already asserts the second half with
+// the same findUnvalidatedWriteRoutes() this file calls; it is asserted here
+// once more against THIS suite's app instance so the AUTHZ-04 proof is
+// self-contained, without a second copy of the route list.
+// ---------------------------------------------------------------------------
+test('AUTHZ-04: every registered route uses only GET or an explicit write method; every write route has a registered schema', () => {
+  const { findUnvalidatedWriteRoutes } = require('../validators/index.js');
+  const ALLOWED = new Set(['get', 'post', 'put', 'patch', 'delete']);
+  const odd = [];
+  for (const layer of app._router.stack) {
+    if (!layer.route) continue;
+    for (const [m, on] of Object.entries(layer.route.methods)) {
+      if (on && !ALLOWED.has(m)) odd.push(`${m.toUpperCase()} ${layer.route.path}`);
+    }
+  }
+  // an app.all() / app.head() / app.options() route would answer a GET with a
+  // handler no write-method gate ever looked at
+  assert.deepStrictEqual(odd, [], 'routes registered on a method outside GET/POST/PUT/PATCH/DELETE');
+  assert.deepStrictEqual(findUnvalidatedWriteRoutes(app), [], 'every write route has a registered zod schema');
+});
+
+test('AUTHZ-04: scripts/list-unvalidated-routes.js (the dev reporter) exits 0 and lists no route', () => {
+  const sandbox = fs.mkdtempSync(path.join(TMP, 'reporter-'));
+  const env = { ...process.env };
+  for (const key of ['MA_MODE', 'MA_DATA_DIR', 'DEMO_OPEN', 'ADMIN_TOKEN']) delete env[key];
+  // the reporter boots the real app — point it at a throwaway data set, never data/*.db
+  Object.assign(env, {
+    MA_CONTROL_DB_PATH: path.join(sandbox, 'control.db'),
+    MA_RUNTIME_DB_PATH: path.join(sandbox, 'runtime.db'),
+    MA_DEMO_DB_PATH: path.join(sandbox, 'demo.db'),
+    MA_AUDIT_DB_PATH: path.join(sandbox, 'audit.db'),
+    MA_DEALS_DIR: path.join(sandbox, 'deals'),
+  });
+  const res = childProcess.spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'list-unvalidated-routes.js')], {
+    env, encoding: 'utf8', timeout: 60000,
+  });
+  assert.strictEqual(res.status, 0, `reporter exit status ${res.status}\n${res.stdout}\n${res.stderr}`);
+  assert.match(res.stdout, /Every registered write route has a schema/);
+  assert.doesNotMatch(res.stdout, /still have no registered schema/);
+});
