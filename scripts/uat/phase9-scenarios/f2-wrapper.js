@@ -33,8 +33,23 @@ function lastRequest(page, method) {
   return all[all.length - 1];
 }
 
+// The server throttles /api/auth/login to 8 attempts per minute per source and
+// every openTab() logs in, so a multi-tab scenario can legitimately meet a 429
+// from the harness's own logins (not a product defect). Wait out the window
+// and retry rather than failing the scenario.
+async function openTabPatient(ctx, opts) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await ctx.openTab(opts);
+    } catch (e) {
+      if (attempt >= 2 || !/\b429\b/.test(String(e && e.message))) throw e;
+      await ctx.sleep(62000);
+    }
+  }
+}
+
 async function openRaidTab(ctx, opts) {
-  const page = await ctx.openTab(Object.assign({ viewport: { width: 1440, height: 900 }, path: '/execution.html' }, opts || {}));
+  const page = await openTabPatient(ctx, Object.assign({ viewport: { width: 1440, height: 900 }, path: '/execution.html' }, opts || {}));
   await page.click('.ex-tab[data-ex-tab="raid"]');
   return page;
 }
@@ -91,4 +106,113 @@ module.exports = {
       next && { status: next.status, sentVersion: next.request && next.request.version, serverVersion: server.version });
     ctx.check('no page errors', b.pageErrors.length === 0, b.pageErrors);
   },
+
+  // R7 F-2c: B deletes a row A already changed -> stale-delete dialog ->
+  // Delete anyway. The row leaves B's DOM and the API.
+  async 'raid-f2-delete-anyway'(ctx) {
+    await deleteAnywayAt(ctx, { width: 1440, height: 900 }, '1440');
+    await deleteAnywayAt(ctx, { width: 390, height: 844 }, '390');
+  },
+
+  // R7 F-2 third writer: while B's dialog is open a third write lands. Apply
+  // meets a fresh 409 -> the SAME overlay re-renders with the banner and the
+  // newest 'theirs'; the next Apply resolves and the row shows server status.
+  async 'third-writer'(ctx) {
+    await thirdWriterAt(ctx, { width: 1440, height: 900 }, '1440');
+    await thirdWriterAt(ctx, { width: 390, height: 844 }, '390');
+  },
+
+  // Two tabs flipping DIFFERENT records never conflict (version is per record).
+  async 'different-records'(ctx) {
+    const r2 = await seedStampedRaid(ctx, 'F-2 different records R2');
+    const r3 = await seedStampedRaid(ctx, 'F-2 different records R3');
+    const a = await openRaidTab(ctx);
+    const b = await openRaidTab(ctx);
+    await a.waitForSelector(`.raid-row[data-raid="${r2.id}"]`, { timeout: 10000 });
+    await b.waitForSelector(`.raid-row[data-raid="${r3.id}"]`, { timeout: 10000 });
+
+    await a.click(`.raid-row[data-raid="${r2.id}"] .raid-status`);
+    await b.click(`.raid-row[data-raid="${r3.id}"] .raid-status`);
+    await ctx.sleep(900);
+    const aReq = lastRequest(a, 'POST');
+    const bReq = lastRequest(b, 'POST');
+    ctx.check('different records: both flips 200', !!aReq && !!bReq && aReq.status === 200 && bReq.status === 200,
+      { a: aReq && aReq.status, b: bReq && bReq.status });
+    ctx.check('different records: no overlay', (await ctx.overlayCount(a)) === 0 && (await ctx.overlayCount(b)) === 0);
+  },
 };
+
+const BANNER_THIRD_WRITER = "That didn't go through — the record changed again. Your edits are still here; review the fresh values below and try again.";
+
+async function deleteAnywayAt(ctx, viewport, tag) {
+  const entry = await seedStampedRaid(ctx, 'F-2 delete anyway entry (' + tag + ')');
+  const a = await openRaidTab(ctx);
+  const b = await openRaidTab(ctx, { viewport });
+  await a.waitForSelector(`.raid-row[data-raid="${entry.id}"]`, { timeout: 10000 });
+  await b.waitForSelector(`.raid-row[data-raid="${entry.id}"]`, { timeout: 10000 });
+
+  await a.click(`.raid-row[data-raid="${entry.id}"] .raid-status`);
+  await ctx.sleep(600);
+
+  // The harness accepts the native confirm (the in-app confirm replaces it in plan 09-14).
+  await b.click(`.raid-row[data-raid="${entry.id}"] .ex-del`);
+  const dlg = await ctx.waitDialog(b);
+  const isStaleDelete = !!dlg && dlg.overlays === 1 && dlg.buttons.some((x) => /conflict-btn-delete/.test(x.cls));
+  ctx.check('stale-delete dialog shown (' + tag + ')', isStaleDelete, dlg && { title: dlg.title, overlays: dlg.overlays });
+  const fit = await ctx.fitCheck(b);
+  ctx.check('fit at ' + tag + ' (stale-delete dialog)', fit.noHorizontalScroll && fit.dialogInside, fit);
+  await ctx.shot(b, 'raid-f2-delete-anyway-' + tag + '.png');
+
+  await b.click('.conflict-modal .conflict-btn-delete');
+  ctx.check('dialog closes after Delete anyway (' + tag + ')', await ctx.waitNoDialog(b));
+  await ctx.sleep(300);
+  const inDom = await b.evaluate((rid) => !!document.querySelector(`.raid-row[data-raid="${rid}"]`), entry.id);
+  const server = await getRaid(ctx, entry.id);
+  ctx.check('row removed after Delete anyway (' + tag + ')', !inDom && !server, { inDom, serverHasEntry: !!server });
+}
+
+async function thirdWriterAt(ctx, viewport, tag) {
+  const entry = await seedStampedRaid(ctx, 'F-2 third writer entry (' + tag + ')');
+  const b = await openRaidTab(ctx, { viewport });
+  await b.waitForSelector(`.raid-row[data-raid="${entry.id}"]`, { timeout: 10000 });
+
+  // Writer A (through the API): closed, version 1 -> 2.
+  const w1 = await ctx.api(ctx.seeder.cookie, 'POST', '/api/raid', { id: entry.id, status: 'closed', version: 1 });
+  ctx.check('writer A 200 (' + tag + ')', w1.status === 200, w1.status);
+
+  // B flips (open -> mitigating, holding version 1) -> conflict dialog.
+  await b.click(`.raid-row[data-raid="${entry.id}"] .raid-status`);
+  const first = await ctx.waitDialog(b);
+  const firstOk = !!first && first.overlays === 1 && !first.banner
+    && first.rows.some((r) => r.mine === 'mitigating' && r.theirs === 'closed');
+  ctx.check('conflict dialog, no banner, theirs=closed (' + tag + ')', firstOk, first && { overlays: first.overlays, banner: first.banner, rows: first.rows });
+  const fit1 = await ctx.fitCheck(b);
+  ctx.check('fit at ' + tag + ' (edit dialog)', fit1.noHorizontalScroll && fit1.dialogInside, fit1);
+  await ctx.shot(b, 'third-writer-dialog-' + tag + '.png');
+
+  // Writer C lands while B's dialog is open: open, version 2 -> 3.
+  const w2 = await ctx.api(ctx.seeder.cookie, 'POST', '/api/raid', { id: entry.id, status: 'open', version: 2 });
+  ctx.check('third writer 200 (' + tag + ')', w2.status === 200, w2.status);
+
+  // B applies -> meets a fresh 409 -> same overlay, banner, newest theirs.
+  await b.click('.conflict-modal .conflict-btn-apply');
+  await ctx.sleep(900);
+  const second = await ctx.readDialog(b);
+  ctx.check('banner on third writer (' + tag + ')', !!second && second.banner === BANNER_THIRD_WRITER, second && second.banner);
+  ctx.check('one overlay throughout (' + tag + ')', !!second && second.overlays === 1, second && second.overlays);
+  ctx.check('theirs refreshed, mine unchanged (' + tag + ')',
+    !!second && second.rows.some((r) => r.mine === 'mitigating' && r.theirs === 'open'), second && second.rows);
+  const fit2 = await ctx.fitCheck(b);
+  ctx.check('fit at ' + tag + ' (banner state)', fit2.noHorizontalScroll && fit2.dialogInside, fit2);
+  await ctx.shot(b, 'third-writer-banner-' + tag + '.png');
+
+  // B applies again -> resolves; the row shows the server's status.
+  await b.click('.conflict-modal .conflict-btn-apply');
+  const closed = await ctx.waitNoDialog(b);
+  await ctx.sleep(300);
+  const server = await getRaid(ctx, entry.id);
+  const label = await rowStatusText(b, entry.id);
+  ctx.check('final Apply resolves and row shows server status (' + tag + ')',
+    closed && !!server && label === RAID_LABEL[server.status] && server.status === 'mitigating',
+    { closed, serverStatus: server && server.status, serverVersion: server && server.version, rowLabel: label });
+}
