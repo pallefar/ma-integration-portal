@@ -33,6 +33,8 @@ const sessionsDb = require('../db/sessions.js');
 const { createDealDatabase } = require('../db/dealSeed.js');
 
 const app = require('../server.js');
+// GD-3 (CONC-02 gap closure): this suite's subject is not the version contract — supply the held-version precondition a real client sends.
+require('./helpers/held-version.js').installHeldVersionFetch();
 
 const controlConn = store.getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
 const runtimeConn = store.getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);

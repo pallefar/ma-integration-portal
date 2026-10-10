@@ -3178,7 +3178,7 @@ app.post('/api/integration-tasks', (req, res) => {
     // any field mutation below, including the status-flip branch (a kanban
     // quick action goes through the identical check as a full edit, D-02 —
     // no exemptions for a single-field payload).
-    if (conflictIfStale(req, res, task)) return;
+    if (conflictIfStale(req, res, task, { requirePrecondition: true })) return;
     // Validate EVERYTHING before touching the object — readDb() hands back the
     // shared cache, so a mutation followed by a 400 would silently stick.
     // VAL-01: status/phase enum membership is now owned exclusively by
@@ -3231,7 +3231,7 @@ app.delete('/api/integration-tasks/:id', (req, res) => {
   // dual-channel contract conflictIfStale() already delegates to (Plan 02).
   // Deleting something already gone is not a conflict (the 404 above already
   // covers it) — this only fires when the record is present but stale.
-  if (conflictIfStale(req, res, task)) return;
+  if (conflictIfStale(req, res, task, { requirePrecondition: true })) return;
   const filtered = lane.filter(t => t.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customIntegrationTasks = filtered;
   else db.integrationTasks = filtered;
@@ -3807,7 +3807,7 @@ app.post('/api/synergies', (req, res) => {
     // CONC-02 (Phase 9): the route-level precheck fast path — placed BEFORE
     // any field mutation below, including the SYN-05 stamping-field
     // computation next.
-    if (conflictIfStale(req, res, item)) return;
+    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
     // SYN-05/D-16: computed from the RAW body before any mutation below —
     // whether this edit touches ANY field in the SYNERGY_STAMPING_FIELDS
     // allowlist. Title and notes are deliberately absent from that list.
@@ -3950,7 +3950,7 @@ app.delete('/api/synergies/:id', (req, res) => {
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
   // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection, same
   // query-channel contract as the sibling sub-routes above.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
   const filtered = lane.filter(s => s.id !== req.params.id);
   if (db.settings && db.settings.demoMode === false) db.customSynergyInitiatives = filtered;
   else db.synergyInitiatives = filtered;
@@ -3973,7 +3973,7 @@ app.post('/api/synergies/:id/cost-entries', (req, res) => {
   // CONC-02 (Phase 9, Plan 02 Task 2): a cost-entry addition mutates the
   // owning initiative record — D-02 gives it no exemption from the version
   // precondition, even though the entry itself is a nested sub-object.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
 
   item.costEntries = Array.isArray(item.costEntries) ? item.costEntries : [];
   const entry = { id: newId('cost'), date: b.date, amountM: roundSynergyMoney(b.amountM), note: String(b.note || '').slice(0, 2000) };
@@ -3998,7 +3998,7 @@ app.delete('/api/synergies/:id/cost-entries/:eid', (req, res) => {
   // contract Task 1 built. This is an UPDATE of the initiative (deleting a
   // nested entry from it), never a record delete, so it uses the ordinary
   // conflict path rather than a later plan's stale-delete surface.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
 
   const entries = Array.isArray(item.costEntries) ? item.costEntries : [];
   const filtered = entries.filter(e => e.id !== req.params.eid);
@@ -4031,7 +4031,7 @@ app.post('/api/synergies/:id/generate-phasing', (req, res) => {
   // item.phasing (a destructive act the client already confirms) — the
   // version precondition is checked here too, D-02, before any of the
   // fields below are touched.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
 
   item.runRateM = roundSynergyMoney(b.runRateM);
   item.startMonth = b.startMonth;
@@ -4089,7 +4089,7 @@ app.post('/api/synergies/:id/phasing/:month', (req, res) => {
   // CONC-02 (Phase 9, Plan 02 Task 2): placed immediately after the
   // not-found guard — before the month-shape/row-existence checks below —
   // and before the first mutation of the resolved initiative (D-02).
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
 
   // SYN-01/D-25: a malformed :month path param is a 400 (bad request shape),
   // distinct from a well-formed month that simply has no row (404 below) —
@@ -4144,7 +4144,7 @@ app.post('/api/synergies/:id/stage', (req, res) => {
   // fires and returns first whenever a stale version is supplied, regardless
   // of whether the request would otherwise hit the same-stage no-op, the
   // unrecognized-stage refusal, or a real stage move.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
 
   const targetStage = b.targetStage;
   const reason = String(b.reason || '').trim();
@@ -4215,7 +4215,7 @@ app.post('/api/synergies/:id/rebaseline', (req, res) => {
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
   // CONC-02 (Phase 9, Plan 02 Task 2): after the not-found guard, before
   // any mutation (D-02).
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
 
   const reason = String(b.reason || '').trim();
   if (!reason) return res.status(400).json({ error: 'A reason is required to re-baseline.' });
@@ -4242,7 +4242,7 @@ app.post('/api/synergies/:id/confirm-current', (req, res) => {
   const lane = synergyLane(db);
   const item = lane.find(s => s.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Initiative not found.' });
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
 
   item.lastConfirmedAt = new Date().toISOString();
   writeDb(db);
