@@ -245,6 +245,22 @@ Plans:
   5. API responses are `no-store`; logout clears client caches/storage; pages no longer wipe legitimate caches.
 
 **Plans**: TBD
+
+- [x] 13-01-PLAN.md
+- [x] 13-02-PLAN.md
+- [ ] 13-03-PLAN.md
+- [ ] 13-04-PLAN.md
+- [ ] 13-05-PLAN.md
+- [ ] 13-06-PLAN.md
+- [ ] 13-07-PLAN.md
+- [ ] 13-08-PLAN.md
+- [ ] 13-09-PLAN.md
+- [ ] 13-10-PLAN.md
+- [ ] 13-11-PLAN.md
+- [ ] 13-12-PLAN.md
+- [ ] 13-13-PLAN.md
+- [ ] 13-14-PLAN.md
+
 **UI hint**: yes
 
 ### Phase 14: Deal Files, Limits & Legacy Hazards
@@ -425,7 +441,7 @@ Items a closed phase deferred or accepted, owned by a later phase (full table wi
 | 10. Accounts & Identity | v3.0 | 9/9 | Complete    | 2026-10-10 |
 | 11. Authorization & Clean-Room Closure | v3.0 | 10/8 | Complete    | 2026-10-10 |
 | 12. Data-Layer Integrity & Performance | v3.0 | 15/15 | Complete    | 2026-10-11 |
-| 13. Content Safety | v3.0 | 0/TBD | Not started | - |
+| 13. Content Safety | v3.0 | 2/14 | In Progress|  |
 | 14. Deal Files, Limits & Legacy Hazards | v3.0 | 0/TBD | Not started | - |
 | 15. Module Control — Core | v3.0 | 0/TBD | Not started | - |
 | 16. Module Control — Surfaces, Per-Deal & Defaults | v3.0 | 0/TBD | Not started | - |
