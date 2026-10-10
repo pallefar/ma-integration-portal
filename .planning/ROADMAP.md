@@ -130,7 +130,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
   4. Eight wrong passwords from one user do not lock out a colleague behind the same proxy; temporary passwords force a change at first login; stored hashes upgrade transparently; any user changes their password and ends their own sessions from the UI.
   5. New database files are `0600` in a `0700` directory under any umask.
 
-**Plans**: 2/9 plans executed (5 waves; server.js-touching plans 10-01 → 10-03 → 10-05 are one per wave)
+**Plans**: 4/9 plans executed (5 waves; server.js-touching plans 10-01 → 10-03 → 10-05 are one per wave)
 **Wave 1**
 
 - [x] 10-01-PLAN.md — W1 tracer: MA_MODE=real mode contract, own data dir seeded without demo accounts, bootstrap-admin CLI, new scrypt hash format, committed-file guards
@@ -138,8 +138,8 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 10-03-PLAN.md — W2: admin user CRUD + last-admin guard + per-request role/disabled re-read (COLLAB-02) + My-sessions API
-- [ ] 10-04-PLAN.md — W2: MNPI files 0600 / dirs 0700 under any umask (OPS-08)
+- [x] 10-03-PLAN.md — W2: admin user CRUD + last-admin guard + per-request role/disabled re-read (COLLAB-02) + My-sessions API
+- [x] 10-04-PLAN.md — W2: MNPI files 0600 / dirs 0700 under any umask (OPS-08)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -369,7 +369,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 |-------|-----------|----------------|--------|-----------|
 | 8. Concurrency & Storage Foundation | v3.0 | 5/5 | Complete    | 2026-08-11 |
 | 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | Complete    | 2026-10-10 |
-| 10. Accounts & Identity | v3.0 | 2/9 | In Progress|  |
+| 10. Accounts & Identity | v3.0 | 4/9 | In Progress|  |
 | 11. Authorization & Clean-Room Closure | v3.0 | 0/TBD | Not started | - |
 | 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |
 | 13. Content Safety | v3.0 | 0/TBD | Not started | - |
