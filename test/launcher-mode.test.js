@@ -36,6 +36,17 @@ test('launchers: start-real-deal.command exports MA_MODE=real before exec and po
   assert.ok(unsetIdx > exportIdx && unsetIdx < execIdx, 'unset DEMO_OPEN must sit between export MA_MODE=real and exec');
 });
 
+test('DEPLOYMENT.md (IN-C02): Self-service wording matches account-menu.js dev/demo gating', () => {
+  const doc = read('DEPLOYMENT.md');
+  const menu = read(path.join('public', 'js', 'account-menu.js'));
+  assert.ok(!/Both are\s+disabled/.test(doc), 'the doc must not claim My sessions is disabled');
+  assert.match(doc, /\*\*Change password\*\*\s+is\s+disabled with an explanatory note/);
+  assert.match(doc, /\*\*My sessions\*\* still lists your sessions but\s+offers no \*\*End session\*\*/);
+  // the code behaviour the sentence documents
+  assert.match(menu, /if \(state\.writable\) \{\s*var end = el\('button', 'btn btn-secondary am-session-end', 'End session'\)/);
+  assert.match(menu, /if \(!state\.writable\) wrap\.appendChild\(el\('p', 'am-note', READ_ONLY_NOTE\)\)/);
+});
+
 test('launchers (IN-C01): start-real-deal.command really clears an inherited DEMO_OPEN', () => {
   const { spawnSync } = require('child_process');
   const src = read('start-real-deal.command');

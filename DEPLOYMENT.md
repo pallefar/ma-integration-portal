@@ -172,9 +172,10 @@ server — the **restart** is what clears the throttle.
 ## Self-service
 
 Every signed-in person has **Change password** and **My sessions** in the account
-menu: the current device is marked, and any other session can be ended. Both are
-disabled with an explanatory note on the dev/demo committed database
-(`accountsWritable:false`).
+menu: the current device is marked, and any other session can be ended. On the
+dev/demo committed database (`accountsWritable:false`) **Change password** is
+disabled with an explanatory note; **My sessions** still lists your sessions but
+offers no **End session**.
 
 ## ADMIN_TOKEN (optional break-glass, discouraged)
 
