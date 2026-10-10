@@ -615,6 +615,30 @@ function openDbFileReadOnly(dbFilePath) {
   return conn;
 }
 
+/**
+ * [security] IN-B04 (12-REVIEW-B): the ONE sanctioned way to read a database
+ * file that must never be written and is not opened through openDbFile() — the
+ * deal-seed TEMPLATE (data/demo.db by default) and the perf harness's copy of
+ * the committed demo/control files. Read-only at the SQLite level (any write
+ * throws SQLITE_READONLY), `fileMustExist` (never creates the file), the
+ * test-isolation guard applies, and a -wal/-shm sidecar that the read-only WAL
+ * open created beside the file is removed again on close() — so the committed
+ * tree is left exactly as it was. Returns the connection; call its close().
+ */
+function openReadOnlySnapshot(dbFilePath) {
+  assertTestIsolation(dbFilePath);
+  const sidecars = SIDECAR_SUFFIXES.map((s) => dbFilePath + s);
+  const existed = sidecars.map((p) => fs.existsSync(p));
+  const conn = new Database(dbFilePath, { readonly: true, fileMustExist: true });
+  const close = conn.close.bind(conn);
+  conn.close = () => {
+    try { close(); } finally {
+      sidecars.forEach((p, i) => { if (!existed[i]) { try { fs.unlinkSync(p); } catch (e) { /* not created */ } } });
+    }
+  };
+  return conn;
+}
+
 module.exports = {
   resolveModeConfig,
   MODE,
@@ -646,6 +670,7 @@ module.exports = {
   assertTestIsolation,
   openDbFile,
   openDbFileReadOnly,
+  openReadOnlySnapshot,
   createdThisProcess,
   // D-12-03: test-only reset of the sticky not-ready cache.
   _clearNotReadyForTests: () => notReadyPaths.clear(),
