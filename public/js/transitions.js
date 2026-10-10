@@ -128,7 +128,12 @@
   const CONFLICT_APPLY_LABEL = 'Apply my changes anyway';
   const CONFLICT_DISCARD_LABEL = 'Discard mine, keep theirs';
   const CONFLICT_APPLYING_LABEL = 'Applying…';
-  const CONFLICT_EMPTY_DIFF = "No conflicting fields — the record's version changed without affecting anything you edited. Apply your changes to continue.";
+  // R7 F-3 / GD-6: a record whose version moved while no payload field maps
+  // to a record field (a `{}` confirm-current, a convert, a re-baseline, a
+  // cost-entry add) used to render a sentence asserting the change was
+  // irrelevant to the user's edit — a claim the client cannot know. The neutral
+  // panel says only what is true and reuses the ONE fallback sentence
+  // (CONFLICT_ATTRIBUTION_FALLBACK) so it is a single constant.
   // E2-error (Plan 03): the reapply-failure banner. One fixed prefix/suffix
   // pair with a swapped-in reason — never a separate string per failure
   // mode, so the copy stays exactly on the Copywriting Contract's sentence.
@@ -141,12 +146,25 @@
   // FA-2 (09-01-PLAN.md): a deliberate extension beyond the signed-off
   // 09-UI-SPEC.md Copywriting Contract — three literals for PD-4's "an
   // UPDATE arrived for a record someone else already deleted" surface,
-  // which the approved UI-SPEC table does not itself enumerate (it only
-  // covers the edit-conflict and D-08 stale-delete variants). Flagged here
-  // for the developer's eye at UAT, per the plan.
-  const CONFLICT_TITLE_DELETED = 'This record was deleted';
+  // which the approved UI-SPEC table did not itself enumerate (it only
+  // covered the edit-conflict and D-08 stale-delete variants). Resolved by
+  // plan 09-13: 09-UI-SPEC.md's "Amendments (2026-10-10" section A1 now lists
+  // these three literals in its Copywriting Contract. GD-10 / R7 F-7: the
+  // title names the actor-less truth ("deleted"), and this variant renders no
+  // attribution line — a deleted row carries no actor/time to attribute.
+  const CONFLICT_TITLE_DELETED = 'Someone else deleted this';
   const CONFLICT_DELETED_INTRO = 'Someone else deleted this record before your change could be saved. There is nothing left to apply — closing this leaves your form exactly as it was.';
   const CONFLICT_CLOSE_LABEL = 'Close';
+  // R7 F-4 / GD-7 (SC6): the server withholds `currentRecord` (null) when the
+  // record is outside the caller's clearance (CR-01). Rendering that as an
+  // empty diff with an "Apply" action was misleading and the follow-up 403
+  // was reported as a network error. The honest variant states the one thing
+  // known, offers no action that cannot succeed, and shows no field value.
+  const CONFLICT_WITHHELD_TEXT = 'This record is no longer within your clearance; your change cannot be applied.';
+  // Reason used when a refused reapply (a 4xx other than a marker 409) carries
+  // no readable `error` text of its own.
+  const CONFLICT_ERROR_REASON_REFUSED = 'the server refused the change';
+  const CONFLICT_ERROR_REASON_MAX_CHARS = 200;
 
   // D-08 (Phase 9, Plan 06): the stale-delete confirmation variant, taken
   // when the intercepted request's method is DELETE — distinct from
@@ -234,6 +252,9 @@
   // UI-SPEC E4: with both actor and time present render "Changed by {name},
   // {relative time}"; with either missing render the fallback sentence —
   // never a blank line, never a line containing the word "undefined".
+  // Returns true when the real "Changed by" line was rendered, false when the
+  // fallback sentence was (so a caller that is already showing that same
+  // sentence elsewhere can omit this element instead of repeating it — A7).
   function renderConflictAttribution(el, body) {
     const name = body && body.changedBy;
     const time = (body && body.changedAt) ? relativeTime(body.changedAt) : null;
@@ -244,9 +265,10 @@
       strong.textContent = name;
       el.appendChild(strong);
       el.appendChild(document.createTextNode(', ' + time));
-    } else {
-      el.textContent = CONFLICT_ATTRIBUTION_FALLBACK;
+      return true;
     }
+    el.textContent = CONFLICT_ATTRIBUTION_FALLBACK;
+    return false;
   }
 
   // UI-SPEC E1-partial: a changed field whose value (mine or theirs) is
@@ -264,6 +286,123 @@
     } else {
       el.textContent = String(val);
     }
+  }
+
+  // R7 F-3 / GD-6 / D-03 / Pitfall 12: the diff compares what the user EDITED
+  // (the payload's keys — their intent) with what the server holds now. Most
+  // routes name their payload keys exactly like the record's fields, so
+  // payload-keys-that-exist-on-the-record is the right default. A few routes
+  // do not: the stage route sends `targetStage` for the record's `stage`, the
+  // per-month phasing route sends a bare `targetM`/`realizedM` that means ONE
+  // cell of `phasing[]` (not the record's total of the same name), and some
+  // routes send action parameters that are not record fields at all. This
+  // declarative per-route table says which is which, so a route is described
+  // in one place instead of by an if-chain in the renderer. An entry has a
+  // method, a pathname pattern and any of:
+  //   aliases  payload key -> record field it stands for;
+  //   cell     { array, key, fields } compare each of `fields` that the payload
+  //            carries against the element of record[array] whose `key` equals
+  //            the pattern's first capture (the label gets ' · ' + the capture);
+  //   ignore   payload keys that are parameters, not edited fields.
+  // A request no entry matches uses the default; a request whose rows come out
+  // empty renders the neutral panel — never a claim about what changed.
+  const CONFLICT_FIELD_MAP = [
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/stage$/, aliases: { targetStage: 'stage' }, ignore: ['reason'] },
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/rebaseline$/, ignore: ['reason'] },
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/cost-entries$/, ignore: ['date', 'amountM', 'note'] },
+    { method: 'POST', path: /^\/api\/synergies\/[^/]+\/phasing\/([^/]+)$/, cell: { array: 'phasing', key: 'month', fields: ['targetM', 'realizedM'] } },
+    { method: 'POST', path: /^\/api\/dd\/findings\/[^/]+\/convert$/, ignore: ['toTask', 'toRaid'] },
+    { method: 'POST', path: /^\/api\/org\/flight-risk\/[^/]+\/convert$/, ignore: ['toTask', 'toRaid'] },
+  ];
+
+  // Display labels (R7 F-5 / GD-8): authored, so the CSS no longer
+  // case-transforms them. Looked up by hasOwnProperty — a payload key is
+  // user-supplied JSON ('constructor' must not resolve to a function).
+  const CONFLICT_FIELD_LABELS = {
+    status: 'Status', title: 'Title', text: 'Request', notes: 'Notes', owner: 'Owner',
+    due: 'Due date', dueDate: 'Due date', severity: 'Severity', probability: 'Probability',
+    type: 'Type', phase: 'Phase', workstreamId: 'Workstream', stage: 'Stage',
+    realizedM: 'Realized (M)', targetM: 'Target (M)', runRateM: 'Run-rate (M)',
+    startMonth: 'Start month', curveShape: 'Curve shape',
+    costPlannedM: 'Planned cost (M)', costExpectedMonth: 'Expected cost month',
+    category: 'Category', level: 'Level', reportsToId: 'Reports to', employeeId: 'Person',
+    riskLevel: 'Risk level', mitigation: 'Mitigation', blocked: 'Blocked',
+    vdrLink: 'Data room link', area: 'Area', description: 'Description', name: 'Name',
+  };
+
+  // Fallback for a key the table does not know: drop a trailing 'Id' that
+  // follows a lowercase letter, split camelCase / underscores / hyphens into
+  // words, lower-case them, capitalise the first, and render a final
+  // standalone 'M' word as '(M)' — neutral, no currency symbol (GD-8).
+  function humaniseConflictKey(key) {
+    const raw = String(key);
+    const words = raw.replace(/([a-z])Id$/, '$1')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/[_-]+/g, ' ')
+      .split(/\s+/).filter(Boolean);
+    if (words.length === 0) return raw;
+    const out = words.map((w, i) => ((i === words.length - 1 && i > 0 && w === 'M') ? '(M)' : w.toLowerCase()));
+    out[0] = out[0].charAt(0).toUpperCase() + out[0].slice(1);
+    return out.join(' ');
+  }
+
+  function conflictRequestPath(url) {
+    try {
+      return new URL(url, (typeof location !== 'undefined' && location.href) || undefined).pathname;
+    } catch (e) {
+      return String(url || '').split('?')[0];
+    }
+  }
+
+  function findConflictFieldMapEntry(method, url) {
+    const path = conflictRequestPath(url);
+    for (let i = 0; i < CONFLICT_FIELD_MAP.length; i++) {
+      const entry = CONFLICT_FIELD_MAP[i];
+      if (entry.method !== method) continue;
+      const m = entry.path.exec(path);
+      if (m) return { entry, match: m };
+    }
+    return null;
+  }
+
+  function conflictFieldLabel(field) {
+    return Object.prototype.hasOwnProperty.call(CONFLICT_FIELD_LABELS, field)
+      ? CONFLICT_FIELD_LABELS[field] : humaniseConflictKey(field);
+  }
+
+  // Builds the diff rows [{ label, mine, theirs }] for one session render.
+  // `mine` always comes from the ORIGINAL payload, `theirs` from the latest
+  // conflict body's currentRecord — which the server already clearance-filtered
+  // (T-09-53: this reads only what was sent; it requests and invents nothing).
+  function buildConflictRows(session, payload, currentRecord) {
+    const found = findConflictFieldMapEntry(session.method, session.url);
+    const entry = found ? found.entry : {};
+    const aliases = entry.aliases || {};
+    const ignore = entry.ignore || [];
+    const cell = entry.cell || null;
+    const rows = [];
+    Object.keys(payload).forEach((key) => {
+      if (key === 'id' || key === 'version' || ignore.indexOf(key) >= 0) return;
+      if (cell) {
+        // One month cell: the server's value for the SAME month, or nothing
+        // ('(empty)') when the month row does not exist there. Never the
+        // record's total of the same name.
+        if (cell.fields.indexOf(key) < 0) return;
+        const month = found.match[1];
+        const arr = Array.isArray(currentRecord[cell.array]) ? currentRecord[cell.array] : [];
+        const theirCell = arr.find((el) => el && el[cell.key] === month);
+        rows.push({
+          label: conflictFieldLabel(key) + ' · ' + month,
+          mine: payload[key],
+          theirs: theirCell ? theirCell[key] : undefined,
+        });
+        return;
+      }
+      const field = Object.prototype.hasOwnProperty.call(aliases, key) ? aliases[key] : key;
+      if (!Object.prototype.hasOwnProperty.call(currentRecord, field)) return;
+      rows.push({ label: conflictFieldLabel(field), mine: payload[key], theirs: currentRecord[field] });
+    });
+    return rows;
   }
 
   // D-03: "Apply my changes anyway" is a genuine REAPPLY against fresh
@@ -300,6 +439,18 @@
     return { input: input, init: newInit };
   }
 
+  // [security] T-09-52: the reason for a refused reapply is the server's own
+  // `error` string to THIS caller (no new data), but it lands in the dialog, so
+  // it is normalised before use — trimmed, one trailing period removed (the
+  // banner's suffix supplies the sentence break), capped at
+  // CONFLICT_ERROR_REASON_MAX_CHARS — and only ever set via textContent.
+  // Anything that is not a non-empty string falls back to the fixed reason.
+  function conflictServerReason(body) {
+    const raw = body && typeof body.error === 'string' ? body.error.trim() : '';
+    const text = raw.replace(/\.$/, '').slice(0, CONFLICT_ERROR_REASON_MAX_CHARS).trim();
+    return text || CONFLICT_ERROR_REASON_REFUSED;
+  }
+
   // The user's own click on "Apply my changes anyway" / "Delete anyway":
   // reapply the session's ORIGINAL request carrying the fresh version, through
   // the internal attemptFetch with the reapply context (NOT window.fetch — a
@@ -308,8 +459,12 @@
   //   2xx            -> settle the held promise with this Response (unconsumed)
   //   marker 409     -> adopt the fresh body, re-render in place + banner
   //   404 (delete)   -> "someone else already deleted this record"
-  //   5xx / other / network failure -> banner; the session stays pending so
-  //                     the user can try again or leave.
+  //   5xx            -> "the server reported an error"
+  //   other 4xx / marker-less 409 -> the server's own `error` text (R7 F-4),
+  //                     else "the server refused the change"
+  //   network failure -> "a network error occurred"
+  //   (each a banner; the session stays pending so the user can try again or
+  //   leave.)
   // inFlight is the double-click guard (HP8): a second click sends nothing.
   function runConflictReapply(session, btn, inFlightLabel) {
     if (session.settled || session.inFlight) return;
@@ -340,14 +495,28 @@
             session.body = b;
             rerender(CONFLICT_ERROR_REASON_CONFLICT);
           } else {
-            rerender(CONFLICT_ERROR_REASON_NETWORK);
+            // A marker-less 409 (a business-rule refusal such as an
+            // unrecognized stage): the server's own words, not "network".
+            rerender(conflictServerReason(b));
           }
-        }, () => rerender(CONFLICT_ERROR_REASON_NETWORK));
+        }, () => rerender(CONFLICT_ERROR_REASON_REFUSED));
       }
-      const reason = (res && res.status === 404 && session.method === 'DELETE') ? CONFLICT_ERROR_REASON_ALREADY_DELETED
-        : (res && res.status >= 500) ? CONFLICT_ERROR_REASON_SERVER
-        : CONFLICT_ERROR_REASON_NETWORK;
-      rerender(reason);
+      if (res && res.status === 404 && session.method === 'DELETE') {
+        rerender(CONFLICT_ERROR_REASON_ALREADY_DELETED);
+        return undefined;
+      }
+      if (res && res.status >= 500) {
+        rerender(CONFLICT_ERROR_REASON_SERVER);
+        return undefined;
+      }
+      if (res && res.status >= 400) {
+        // R7 F-4: any other 4xx (a 403 for a clearance change, a 400 for a
+        // validation refusal) is the server REFUSING — never "a network
+        // error". It tells the caller why, in its own `error` field.
+        return res.clone().json().then((b) => rerender(conflictServerReason(b)),
+          () => rerender(CONFLICT_ERROR_REASON_REFUSED));
+      }
+      rerender(CONFLICT_ERROR_REASON_NETWORK);
       return undefined;
     }).catch(() => rerender(CONFLICT_ERROR_REASON_NETWORK));
   }
@@ -375,7 +544,9 @@
     const attribution = document.createElement('p');
     attribution.className = 'conflict-modal-attribution';
     head.appendChild(title);
-    head.appendChild(attribution);
+    // The attribution element joins the head per variant below: the deleted
+    // variant has nothing true to say (GD-10) and the neutral panel must not
+    // repeat the fallback sentence it already shows (A7).
     modal.appendChild(head);
 
     const intro = document.createElement('p');
@@ -390,13 +561,36 @@
     // above for why 'deleted' can never arise here).
     const isDelete = method === 'DELETE';
     const isDeleted = !isDelete && body && body.conflictKind === 'deleted';
+    // GD-7: a version conflict whose record the server withheld (clearance).
+    // Strictly `=== null` — an absent field is not the server's withheld
+    // signal. Checked BEFORE the delete/edit variants: for a withheld record
+    // neither "Delete anyway" nor "Apply my changes anyway" can succeed, so
+    // neither may be offered (T-09-51).
+    const isWithheld = !!body && body.conflictKind !== 'deleted' && body.currentRecord === null;
 
-    if (isDelete) {
+    if (isWithheld) {
+      modal.appendChild(intro);
+      title.textContent = CONFLICT_TITLE_EDIT;
+      intro.textContent = CONFLICT_WITHHELD_TEXT;
+      // Who/when still shows (T-09-17 accepted in 09-REVIEW IN-01): never what.
+      renderConflictAttribution(attribution, body);
+      head.appendChild(attribution);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'btn btn-secondary conflict-btn-discard';
+      closeBtn.textContent = CONFLICT_CLOSE_LABEL;
+      // Close settles the held promise with the original 409; the page's
+      // re-read (09-12) then drops the record through the clearance-filtered GET.
+      closeBtn.addEventListener('click', () => settleConflictSession(session, session.originalRes));
+      actions.appendChild(closeBtn);
+    } else if (isDelete) {
       // UI-SPEC E3: "No collection inside this variant — content is title +
       // attribution + actions, all static or covered by E4 rules." No intro
       // paragraph, no diff list — the title question IS the confirmation.
       title.textContent = CONFLICT_TITLE_DELETE;
       renderConflictAttribution(attribution, body);
+      head.appendChild(attribution);
 
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
@@ -431,7 +625,8 @@
       modal.appendChild(intro);
       title.textContent = CONFLICT_TITLE_DELETED;
       intro.textContent = CONFLICT_DELETED_INTRO;
-      renderConflictAttribution(attribution, body);
+      // No attribution line (GD-10 / R7 F-7): the deleted row has no actor or
+      // time to attribute, and the fallback sentence would contradict the title.
 
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
@@ -443,7 +638,7 @@
       modal.appendChild(intro);
       title.textContent = CONFLICT_TITLE_EDIT;
       intro.textContent = CONFLICT_INTRO_EDIT;
-      renderConflictAttribution(attribution, body);
+      const realAttribution = renderConflictAttribution(attribution, body);
 
       const diffList = document.createElement('div');
       diffList.className = 'conflict-diff-list';
@@ -451,24 +646,28 @@
       let payload = {};
       try { payload = JSON.parse((init && init.body) || '{}'); } catch (e) { payload = {}; }
       const currentRecord = (body && body.currentRecord) || {};
-      // Pitfall 12: the keys a field-patch payload carries ARE the fields
-      // the user changed — never id/version, and only fields the server's
-      // current record actually has.
-      const fields = Object.keys(payload).filter((k) => k !== 'id' && k !== 'version'
-        && Object.prototype.hasOwnProperty.call(currentRecord, k));
+      // Pitfall 12 / R7 F-3: the rows come from the per-route field map — the
+      // payload's keys are the user's edited intent, translated to the record
+      // field they stand for, and only fields the server's record has.
+      const rows = buildConflictRows(session, payload, currentRecord);
 
-      if (fields.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'conflict-diff-empty';
-        empty.textContent = CONFLICT_EMPTY_DIFF;
-        diffList.appendChild(empty);
+      if (rows.length === 0) {
+        // GD-6: the neutral panel — only the one true thing (the record's
+        // version moved), via the single fallback constant. When the head's
+        // attribution would repeat that very sentence it is omitted (A7).
+        const neutral = document.createElement('p');
+        neutral.className = 'conflict-diff-empty';
+        neutral.textContent = CONFLICT_ATTRIBUTION_FALLBACK;
+        diffList.appendChild(neutral);
+        if (realAttribution) head.appendChild(attribution);
       } else {
-        fields.forEach((field) => {
+        head.appendChild(attribution);
+        rows.forEach((r) => {
           const row = document.createElement('div');
           row.className = 'conflict-diff-row';
           const label = document.createElement('div');
           label.className = 'conflict-diff-label';
-          label.textContent = field;
+          label.textContent = r.label;
           row.appendChild(label);
 
           const values = document.createElement('div');
@@ -476,12 +675,12 @@
 
           const mine = document.createElement('div');
           mine.className = 'conflict-diff-mine';
-          setConflictDiffValue(mine, payload[field]);
+          setConflictDiffValue(mine, r.mine);
           values.appendChild(mine);
 
           const theirs = document.createElement('div');
           theirs.className = 'conflict-diff-theirs';
-          setConflictDiffValue(theirs, currentRecord[field]);
+          setConflictDiffValue(theirs, r.theirs);
           values.appendChild(theirs);
 
           row.appendChild(values);

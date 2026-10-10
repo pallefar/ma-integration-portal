@@ -8283,7 +8283,10 @@ body.cms-inline-on [data-i18n-html]:hover {
 .conflict-diff-list { overflow-y: auto; max-height: 40vh; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
 .conflict-diff-empty { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-secondary); }
 .conflict-diff-row { display: flex; flex-direction: column; gap: 4px; }
-.conflict-diff-label { font-size: 13px; font-weight: 700; line-height: 1.4; color: var(--te-dark-teal); text-transform: capitalize; }
+/* R7 F-5: labels are authored display labels now (transitions.js
+   CONFLICT_FIELD_LABELS + humaniser) — no case transform, which would mangle
+   '(M)' and a label such as 'Run-rate (M) · 2026-03'. */
+.conflict-diff-label { font-size: 13px; font-weight: 700; line-height: 1.4; color: var(--te-dark-teal); }
 .conflict-diff-values { display: flex; gap: 8px; }
 .conflict-diff-mine, .conflict-diff-theirs {
   flex: 1; min-width: 0; padding: 16px; border-radius: 8px;
