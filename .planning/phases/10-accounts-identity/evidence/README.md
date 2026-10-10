@@ -2,13 +2,25 @@
 
 Reproduce: `PLAYWRIGHT_PATH=<playwright package dir> node scripts/uat/phase10-walk.js`
 (all scenarios, all six lanes). Runner stdout is `phase10-walk.log`; machine form is
-`results.json`. Last run: **179 PASS / 0 FAIL**, committed `data/demo.db` and
-`data/control.db` (+ `-wal`) sha256 identical and `git status --porcelain -- data` empty
-before and after.
+`results.json`. Last run: **184 PASS / 0 FAIL** (re-run after the post-verification
+correction below), committed `data/demo.db` and `data/control.db` (+ `-wal`) sha256 identical
+and `git status --porcelain -- data` empty before and after.
 
 Every screenshot is a 60-quality JPEG of the viewport only. No screenshot or log carries a
-password, temporary password or session cookie (T-10-52): password inputs are empty or
-masked in the DOM before capture, and log lines carry scenario names and statuses only.
+real, temporary or rotated password or a session cookie (T-10-52): password inputs are empty
+or masked in the DOM before capture, and log lines carry scenario names, statuses and counts
+only. The Users-tab scenario takes its screenshots through `shot()`, which masks the
+temporary-password field, proves the secret is nowhere in the DOM, and refuses to write the
+file otherwise. The one password-like string in any shot is the published demo password
+`TEdemo!2026` in the demo panel of the dev and demo-open login shots, shown there by design
+(D-10-08; it is the evidence that the panel appears only in those modes).
+
+**Post-verification correction.** `10-VERIFICATION.md` found the runner red on HEAD (179 PASS /
+1 FAIL): the WR-C01 check in `users-tab.js` compared the temporary-password field with the
+real secret after the scenario had masked it for the screenshot. Fixed in `e7a36bf`; every
+screenshot, `results.json` and `phase10-walk.log` here are from the corrected re-run. The
+scenario's check count is 33 (28 at the original sign-off, +1 WR-C01 sticky check added by the
+review fix and repaired here, +4 added here).
 
 | Screenshot | Scenario @ lane | Proves |
 |------------|-----------------|--------|
@@ -35,7 +47,7 @@ masked in the DOM before capture, and log lines carry scenario names and statuse
 
 | Run | Result |
 |-----|--------|
-| `node --test` (twice, clean tree) | 1038 tests, 1038 pass, 0 fail, both runs |
+| `node --test` (once, post-verification re-run, clean tree) | 1055 tests, 1055 pass, 0 fail, 0 skipped (1038 / 1038 twice at the original sign-off, before the review fixes) |
 | `npm run soak` (3 processes, 120 s) | PASS: 4288 acknowledged / 0 missing / 0 mismatched, audit 1:1, 21 bounded 503s, conflict lane 443 acked / 924 real 409s, version reconciles |
 | `node scripts/uat/phase9-walk.js` | 350 PASS / 0 FAIL |
 | `node scripts/uat/phase9-walk.js --demo-open` | 18 PASS / 0 FAIL |
