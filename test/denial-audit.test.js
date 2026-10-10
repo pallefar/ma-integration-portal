@@ -481,6 +481,32 @@ test('structural: the inline grants 403 and the clearance-404 branch go through 
   assert.deepStrictEqual(rawRefusals, [], 'every 401/403 inside the consolidated gate is a denyAt()');
 });
 
+// Suites that only inspect the route table / source and never send a request:
+// no denial can be triggered, so they need no audit isolation.
+const NO_REQUESTS = new Set(['deal-wizard-page.test.js', 'write-validation-coverage.test.js']);
+
+test('suite isolation: every test file that requires server.js points the audit database at a temp file BEFORE the require', () => {
+  const dir = __dirname;
+  const offenders = [];
+  let scanned = 0;
+  for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.test.js'))) {
+    if (name === 'denial-audit.test.js' || NO_REQUESTS.has(name)) continue;
+    // comment-only lines are dropped so prose that quotes the require does not count
+    const src = fs.readFileSync(path.join(dir, name), 'utf8')
+      .split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+    if (!/require\((['"])\.\.\/server(\.js)?\1\)/.test(src)) continue;
+    scanned += 1;
+    // MA_AUDIT_DB_PATH (explicit) or MA_DATA_DIR (the real-mode data dir carries its own audit.db)
+    const env = /MA_AUDIT_DB_PATH|MA_DATA_DIR/.exec(src);
+    // a column-0 (module-level) require loads the app at file load: the env must precede it.
+    // An indented require runs inside a test body, after every module-level assignment.
+    const top = /^\S.*require\((['"])\.\.\/server(\.js)?\1\)/m.exec(src);
+    if (!env || (top && env.index > top.index)) offenders.push(name);
+  }
+  assert.ok(scanned >= 10, `expected to scan the server-loading suites, scanned ${scanned}`);
+  assert.deepStrictEqual(offenders, [], 'these suites would write access-denied rows into the developer data/audit.db');
+});
+
 test('lockdown: a credential-lockdown refusal reports through onDenied (anonymous, 403); allowlisted paths report nothing', () => {
   const lockdown = createLockdown({ enabled: true });
   lockdown.noteDemoLogin('someone');

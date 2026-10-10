@@ -41,6 +41,8 @@ process.env.MA_CONTROL_DB_PATH = path.join(TMP_DIR, 'control.db');
 process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
 process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
 process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
+// Phase 11 / 11-04: gate denials are audited — keep them out of data/audit.db.
+process.env.MA_AUDIT_DB_PATH = path.join(TMP_DIR, 'audit.db');
 process.env.ADMIN_TOKEN = '';
 
 const { runMigration } = require('../scripts/migrate-db-json-to-sqlite.js');
