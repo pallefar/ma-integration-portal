@@ -1,0 +1,5 @@
+# Files excluded from `git archive` (the release zips). Phase 21 extends this
+# file for .planning/ and test/.
+
+# D-12-08: the browser smoke harness is developer tooling, never shipped.
+scripts/smoke/ export-ignore
