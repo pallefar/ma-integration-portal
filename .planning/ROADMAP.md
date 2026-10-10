@@ -211,6 +211,24 @@ Plans:
   8. One command runs the browser smoke harness (real browser + axe) over the first IL pages; it is excluded from release zips.
 
 **Plans**: TBD
+
+- [x] 12-01-PLAN.md
+- [x] 12-02-PLAN.md
+- [x] 12-03-PLAN.md
+- [x] 12-04-PLAN.md
+- [ ] 12-05-PLAN.md
+- [ ] 12-06-PLAN.md
+- [x] 12-07-PLAN.md
+- [ ] 12-08-PLAN.md
+- [ ] 12-09-PLAN.md
+- [ ] 12-10-PLAN.md
+- [ ] 12-11-PLAN.md
+- [ ] 12-12-PLAN.md
+- [ ] 12-13-PLAN.md
+- [ ] 12-14-PLAN.md
+- [x] 12-15-PLAN.md
+- [ ] 12-PLAN-CHECK.md
+
 **UI hint**: no
 
 ### Phase 13: Content Safety
@@ -406,7 +424,7 @@ Items a closed phase deferred or accepted, owned by a later phase (full table wi
 | 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | Complete    | 2026-10-10 |
 | 10. Accounts & Identity | v3.0 | 9/9 | Complete    | 2026-10-10 |
 | 11. Authorization & Clean-Room Closure | v3.0 | 10/8 | Complete    | 2026-10-10 |
-| 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |
+| 12. Data-Layer Integrity & Performance | v3.0 | 6/16 | In Progress|  |
 | 13. Content Safety | v3.0 | 0/TBD | Not started | - |
 | 14. Deal Files, Limits & Legacy Hazards | v3.0 | 0/TBD | Not started | - |
 | 15. Module Control — Core | v3.0 | 0/TBD | Not started | - |
