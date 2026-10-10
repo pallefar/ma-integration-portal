@@ -1,0 +1,83 @@
+/* Admin console Users tab (Phase 10, plan 10-07, D-10-03 / D-10-10).
+   Loaded by public/admin.html. The modals reuse the .deal-modal shell from
+   style.css; this file adds the account table, status badges, the one-time
+   temporary-password field and the <= 600px stacked-card layout (the tab and
+   its modals must work at 390px without horizontal scrolling). */
+
+.users-note {
+  margin: 0 0 1rem; padding: 0.55rem 0.75rem;
+  font-size: 0.8rem; line-height: 1.4;
+  color: var(--text-secondary, #5b666c);
+  background: var(--bg-light, #f4f7f8);
+  border: 1px solid var(--border-color, #dde3e6);
+  border-radius: 8px;
+}
+
+.au-empty { text-align: center; color: var(--text-dim, #7a868c); padding: 1.5rem; }
+
+.au-table-wrap { width: 100%; }
+.au-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.au-table th {
+  text-align: left; padding: 0.55rem 0.6rem;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-secondary, #5b666c);
+  border-bottom: 2px solid var(--border-color, #dde3e6);
+}
+.au-table td {
+  padding: 0.6rem; vertical-align: middle;
+  border-bottom: 1px solid var(--border-color, #dde3e6);
+  overflow-wrap: anywhere;
+}
+.au-username { font-weight: 700; color: var(--te-dark-teal, #244C5A); }
+.au-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.au-actions .btn { font-size: 0.74rem; padding: 0.3rem 0.6rem; }
+
+.au-badge {
+  display: inline-block; margin: 0 0.3rem 0.2rem 0;
+  padding: 0.12rem 0.5rem; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; white-space: nowrap;
+}
+.au-badge-on { background: #e3f4ec; color: var(--status-success, #047857); }
+.au-badge-off { background: #f1e3e3; color: var(--status-danger, #b42318); }
+.au-badge-warn { background: #fdf0d9; color: #8a5300; }
+
+/* ---- modals (shell = .deal-modal) ---- */
+.au-overlay { z-index: 12100; }
+.au-modal { width: min(520px, calc(100vw - 1.5rem)); max-height: 90vh; overflow-y: auto; box-sizing: border-box; }
+.au-modal .deal-modal-field input,
+.au-modal .deal-modal-field select { width: 100%; box-sizing: border-box; }
+.au-select {
+  padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--border-color);
+  font-family: inherit; font-size: 0.85rem; font-weight: 500; background: #fff;
+}
+.au-hint { font-weight: 500; font-size: 0.72rem; color: var(--text-secondary, #5b666c); }
+.au-warning {
+  margin: 0.25rem 0 0; font-size: 0.8rem; font-weight: 700;
+  color: #8a5300;
+}
+.au-temp-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+.au-confirm-text { margin: 0 0 0.75rem; font-size: 0.85rem; line-height: 1.45; color: var(--text-primary); }
+
+/* ---- <= 600px: rows become stacked cards, labels from data-label ---- */
+@media (max-width: 600px) {
+  .au-table, .au-table tbody, .au-table tr, .au-table td { display: block; width: 100%; box-sizing: border-box; }
+  .au-table thead { display: none; }
+  .au-table tr {
+    margin-bottom: 0.75rem; padding: 0.4rem 0.7rem;
+    border: 1px solid var(--border-color, #dde3e6); border-radius: 10px;
+  }
+  .au-table td { border-bottom: none; padding: 0.3rem 0; }
+  .au-table td::before {
+    content: attr(data-label);
+    display: block; font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-secondary, #5b666c);
+  }
+  .au-table td.au-actions { flex-wrap: wrap; }
+  .au-table td.au-actions::before { flex: 0 0 100%; }
+  .au-actions .btn { flex: 1 1 auto; }
+  .au-modal { padding: 1.1rem; }
+}

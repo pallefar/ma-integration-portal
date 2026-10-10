@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     projects: ['M&A Projects', 'Each acquisition is a project at the top of the hierarchy — create, switch, and manage them'],
     deals: ['Real Deals', 'Isolated real-acquisition workspaces — create, manage membership, archive or delete (separate from the demo Projects above)'],
     audit: ['Audit Log', 'Append-only compliance trail — every real-deal write and control-plane security event, filterable by deal, actor and date range'],
+    users: ['Users', 'Accounts, roles and access — create, disable, reset passwords'],
     courses: ['Courses', 'Manage the academy curriculum — courses, modules, lessons & quizzes'],
     modules: ['Action Modules', 'Score-gated recommendations shown on the Integration Leader dashboard'],
     departments: ['Department Modules', 'Functional integration tracks — shared culture & communication, per-department systems & trainings'],
