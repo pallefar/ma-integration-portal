@@ -177,6 +177,31 @@ test('WR-B01: non-canonical HTML spellings are refused (404), never served by ex
   assert.match(ok.body, /transitions\.js\?v=[0-9a-f]{16}/);
 });
 
+test('IN-B03: an asset that is not clean UTF-8 is served byte-for-byte (never U+FFFD-substituted); a clean one is still rewritten', () => {
+  const { createAssetStamper } = require('../lib/assetStamp.js');
+  const dir = fs.mkdtempSync(path.join(TMP, 'stamp-utf8-'));
+  fs.mkdirSync(path.join(dir, 'js'));
+  fs.writeFileSync(path.join(dir, 'js', 'dep.js'), 'export const x = 1;\n');
+  const latin1 = Buffer.concat([
+    Buffer.from("import '/js/dep.js?v=1791900001';\n// caf"), Buffer.from([0xe9]), Buffer.from(' (Latin-1)\n'),
+  ]);
+  fs.writeFileSync(path.join(dir, 'js', 'latin1.js'), latin1);
+  fs.writeFileSync(path.join(dir, 'js', 'clean.js'), "import '/js/dep.js?v=1791900001';\n// café (UTF-8)\n");
+  const warnings = [];
+  const stamper = createAssetStamper({ publicDir: dir, warn: (m) => warnings.push(m) });
+
+  const bad = stamper.rewriteAsset('/js/latin1.js');
+  assert.strictEqual(bad.rewritten, false);
+  assert.ok(Buffer.from(bad.body).equals(latin1), 'served bytes == on-disk bytes');
+  assert.strictEqual(stamper.stampFor('/js/latin1.js'), sha16(latin1));
+  assert.ok(warnings.some((w) => /not valid UTF-8/.test(w)));
+
+  const good = stamper.rewriteAsset('/js/clean.js');
+  assert.strictEqual(good.rewritten, true);
+  assert.match(Buffer.from(good.body).toString('utf8'), new RegExp(`/js/dep\\.js\\?v=${sha16(fs.readFileSync(path.join(dir, 'js', 'dep.js')))}`));
+  assert.match(Buffer.from(good.body).toString('utf8'), /café/);
+});
+
 test('JS-internal references are rewritten (transitive) and assets stay on the 30-day cache header', async () => {
   const tr = await fetch(base + '/js/transitions.js');
   assert.strictEqual(tr.status, 200);
