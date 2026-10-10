@@ -202,6 +202,7 @@ const egress = require('./lib/egress').createEgress({
   write: (patch) => controlStore.setEgressSettings(patch),
 });
 const csp = require('./lib/csp');
+csp.logBootMode(); // SAFE-02 / D-13-03: names the active CSP_MODE once at boot
 aiService.setEgressCheck(() => egress.allows('gemini'));
 const EGRESS_DISABLED_MESSAGE = 'This feature is switched off by your administrator.';
 app.use((req, res, next) => {
@@ -555,7 +556,9 @@ function isOpenMode(req) {
 // The only /api paths reachable without a session — auth bootstrapping itself
 // cannot require a session to exist first. /auth/mode (D-10-01/D-10-08) is the
 // unauthenticated mode probe the login page reads before any session exists.
-const PUBLIC_API_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me', '/auth/mode']);
+// `/csp-report` (SAFE-02 / D-13-03): the browser's CSP violation channel carries no
+// session; the handler is bounded (lib/cspReports.js) and stores no query string.
+const PUBLIC_API_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me', '/auth/mode', '/csp-report']);
 
 // [security] D-10-05: the ONLY gated /api path a session with
 // mustChangePassword may use (full '/api/...' form, as the consolidated gate
@@ -3024,6 +3027,55 @@ app.post('/api/admin/egress', (req, res) => {
     request: requestMeta(req),
   });
   res.json(snap);
+});
+
+// [security] SAFE-02 / D-13-03 / PD-25 (plan 13-07): the CSP violation channel.
+// POST /api/csp-report is on PUBLIC_API_PATHS (a browser report carries no
+// session) and is the ONLY route in this block an anonymous caller reaches, so
+// it is bounded three ways BEFORE the handler: a per-IP limiter (60/min, req.ip
+// is TRUST_PROXY-aware), a route-level parser that accepts only the two report
+// content types at 4 KB, and lib/cspReports.js normalisation (distinct tuples,
+// query/fragment dropped, truncated, last 100 kept). 204, no body. Nothing here
+// renders HTML; GET /api/admin/csp-violations is JSON for admins only (the
+// `/api/admin` prefix is admin-only for every method - checked again inline).
+const cspReports = require('./lib/cspReports');
+const cspReportLimiter = cspReports.createLimiter({ perMinute: 60 });
+app.post(
+  '/api/csp-report',
+  (req, res, next) => {
+    if (!cspReportLimiter.take(req.ip)) {
+      res.set('Retry-After', '60');
+      return res.status(429).json({ error: 'Too many reports.' });
+    }
+    next();
+  },
+  express.json({ type: cspReports.SUPPORTED_TYPES, limit: '4kb' }),
+  (req, res) => {
+    const type = String(req.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!cspReports.SUPPORTED_TYPES.includes(type)) {
+      return res.status(415).json({ error: 'Unsupported report content type.' });
+    }
+    for (const tuple of cspReports.normalize(type, req.body)) cspReports.record(tuple);
+    res.status(204).end();
+  },
+  // Route-local error mapping: the generic handlers at the bottom of this file
+  // would answer a body-parser rejection with the 500 handler.
+  (err, req, res, next) => {
+    if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'Report too large.' });
+    if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Malformed report.' });
+    if (err && (err.type === 'charset.unsupported' || err.type === 'encoding.unsupported')) {
+      return res.status(415).json({ error: 'Unsupported report encoding.' });
+    }
+    next(err);
+  }
+);
+app.get('/api/admin/csp-violations', (req, res) => {
+  if (!isAdminRequest(req)) {
+    return res.status(403).json({ error: 'Your role cannot perform this action.' });
+  }
+  const violations = cspReports.list();
+  res.set('Cache-Control', 'no-store');
+  res.json({ mode: csp.resolveMode().mode, count: violations.length, violations });
 });
 
 // POST Reset Custom M&A Wizard state

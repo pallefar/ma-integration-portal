@@ -239,6 +239,18 @@ const EgressUpdateSchema = z.object({
 }).strict();
 registerSchema('POST', '/api/admin/egress', EgressUpdateSchema);
 
+// ---------------------------------------------------------------------------
+// POST /api/csp-report (SAFE-02 / D-13-03, plan 13-07) - the browser's CSP
+// violation report. The route is on PUBLIC_API_PATHS, so the generic validation
+// middleware never runs for it; the real bound is the route-level 4 KB parser
+// and lib/cspReports.js normalize() (unknown shapes yield no tuple, strings are
+// clipped, query strings dropped). This schema exists so the VAL-01 coverage
+// gate sees the write route as deliberately reviewed, and documents the shape:
+// an object (`application/csp-report`) or an array (`application/reports+json`).
+// ---------------------------------------------------------------------------
+const CspReportSchema = z.union([z.object({}).passthrough(), z.array(z.unknown()).max(40)]);
+registerSchema('POST', '/api/csp-report', CspReportSchema);
+
 registerSchema('POST', '/api/admin/users/:username/revoke-sessions', EmptyBodySchema);
 
 module.exports = {

@@ -44,7 +44,8 @@ test.after(() => {
 
 // The only /api paths reachable without a session — auth bootstrapping itself
 // cannot require a session to already exist.
-const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/auth/mode']);
+// /api/csp-report (SAFE-02 / plan 13-07) is the browser's unauthenticated CSP violation channel.
+const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/auth/mode', '/api/csp-report']);
 
 // Verified live against this repo's actually-installed express@4.22.2 (see
 // 02-RESEARCH.md "Pattern 1: Route Inventory Mechanism"). This codebase
