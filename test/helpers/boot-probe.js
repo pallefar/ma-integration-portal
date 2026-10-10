@@ -14,6 +14,7 @@
 // NODE_TEST_CONTEXT is inherited.
 
 const { spawn } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
 const REPO = path.join(__dirname, '..', '..');
@@ -86,4 +87,50 @@ function bootProbe({ dir, env, probes, timeoutMs }) {
   });
 }
 
-module.exports = { bootProbe, isolatedPaths, cleanEnv, REPO };
+/**
+ * Fixture builder: create a plain version-0 SQLite file from `schemaPath` (no
+ * user_version stamp — exactly what a pre-Phase-12 release left on disk),
+ * optionally seeded by `seedFn(conn)`.
+ */
+function seedV0File(file, schemaPath, seedFn) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const Database = require('better-sqlite3');
+  const c = new Database(file);
+  c.pragma('journal_mode = WAL');
+  c.exec(fs.readFileSync(schemaPath, 'utf8'));
+  if (seedFn) seedFn(c);
+  c.pragma('wal_checkpoint(TRUNCATE)');
+  c.close();
+}
+
+/**
+ * Fixture builder: a deal database whose `alerts` b-tree is damaged inside a
+ * page (the file header stays valid, so the file still OPENS — exactly the
+ * case PRAGMA quick_check exists for). Asserts the damage is detectable.
+ */
+function makeCorruptDealFile(file, schemaPath) {
+  const Database = require('better-sqlite3');
+  seedV0File(file, schemaPath, (c) => {
+    const insert = c.prepare('INSERT INTO alerts (id, project_id, seq, data) VALUES (?, ?, ?, ?)');
+    const filler = 'x'.repeat(300);
+    c.transaction(() => { for (let i = 0; i < 600; i += 1) insert.run(`a${i}`, null, i, JSON.stringify({ i, filler })); })();
+  });
+  const probe = new Database(file, { readonly: true });
+  const root = probe.prepare("SELECT rootpage FROM sqlite_master WHERE name = 'alerts'").get().rootpage;
+  const pageSize = probe.pragma('page_size', { simple: true });
+  probe.close();
+  const fd = fs.openSync(file, 'r+');
+  try {
+    // Keep the 12-byte b-tree page header, destroy the cell-pointer array.
+    fs.writeSync(fd, Buffer.alloc(240, 0xff), 0, 240, (root - 1) * pageSize + 12);
+  } finally {
+    fs.closeSync(fd);
+  }
+  const check = new Database(file, { readonly: true });
+  let ok;
+  try { ok = check.pragma('quick_check', { simple: true }); } catch (e) { ok = `threw ${e.code}`; }
+  check.close();
+  if (ok === 'ok') throw new Error('fixture: corruption was not detectable by quick_check');
+}
+
+module.exports = { bootProbe, isolatedPaths, cleanEnv, REPO, seedV0File, makeCorruptDealFile };

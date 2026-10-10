@@ -162,6 +162,7 @@ function takeBackup(conn, file, mig, opts) {
   else free = realFreeBytes(path.dirname(path.resolve(file)));
   const needed = FREE_SPACE_MULTIPLIER * size + MIN_FREE_FLOOR_BYTES;
   if (free < needed) {
+    // reason 'insufficient-disk-for-migration' (readiness.REASONS.INSUFFICIENT_DISK): nothing is written.
     throw readiness.markNotReady({ family: opts.family, file, migration: mig.name, reason: readiness.REASONS.INSUFFICIENT_DISK });
   }
   const bak = `${file}.pre-v${mig.id}.bak`;

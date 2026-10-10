@@ -15,9 +15,10 @@ const os = require('os');
 const path = require('path');
 const Database = require('better-sqlite3');
 
-const { bootProbe, isolatedPaths, REPO } = require('./helpers/boot-probe');
+const { bootProbe, isolatedPaths, REPO, seedV0File, makeCorruptDealFile } = require('./helpers/boot-probe');
 const dbFiles = require('../db/dbFiles');
 const migrate = require('../db/migrate');
+const sessions = require('../db/sessions');
 
 const dirs = [];
 function tmp(label) {
@@ -70,5 +71,97 @@ test('/healthz: stays a cheap GET — no schema migration or DDL during the requ
   assert.ok(!/openDbFile|runMigrations|getOrOpenConnection|initDb\s*\(/.test(body), 'no open/migrate in the handler');
 });
 
-// keep helpers referenced for the Task-2 cases appended below
-void isolatedPaths; void dbFiles; void userVersion;
+// --- audit.db is opened at boot (checker B-1) ------------------------------
+
+test('/healthz: audit.db is opened and versioned at boot with NO request made (checker B-1)', async () => {
+  const dir = tmp('audit');
+  const paths = isolatedPaths(dir);
+  assert.strictEqual(fs.existsSync(paths.MA_AUDIT_DB_PATH), false, 'precondition: no audit file yet');
+  const r = await bootProbe({ dir, probes: [{ path: '/healthz' }] }); // the ONLY request
+  assert.strictEqual(r.exitCode, 0, r.stderr);
+  assert.ok(fs.existsSync(paths.MA_AUDIT_DB_PATH), 'audit.db was created by the boot, not by a request');
+  const { body } = r.results[0];
+  // Asserted against latestVersion(), never a literal: 0 until the audit family
+  // gets its first migration (12-13), 1 after — this test passes unchanged then.
+  assert.strictEqual(body.readiness.versions.audit.version, migrate.latestVersion('audit'));
+  assert.strictEqual(userVersion(paths.MA_AUDIT_DB_PATH), migrate.latestVersion('audit'));
+});
+
+// --- registered deal files are opened by the boot sweep (checker W-5) ------
+
+function registerDeal(c, id, status) {
+  c.prepare('INSERT INTO deals (id, project_id, seq, status, data) VALUES (?, ?, ?, ?, ?)')
+    .run(id, null, 1, status, JSON.stringify({ id, name: `Deal ${id}`, status, members: ['admin'] }));
+}
+
+test('boot sweep: a registered version-0 deal file is at version 1 after boot with no request; absent files are skipped, archived ones migrated', async () => {
+  const dir = tmp('sweep');
+  const paths = isolatedPaths(dir);
+  const active = 'deal_sweepactive1';
+  const archived = 'deal_sweeparchived1';
+  const absent = 'deal_sweepabsent1';
+  seedV0File(paths.MA_CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH, (c) => {
+    registerDeal(c, active, 'active');
+    registerDeal(c, archived, 'archived');
+    registerDeal(c, absent, 'active');
+  });
+  for (const id of [active, archived]) {
+    seedV0File(path.join(paths.MA_DEALS_DIR, `${id}.db`), dbFiles.DEAL_SCHEMA_PATH, (c) => {
+      c.prepare("INSERT INTO alerts (id, project_id, seq, data) VALUES ('a1', NULL, 1, '{}')").run();
+    });
+  }
+
+  const r = await bootProbe({ dir, probes: [{ path: '/healthz' }] }); // no request touches a deal
+  assert.strictEqual(r.exitCode, 0, r.stderr);
+  assert.strictEqual(r.results[0].status, 200);
+  for (const id of [active, archived]) {
+    const file = path.join(paths.MA_DEALS_DIR, `${id}.db`);
+    assert.strictEqual(userVersion(file), 1, `${id} migrated at boot`);
+    const c = new Database(file, { readonly: true });
+    assert.strictEqual(c.prepare('SELECT COUNT(*) AS n FROM alerts').get().n, 1, 'deal data intact');
+    c.close();
+  }
+  assert.strictEqual(fs.existsSync(path.join(paths.MA_DEALS_DIR, `${absent}.db`)), false, 'boot never creates a deal file');
+  assert.match(r.stdout, /\[readiness\] deal sweep: 2 opened, 0 not ready, \d+ ms/);
+  assert.ok(!r.stdout.includes('deal_sweep') && !r.stderr.includes('deal_sweep'), 'the sweep log names no deal id');
+  assert.strictEqual(r.results[0].body.readiness.versions.deal.version, 1);
+});
+
+test('boot sweep: a corrupt registered deal file is not-ready immediately after boot; a request bound to it is a non-retryable 503', async () => {
+  const dir = tmp('corrupt-boot');
+  const paths = isolatedPaths(dir);
+  const dealId = 'deal_corruptboot1';
+  // Real accounts (demo admin) from a TEMP copy of the committed control.db.
+  fs.copyFileSync(path.join(REPO, 'data', 'control.db'), paths.MA_CONTROL_DB_PATH);
+  const control = new Database(paths.MA_CONTROL_DB_PATH);
+  registerDeal(control, dealId, 'active');
+  control.pragma('wal_checkpoint(TRUNCATE)');
+  control.close();
+  makeCorruptDealFile(path.join(paths.MA_DEALS_DIR, `${dealId}.db`), dbFiles.DEAL_SCHEMA_PATH);
+
+  const rt = dbFiles.openDbFile(paths.MA_RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
+  const token = sessions.createSession(rt, { username: 'admin', role: 'admin', ttlMs: 3600e3 });
+  assert.ok(sessions.bindSessionDeal(rt, token, dealId));
+  rt.close();
+
+  const cookie = { cookie: `ma_session=${token}` };
+  const r = await bootProbe({
+    dir,
+    probes: [{ path: '/healthz' }, { path: '/api/alerts', headers: cookie }, { path: '/api/alerts', headers: cookie }],
+  });
+  assert.strictEqual(r.exitCode, 0, r.stderr);
+  const [health, first, second] = r.results;
+  assert.strictEqual(health.status, 503);
+  assert.strictEqual(health.body.status, 'not-ready');
+  assert.deepStrictEqual(health.body.readiness.failures, [{ family: 'deal', file: 'deal', reason: 'integrity-check-failed' }]);
+  const wire = JSON.stringify(health.body);
+  assert.ok(!wire.includes(dealId) && !wire.includes(dir), 'no deal id / path in the unauthenticated payload');
+  assert.match(r.stdout, /\[readiness\] deal sweep: 0 opened, 1 not ready/);
+
+  for (const res of [first, second]) {
+    assert.strictEqual(res.status, 503, JSON.stringify(res.body));
+    assert.strictEqual(res.body.retryable, false);
+    assert.strictEqual(res.headers['retry-after'], undefined);
+    assert.ok(!JSON.stringify(res.body).includes(dealId));
+  }
+});
