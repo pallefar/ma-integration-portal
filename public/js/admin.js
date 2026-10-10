@@ -2950,8 +2950,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const stillActive = document.querySelector('.admin-tab-btn.active');
     if (projectsBtn && (!stillActive || stillActive.hidden === true)) projectsBtn.click();
   }
+  // IN-C03 (Phase 11 review): admin.html ships the configuration/content rail
+  // tabs (and the all-config Localization group) hidden — `[data-config-only]`
+  // with inline display:none — so they never flash for a role that may not use
+  // them. They are revealed once the map grants configWrite, or immediately
+  // when there is no map helper at all. Demo-open: the map is absent, maCanReady
+  // resolves true, so they appear as soon as the probe settles.
+  function revealConfigTabs() {
+    document.querySelectorAll('[data-config-only]').forEach((el) => {
+      el.hidden = false;
+      el.style.display = '';
+    });
+  }
   if (typeof window.maCanReady === 'function') {
     window.maCanReady('configWrite').then((ok) => { if (!ok) applyConfigWriteGate(); });
+    window.maCanReady('configWrite').then((ok) => { if (ok) revealConfigTabs(); });
+  } else {
+    revealConfigTabs();
   }
 
   // --- Initial runs ---

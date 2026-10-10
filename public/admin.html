@@ -75,12 +75,12 @@
             </div>
             <div class="admin-rail-group">
               <span class="admin-rail-label">Content</span>
-              <button class="admin-tab-btn" data-tab="courses"><span class="admin-rail-ic">🎓</span> Courses</button>
+              <button class="admin-tab-btn" data-tab="courses" data-config-only style="display:none;"><span class="admin-rail-ic">🎓</span> Courses</button>
               <button class="admin-tab-btn" data-tab="modules"><span class="admin-rail-ic">🧩</span> Action Modules</button>
               <button class="admin-tab-btn" data-tab="departments"><span class="admin-rail-ic">🏭</span> Departments</button>
               <button class="admin-tab-btn" data-tab="processes"><span class="admin-rail-ic">🔄</span> Processes</button>
-              <button class="admin-tab-btn" data-tab="slides"><span class="admin-rail-ic">🖥️</span> Slides</button>
-              <button class="admin-tab-btn" data-tab="pages"><span class="admin-rail-ic">📄</span> Pages &amp; Playbook</button>
+              <button class="admin-tab-btn" data-tab="slides" data-config-only style="display:none;"><span class="admin-rail-ic">🖥️</span> Slides</button>
+              <button class="admin-tab-btn" data-tab="pages" data-config-only style="display:none;"><span class="admin-rail-ic">📄</span> Pages &amp; Playbook</button>
             </div>
             <div class="admin-rail-group">
               <span class="admin-rail-label">People</span>
@@ -90,13 +90,17 @@
             <div class="admin-rail-group">
               <span class="admin-rail-label">Engagement</span>
               <button class="admin-tab-btn" data-tab="communication"><span class="admin-rail-ic">📣</span> Communications</button>
-              <button class="admin-tab-btn" data-tab="banners"><span class="admin-rail-ic">📢</span> Banners</button>
+              <button class="admin-tab-btn" data-tab="banners" data-config-only style="display:none;"><span class="admin-rail-ic">📢</span> Banners</button>
             </div>
-            <div class="admin-rail-group">
+            <!-- IN-C03 (Phase 11 review): configuration/content tabs start hidden and
+                 admin.js reveals them once the access map grants configWrite (or at
+                 once when there is no map, i.e. demo-open), so they never flash for
+                 a role that may not use them. -->
+            <div class="admin-rail-group" data-config-only style="display:none;">
               <span class="admin-rail-label">Localization</span>
-              <button class="admin-tab-btn" data-tab="translations"><span class="admin-rail-ic">🌐</span> Translations</button>
-              <button class="admin-tab-btn" data-tab="menus"><span class="admin-rail-ic">🧭</span> Menus</button>
-              <button class="admin-tab-btn" data-tab="media"><span class="admin-rail-ic">🖼️</span> Media</button>
+              <button class="admin-tab-btn" data-tab="translations" data-config-only style="display:none;"><span class="admin-rail-ic">🌐</span> Translations</button>
+              <button class="admin-tab-btn" data-tab="menus" data-config-only style="display:none;"><span class="admin-rail-ic">🧭</span> Menus</button>
+              <button class="admin-tab-btn" data-tab="media" data-config-only style="display:none;"><span class="admin-rail-ic">🖼️</span> Media</button>
             </div>
             <div class="admin-rail-group">
               <span class="admin-rail-label">System</span>

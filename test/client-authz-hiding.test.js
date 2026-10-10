@@ -1596,6 +1596,39 @@ test('WR-C07 (source): the three recipient pickers (IL desk, PMO desk, admin dis
   assert.ok(ADMIN_SRC.includes('window.maAddEmployeeInboxNote(recipientTypeSelect);'));
 });
 
+// ------------------------------------- IN-C03: no flash of the config tabs
+test('IN-C03 (source): admin.html ships exactly the configuration/content tabs (and the Localization group) hidden', () => {
+  const html = readPublic('admin.html');
+  for (const k of CONFIG_TABS) {
+    assert.ok(html.includes(`<button class="admin-tab-btn" data-tab="${k}" data-config-only style="display:none;">`), `${k} starts hidden`);
+  }
+  for (const k of KEPT_TABS) {
+    assert.ok(new RegExp(`<button class="admin-tab-btn[^"]*"[^>]*data-tab="${k}"(?![^>]*data-config-only)[^>]*>`).test(html), `${k} is not config-only`);
+  }
+  assert.ok(/<div class="admin-rail-group" data-config-only style="display:none;">\s*<span class="admin-rail-label">Localization<\/span>/.test(html));
+  assert.strictEqual((html.match(/data-config-only/g) || []).length, CONFIG_TABS.length + 1);
+});
+
+test('IN-C03 (vm): the hidden-by-default tabs are revealed for configWrite (and demo-open), left hidden otherwise', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody, '/admin.html');
+    const els = [fakeEl(), fakeEl()];
+    els.forEach((e) => { e.style.display = 'none'; });
+    const ex = loadBlocks(ADMIN_SRC, ['function revealConfigTabs('], {
+      window: win,
+      document: { querySelectorAll: (sel) => (sel === '[data-config-only]' ? els : []) },
+    }, ['revealConfigTabs']);
+    if (await win.maCanReady('configWrite')) ex.revealConfigTabs();
+    return els;
+  };
+  for (const meBody of [ME_ADMIN, ME_OPEN]) {
+    (await run(meBody)).forEach((e) => { assert.strictEqual(e.style.display, ''); assert.strictEqual(e.hidden, false); });
+  }
+  (await run(ME_HRBP)).forEach((e) => assert.strictEqual(e.style.display, 'none'));
+  assert.ok(/window\.maCanReady\('configWrite'\)\.then\(\(ok\) => \{ if \(ok\) revealConfigTabs\(\); \}\);/.test(ADMIN_SRC), 'wired to the map');
+  assert.ok(/\} else \{\s*revealConfigTabs\(\);\s*\}/.test(ADMIN_SRC), 'no map helper at all => revealed at once');
+});
+
 test('WR-C02 (source): the submit handler is wired to submitHelpdeskTicket and the old .finally(success) is gone', () => {
   assert.ok(EMPLOYEE_SRC.includes("hrForm.addEventListener('submit', submitHelpdeskTicket);"));
   const body = extractBlock(EMPLOYEE_SRC, 'function submitHelpdeskTicket(');
