@@ -806,3 +806,255 @@ test('leaders.js: a role refused the roster gets a neutral line and no request; 
   const open = await run(ME_OPEN);
   assert.deepStrictEqual(open.urls, ['/api/employees']);
 });
+
+// ============================================== item 8: admin console (admin.js)
+const ADMIN_SRC = readPublic('js', 'admin.js');
+// What hrbp/pmo may still use on admin.html, and what only an admin may configure.
+const CONFIG_TABS = ['courses', 'slides', 'pages', 'translations', 'menus', 'banners', 'media'];
+const KEPT_TABS = ['projects', 'deals', 'modules', 'departments', 'processes', 'employees', 'hrbp', 'communication', 'system'];
+
+function adminGateHarness(win, opts) {
+  const o = Object.assign({ editMode: false }, opts);
+  const btns = {};
+  const panels = {};
+  CONFIG_TABS.concat(KEPT_TABS).forEach((k) => { btns[k] = fakeEl(); panels[k] = fakeEl(); });
+  const groupOf = (keys) => {
+    const g = fakeEl();
+    g.querySelectorAll = (sel) => (sel === '.admin-tab-btn' ? keys.map((k) => btns[k]) : []);
+    return g;
+  };
+  const groups = {
+    workspace: groupOf(['projects']),
+    deals: groupOf(['deals']),
+    content: groupOf(['courses', 'modules', 'departments', 'processes', 'slides', 'pages']),
+    people: groupOf(['employees', 'hrbp']),
+    engagement: groupOf(['communication', 'banners']),
+    localization: groupOf(['translations', 'menus', 'media']),
+    system: groupOf(['system']),
+  };
+  const settingsCard = fakeEl();
+  const settingsForm = fakeEl({ closest: (s) => (s === '.card' ? settingsCard : null) });
+  const zipCard = fakeEl();
+  const zipLink = fakeEl({ closest: (s) => (s === '.card' ? zipCard : null) });
+  const named = {
+    'settings-form': settingsForm,
+    'admin-role-visibility-card': fakeEl(),
+    'admin-custom-ma-card': fakeEl(),
+    'admin-db-migration-card': fakeEl(),
+    'demo-mode-switcher-container': fakeEl(),
+    'edit-mode-switcher-container': fakeEl(),
+  };
+  CONFIG_TABS.concat(KEPT_TABS).forEach((k) => { named['tab-' + k] = panels[k]; });
+  const store_ = o.editMode ? { adminEditMode: 'true' } : {};
+  const classRemoved = [];
+  const projectsClicks = { n: 0 };
+  btns.projects.click = () => { projectsClicks.n++; };
+  const document = {
+    getElementById: (id) => named[id] || null,
+    querySelectorAll: (sel) => {
+      if (sel === '.admin-rail-group') return Object.keys(groups).map((k) => groups[k]);
+      const m = /^\.admin-tab-btn\[data-tab="([a-z]+)"\]$/.exec(sel);
+      return m && btns[m[1]] ? [btns[m[1]]] : [];
+    },
+    querySelector: (sel) => {
+      if (sel === 'a[href="/api/admin/download-zip"]') return zipLink;
+      if (sel === '.admin-tab-btn[data-tab="projects"]') return btns.projects;
+      if (sel === '.admin-tab-btn.active') return o.activeKey ? btns[o.activeKey] : btns.projects;
+      return null;
+    },
+    body: { classList: { remove: (c) => classRemoved.push(c) } },
+  };
+  const ex = loadBlocks(ADMIN_SRC, ['function applyConfigWriteGate('], {
+    window: win,
+    document,
+    localStorage: { getItem: (k) => (k in store_ ? store_[k] : null), setItem: (k, v) => { store_[k] = String(v); } },
+  }, ['applyConfigWriteGate']);
+  return { btns, panels, groups, named, settingsCard, zipCard, store_, classRemoved, projectsClicks, run: ex.applyConfigWriteGate };
+}
+
+test('item 8 (vm): the configuration/content tabs, cards and header pills are hidden; the deal and survey tabs stay', async () => {
+  const win = await bootWindow(ME_HRBP, '/admin.html');
+  const h = adminGateHarness(win, { editMode: true });
+  h.run();
+  for (const k of CONFIG_TABS) {
+    assert.strictEqual(h.btns[k].hidden, true, `${k} tab button hidden`);
+    assert.strictEqual(h.panels[k].hidden, true, `${k} panel hidden`);
+    assert.strictEqual(h.btns[k].style.display, 'none');
+  }
+  for (const k of KEPT_TABS) {
+    assert.notStrictEqual(h.btns[k].hidden, true, `${k} tab button stays`);
+    assert.notStrictEqual(h.panels[k].hidden, true, `${k} panel stays`);
+  }
+  assert.strictEqual(h.groups.localization.hidden, true, 'a rail group left empty is hidden with its tabs');
+  for (const g of ['workspace', 'deals', 'content', 'people', 'engagement', 'system']) {
+    assert.notStrictEqual(h.groups[g].hidden, true, `${g} rail group stays`);
+  }
+  assert.strictEqual(h.settingsCard.hidden, true, 'the settings form card (AI key, company profile)');
+  assert.strictEqual(h.named['admin-role-visibility-card'].hidden, true);
+  assert.strictEqual(h.named['admin-custom-ma-card'].hidden, true);
+  assert.strictEqual(h.named['admin-db-migration-card'].hidden, true, 'database configuration');
+  assert.strictEqual(h.zipCard.hidden, true, 'the admin-only package download');
+  assert.strictEqual(h.named['demo-mode-switcher-container'].hidden, true);
+  assert.strictEqual(h.named['edit-mode-switcher-container'].hidden, true);
+  assert.strictEqual(h.store_.adminEditMode, 'false', 'a stale edit-mode flag is cleared');
+  assert.deepStrictEqual(h.classRemoved, ['admin-edit-active']);
+});
+
+test('item 8 (vm): a console restored onto a hidden panel falls back to Projects', async () => {
+  const win = await bootWindow(ME_HRBP, '/admin.html');
+  const h = adminGateHarness(win, { activeKey: 'menus' });
+  h.run();
+  assert.strictEqual(h.projectsClicks.n, 1);
+});
+
+test('item 8 (source): the gate runs only when the map says configWrite is false, and every config save is guarded', () => {
+  assert.ok(/window\.maCanReady\('configWrite'\)\.then\(\(ok\) => \{ if \(!ok\) applyConfigWriteGate\(\); \}\)/.test(ADMIN_SRC),
+    'applyConfigWriteGate is wired to the access map, and only runs when it is refused');
+  const guarded = (needle) => {
+    const at = ADMIN_SRC.indexOf(needle);
+    assert.ok(at > 0, `could not find ${needle}`);
+    const handlerAt = ADMIN_SRC.lastIndexOf('addEventListener(', at);
+    return ADMIN_SRC.slice(handlerAt, at).includes("window.maCan('configWrite')");
+  };
+  assert.ok(guarded("fetch('/api/settings', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(payload)"), 'settings save');
+  assert.ok(guarded('body: JSON.stringify({ demoMode: nextDemoMode })'), 'demo-mode switcher');
+  assert.ok(guarded('roleVisibility: {'), 'role visibility save');
+  assert.ok(guarded("fetch('/api/settings/new-ma'"), 'reset custom M&A');
+  assert.ok(guarded("fetch('/api/admin/migrate-db'"), 'database migration');
+});
+
+test('item 8 (vm): admin-cms.js builds the slides/courses/pages/menus/banners editors only with configWrite', async () => {
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody, '/admin.html');
+    const fetchImpl = recordingFetch({
+      '/api/projects': { projects: [] },
+      '/api/menus': { sidebar: [], landing: [], bookmarks: [] },
+    });
+    const listeners = {};
+    const sandbox = {
+      window: win,
+      console,
+      Promise,
+      fetch: fetchImpl,
+      setTimeout,
+      localStorage: { getItem: () => null, setItem() {} },
+      document: {
+        addEventListener(ev, cb) { listeners[ev] = cb; },
+        getElementById: () => fakeEl(),
+        querySelector: () => fakeEl(),
+        querySelectorAll: () => [],
+        createElement: () => fakeEl(),
+        body: fakeEl(),
+      },
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(readPublic('js', 'admin-cms.js'), sandbox);
+    assert.strictEqual(typeof listeners.DOMContentLoaded, 'function');
+    listeners.DOMContentLoaded();
+    await settle(win);
+    return urls(fetchImpl).sort();
+  };
+  const lead = await run(ME_HRBP);
+  assert.deepStrictEqual(lead, ['/api/departments', '/api/processes', '/api/projects'],
+    'hrbp: only the panels a deal lead may edit are loaded');
+  for (const meBody of [ME_ADMIN, ME_OPEN]) {
+    const full = await run(meBody);
+    for (const u of ['/api/slides', '/api/courses', '/api/pages', '/api/menus', '/api/banners']) {
+      assert.ok(full.includes(u), `${u} loads for admin / demo-open`);
+    }
+  }
+});
+
+// ================================================== item 9: inline-edit.js
+function inlineEditHarness(win, opts) {
+  const o = Object.assign({ editMode: true }, opts);
+  const listeners = {};
+  const state = { inlineOn: null, prevented: false };
+  const document = {
+    readyState: 'complete',
+    addEventListener(ev, cb) { listeners[ev] = cb; },
+    getElementById: () => null,
+    createElement: () => fakeEl(),
+    createRange: () => ({ selectNodeContents() {} }),
+    querySelector: () => null,
+    body: {
+      classList: { toggle(name, on) { if (name === 'cms-inline-on') state.inlineOn = !!on; } },
+      getAttribute: () => null,
+      appendChild() {},
+    },
+  };
+  win.getSelection = () => ({ removeAllRanges() {}, addRange() {} });
+  const sandbox = {
+    window: win,
+    console,
+    Promise,
+    document,
+    setTimeout,
+    clearTimeout,
+    fetch: () => Promise.reject(new Error('no network in this row')),
+    localStorage: { getItem: (k) => (k === 'adminEditMode' && o.editMode ? 'true' : null) },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(readPublic('js', 'inline-edit.js'), sandbox);
+  const i18nEl = fakeEl({
+    isContentEditable: false,
+    hasAttribute: () => false,
+    getAttribute: () => 'some.key',
+    matches: () => false,
+    focus() {},
+    removeEventListener() {},
+  });
+  const click = () => {
+    state.prevented = false;
+    const e = {
+      target: { closest: () => i18nEl },
+      preventDefault() { state.prevented = true; },
+      stopPropagation() {},
+    };
+    try { listeners.click(e); } catch (err) { /* editing internals are not under test */ }
+    return state.prevented;
+  };
+  return { state, click, i18nEl };
+}
+
+test('item 9 (vm): click-to-edit is inert without configWrite, and still works in demo-open and for admin', async () => {
+  const denied = inlineEditHarness(await bootWindow(ME_HRBP, '/index.html'));
+  assert.strictEqual(denied.state.inlineOn, false, 'the cms-inline-on class is not applied');
+  assert.strictEqual(denied.click(), false, 'a click is not intercepted into an editor');
+
+  const adminH = inlineEditHarness(await bootWindow(ME_ADMIN, '/index.html'));
+  assert.strictEqual(adminH.state.inlineOn, true);
+  assert.strictEqual(adminH.click(), true);
+
+  const open = inlineEditHarness(await bootWindow(ME_OPEN, '/index.html'));
+  assert.strictEqual(open.state.inlineOn, true, 'demo-open: the presenter edits exactly as before');
+  assert.strictEqual(open.click(), true);
+});
+
+test('item 9 (vm): the access map settling after init re-evaluates edit mode', async () => {
+  // Load inline-edit.js BEFORE the probe settles (a window whose maAccessReady is still pending).
+  let release;
+  const win = { maCan: () => true, location: { pathname: '/' }, maAccessReady: new Promise((r) => { release = r; }) };
+  const h = inlineEditHarness(win);
+  assert.strictEqual(h.state.inlineOn, true, 'before the map arrives the default is the showcase');
+  win.maCan = (k) => k !== 'configWrite';
+  release();
+  await tick();
+  await tick();
+  assert.strictEqual(h.state.inlineOn, false, 'once the map says configWrite is false the flag is cleared');
+});
+
+test('item 9 (source): the unconditional always-true admin check is gone', () => {
+  const src = readPublic('js', 'inline-edit.js');
+  assert.ok(!/isAdmin = \(\) => true/.test(src));
+  assert.ok(/window\.maCan === 'function' \? window\.maCan\('configWrite'\)/.test(src));
+});
+
+test('inline-edit.js is loaded with a bumped stamp by transitions.js', () => {
+  assert.ok(/\/js\/inline-edit\.js\?v=1791800001/.test(TRANSITIONS_SRC));
+  assert.ok(!/inline-edit\.js\?v=1783577700/.test(TRANSITIONS_SRC));
+});
+
+test('transitions.js: the app-wide Edit Content toggle is not offered without configWrite', () => {
+  assert.ok(/window\.maCanReady\('configWrite'\)\.then\(function \(ok\) \{\s*if \(ok\) return;\s*editWrap\.style\.display = 'none';/.test(TRANSITIONS_SRC));
+});

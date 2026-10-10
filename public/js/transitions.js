@@ -2349,6 +2349,17 @@ document.addEventListener('DOMContentLoaded', () => {
       document.addEventListener('editModeChanged', syncToggle);
       editWrap.appendChild(editToggle);
       headerToolsContainer.appendChild(editWrap);
+      // [security] D-11-02 (plan 11-07): inline editing saves through POST
+      // /api/i18n and POST /api/pages (admin-only). The toggle is not offered to
+      // a role the server's access map says cannot write configuration/content.
+      window.maCanReady('configWrite').then(function (ok) {
+        if (ok) return;
+        editWrap.style.display = 'none';
+        if (localStorage.getItem('adminEditMode') === 'true') {
+          localStorage.setItem('adminEditMode', 'false');
+          document.body.classList.remove('admin-edit-active');
+        }
+      });
     }
 
     // Time machine (Day pill) leads the tools cluster
@@ -2358,7 +2369,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('inline-edit-js')) {
       const ieScript = document.createElement('script');
       ieScript.id = 'inline-edit-js';
-      ieScript.src = '/js/inline-edit.js?v=1783577700';
+      ieScript.src = '/js/inline-edit.js?v=1791800001';
       document.body.appendChild(ieScript);
     }
 
