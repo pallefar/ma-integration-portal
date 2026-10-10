@@ -258,9 +258,11 @@ function stopChild(child) {
 // co-edit the same collections in production.
 //
 // Every write carries a unique id derived from the worker index and a
-// monotonic per-worker counter (embedded in the required `employeeName`
-// field, since POST /api/pulses mints its own row id server-side — the
-// harness cannot pass one in). Each attempt is recorded into exactly one
+// monotonic per-worker counter (embedded in the pulse `comment`, since POST
+// /api/pulses mints its own row id server-side — the harness cannot pass one
+// in. Phase 11 review IN-02: a real deal now stamps `employeeName` from the
+// signed-in account and ignores the body value, so the correlator can no longer
+// ride in that field; `comment` is stored verbatim and stays unique). Each attempt is recorded into exactly one
 // outcome bucket: acknowledged (2xx), cleanly refused (503 carrying
 // Retry-After), or unexpected (anything else — a 500, a network failure, a
 // non-JSON body, a 503 with no Retry-After). [security] T-08-01
@@ -359,9 +361,9 @@ async function runWorkerLoad(workerIndex, port, cookie, durationMs, writeInterva
   async function doWrite(correlator) {
     const seed = Math.abs(hashCode(correlator));
     const payload = {
-      employeeName: correlator,
+      employeeName: correlator, // required by the schema; a real deal stamps the account name instead (IN-02)
       rating: 1 + (seed % 5),
-      comment: 'soak-load',
+      comment: correlator,
       type: 'general',
     };
     let res;
@@ -480,19 +482,20 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   // Check 1: every acknowledged write present and exact.
   const pulseRows = dealConn.prepare('SELECT id, data FROM pulses').all();
   const pulsesById = new Map();
-  const pulseIdByEmployeeName = new Map();
+  const pulseIdByCorrelator = new Map();
   for (const r of pulseRows) {
     const parsed = JSON.parse(r.data);
     pulsesById.set(r.id, parsed);
-    pulseIdByEmployeeName.set(parsed.employeeName, r.id);
+    pulseIdByCorrelator.set(parsed.comment, r.id);
   }
   const missingAck = [];
   const mismatchedAck = [];
   for (const w of acknowledged) {
     const row = pulsesById.get(w.pulseId);
     if (!row) { missingAck.push(w.pulseId); continue; }
-    const exact = row.employeeName === w.payload.employeeName
-      && Number(row.rating) === Number(w.payload.rating)
+    // employeeName is deliberately not compared: the server stamps it from the
+    // account (IN-02). The unique correlator travels in `comment`.
+    const exact = Number(row.rating) === Number(w.payload.rating)
       && row.comment === w.payload.comment
       && row.type === w.payload.type;
     if (!exact) mismatchedAck.push(w.pulseId);
@@ -539,7 +542,7 @@ function verify({ dealId, acknowledged, refused, unexpected, conflictAcknowledge
   const committedButUnaudited = [];
   const committedAndAudited = [];
   for (const w of refused) {
-    const pulseId = pulseIdByEmployeeName.get(w.correlator);
+    const pulseId = pulseIdByCorrelator.get(w.correlator);
     if (!pulseId) continue; // the common, expected case: truly absent
     if (auditRowIdCounts.has(pulseId)) {
       committedAndAudited.push(w.correlator);
