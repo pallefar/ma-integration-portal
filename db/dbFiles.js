@@ -33,6 +33,8 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const migrate = require('./migrate');
+const readiness = require('./readiness');
 
 // [security] D-10-01 (Phase 10): the REAL-DEAL MODE CONTRACT lives here, at the
 // single source of truth for every database path. `MA_MODE=real` is the one and
@@ -345,6 +347,66 @@ function tightenSidecars(dbFilePath, preExistingSet) {
   }
 }
 
+// --- D-12-03 (Phase 12): schema versioning wiring --------------------------
+// The family of a file is derived from the schema file its caller already
+// passes, so no call site changes. Any other schema path gets no family.
+const SCHEMA_FAMILIES = new Map([
+  [path.resolve(CONTROL_SCHEMA_PATH), 'control'],
+  [path.resolve(RUNTIME_SCHEMA_PATH), 'runtime'],
+  [path.resolve(DEAL_SCHEMA_PATH), 'deal'],
+  [path.resolve(AUDIT_SCHEMA_PATH), 'audit'],
+]);
+
+function familyForSchema(schemaPath) {
+  if (typeof schemaPath !== 'string') return null;
+  return SCHEMA_FAMILIES.get(path.resolve(schemaPath)) || null;
+}
+
+// path.resolve(dbFilePath) -> the DbNotReadyError that file failed with. A
+// failed migration/quick_check is sticky per path until the process restarts.
+const notReadyPaths = new Map();
+
+function safeSize(p) {
+  try { return fs.statSync(p).size; } catch (e) { return 0; }
+}
+
+function isCorruptionError(e) {
+  return !!(e && typeof e.code === 'string' && (e.code.startsWith('SQLITE_CORRUPT') || e.code === 'SQLITE_NOTADB'));
+}
+
+/**
+ * PRAGMA quick_check, single result. Anything but 'ok' — including a thrown
+ * corruption error — is an integrity failure; lock contention is not.
+ */
+function quickCheckOk(conn) {
+  try {
+    return conn.pragma('quick_check', { simple: true }) === 'ok';
+  } catch (e) {
+    if (isCorruptionError(e)) return false;
+    throw e;
+  }
+}
+
+/**
+ * Create-or-migrate a file of a known family: a FRESH file gets its schema and
+ * is stamped at the family's latest version; an EXISTING file is integrity-
+ * checked (never audit), migrated BEFORE the idempotent schema exec, and then
+ * has the schema exec'd. Committed demo/control files are never written by the
+ * version runner (PD-5).
+ */
+function prepareVersionedFile(conn, { family, dbFilePath, schema }) {
+  if (migrate.isFresh(conn)) {
+    conn.exec(schema);
+    migrate.runMigrations(conn, { family, file: dbFilePath, fresh: true });
+    return;
+  }
+  if (family !== 'audit' && !quickCheckOk(conn)) {
+    throw readiness.markNotReady({ family, file: dbFilePath, reason: readiness.REASONS.INTEGRITY_FAILED });
+  }
+  migrate.runMigrations(conn, { family, file: dbFilePath, committed: isCommittedDbPath(dbFilePath) });
+  conn.exec(schema);
+}
+
 /**
  * Open (or create) the SQLite file at `dbFilePath`, apply the Phase-1 pragma
  * contract, and apply `schemaPath`'s schema idempotently (CREATE TABLE/INDEX/
@@ -368,9 +430,15 @@ function openDbFile(dbFilePath, schemaPath) {
   // [security] D-12-06: AFTER the real-mode refusal (real-mode tests still see
   // `[security]`) and BEFORE ensurePrivateDir so a refused path creates nothing.
   assertTestIsolation(dbFilePath);
+  // [security] D-12-03: a file that already failed its migration or integrity
+  // check is refused on every later open until restart — never retried, never
+  // served (T-12-51). Checked before anything is created or opened.
+  const stuck = notReadyPaths.get(path.resolve(dbFilePath));
+  if (stuck) throw stuck;
   ensurePrivateDir(path.dirname(dbFilePath));
 
-  if (fs.existsSync(dbFilePath)) {
+  const existedBefore = fs.existsSync(dbFilePath);
+  if (existedBefore) {
     chmodPrivateFile(dbFilePath, { preExisting: true });
   } else {
     // Created 0600 BEFORE SQLite opens it so its -wal/-shm inherit 0600; the
@@ -382,6 +450,8 @@ function openDbFile(dbFilePath, schemaPath) {
   const preExistingSidecars = new Set(SIDECAR_SUFFIXES.filter((s) => fs.existsSync(dbFilePath + s)));
   tightenSidecars(dbFilePath, preExistingSidecars);
 
+  const family = familyForSchema(schemaPath);
+  const hadContent = existedBefore && family !== null && safeSize(dbFilePath) > 0;
   const conn = new Database(dbFilePath);
   try {
     conn.pragma('journal_mode = WAL');
@@ -390,11 +460,29 @@ function openDbFile(dbFilePath, schemaPath) {
     conn.pragma('busy_timeout = 1000'); // D-03/D-05/CONC-01 (Phase 8): see file header
 
     const schema = fs.readFileSync(schemaPath, 'utf8');
-    conn.exec(schema);
+    if (family === null) {
+      // A schema outside the four known families (a test-only custom schema):
+      // no version, no checks — unchanged behaviour.
+      conn.exec(schema);
+    } else {
+      prepareVersionedFile(conn, { family, dbFilePath, schema });
+    }
 
     tightenSidecars(dbFilePath, preExistingSidecars);
   } catch (e) {
     try { conn.close(); } catch (closeErr) { /* surface the original error */ }
+    if (e instanceof readiness.DbNotReadyError) {
+      notReadyPaths.set(path.resolve(dbFilePath), e); // sticky until restart
+      throw e;
+    }
+    // A header/page-level corruption surfaces as an SqliteError from the very
+    // first statement. On an EXISTING non-empty file of a known family that is
+    // an integrity failure, not a crash (D-12-03).
+    if (hadContent && isCorruptionError(e)) {
+      const nr = readiness.markNotReady({ family, file: dbFilePath, reason: readiness.REASONS.INTEGRITY_FAILED });
+      notReadyPaths.set(path.resolve(dbFilePath), nr);
+      throw nr;
+    }
     throw e;
   }
 
@@ -425,4 +513,6 @@ module.exports = {
   chmodPrivateFile,
   assertTestIsolation,
   openDbFile,
+  // D-12-03: test-only reset of the sticky not-ready cache.
+  _clearNotReadyForTests: () => notReadyPaths.clear(),
 };

@@ -82,6 +82,27 @@ const reportFilename = require('./lib/reportFilename');
 // the full mode contract.
 require('./db/realDataDir').ensureRealDataDir();
 
+// [security] D-12-03 / PD-6 / PD-27 (Phase 12): boot-time database readiness.
+// A database that fails its migration or PRAGMA quick_check throws a
+// DbNotReadyError from db/dbFiles.js openDbFile() and is refused (sticky) until
+// restart. `bootOpen` wraps each require-time open: it catches ONLY that error,
+// logs the reason (never a path or a deal id) and lets the process reach
+// listen() so GET /healthz can report not-ready (503) and every request that
+// needs the refused file fails closed. Every other error still throws exactly
+// as before.
+const readiness = require('./db/readiness');
+function bootOpen(label, fn) {
+  try {
+    return fn();
+  } catch (e) {
+    if (e instanceof readiness.DbNotReadyError) {
+      console.error(`[readiness] ${label} not ready: ${e.reason}`);
+      return undefined;
+    }
+    throw e;
+  }
+}
+
 const app = express();
 // [security] CR-01 (Phase 10 review): Express matches routes case-INsensitively
 // by default, while every path-prefix policy table in this file is written in
@@ -231,9 +252,14 @@ app.use((req, res, next) => {
 // lib/credentialLockdown.js (LOCKDOWN_STATIC_ALLOWLIST).
 const credentialLockdown = createLockdown({ enabled: dbFiles.IS_REAL_MODE });
 if (dbFiles.IS_REAL_MODE) {
-  credentialLockdown.scanAccounts(
+  // [security] T-12-56: if control.db is not ready (a failed migration or
+  // integrity check, D-12-03) this scan cannot run — safe, because every
+  // session, login and API path needs control.db and fails closed with it
+  // (asserted by test/schema-migrations.test.js). The boot continues so
+  // /healthz can report the failure.
+  bootOpen('control-lockdown-scan', () => credentialLockdown.scanAccounts(
     controlStore.listUsers(), passwords.verifyPasswordSync, passwords.KNOWN_DEMO_PASSWORDS
-  );
+  ));
   if (credentialLockdown.isActive()) {
     console.warn(
       '[security] CREDENTIAL LOCKDOWN — these accounts still accept a published demo password: ' +
@@ -1586,10 +1612,25 @@ app.patch('/api/admin/users/:username', (req, res, next) => {
   }
 });
 
-// Lightweight health check for uptime monitors and platform probes
+// Lightweight health check for uptime monitors and platform probes.
+// D-12-03 (Phase 12): reports the process-level readiness object (db/readiness.js
+// — per-family schema versions, and any failed migration / integrity check). It
+// no longer parses the demo database per probe: a liveness `SELECT 1` on the
+// already-open demo singleton replaces readDb().
+// [security] T-12-52: unauthenticated — the snapshot carries family, migration
+// id, a fixed reason code and a basename (`deal` for any deal file), never an
+// absolute path or a deal id.
 app.get('/healthz', (req, res) => {
-  try { readDb(); res.json({ status: 'ok', ts: Date.now() }); }
-  catch (e) { res.status(503).json({ status: 'degraded' }); }
+  const snap = readiness.snapshot();
+  if (!snap.ready) {
+    return res.status(503).json({ status: 'not-ready', ts: Date.now(), readiness: snap });
+  }
+  try {
+    require('./db/store').getConnection().prepare('SELECT 1').get();
+    res.json({ status: 'ok', ts: Date.now(), readiness: snap });
+  } catch (e) {
+    res.status(503).json({ status: 'degraded' });
+  }
 });
 
 // Helper functions for database I/O
@@ -1611,9 +1652,47 @@ const sessions = require('./db/sessions');
 // pointed at demo.db so any code path that runs OUTSIDE a request context
 // (this startup block itself, a CLI script) still has a sane default —
 // unchanged fallback behavior for requireDb() (03-RESEARCH.md Pattern 1).
-initDb(dbFiles.DEMO_DB_PATH);
-getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH);
-getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH);
+bootOpen('demo', () => initDb(dbFiles.DEMO_DB_PATH));
+bootOpen('runtime', () => getOrOpenConnection(dbFiles.RUNTIME_DB_PATH, dbFiles.RUNTIME_SCHEMA_PATH));
+bootOpen('control', () => getOrOpenConnection(dbFiles.CONTROL_DB_PATH, dbFiles.CONTROL_SCHEMA_PATH));
+
+// --- boot statements: audit open + deal sweep (D-12-03 / PD-27) -------------
+// [security] Every database file family is opened — and therefore versioned,
+// migrated and integrity-checked — HERE, before listen(), never on first use.
+// audit.db: its family migrations must run at boot, outside any request. A lazy
+// first open inside writeDb() would run them NESTED in a deal file's
+// `.immediate` write transaction (holding that deal's write lock for the length
+// of a migration), and a failure would surface only as a per-request 5xx
+// (checker B-1 / T-12-57).
+bootOpen('audit', () => auditHook.getAuditConnection());
+// Registered deal files: bounded sweep — one open + one quick_check per
+// EXISTING registered deal file, no network, boot never creates a file
+// (checker W-5 / T-12-59). Active deals open through the resolver's shared
+// connection cache (the first request reuses the handle); an archived deal
+// (no request can bind it) is opened to be versioned and closed again. A
+// DbNotReadyError is recorded under family `deal`, file `deal` — never the id.
+bootOpen('deals', () => {
+  const started = Date.now();
+  let opened = 0;
+  let notReady = 0;
+  for (const deal of controlStore.listDeals()) {
+    let dealPath;
+    try { dealPath = dbFiles.dealDbPath(deal && deal.id); } catch (e) { continue; } // not a mintable id: no file to open
+    if (!fs.existsSync(dealPath)) continue;
+    try {
+      if (deal.status === 'archived') {
+        dbFiles.openDbFile(dealPath, dbFiles.DEAL_SCHEMA_PATH).close();
+      } else {
+        getOrOpenConnection(dealPath, dbFiles.DEAL_SCHEMA_PATH);
+      }
+      opened += 1;
+    } catch (e) {
+      if (!(e instanceof readiness.DbNotReadyError)) throw e;
+      notReady += 1;
+    }
+  }
+  console.log(`[readiness] deal sweep: ${opened} opened, ${notReady} not ready, ${Date.now() - started} ms`);
+});
 
 /** Sessions (Phase 2, AUTH-03) live in runtime.db (D-07), not the
  * request-bound demo/deal connection — a session must be resolvable BEFORE
@@ -1626,7 +1705,7 @@ function getRuntimeConnection() {
 // Startup sweep of expired session rows — a table-bloat cleanup, NOT a
 // security mechanism (findSession() already treats a past expires_at as an
 // immediate miss regardless of whether the row has been physically deleted).
-sessions.pruneExpiredSessions(getRuntimeConnection());
+bootOpen('sessions-prune', () => sessions.pruneExpiredSessions(getRuntimeConnection()));
 
 // Collision-resistant id: time-sortable base36 timestamp + random suffix. Two
 // creates in the same millisecond used to mint identical `prefix_<Date.now()>`
@@ -8658,6 +8737,25 @@ app.use((err, req, res, next) => {
       recordDenial(req, 404, 'clearance-404', req.route && typeof req.route.path === 'string' ? req.route.path : undefined);
     }
     return res.status(404).json({ error: 'Not found' });
+  }
+  next(err);
+});
+
+// [security] D-12-03 / T-12-51 (Phase 12): a database that failed its migration
+// or integrity check (db/readiness.js DbNotReadyError, thrown by every open of
+// the refused file until restart) is a 503 that is NOT retryable: no
+// Retry-After and `retryable: false`, so the client (plan 12-04's marker) shows
+// it once and never retries. FIXED body — never err.message, a path or a deal
+// id. A route that catches the error locally keeps its own generic 500; no path
+// ever turns it into a 2xx. Sits ABOVE the busy 503 handler (a different cause,
+// a different contract).
+app.use((err, req, res, next) => {
+  if (err instanceof readiness.DbNotReadyError) {
+    if (res.headersSent) return next(err);
+    return res.status(503).json({
+      error: 'The server is not ready: a database failed its migration or integrity check. An administrator must restore it from backup.',
+      retryable: false,
+    });
   }
   next(err);
 });
