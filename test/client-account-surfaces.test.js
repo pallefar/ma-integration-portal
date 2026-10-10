@@ -245,3 +245,52 @@ test('deal-switcher: with a session /api/deals is still requested', async () => 
   const requested = await runDealSwitcher({ authEnabled: true, dealId: null, user: { username: 'karen', role: 'hrbp' } });
   assert.deepStrictEqual(requested, ['/api/auth/me', '/api/deals']);
 });
+
+// ======================================================= account-menu (Task 3)
+test('maAccountMenuPolicy.accountWritesAllowed truth table (D-10-01, D-10-07)', () => {
+  const p = loadPolicyWindow('js', 'account-menu.js').maAccountMenuPolicy;
+  assert.ok(p, 'account-menu.js must expose window.maAccountMenuPolicy');
+  assert.strictEqual(p.accountWritesAllowed({ accountsWritable: true }), true);
+  assert.strictEqual(p.accountWritesAllowed({ accountsWritable: false }), false);
+  assert.strictEqual(p.accountWritesAllowed({}), false);
+  assert.strictEqual(p.accountWritesAllowed(null), false, 'a failed mode probe counts as not writable');
+  assert.strictEqual(p.accountWritesAllowed(undefined), false);
+  assert.strictEqual(p.accountWritesAllowed({ accountsWritable: 1 }), false, 'only boolean true counts');
+});
+
+test('maAccountMenuPolicy.deviceLabel shortens the user agent to 80 characters', () => {
+  const p = loadPolicyWindow('js', 'account-menu.js').maAccountMenuPolicy;
+  assert.strictEqual(p.deviceLabel(null), 'Unknown device');
+  assert.strictEqual(p.deviceLabel('   '), 'Unknown device');
+  assert.strictEqual(p.deviceLabel('Mozilla/5.0'), 'Mozilla/5.0');
+  const long = 'A'.repeat(300);
+  const label = p.deviceLabel(long);
+  assert.strictEqual(label.length, 80);
+  assert.ok(label.endsWith('…'));
+});
+
+test('account-menu.js, login.js and change-password.js never assign HTML strings to an element (T-10-39)', () => {
+  const sink = /\.(innerHTML|outerHTML)\b|insertAdjacentHTML|document\.write|\.createContextualFragment|\.srcdoc\b/;
+  ['account-menu.js', 'login.js', 'change-password.js'].forEach((name) => {
+    const src = readPublic('js', name);
+    assert.ok(!sink.test(src), name + ' must build the DOM with createElement/textContent only');
+  });
+});
+
+test('account-menu.js mounts into the profile dropdown and the sidebar footer, gates on accountsWritable, and is stamped in transitions.js', () => {
+  const src = readPublic('js', 'account-menu.js');
+  assert.ok(src.includes("'#profile-dropdown-card .dropdown-body'"), 'dropdown mount');
+  assert.ok(src.includes("'.sidebar-footer'"), 'sidebar-footer mount');
+  assert.ok(src.includes('accountsWritable'), 'must read accountsWritable');
+  assert.ok(src.includes("setAttribute('aria-disabled', 'true')"), 'the disabled item carries aria-disabled');
+  assert.ok(src.includes('encodeURIComponent(s.id)'), 'the session id is encoded into the DELETE path');
+  assert.ok(/account\.css\?v=\d+/.test(src), 'account.css is linked with a stamp');
+  const transitions = readPublic('js', 'transitions.js');
+  assert.ok(/account-menu\.js\?v=\d+/.test(transitions), 'transitions.js injects account-menu.js with a stamp');
+});
+
+test('account.css carries the <= 480px rules that keep both modals inside a 390px viewport', () => {
+  const css = readPublic('css', 'account.css');
+  assert.ok(/@media \(max-width: 480px\)/.test(css));
+  assert.ok(css.includes('calc(100vw - 1.5rem)'), 'modal width is min(480px, calc(100vw - 1.5rem)) on phones');
+});
