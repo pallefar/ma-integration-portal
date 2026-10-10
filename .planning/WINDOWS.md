@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 3
+open_count: 2
 waived_count: 0
-fixed_count: 1
+fixed_count: 2
 total_count: 4
-last_updated: 2026-10-10T10:23:28.395Z
+last_updated: 2026-10-10T12:57:21.213Z
 ---
 
 # Broken Windows Ledger
@@ -18,7 +18,7 @@ last_updated: 2026-10-10T10:23:28.395Z
 | 1 | 9 | unrun-verify | public/execution.html |  | Manual two-tab browser walk on execution.html and org.html (delete flows) not performed in this browser-less autonomous run | fixed |  | 2026-08-11T07:32:44.436Z | 2026-10-10T10:23:02.683Z |
 | 2 | 9 | deviation | public/js/org.js |  | Org flight-risk entries and both DD collections (request-items, findings) have no client-side delete UI in this codebase — server-side D-08 protection complete for all 7 routes, but only 4 of 7 client call sites exist to thread expectedVersion through | open |  | 2026-08-11T07:32:53.360Z |  |
 | 3 | 9 | deviation | public/js/org.js |  | org.html has no position-edit surface: per node only expand, Decisions and Delete; positions can be created, deleted, copied to target and imported but not edited in place (UAT item 3 was not walkable as written; the conflict contract was proven via the API). Routed to Phase 18 IL-18. | open |  | 2026-10-10T09:49:42.900Z |  |
-| 4 | 9 | deviation | public/js/deal-switcher.js |  | DEMO_OPEN=1: a cookie-less browser tab redirect-loops login.html -> / -> login.html (deal switcher fetches control-plane /api/deals -> 401 authRequired); pre-existing since v2.1.0, found by the 09-16 demo smoke; see 09-optimistic-locking-conflict-recovery/deferred-items.md D-1 | open |  | 2026-10-10T10:23:28.395Z |  |
+| 4 | 9 | deviation | public/js/deal-switcher.js |  | DEMO_OPEN=1: a cookie-less browser tab redirect-loops login.html -> / -> login.html (deal switcher fetches control-plane /api/deals -> 401 authRequired); pre-existing since v2.1.0, found by the 09-16 demo smoke; see 09-optimistic-locking-conflict-recovery/deferred-items.md D-1 | fixed |  | 2026-10-10T10:23:28.395Z | 2026-10-10T12:57:21.213Z |
 
 ````json
 [
@@ -65,10 +65,10 @@ last_updated: 2026-10-10T10:23:28.395Z
     "file": "public/js/deal-switcher.js",
     "line": null,
     "description": "DEMO_OPEN=1: a cookie-less browser tab redirect-loops login.html -> / -> login.html (deal switcher fetches control-plane /api/deals -> 401 authRequired); pre-existing since v2.1.0, found by the 09-16 demo smoke; see 09-optimistic-locking-conflict-recovery/deferred-items.md D-1",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-10-10T10:23:28.395Z",
-    "resolved_at": null
+    "resolved_at": "2026-10-10T12:57:21.213Z"
   }
 ]
 ````
