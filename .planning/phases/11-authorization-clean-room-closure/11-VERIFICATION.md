@@ -4,16 +4,16 @@ verified: 2026-10-10T16:40:00Z
 verified_commit: e6a5021
 verifier: Claude Fable 5.1 (gsd-verifier, independent of executors/reviewers/fixers)
 verification: automated, Fable-reviewed
-status: gaps_found
-score: 36/39 must-haves verified
+status: passed
+score: 39/39 must-haves verified (36 by the verifier at e6a5021; G-1 closed by d91ff88; 2 UNCERTAIN browser lanes re-run by the evidence refresh; 1 human item decided)
 behavior_unverified: 0
 overrides_applied: 0
-re_verification: false
+re_verification: true
 suite: "node --test at e6a5021 -> tests 1258, pass 1258, fail 0 (26.3 s), run by the verifier"
 soak: "SOAK_DURATION_MS=20000 SOAK_WRITE_INTERVAL_MS=250 npm run soak at e6a5021 -> FAIL (acknowledged=894 missing=0 mismatched=894) — see gap G-1"
 gaps:
   - truth: "11-08 must-have 4 / Phase 8 contract: `npm run soak` PASS on the final code (acknowledged-write invariant held and EXACT)"
-    status: failed
+    status: closed (d91ff88, merged e920245)
     severity: high (proof instrument broken; no data-loss observed)
     reason: "Review fix IN-02 (commit feed9c9) makes POST /api/pulses in a real deal file the pulse under the session account's display name and ignore the body `employeeName`. scripts/soak.js uses `employeeName` as its per-write correlator (soak.js:261-263, 362, 494, 542). On HEAD every acknowledged pulse row therefore carries the worker's account name instead of the correlator: check 1 ('every acknowledged write present in the final database and exact') reports mismatched=894 of 894 and the run exits 1. The committedButUnaudited attribution (soak.js:542, pulseIdByEmployeeName) is also blind for the same reason, so under contention a committed-but-unaudited refused write could no longer be detected. 11-VALIDATION.md's soak PASS and evidence/soak.log were produced at the 11-08 base (before feed9c9) and do not describe HEAD."
     artifacts:
@@ -229,3 +229,20 @@ One gap. Phase 11's own authorization goal — explicit fail-closed read policy,
 
 _Verified: 2026-10-10T16:40Z at e6a5021_
 _Verifier: Claude Fable 5.1 (gsd-verifier) — verification: automated, Fable-reviewed_
+
+
+## Closure addendum (orchestrator, 2026-10-10, autonomous-mode contract)
+
+- **G-1 CLOSED.** `scripts/soak.js` carries its correlator in `comment` (`d91ff88`, merged `e920245`); `test/soak-correlator.test.js`
+  pins it (3 static guards + a 2-process smoke). Soak re-run on the final code: fixer — 3 and 4 processes PASS (872 / 1118 acknowledged,
+  0 missing, 0 mismatched, audit 1:1); evidence refresh — `SOAK_DURATION_MS=60000 SOAK_WRITE_INTERVAL_MS=250`: 2226 acknowledged,
+  0 lost, audit 1:1, 0 committed-but-unaudited. `evidence/soak.log` is the post-fix run.
+- **Browser lanes re-run on the final code** (evidence refresh `213f707`): real lane 284/0, demo lanes 195/0, full Phase 10 runner
+  655/0, Phase 9 walk 350/0 and `--demo-open` 18/0; the same scenario module run against `d927233` (pre-fix) fails 93 rows — one
+  cluster per review finding — and fails none on the fixed tree (`evidence/prefix-sensitivity.log`).
+- **Human items decided:** (1) WR-C01 reachability — ACCEPTED as the original `pageAccess` design now actually enforced (hrbp is not on
+  employee/pmo/supporting; employee not on dashboard/supporting; pmo not on admin); real-deal landing by role is Phase 15/17
+  (`11-CARRY-INS.md` #7). (2) Visual layout — refreshed JPEGs viewed at 1440 and 390: no broken layout, hidden controls are hidden;
+  demo copy / persona-derived header in a real deal recorded as carry-in #17. (3) IN-C04 logged-in demo store hides config controls
+  from karen/pmo — ACKNOWLEDGED (D-11-02), noted for the release notes.
+- Open items for later phases live in `11-CARRY-INS.md`; the security audit is `11-SECURITY.md` (SECURED 44/44, 0 open).

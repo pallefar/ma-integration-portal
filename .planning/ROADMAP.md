@@ -50,7 +50,7 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
 - [x] **Phase 8: Concurrency & Storage Foundation** — Serialize concurrent writers with zero lost updates — CONC-01 (completed 2026-08-11)
 - [x] **Phase 9: Optimistic Locking & Conflict Recovery** — Stale writes caught (409) and recoverable; **gap closure** for the R7 findings — CONC-02 (completed 2026-10-10)
 - [x] **Phase 10: Accounts & Identity** — Real people with real accounts; explicit real-deal mode; no published credentials — ACCT-01..07, COLLAB-02, OPS-08 (completed 2026-10-10)
-- [ ] **Phase 11: Authorization & Clean-Room Closure** — Every read and write authorized for who the caller is — AUTHZ-01..05
+- [x] **Phase 11: Authorization & Clean-Room Closure** — Every read and write authorized for who the caller is — AUTHZ-01..05 (completed 2026-10-10)
 - [ ] **Phase 12: Data-Layer Integrity & Performance** — Writes/audit proportional to change; versioned schemas; trustworthy tests — DATA-01..06, QUAL-01/02
 - [ ] **Phase 13: Content Safety** — User content can't run code in another session — SAFE-01/02/03/06/07
 - [ ] **Phase 14: Deal Files, Limits & Legacy Hazards** — Files stay inside the deal boundary; limits and legacy hazards closed — SAFE-04/05/08
@@ -405,7 +405,7 @@ Items a closed phase deferred or accepted, owned by a later phase (full table wi
 | 8. Concurrency & Storage Foundation | v3.0 | 5/5 | Complete    | 2026-08-11 |
 | 9. Optimistic Locking & Conflict Recovery | v3.0 | 16/16 | Complete    | 2026-10-10 |
 | 10. Accounts & Identity | v3.0 | 9/9 | Complete    | 2026-10-10 |
-| 11. Authorization & Clean-Room Closure | v3.0 | 8/8 | In Progress|  |
+| 11. Authorization & Clean-Room Closure | v3.0 | 10/8 | Complete    | 2026-10-10 |
 | 12. Data-Layer Integrity & Performance | v3.0 | 0/TBD | Not started | - |
 | 13. Content Safety | v3.0 | 0/TBD | Not started | - |
 | 14. Deal Files, Limits & Legacy Hazards | v3.0 | 0/TBD | Not started | - |

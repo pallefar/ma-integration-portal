@@ -37,11 +37,11 @@ mode, and MNPI (deal names, members) can therefore never land in a committed fil
 
 ### Authorization (AUTHZ)
 
-- [ ] **AUTHZ-01**: Every `/api` read route has an explicit role policy and an unlisted read route fails the coverage test (VAL-01 precedent); an `employee` session in a real deal cannot read synergy financials, RAID, tasks, roster, communications, pulses or org data.
-- [ ] **AUTHZ-02**: Configuration and content surfaces (instance settings, menus, pages, banners, slides, media, i18n, courses, AI keys) are writable only by admin; deal-level settings the IL may edit (currency, synergy target, Day-1 date, stale-days) live under the deal's own setup route.
-- [ ] **AUTHZ-03**: Tasks, RAID entries and every other record carrying a clearance area are filtered by clean-room clearance on read, write, delete and 409 bodies; a record outside the caller's clearance answers as not found.
-- [ ] **AUTHZ-04**: No GET route changes state; every state-changing route is POST/PUT/DELETE and passes write validation.
-- [ ] **AUTHZ-05**: Every 401/403 and clearance-404 is recorded as a security event with actor, route and reason (rate-bounded so a probe cannot flood the audit).
+- [x] **AUTHZ-01**: Every `/api` read route has an explicit role policy and an unlisted read route fails the coverage test (VAL-01 precedent); an `employee` session in a real deal cannot read synergy financials, RAID, tasks, roster, communications, pulses or org data.
+- [x] **AUTHZ-02**: Configuration and content surfaces (instance settings, menus, pages, banners, slides, media, i18n, courses, AI keys) are writable only by admin; deal-level settings the IL may edit (currency, synergy target, Day-1 date, stale-days) live under the deal's own setup route.
+- [x] **AUTHZ-03**: Tasks, RAID entries and every other record carrying a clearance area are filtered by clean-room clearance on read, write, delete and 409 bodies; a record outside the caller's clearance answers as not found.
+- [x] **AUTHZ-04**: No GET route changes state; every state-changing route is POST/PUT/DELETE and passes write validation.
+- [x] **AUTHZ-05**: Every 401/403 and clearance-404 is recorded as a security event with actor, route and reason (rate-bounded so a probe cannot flood the audit).
 
 ### Data Layer (DATA) and Test Signal (QUAL)
 
@@ -176,11 +176,11 @@ All 86 requirements (11 complete, 75 pending) mapped to exactly one phase.
 | ACCT-05 | Phase 10 | Complete |
 | ACCT-06 | Phase 10 | Complete |
 | ACCT-07 | Phase 10 | Complete |
-| AUTHZ-01 | Phase 11 | Pending |
-| AUTHZ-02 | Phase 11 | Pending |
-| AUTHZ-03 | Phase 11 | Pending |
-| AUTHZ-04 | Phase 11 | Pending |
-| AUTHZ-05 | Phase 11 | Pending |
+| AUTHZ-01 | Phase 11 | Complete |
+| AUTHZ-02 | Phase 11 | Complete |
+| AUTHZ-03 | Phase 11 | Complete |
+| AUTHZ-04 | Phase 11 | Complete |
+| AUTHZ-05 | Phase 11 | Complete |
 | DATA-01 | Phase 12 | Pending |
 | DATA-02 | Phase 12 | Pending |
 | DATA-03 | Phase 12 | Pending |
