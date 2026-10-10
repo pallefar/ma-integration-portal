@@ -141,12 +141,17 @@ function resolveDatabase(req) {
  * ever applies to a resolved 'demo' kind, which is never audited (D-08), so
  * it cannot affect an audited write's actor.
  */
-function dealResolverMiddleware(req, res, next) {
+function dealResolverMiddleware(req, res, next, onDenied) {
   let resolved;
   try {
     resolved = resolveDatabase(req);
   } catch (e) {
     if (e instanceof DealAccessError) {
+      // D-11-05: the resolver keeps NO audit dependency (same isolation rule as
+      // db/accessPolicy.js) — the optional caller-supplied hook is told about
+      // the refusal immediately before it is sent. A throw from the hook (a
+      // busy audit.db) propagates to the central error middleware.
+      if (typeof onDenied === 'function') onDenied(e.status, 'deal-access');
       return res.status(e.status).json({ error: e.message });
     }
     throw e;
