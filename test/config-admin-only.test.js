@@ -22,6 +22,8 @@ process.env.MA_RUNTIME_DB_PATH = path.join(TMP_DIR, 'runtime.db');
 process.env.MA_DEMO_DB_PATH = path.join(TMP_DIR, 'demo.db');
 process.env.MA_DEALS_DIR = path.join(TMP_DIR, 'deals');
 process.env.MA_AUDIT_DB_PATH = path.join(TMP_DIR, 'audit.db');
+// SAFE-03 (13-03): slide uploads land in a throwaway directory, never public/uploads/.
+process.env.MA_SLIDES_UPLOAD_DIR = path.join(TMP_DIR, 'slides');
 process.env.ADMIN_TOKEN = '';
 for (const key of ['MA_MODE', 'MA_DATA_DIR', 'DEMO_OPEN']) delete process.env[key];
 

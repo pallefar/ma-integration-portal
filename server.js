@@ -353,8 +353,9 @@ app.get('/', (req, res) => {
 
 // HTML entry points (every public/**/*.html except vendored code): served
 // through sendHtml() so the stamps are the content hash of what is served.
-// Mounted AFTER the credential-lockdown gate (T-12-22) and immediately BEFORE
-// express.static, which keeps serving everything else.
+// Mounted AFTER the credential-lockdown gate (T-12-22) and the dedicated
+// /uploads/slides mount (SAFE-03; defined just above the middleware itself),
+// and BEFORE express.static, which keeps serving everything else.
 //
 // [security] WR-B01 (12-REVIEW-B): TERMINAL for every request whose path is, or
 // normalises to, an `.html` path. express.static (`send`) normalises dot
@@ -379,8 +380,66 @@ function htmlRequestVerdict(rawPath) {
   return { html: true, canonical: true, path: decoded };
 }
 
+// [security] SAFE-03 / D-13-04 (b) / R1-04 / T-13-20 / T-13-26 (plan 13-03):
+// admin-uploaded slides are untrusted markup. They are served ONLY from this
+// dedicated mount, which sets the sandbox CSP (opaque origin, no network, no
+// portal cookies — even when the URL is opened top-level) and nosniff. It MUST
+// precede the terminal `.html` middleware below: that middleware answers every
+// canonical `*.html` file under public/ through sendHtml() with the app CSP, so
+// in the DEFAULT configuration (MA_SLIDES_UPLOAD_DIR unset -> public/uploads/
+// slides) a mount placed after it would never see a slide (plan-check B-1).
+// The mount is TERMINAL for its prefix (the trailing handler answers 404), so
+// neither sendHtml nor the public express.static can serve a slide path — which
+// also stops legacy files left in public/uploads/slides from being served
+// unsandboxed when MA_SLIDES_UPLOAD_DIR points elsewhere. Routing here is
+// case-sensitive (`case sensitive routing`), so the mount answers only the exact
+// `/uploads/slides` spelling: any other spelling of the prefix (case variants,
+// percent-encoded, dot segments, duplicate slashes) is answered 404 by the guard
+// below and can never reach sendHtml or the public express.static — on a
+// case-insensitive filesystem `/UPLOADS/Slides/x.html` would otherwise resolve to
+// the same file with the app CSP.
+const slideUpload = require('./lib/slideUpload');
+const SLIDE_URL_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/i;
+const SLIDE_MOUNT_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/;
+const slideNotFound = (req, res) => res.status(404).type('text/plain').send('Not found');
+app.use((req, res, next) => {
+  if (SLIDE_MOUNT_PREFIX_RE.test(req.path)) return next();
+  let decoded;
+  try { decoded = decodeURIComponent(req.path); } catch (e) { return next(); }
+  if (SLIDE_URL_PREFIX_RE.test(req.path) || SLIDE_URL_PREFIX_RE.test(decoded) ||
+      SLIDE_URL_PREFIX_RE.test(path.posix.normalize(decoded))) return slideNotFound(req, res);
+  return next();
+});
+app.use('/uploads/slides', (req, res, next) => {
+  // Only the allowlisted slide extensions are ever served from this prefix.
+  let decoded;
+  try { decoded = decodeURIComponent(req.path); } catch (e) { return slideNotFound(req, res); }
+  if (!slideUpload.servableExt(path.extname(decoded))) return slideNotFound(req, res);
+  return next();
+});
+app.use('/uploads/slides', express.static(slideUpload.slidesDir(), {
+  dotfiles: 'deny',
+  index: false,
+  redirect: false,
+  setHeaders: (res, filePath) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-cache');
+    // Later report-only CSP phases must not need to know about slides.
+    res.removeHeader('Content-Security-Policy-Report-Only');
+    // PD-17: a PDF cannot render in a sandboxed document; it keeps the app CSP
+    // + nosniff + the magic-byte check done at upload.
+    if (slideUpload.sandboxedExt(path.extname(filePath))) {
+      res.setHeader('Content-Security-Policy', slideUpload.SLIDE_SANDBOX_CSP);
+    }
+  }
+}));
+app.use('/uploads/slides', slideNotFound);
+
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  // [security] SAFE-03 / B-1: slide paths belong to the dedicated mount above
+  // (defence in depth — sendHtml/rewriteHtml must never touch slide bytes).
+  if (SLIDE_URL_PREFIX_RE.test(req.path)) return next();
   const v = htmlRequestVerdict(req.path);
   if (!v.html) return next();
   if (!v.canonical) return res.status(404).type('text/plain').send('Not found');
@@ -3294,19 +3353,27 @@ app.delete('/api/slides/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// Upload an HTML slide file (raw HTML string) -> saved under public/uploads/slides/
-// and returned as a servable URL. Behind the same admin-write gate as other writes.
+// Upload a slide file -> saved under slideUpload.slidesDir() (MA_SLIDES_UPLOAD_DIR,
+// default public/uploads/slides) and returned as a servable URL. Behind the same
+// admin-write gate as other writes. SAFE-03 / D-13-04 (a): HTML is sent as utf8
+// text, PDF/PNG/JPEG/WebP as base64 (`encoding: 'base64'`); extension AND declared
+// type AND (binary) magic bytes must agree, > 10 MB or over the library quota is
+// refused with a fixed body, and a refusal writes nothing.
 app.post('/api/slides/upload', (req, res) => {
   const b = req.body || {};
-  // VAL-01: non-empty-content is now owned exclusively by validators/cms.js's SlideUploadSchema.
-  const content = typeof b.content === 'string' ? b.content : '';
-  const base = String(b.filename || 'slide.html').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '');
-  const safe = /\.html?$/i.test(base) ? base : base + '.html';
-  const dir = path.join(__dirname, 'public', 'uploads', 'slides');
+  // VAL-01: non-empty-content is owned by validators/cms.js's SlideUploadSchema.
+  const verdict = slideUpload.checkUpload({
+    filename: b.filename,
+    type: b.type,
+    encoding: b.encoding,
+    content: typeof b.content === 'string' ? b.content : '',
+  });
+  if (!verdict.ok) return res.status(verdict.status).json(verdict.body);
+  const dir = slideUpload.slidesDir();
   try {
     fs.mkdirSync(dir, { recursive: true });
-    const fname = Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '_' + safe;
-    fs.writeFileSync(path.join(dir, fname), content, 'utf8');
+    const fname = Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '_' + verdict.safeName;
+    fs.writeFileSync(path.join(dir, fname), verdict.buffer, { flag: 'wx' });
     res.json({ success: true, url: '/uploads/slides/' + fname });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save slide file.' });

@@ -1098,14 +1098,19 @@
     slides.forEach(s => {
       const row = document.createElement('div');
       row.className = 'cms-row';
+      // [security] SAFE-03 / T-13-24 (13-03): slide label/url/pages are admin-typed
+      // strings — the static markup carries no interpolation; the text is set via
+      // textContent so it can never be parsed as HTML.
       row.innerHTML = `<div class="cms-row-main">
-          <span class="cms-row-title">${esc(s.icon || '🖥️')} ${esc(s.label || s.url)}</span>
-          <span class="cms-row-sub">${esc(s.url || '')} · ${esc(s.pages || 'all')}</span></div>
+          <span class="cms-row-title"></span>
+          <span class="cms-row-sub"></span></div>
         <div style="display:flex;align-items:center;gap:0.4rem;">
           <button type="button" class="cms-mini" data-open>Preview</button>
           <button type="button" class="cms-mini" data-edit>Edit</button>
           <button type="button" class="cms-mini danger" data-del>✕</button>
         </div>`;
+      row.querySelector('.cms-row-title').textContent = (s.icon || '🖥️') + ' ' + (s.label || s.url || '');
+      row.querySelector('.cms-row-sub').textContent = (s.url || '') + ' · ' + (s.pages || 'all');
       row.querySelector('[data-open]').addEventListener('click', () => { if (window.openHtmlSlide) window.openHtmlSlide(s.url, s.label); else window.open(s.url, '_blank'); });
       row.querySelector('[data-edit]').addEventListener('click', () => editSlide(s));
       row.querySelector('[data-del]').addEventListener('click', () => {
@@ -1135,10 +1140,11 @@
         <label class="form-label">Slide source</label>
         <div style="display:flex;gap:1rem;margin:0.2rem 0 0.5rem;font-size:0.85rem;">
           <label style="display:flex;align-items:center;gap:0.3rem;"><input type="radio" name="sl-src" value="link" checked> Paste a link</label>
-          <label style="display:flex;align-items:center;gap:0.3rem;"><input type="radio" name="sl-src" value="upload"> Upload HTML file</label>
+          <label style="display:flex;align-items:center;gap:0.3rem;"><input type="radio" name="sl-src" value="upload"> Upload a file</label>
         </div>
         <input type="text" class="form-control" id="sl-url" value="${esc(s.url || '')}" placeholder="https://… or /slides/deck.html">
-        <input type="file" class="form-control" id="sl-file" accept=".html,.htm,text/html" style="display:none;margin-top:0.4rem;">
+        <input type="file" class="form-control" id="sl-file" accept=".html,.htm,.pdf,.png,.jpg,.jpeg,.webp" style="display:none;margin-top:0.4rem;">
+        <div class="form-hint" id="sl-file-hint" style="display:none;font-size:0.78rem;color:var(--text-dim);margin-top:0.3rem;">HTML, PDF, PNG, JPEG or WebP — up to 10 MB per file.</div>
       </div>`;
     const urlInput = form.querySelector('#sl-url');
     const fileInput = form.querySelector('#sl-file');
@@ -1146,6 +1152,8 @@
       const up = form.querySelector('input[name="sl-src"]:checked').value === 'upload';
       urlInput.style.display = up ? 'none' : '';
       fileInput.style.display = up ? '' : 'none';
+      const hint = form.querySelector('#sl-file-hint');
+      if (hint) hint.style.display = up ? '' : 'none';
     }));
     modal(isNew ? 'New slide' : 'Edit slide', form, async () => {
       const label = form.querySelector('#sl-label').value.trim();
@@ -1154,11 +1162,30 @@
       let url = urlInput.value.trim();
       if (mode === 'upload') {
         const file = fileInput.files && fileInput.files[0];
-        if (!file && !s.url) { toast('Choose an HTML file to upload.', true); throw new Error('file required'); }
+        if (!file && !s.url) { toast('Choose a slide file to upload.', true); throw new Error('file required'); }
         if (file) {
-          const content = await file.text();
-          const up = await fetch('/api/slides/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: file.name, content }) }).then(r => r.json());
-          if (up.error || !up.url) { toast(up.error || 'Upload failed.', true); throw new Error('upload failed'); }
+          // SAFE-03 / D-13-04 (a) / PD-16: HTML travels as utf8 text (the existing
+          // contract); PDF/PNG/JPEG/WebP travel as base64 with the browser's type.
+          // The server owns the allowlist, the 10 MB limit and the library quota.
+          let payload;
+          if (/\.html?$/i.test(file.name)) {
+            payload = { filename: file.name, content: await file.text() };
+          } else {
+            const dataUrl = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result || ''));
+              reader.onerror = () => reject(reader.error || new Error('read failed'));
+              reader.readAsDataURL(file);
+            });
+            payload = { filename: file.name, type: file.type || '', encoding: 'base64', content: dataUrl.slice(dataUrl.indexOf(',') + 1) };
+          }
+          const res = await fetch('/api/slides/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          const up = await res.json().catch(() => ({}));
+          if (!res.ok || !up || !up.url) {
+            // PD-33: the server's fixed refusal text, shown as text only (toast uses textContent).
+            toast((up && typeof up.error === 'string' && up.error) || 'Upload refused.', true);
+            throw new Error('upload refused');
+          }
           url = up.url;
         } else { url = s.url; }
       }
