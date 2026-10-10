@@ -97,18 +97,29 @@
       state.templates = Array.isArray(res[0]) ? res[0] : [];
       state.status = res[1] || {};
       state.pulses = Array.isArray(res[2]) ? res[2] : [];
-      return Promise.all(state.templates.map(function (tpl) {
-        return fetch('/api/assessment-instances?templateId=' + encodeURIComponent(tpl.id))
-          .then(function (r) { return r.json(); })
-          .catch(function () { return []; })
-          .then(function (list) {
+      // [security] WR-C03 (Phase 11 review): the instance list is admin-only in a
+      // real deal (lib/readPolicy.js). A role the server-computed access map
+      // refuses `assessmentInstances` (hrbp, pmo) is not sent there at all — it
+      // gets the status-rollup fallback below without three refused requests.
+      // No map (demo-open, demo store) => fetched exactly as before.
+      var instancesReady = typeof window.maCanReady === 'function'
+        ? window.maCanReady('assessmentInstances') : Promise.resolve(true);
+      return instancesReady.then(function (canListInstances) {
+        return Promise.all(state.templates.map(function (tpl) {
+          var listed = canListInstances
+            ? fetch('/api/assessment-instances?templateId=' + encodeURIComponent(tpl.id))
+              .then(function (r) { return r.json(); })
+              .catch(function () { return []; })
+            : Promise.resolve([]);
+          return listed.then(function (list) {
             if (!Array.isArray(list)) list = []; // e.g. 401 when ADMIN_TOKEN gates the record list
             list.sort(function (a, b) {
               var d = (a.demoDay || 0) - (b.demoDay || 0);
               return d !== 0 ? d : String(a.timestamp).localeCompare(String(b.timestamp));
             });
-            // Record list unavailable (locked-down deployment): fall back to the
-            // open status rollup so the scorecard still renders (no trend).
+            // Record list unavailable (locked-down deployment, or a role the
+            // access map refuses it): fall back to the open status rollup so
+            // the scorecard still renders (no trend).
             if (!list.length && state.status && state.status.bySubject) {
               var entry = state.status.bySubject[tpl.subject];
               if (entry && entry.latestInstance && entry.latestInstance.templateId === tpl.id) {
@@ -117,7 +128,8 @@
             }
             state.instancesByTpl[tpl.id] = list;
           });
-      }));
+        }));
+      });
     });
   }
 

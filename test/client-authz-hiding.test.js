@@ -1419,6 +1419,45 @@ test('WR-C02 (vm): the helpdesk card is hidden for a role the `helpdesk` capabil
   }
 });
 
+// ------------------------------------- WR-C03: assessments.html instance list
+test('WR-C03 (server): `assessmentInstances` mirrors the admin-only read rule; hrbp is refused the route itself', async () => {
+  const fx = createDealFixture({ controlConn, runtimeConn, dealId: 'deal_ahinst', members: MEMBERS });
+  await withServer(async (base) => {
+    for (const m of MEMBERS) {
+      const { access } = (await me(base, fx.cookie(m.username))).json;
+      assert.strictEqual(access.assessmentInstances, m.role === 'admin', `${m.role}.assessmentInstances`);
+    }
+    const res = await fetch(`${base}/api/assessment-instances?templateId=x`, { headers: { cookie: fx.cookie('ah-hrbp') } });
+    assert.strictEqual(res.status, 403, 'the key agrees with the gate');
+  });
+});
+
+test('WR-C03 (vm): assessments.js does not request the instance list for a role refused it, and still renders from the status rollup', async () => {
+  const SRC = readPublic('js', 'assessments.js');
+  const run = async (meBody) => {
+    const win = await bootWindow(meBody, '/assessments.html');
+    const fetchImpl = recordingFetch({
+      '/api/assessment-templates': [{ id: 't1', subject: 'company' }, { id: 't2', subject: 'leader' }],
+      '/api/assessment-status': { bySubject: { company: { latestInstance: { templateId: 't1', overallScore: 3 } } } },
+      '/api/pulses': [],
+      '/api/assessment-instances': [{ templateId: 't1', overallScore: 4, demoDay: 1 }],
+    });
+    const state = { templates: [], status: {}, pulses: [], instancesByTpl: {} };
+    const ex = loadBlocks(SRC, ['function loadAll('], { window: win, fetch: fetchImpl, state }, ['loadAll']);
+    await ex.loadAll();
+    return { urls: urls(fetchImpl), state };
+  };
+  const ME_HRBP_NOINST = Object.assign({}, ME_HRBP, { access: Object.assign({}, ME_HRBP.access, { assessmentInstances: false }) });
+  const lead = await run(ME_HRBP_NOINST);
+  assert.ok(!lead.urls.some((u) => u.startsWith('/api/assessment-instances')), 'no refused request');
+  assert.strictEqual(JSON.stringify(lead.state.instancesByTpl.t1), JSON.stringify([{ templateId: 't1', overallScore: 3 }]), 'status-rollup fallback');
+  for (const meBody of [Object.assign({}, ME_ADMIN, { access: Object.assign({}, ME_ADMIN.access, { assessmentInstances: true }) }), ME_OPEN]) {
+    const full = await run(meBody);
+    assert.strictEqual(full.urls.filter((u) => u.startsWith('/api/assessment-instances?templateId=')).length, 2);
+    assert.strictEqual(full.state.instancesByTpl.t1[0].overallScore, 4);
+  }
+});
+
 test('WR-C02 (source): the submit handler is wired to submitHelpdeskTicket and the old .finally(success) is gone', () => {
   assert.ok(EMPLOYEE_SRC.includes("hrForm.addEventListener('submit', submitHelpdeskTicket);"));
   const body = extractBlock(EMPLOYEE_SRC, 'function submitHelpdeskTicket(');
