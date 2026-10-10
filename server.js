@@ -5347,6 +5347,29 @@ function raidLane(db) {
   db.raidEntries = db.raidEntries || [];
   return db.raidEntries;
 }
+
+// D-12-02 (Phase 12, plan 12-05): the proportional read path for the RAID lane.
+// Required here (beside the handlers that use them) rather than in the
+// top-of-file import block so the RAID region stays one self-contained edit.
+const { readCollections, readSingleton, readProjection } = require('./db/store');
+const listQuery = require('./lib/listQuery');
+
+// The lane NAME raidLane() resolves, from the settings singleton alone: the
+// list read needs it before (and instead of) loading any collection. Kept
+// BESIDE raidLane() rather than inside it: test/optimistic-locking-contract
+// source-scans raidLane's body for exactly its two db.<collection> keys, and
+// test/read-collections asserts the two always agree for demoMode
+// false / true / absent.
+function raidLaneName(settings) {
+  return settings && settings.demoMode === false ? 'customRaidEntries' : 'raidEntries';
+}
+
+// The collections a RAID write handler needs: settings (lane choice), both
+// lanes (raidLane() assigns the one it does not use), and ddFindings (the
+// provenance rule resolves `dd-finding:<id>` to that finding's area). A
+// handler that touches any other collection throws CollectionNotLoadedError
+// naming it: add it here rather than going back to readDb().
+const RAID_READ_SET = ['settings', 'raidEntries', 'customRaidEntries', 'ddFindings'];
 const RAID_TYPES = ['risk', 'issue', 'decision', 'dependency'];
 // D-26: four levels — a `critical` DD finding (db/accessPolicy.js's
 // DD_FINDING_SEVERITIES, above) converts into a RAID entry via
@@ -5359,6 +5382,14 @@ const RAID_TYPES = ['risk', 'issue', 'decision', 'dependency'];
 // superset of the previous three and rejects nothing accepted today.
 const RAID_LEVELS = ['low', 'medium', 'high', 'critical'];
 const RAID_STATUSES = ['open', 'mitigating', 'closed'];
+
+// What GET /api/raid accepts (PD-12). `phase` is not a RAID concept, so it is
+// not listed and is ignored like any other unknown key.
+const RAID_LIST_SPEC = {
+  filters: { status: 'status', owner: 'owner', workstream: 'workstreamId' },
+  enums: { status: RAID_STATUSES },
+  search: ['title', 'notes'],
+};
 
 // T-06-42/D-17 (06-06): closes the Phase-4 accepted risk (T-04-21, proven
 // live once — converting a Legal DD finding republished its title and
@@ -5402,19 +5433,50 @@ const RAID_STATUSES = ['open', 'mitigating', 'closed'];
 // route creates from today onward always carries the stamp, so the
 // fallback branch is never reached for a fresh conversion.
 function resolveRaidEntryClearanceArea(entry, db) {
-  if (entry && entry.clearanceArea) return entry.clearanceArea;
-  const source = entry && entry.source;
+  return clearanceAreaFromProvenance(
+    entry && entry.clearanceArea,
+    entry && entry.source,
+    (findingId) => {
+      const finding = ddFindingsLane(db).find((f) => f.id === findingId);
+      return finding ? finding.area : null;
+    }
+  );
+}
+
+// D-12-02 (PD-10): the provenance rule itself, factored out so the in-memory
+// path (resolveRaidEntryClearanceArea, over a fully-read db) and the light list
+// path (GET /api/raid, over column projections) apply LITERALLY the same
+// rule. Stamped `clearanceArea` first (WR-03), then `dd-finding:<id>` -> that
+// finding's area via `findingAreaOf(id)` (null when the finding no longer
+// exists, T-06-45), then `org-flightrisk:` -> 'hr', else null = unrestricted.
+function clearanceAreaFromProvenance(clearanceArea, source, findingAreaOf) {
+  if (clearanceArea) return clearanceArea;
   if (!source) return null;
   const ddMatch = /^dd-finding:(.+)$/.exec(source);
-  if (ddMatch) {
-    const finding = ddFindingsLane(db).find((f) => f.id === ddMatch[1]);
-    return finding ? finding.area : null;
-  }
+  if (ddMatch) return findingAreaOf(ddMatch[1]);
   // Retention clearance is always the fixed `hr` area regardless of which
   // workstream a converted flight-risk entry was filed under (D-15's
   // conversion route, above, never sets a workstream-derived area here).
-  if (source.indexOf('org-flightrisk:') === 0) return 'hr';
+  if (typeof source === 'string' && source.indexOf('org-flightrisk:') === 0) return 'hr';
   return null;
+}
+
+// WR-04's "one filtered read path", made literal: the single per-row
+// visibility predicate behind reportRaidRows() (export, pack) AND the paged /
+// filtered GET /api/raid. `entryLike` is anything carrying `clearanceArea` and
+// `source`: a full entry or a two-field projection.
+function raidRowVisible(entryLike, findingAreaOf, deal, portalUser) {
+  return areaVisibleTo(
+    clearanceAreaFromProvenance(entryLike.clearanceArea, entryLike.source, findingAreaOf),
+    deal,
+    portalUser
+  );
+}
+
+// The shared tail of that rule: a null area (unrestricted provenance) is visible
+// to every deal member; any other area needs the caller's own grant for it.
+function areaVisibleTo(area, deal, portalUser) {
+  return area === null || accessPolicy.hasAreaGrant(deal, portalUser, area);
 }
 
 // [security] T-ERM-01/T-ERM-02 (260810-erm, milestone-close Fable 5 review):
@@ -5473,10 +5535,9 @@ function reportTaskRows(db, deal, portalUser) {
 // of the three callers.]
 function reportRaidRows(db, deal, portalUser) {
   ddFindingsLane(db);
-  return raidLane(db).filter((entry) => {
-    const area = resolveRaidEntryClearanceArea(entry, db);
-    return area === null || accessPolicy.hasAreaGrant(deal, portalUser, area);
-  });
+  // resolveRaidEntryClearanceArea -> clearanceAreaFromProvenance, then the same
+  // areaVisibleTo() tail raidRowVisible() ends in: one rule, two read shapes.
+  return raidLane(db).filter((entry) => areaVisibleTo(resolveRaidEntryClearanceArea(entry, db), deal, portalUser));
 }
 
 // [security] D-11-03 / R1-02 / T-11-20..22 (Phase 11): the by-id WRITE-path
@@ -5545,11 +5606,56 @@ function hrClearanceFilter(req, deal) {
   return (rec) => (rec && accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr') ? rec : null);
 }
 
+// D-12-02 / PD-10 / PD-12: the proportional list read. Reads ONE lane through a
+// light projection (id, raw JSON, clearanceArea, source + any filter field),
+// never all 38 collections. It no longer builds the whole-db model that
+// reportRaidRows() (CSV export, PDF pack) filters; instead it applies the SAME
+// provenance rule through raidRowVisible() (WR-04: one rule, not two
+// hand-synchronised copies; test/raid-list-query proves the two paths agree
+// row for row), and only then filters, counts and pages. No list
+// parameter -> the legacy bare array, byte-identical to the previous output;
+// `?limit=` -> { items, total } with `total` counting only entries the caller
+// may see (T-12-40).
 app.get('/api/raid', (req, res) => {
-  const db = readDb();
+  let parsed;
+  try {
+    parsed = listQuery.parseListQuery(req.query, RAID_LIST_SPEC);
+  } catch (err) {
+    if (err instanceof listQuery.ListQueryError) return res.status(400).json({ error: 'Invalid list query.' });
+    throw err;
+  }
   const deal = controlStore.getDeal(req.dealContext.dealId);
-  const visible = reportRaidRows(db, deal, req.portalUser);
-  res.json(visible);
+  // Visibility below is the reportRaidRows() rule (raidRowVisible), evaluated
+  // per row over projections instead of over a fully-read db object.
+  const lane = raidLaneName(readSingleton('settings'));
+  const rows = readProjection(lane, listQuery.projectionFields(RAID_LIST_SPEC, parsed, ['clearanceArea', 'source']));
+
+  // Built lazily, only when an unstamped `dd-finding:` provenance is present.
+  // Exact for the odd record: a finding whose area is absent resolves to
+  // undefined (restricted unless granted), a missing finding to null.
+  let findingAreas = null;
+  const findingAreaOf = (findingId) => {
+    if (!findingAreas) {
+      findingAreas = new Map();
+      for (const r of readProjection('ddFindings', ['id', 'area'])) {
+        if (findingAreas.has(r.f.id)) continue;
+        findingAreas.set(r.f.id, r.f.area === null ? JSON.parse(r.raw).area : r.f.area);
+      }
+    }
+    return findingAreas.has(findingId) ? findingAreas.get(findingId) : null;
+  };
+
+  const visible = rows.filter((row) => {
+    let { clearanceArea, source } = row.f;
+    // A non-string stamp/source cannot be judged from the projection alone.
+    if ((clearanceArea && typeof clearanceArea !== 'string') || (source && typeof source !== 'string')) {
+      const full = JSON.parse(row.raw);
+      clearanceArea = full.clearanceArea;
+      source = full.source;
+    }
+    return raidRowVisible({ clearanceArea, source }, findingAreaOf, deal, req.portalUser);
+  });
+  listQuery.sendList(res, listQuery.applyListFilters(visible, parsed, RAID_LIST_SPEC), parsed);
 });
 
 app.post('/api/raid', (req, res) => {
