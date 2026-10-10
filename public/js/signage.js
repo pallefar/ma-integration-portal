@@ -115,10 +115,22 @@ document.addEventListener('DOMContentLoaded', () => {
         timelineBarFill.style.width = `${percent}%`;
       }
 
-      // Fetch employee roster
-      const employeesRes = await fetch('/api/employees');
-      const employees = await employeesRes.json();
-      
+      // [security] IN-C02 (Phase 11 review): the kiosk loads no transitions.js,
+      // so it asks the public /api/auth/me probe itself and does not request the
+      // staff-only roster when the server's access map refuses `roster` (an
+      // employee session in a real deal). A refused or malformed response is
+      // never iterated — the board shows a neutral state instead of throwing.
+      // No map (demo-open, a kiosk with no session) => loads exactly as before.
+      const employees = await loadSignageRoster();
+      if (employees === null) {
+        if (completionRateEl) completionRateEl.textContent = '—';
+        if (teamXpEl) teamXpEl.textContent = '—';
+        renderLeaderboardUnavailable();
+        renderCalendar(currentCalendarDay);
+        renderEvents(currentCalendarDay);
+        return;
+      }
+
       // Filter out non-NextGen employees or calculate global site aggregates
       const siteEmployees = employees.filter(e => !e.isLeader || e.id !== 'emp_3'); // Emma Watson is leader, keep others
       
@@ -155,6 +167,34 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       console.error("Error loading signage board metrics:", error);
     }
+  }
+
+  // IN-C02: the roster, or null when it is not available to this session
+  // (refused by the access map, a refused/failed request, or a non-array body).
+  async function loadSignageRoster() {
+    try {
+      const me = await (await fetch('/api/auth/me')).json();
+      if (me && me.access && me.access.roster === false) return null;
+    } catch (e) { /* probe is best-effort: no map => behave as before */ }
+    try {
+      const res = await fetch('/api/employees');
+      if (!res.ok) return null;
+      const body = await res.json();
+      return Array.isArray(body) ? body : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // IN-C02: neutral leaderboard line (textContent only, no server data).
+  function renderLeaderboardUnavailable() {
+    if (!leaderboardContainer) return;
+    leaderboardContainer.innerHTML = '';
+    const p = document.createElement('p');
+    p.className = 'signage-leaderboard-unavailable';
+    p.style.cssText = 'text-align:center;opacity:0.7;font-style:italic;';
+    p.textContent = 'Leaderboard not available.';
+    leaderboardContainer.appendChild(p);
   }
 
   // 3. Render Calendar Grid dynamically

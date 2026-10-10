@@ -1500,6 +1500,69 @@ test('IN-C01 (source): the Day pill is gated right where it is mounted, and a da
   assert.ok(handler.includes("if (!window.maCan('timeTravel')) return;"));
 });
 
+// ---------------------------------------------------- IN-C02: signage kiosk
+function signageHarness(meBody, employeesStatus, employeesBody) {
+  const calls = [];
+  const fetchImpl = (url) => {
+    calls.push(String(url));
+    if (url === '/api/settings') return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ timeTravelDay: 8 }) });
+    if (url === '/api/auth/me') return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(meBody) });
+    if (url === '/api/employees') {
+      return Promise.resolve({ ok: employeesStatus === 200, status: employeesStatus, json: () => Promise.resolve(employeesBody) });
+    }
+    return Promise.reject(new Error('unexpected ' + url));
+  };
+  const leaderboard = fakeEl();
+  const completion = fakeEl();
+  const xp = fakeEl();
+  const rendered = { leaderboard: null, calendar: 0, events: 0, errors: [] };
+  const ex = loadBlocks(readPublic('js', 'signage.js'), [
+    'async function loadSettingsAndStats(', 'async function loadSignageRoster(', 'function renderLeaderboardUnavailable(',
+  ], {
+    fetch: fetchImpl,
+    console: { log() {}, warn() {}, error: (...a) => rendered.errors.push(a.join(' ')) },
+    document: { createElement: () => fakeEl() },
+    leaderboardContainer: leaderboard,
+    completionRateEl: completion,
+    teamXpEl: xp,
+    timelineDayText: null,
+    timelineBarFill: null,
+    renderLeaderboard: (list) => { rendered.leaderboard = list; },
+    renderCalendar: () => { rendered.calendar++; },
+    renderEvents: () => { rendered.events++; },
+  }, ['loadSettingsAndStats']);
+  return { calls, leaderboard, completion, xp, rendered, run: ex.loadSettingsAndStats };
+}
+
+test('IN-C02 (vm): signage does not request the roster when the map refuses it, and shows a neutral board', async () => {
+  const h = signageHarness({ authEnabled: true, user: { role: 'employee' }, access: { roster: false } }, 403, { error: 'x' });
+  await h.run();
+  assert.deepStrictEqual(h.calls, ['/api/settings', '/api/auth/me'], 'no GET /api/employees');
+  assert.strictEqual(h.completion.textContent, '—');
+  assert.strictEqual(h.leaderboard.children[0].textContent, 'Leaderboard not available.');
+  assert.strictEqual(h.rendered.calendar, 1, 'the calendar still renders');
+  assert.deepStrictEqual(h.rendered.errors, [], 'nothing throws');
+});
+
+test('IN-C02 (vm): a refused or non-array roster body is never iterated (no "employees.filter is not a function")', async () => {
+  const h = signageHarness({ authEnabled: true, user: null }, 401, { error: 'Login required.', authRequired: true });
+  await h.run();
+  assert.deepStrictEqual(h.rendered.errors, []);
+  assert.strictEqual(h.rendered.leaderboard, null);
+  assert.strictEqual(h.completion.textContent, '—');
+  const junk = signageHarness({ authEnabled: false, user: null }, 200, { not: 'an array' });
+  await junk.run();
+  assert.deepStrictEqual(junk.rendered.errors, []);
+});
+
+test('IN-C02 (vm): demo-open loads and renders the kiosk roster exactly as before', async () => {
+  const h = signageHarness({ authEnabled: false, user: null }, 200, [{ points: 10, completedLessons: ['a'] }, { points: 20, completedLessons: [] }]);
+  await h.run();
+  assert.deepStrictEqual(h.calls, ['/api/settings', '/api/auth/me', '/api/employees']);
+  assert.strictEqual(h.rendered.leaderboard.length, 2);
+  assert.strictEqual(String(h.xp.textContent), '30');
+});
+
 test('WR-C02 (source): the submit handler is wired to submitHelpdeskTicket and the old .finally(success) is gone', () => {
   assert.ok(EMPLOYEE_SRC.includes("hrForm.addEventListener('submit', submitHelpdeskTicket);"));
   const body = extractBlock(EMPLOYEE_SRC, 'function submitHelpdeskTicket(');
