@@ -441,3 +441,26 @@ test('partitions (j): chmodPrivateFile is tightening-only (0400 stays 0400, 0644
   assert.strictEqual(fs.statSync(sealed).mode & 0o777, 0o400, 'a sealed 0400 file is never re-opened writable');
   assert.strictEqual(fs.statSync(loose).mode & 0o777, 0o600);
 });
+
+test('partitions (k): WR-01 — audit.db and partitions commit with synchronous=FULL (+fullfsync); deal files keep NORMAL', () => {
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'sync-'));
+  const open = (name, schema) => dbFiles.openDbFile(path.join(dir, name), schema);
+  const audit = open('a-audit.db', dbFiles.AUDIT_SCHEMA_PATH);
+  const part = open('a-part.db', dbFiles.AUDIT_PARTITION_SCHEMA_PATH);
+  const deal = open('a-deal.db', dbFiles.DEAL_SCHEMA_PATH);
+  try {
+    assert.strictEqual(audit.pragma('synchronous', { simple: true }), 2, 'audit.db: FULL');
+    assert.strictEqual(part.pragma('synchronous', { simple: true }), 2, 'partition: FULL');
+    assert.strictEqual(audit.pragma('fullfsync', { simple: true }), 1);
+    assert.strictEqual(part.pragma('fullfsync', { simple: true }), 1);
+    assert.strictEqual(deal.pragma('synchronous', { simple: true }), 1, 'deal file: NORMAL (unchanged)');
+    // The live partition connection the hook appends through carries it too.
+    const dealId = 'deal_sync' + crypto.randomBytes(3).toString('hex');
+    assert.strictEqual(auditHook.getAuditConnection().pragma('synchronous', { simple: true }), 2);
+    const live = auditHook.getPartitionConnection(dealId);
+    assert.strictEqual(live.pragma('synchronous', { simple: true }), 2);
+    auditHook.closePartitionConnection(dealId);
+  } finally {
+    for (const c of [audit, part, deal]) { try { c.close(); } catch (e) { /* ignore */ } }
+  }
+});

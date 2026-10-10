@@ -12,6 +12,7 @@
 //
 // openDbFile() reproduces db/store.js's initDb() pragma contract exactly
 // (journal_mode WAL, synchronous NORMAL, foreign_keys ON, busy_timeout 1000)
+// — except the audit families, which use synchronous FULL (12-REVIEW WR-01) —
 // so every new file is opened under the same concurrency-safety guarantees
 // Phase 1 already established for data/ma-portal.db — this is one storage-
 // layer contract, not two.
@@ -527,7 +528,21 @@ function openDbFile(dbFilePath, schemaPath) {
   const conn = new Database(dbFilePath);
   try {
     conn.pragma('journal_mode = WAL');
-    conn.pragma('synchronous = NORMAL');
+    // [security] WR-01 (12-REVIEW): the audit families (audit.db and every
+    // per-deal partition) fsync on EVERY commit (`synchronous = FULL`). In WAL
+    // mode NORMAL fsyncs only at checkpoint, so after an OS crash / power loss
+    // the kernel could persist the deal file's later commit while losing the
+    // partition append made just before it — a committed MNPI row with no
+    // audit row. With FULL the audit commit is durable before the deal's
+    // COMMIT begins (the append is the last statement inside the deal's
+    // BEGIN IMMEDIATE, on its own connection), so the audit can never lag the
+    // deal write. Deal/control/runtime files keep NORMAL (measured:
+    // scripts/perf/write-latency.js stays inside the 40 ms median budget).
+    // On macOS a plain fsync() does not flush the drive's write cache; SQLite
+    // only issues F_FULLFSYNC with `fullfsync = ON` (a no-op elsewhere).
+    const auditFamily = family === 'audit' || family === 'audit-partition';
+    conn.pragma(auditFamily ? 'synchronous = FULL' : 'synchronous = NORMAL');
+    if (auditFamily) conn.pragma('fullfsync = ON');
     conn.pragma('foreign_keys = ON');
     conn.pragma('busy_timeout = 1000'); // D-03/D-05/CONC-01 (Phase 8): see file header
 

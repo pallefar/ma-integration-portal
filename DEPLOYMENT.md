@@ -463,6 +463,15 @@ All three live inside the data directory (`data/real` or `MA_DATA_DIR`), files
 The Admin console **Audit** tab and `GET /api/admin/audit` read all of them
 together; each row is tagged with its partition.
 
+**Durability.** `audit.db` and every partition are flushed to disk on every
+commit (SQLite `synchronous = FULL`, plus `fullfsync` on macOS), and a deal
+write's audit row is committed before the deal write itself — so after a power
+loss or OS crash an audit row can be present for a write that did not survive,
+but a surviving deal write never lacks its audit row. Measured cost on the dev
+host (`scripts/perf/write-latency.js`, 5,000 RAID / 1,000 tasks): median
+`POST /api/raid` 21.7 ms, `POST /api/integration-tasks` 9.2 ms against the
+40 ms budget.
+
 ### 2. Tamper evidence
 
 Every row of `audit.db` and of every partition is linked to the one before it by a
