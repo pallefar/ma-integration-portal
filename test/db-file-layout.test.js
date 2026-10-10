@@ -41,7 +41,11 @@ test('db-file-layout: all four db kinds open with the Phase-1 pragma contract', 
       const conn = dbFiles.openDbFile(dbPath, schemaPath);
       try {
         assert.strictEqual(conn.pragma('journal_mode', { simple: true }), 'wal', `${label}: journal_mode must be WAL`);
-        assert.strictEqual(conn.pragma('synchronous', { simple: true }), 1, `${label}: synchronous must be NORMAL (1)`);
+        // 12-REVIEW WR-01: the audit family commits with synchronous=FULL (2) so
+        // an audit row is durable before its deal write; every other kind
+        // keeps the Phase-1 NORMAL (1).
+        const wantSync = label === 'audit' ? 2 : 1;
+        assert.strictEqual(conn.pragma('synchronous', { simple: true }), wantSync, `${label}: synchronous must be ${wantSync === 2 ? 'FULL (2)' : 'NORMAL (1)'}`);
         assert.strictEqual(conn.pragma('foreign_keys', { simple: true }), 1, `${label}: foreign_keys must be ON (1)`);
         // D-03/D-05/CONC-01 (Phase 8): busy_timeout is 1000ms as of Phase 8
         // (was 5000ms pre-Phase-8) — see db/dbFiles.js's file header.
