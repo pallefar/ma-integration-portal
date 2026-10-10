@@ -1,0 +1,97 @@
+HOST: load1=9.77 cpus=11 at 2026-10-10T19:40:21Z (threshold 10)
+sentinels created
+=== isolation snapshot BEFORE (sha256  bytes  file) ===
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/audit.db
+absent  data/audit.db-wal
+absent  data/audit.db-shm
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/runtime.db
+absent  data/runtime.db-wal
+absent  data/runtime.db-shm
+63d552c4c4d8e301752d5f47b7f82b4fd391ee7d32534e7ea0b808cdcba805a8  1310720 B  data/demo.db
+e83f049e9f018d84e363031a9b1c29613e0ad682d6585b6cee13f783c4854a72  36864 B  data/control.db
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  0 B  data/control.db-wal
+controlmode(data/control.db) before: 600
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 1/20: pass=1445 fail=0 (19882 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 2/20: pass=1445 fail=0 (19974 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 3/20: pass=1445 fail=0 (20586 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 4/20: pass=1445 fail=0 (21613 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 5/20: pass=1445 fail=0 (20733 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 6/20: pass=1445 fail=0 (21291 ms)
+# tests 1445
+# suites 0
+# pass 1445
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+run 7/20: pass=1445 fail=0 (44099 ms)
+not ok 4 - accounts-writable parity (B): with MA_CONTROL_DB_PATH on a temp copy accountsWritable is true and the same POST succeeds
+not ok 38 - with no control.db at all every deal row goes to the sealed legacy partition
+# tests 1445
+# suites 0
+# pass 1443
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+run 8/20: pass=1443 fail=2 (920630 ms)
+test-gate: run 8 not green: exit code 1, fail=2
+GATE FAIL at run 8
+controlmode(data/control.db) after: 600  [committed file mode is 644 in git; a suite open tightens it - bytes are what the guard compares]
+=== isolation snapshot AFTER ===
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/audit.db
+absent  data/audit.db-wal
+absent  data/audit.db-shm
+9f2d994f1b3520189c7caed7fc59579eebc017aa02e7b75bb091d73b5a0c1a0c  8192 B  data/runtime.db
+absent  data/runtime.db-wal
+absent  data/runtime.db-shm
+63d552c4c4d8e301752d5f47b7f82b4fd391ee7d32534e7ea0b808cdcba805a8  1310720 B  data/demo.db
+e83f049e9f018d84e363031a9b1c29613e0ad682d6585b6cee13f783c4854a72  36864 B  data/control.db
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  0 B  data/control.db-wal
+ISOLATION: data/audit.db* and data/runtime.db* (and committed demo/control) byte-identical before/after: PASS
+sentinels removed
+gate exit code: 1
+HOST: load at end: 87.11 37.44 23.85 at 2026-10-10T19:58:30Z
+EXIT=1
