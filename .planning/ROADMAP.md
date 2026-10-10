@@ -369,7 +369,7 @@ Plans:
 
 ### Phase 23: Production Certification
 
-**Goal**: v3.0 is proven production-ready by independent, adversarial verification, and the release is staged — not pushed — for the user's explicit go.
+**Goal**: v3.0 is proven production-ready by independent, adversarial verification; once it is fully up and running, all changes are pushed and a release that opens on Windows and macOS is created (user's standing authorization, 2026-10-10 — no further confirmation).
 **Depends on**: All prior phases
 **Requirements**: CERT-01, CERT-02, CERT-03, CERT-04, CERT-05, CERT-06
 **Success Criteria** (what must be TRUE):
@@ -379,7 +379,7 @@ Plans:
   3. The demo showcase passes its regression walk under `DEMO_OPEN=1` and boots from the turnkey zip (macOS, plus Linux via Docker).
   4. An Integration-Leader acceptance walk of a full deal completes in-app with none of the review's spreadsheet-fallback gaps remaining.
   5. The security-decisions record ships (ASVS L2 mapping, single-factor justification, timeouts, retention, RPO/RTO, at-rest).
-  6. v3.0.0 zips are built and checksummed; the push and GitHub release are presented for the user's explicit confirmation.
+  6. v3.0.0 zips are built and checksummed and boot on macOS (the built artifact) and Windows (a real Windows environment where available, otherwise static verification with the gap stated in the release notes); once criteria 1–5 are green, `main` + tag `v3.0.0` are pushed and the GitHub release is created under the user's standing authorization of 2026-10-10.
 
 **Plans**: TBD
 
