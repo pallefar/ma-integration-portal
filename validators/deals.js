@@ -43,6 +43,10 @@ const DEAL_ID_PATTERN = /^deal_[a-z0-9]+$/i;
 const DEAL_TYPES = ['acquisition', 'jv', 'merger'];
 const DATE_MAX = 10; // 'YYYY-MM-DD'
 const CURRENCY_MAX = 10;
+// IN-05 (Phase 11 review): ISO calendar date or empty — an independent copy of
+// validators/wizard.js's ISO_DATE_OR_EMPTY (the two basics schemas stay in
+// exact sync; test/deal-wizard.test.js is the anti-drift check).
+const ISO_DATE_OR_EMPTY = /^(\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))?$/;
 
 /** POST /api/deals — D-02 (admin/hrbp only, enforced by ROLE_WRITE_POLICY,
  * not here) create-deal body. `members` defaults to an empty array — the
@@ -55,7 +59,7 @@ const CreateDealSchema = z.object({
   dealType: z.enum(DEAL_TYPES).optional(),
   signingDate: z.string().trim().max(DATE_MAX).optional(),
   expectedClose: z.string().trim().max(DATE_MAX).optional(),
-  day1Date: z.string().trim().max(DATE_MAX).optional(),
+  day1Date: z.string().trim().max(DATE_MAX).regex(ISO_DATE_OR_EMPTY, 'Use the YYYY-MM-DD date format.').optional(),
   dealSizeM: z.union([z.number(), z.string().max(20)]).optional(),
   currency: z.string().trim().max(CURRENCY_MAX).optional(),
 });
