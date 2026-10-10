@@ -999,7 +999,12 @@ app.post('/api/auth/login', async (req, res, next) => {
     if (!verdict.ok) {
       noteBackoff(accountThrottle.fail(accountKey), accountKey, req);
       noteBackoff(sourceThrottle.fail(sourceKey), sourceKey, req);
-      return setTimeout(() => res.status(401).json({ error: 'Invalid username or password.' }), 400);
+      // IN-02 (Phase 10 review): no artificial delay here. The former fixed
+      // 400 ms was additive (success had none), so it implied a timing
+      // guarantee it never gave; the real equaliser is the one scrypt
+      // derivation every attempt pays (dummyVerify above, T-10-08), and the
+      // rate limit is the account/source throttle.
+      return res.status(401).json({ error: 'Invalid username or password.' });
     }
     // A correct password ends the account's backoff episode; the source window
     // keeps sliding on its own.

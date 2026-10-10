@@ -226,6 +226,19 @@ test('HTTP: a successful sign-in clears that account\'s failure episode', async 
   for (let i = 0; i < 3; i++) assert.strictEqual((await login('bob', 'nope-again-' + i)).status, 401);
 });
 
+// IN-02 (Phase 10 review): the failure path carries no fixed artificial delay —
+// the equaliser is the one scrypt derivation per attempt (dummyVerify), not a
+// timer that only one branch paid.
+test('IN-02: the login failure path answers 401 directly (no fixed setTimeout delay)', () => {
+  const src = fs.readFileSync(path.join(REPO, 'server.js'), 'utf8');
+  const start = src.indexOf("app.post('/api/auth/login'");
+  const handler = src.slice(start, src.indexOf('\n});', start));
+  assert.ok(start > 0 && handler.length > 0);
+  assert.doesNotMatch(handler, /setTimeout\(/, 'no timer-based delay in the login handler');
+  assert.match(handler, /return res\.status\(401\)\.json\(\{ error: 'Invalid username or password\.' \}\);/);
+  assert.match(handler, /passwords\.dummyVerify\(/, 'the scrypt equaliser stays');
+});
+
 test('HTTP (WR-01): an enabled admin name and an unknown name get identical statuses, bodies AND Retry-After', async () => {
   const run = async (name) => {
     const out = [];
