@@ -210,6 +210,9 @@
       activeConflictSession = null;
     }
     session.resolve(response);
+    // The shown session just ended: bring up the next queued conflict (a
+    // function declaration below — hoisted — so ordering in this IIFE is free).
+    openNextQueuedConflict();
   }
 
   // Minute/hour/day granularity relative-time formatter for the attribution
@@ -556,15 +559,35 @@
   // Called from the 409 branch of attemptFetch for a marker 409 that is NOT a
   // dialog reapply. Returns the promise handed back to the caller: it stays
   // pending until the session settles.
+  //
+  // Ordering: a conflict arriving while another dialog is shown is queued
+  // FIFO — never rendered over the shown one and never mislabelled "the record
+  // changed again" — and opens as a FRESH render (no banner) when the shown
+  // one settles. T-09-46 (DoS bound): the queue holds at most
+  // CONFLICT_QUEUE_CAP sessions; a conflict beyond the cap resolves
+  // immediately with its OWN 409 and opens nothing, so a flood of conflicting
+  // writes can never pin unbounded promises and DOM.
+  const CONFLICT_QUEUE_CAP = 20;
+  const conflictQueue = [];
+
+  function openNextQueuedConflict() {
+    if (activeConflictSession) return;
+    let next = conflictQueue.shift();
+    while (next && next.settled) next = conflictQueue.shift();
+    if (next) activateConflictSession(next);
+  }
+
   function holdConflict(body, input, init, url, method, res) {
-    if (activeConflictSession) return res; // task 2 queues this
+    if (activeConflictSession && conflictQueue.length >= CONFLICT_QUEUE_CAP) return res;
     return new Promise((resolve) => {
-      activateConflictSession({
+      const session = {
         body, input, init, url, method,
         originalRes: res, resolve,
         settled: false, inFlight: false,
         overlay: null, modal: null, onKeydown: null,
-      });
+      };
+      if (activeConflictSession) conflictQueue.push(session);
+      else activateConflictSession(session);
     });
   }
 

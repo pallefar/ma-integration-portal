@@ -697,6 +697,63 @@ test('HP8 (double click): two synchronous Apply clicks send exactly one extra fe
   }
 });
 
+test('HP9 (queue): a second conflict is queued FIFO, not rendered over the first nor labelled "changed again"; each promise gets ITS OWN response', async () => {
+  const r1Conflict = makeResponse({ status: 409, body: conflictOf({ currentRecord: { id: 'r1', title: 'R1 theirs' } }) });
+  const r2Conflict = makeResponse({ status: 409, body: conflictOf({ currentRecord: { id: 'r2', title: 'R2 theirs' } }) });
+  const r2Ok = makeResponse({ status: 200, body: { success: true, which: 'r2' } });
+  const fake = makeRoutedFetch((i) => (i === 0 ? r1Conflict : i === 1 ? r2Conflict : r2Ok));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p1 = sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'r1', version: 1, title: 'mine 1' }) });
+  await flushAll();
+  const p2 = sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'r2', version: 1, title: 'mine 2' }) });
+  const o2 = track(p2);
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'the second conflict must not stack an overlay');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-error').length, 0, 'R1 must NOT be labelled "changed again"');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-theirs')[0].textContent, 'R1 theirs');
+
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  assert.strictEqual(await p1, r1Conflict, 'R1 must resolve with ITS OWN 409');
+  await flushAll();
+
+  assert.strictEqual(o2.settled, false, 'R2 is still held');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'R2\'s dialog opens when R1 settles');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-error').length, 0, 'R2 opens fresh with no banner');
+  assert.strictEqual(document.querySelectorAll('.conflict-diff-theirs')[0].textContent, 'R2 theirs');
+
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  assert.strictEqual(await p2, r2Ok, 'R2 must resolve with ITS OWN reapplied 200');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+});
+
+test('HP10 (cap): with 20 queued behind an open dialog one more marker 409 resolves immediately with its own 409 and renders nothing', async () => {
+  const responses = [];
+  const fake = makeRoutedFetch((i) => {
+    const r = makeResponse({ status: 409, body: conflictOf({ currentRecord: { id: 'r' + i, title: 'T' + i } }) });
+    responses.push(r);
+    return r;
+  });
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const held = [];
+  for (let i = 0; i < 21; i++) { // 1 active + 20 queued
+    held.push(track(sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'r' + i, version: 1, title: 'm' + i }) })));
+    await flushAll(3);
+  }
+  assert.ok(held.every((h) => !h.settled), 'all 21 conflicts are held');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1);
+
+  const overflow = track(sandbox.window.fetch('/api/raid', { method: 'POST', body: JSON.stringify({ id: 'r21', version: 1, title: 'm21' }) }));
+  await flushAll();
+
+  assert.strictEqual(overflow.settled, true, 'the overflow conflict must resolve immediately');
+  assert.strictEqual(overflow.value, responses[21], 'with its OWN 409');
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 1, 'and open nothing');
+  assert.ok(held.every((h) => !h.settled), 'the held 21 are unaffected');
+});
+
 test('HP11 (settle-once): a stale Apply/Discard handler of an already-settled session sends nothing and does not resolve again', async () => {
   const first = makeResponse({ status: 409, body: conflictOf() });
   const fake = makeFakeFetch([first]);
@@ -719,6 +776,28 @@ test('HP11 (settle-once): a stale Apply/Discard handler of an already-settled se
   assert.strictEqual(fake.calls.length, 1, 'a stale handler must send nothing');
   assert.strictEqual(outcome.count, 1, 'must not resolve again');
   assert.strictEqual(outcome.value, first);
+});
+
+test('HP12 (cleanup): after the last session settles there are zero overlays and zero document keydown listeners', async () => {
+  const fake = makeRoutedFetch((i) => (i < 2 ? makeResponse({ status: 409, body: conflictOf() }) : makeResponse({ status: 200, body: {} })));
+  const { sandbox, document } = buildSandbox(fake.impl);
+
+  const p1 = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  const p2 = sandbox.window.fetch('/api/raid', RAID_FLIP());
+  await flushAll();
+  assert.strictEqual(document.listenerCount('keydown'), 1, 'one listener while a dialog is shown');
+
+  document.querySelectorAll('.conflict-btn-discard')[0].click();
+  await p1;
+  await flushAll();
+  assert.strictEqual(document.listenerCount('keydown'), 1, 'the next queued dialog now owns the one listener');
+  document.querySelectorAll('.conflict-btn-apply')[0].click();
+  await p2;
+  await flushAll();
+
+  assert.strictEqual(document.querySelectorAll('.conflict-modal-overlay').length, 0);
+  assert.strictEqual(document.listenerCount('keydown'), 0);
 });
 
 test('HP13 (deleted variant): a conflictKind "deleted" 409 on a POST -> Close resolves with the original 409', async () => {
