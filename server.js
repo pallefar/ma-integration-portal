@@ -8034,9 +8034,19 @@ app.post('/api/pulses', (req, res) => {
   const db = readDb();
   db.pulses = db.pulses || [];
 
+  // [security] IN-02 (Phase 11 review, D-11-06): in a real deal the name a
+  // pulse is filed under is the AUTHOR's account display name (fallback: the
+  // username), never the free-text body value — an employee cannot file a
+  // named pulse as a colleague that the IL then reads as that colleague's.
+  // The demo store keeps the body value (showcase unchanged).
+  const accountName = req.portalUser
+    ? (String(req.portalUser.name || '').trim() || req.portalUser.username)
+    : null;
+  const filedName = (req.isDemo !== true && accountName) ? accountName : employeeName;
+
   const newPulse = {
     id: newId('pulse'),
-    employeeName,
+    employeeName: filedName,
     rating: parseInt(rating) || 3,
     comment: comment || '',
     timestamp: new Date().toISOString(),
