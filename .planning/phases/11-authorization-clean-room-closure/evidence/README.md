@@ -73,7 +73,7 @@ for that one page only.
 |---|---|
 | 1 employee refused / served | `phase11-real.log` rows "acceptance 1: employee GET ... -> 403/200", pulses rows; `p11-employee-*` |
 | 2 config writes admin-only, deal setup route, no secret in settings | rows "acceptance 2: pmo|hrbp POST ... -> 403", "...deal-level values via the deal setup route -> 200", "...keys are a subset of the public allowlist" |
-| 3 clean-room 404 | `cleanRoom404@real` rows (8 write/delete shapes + version 0 / 999 / none), `p11-cleanroom-board-*` |
+| 3 clean-room 404 | `cleanRoom404@real` rows (10 write/delete shapes on the task and the RAID entry, with version none / 0 / 999), `p11-cleanroom-board-*` |
 | 4 no GET mutates | row "acceptance 4: ... get-or-create" (employee POST resolves own record, GET never 200); instrumented test in `test/no-get-mutates.test.js` |
 | 5 variant paths | rows "acceptance 5: employee GET /api/Synergies ... is never 200" (12 spellings), "pmo POST ... never 2xx" (6) |
 | 6 rate-bounded denial audit; demo and earlier walks unchanged | `denialAuditBounded@real` (20 probes -> 1 row; after the window total count == 20, 2 rows 62 s apart); `phase11-demo.log`, `phase10-walk.log`, `phase9-walk*.log`, `soak.log` |
