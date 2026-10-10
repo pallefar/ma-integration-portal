@@ -17,6 +17,14 @@
 //   node scripts/perf/load-40.js [--seconds N] [--clients N] [--runs N] [--assert]
 //   --assert   exit 1 if ANY run misses the budget (not a median of runs)
 //
+// EVERY run is a FRESH scratch deal on a FRESH server (12-14 evidence refresh,
+// orchestrator decision 1): the R2 review profile is one 45 s run on a fresh
+// deal, and POST /api/raid is 25 % of the mix, so reusing one deal made runs
+// 2-3 measure a RAID list ~15x larger than the profile (40 -> ~6,500 rows).
+// With --runs N > 1 this script re-invokes itself once per run (`--run-index`,
+// internal) so each run gets its own mkdtemp scratch, deal, seed and server.
+// Mix, duration, clients and the budget are unchanged.
+//
 // Exit: 0 pass/informational, 1 assertion failed, 2 harness refused or failed,
 // 130/143 interrupted. Scratch is removed on every path.
 
@@ -29,6 +37,10 @@ const num = (flag, dflt) => { const i = args.indexOf(flag); return i >= 0 ? Math
 const SECONDS = num('--seconds', 45);
 const CLIENTS = num('--clients', 40);
 const RUNS = num('--runs', 1);
+// Internal: set by the parent when it re-invokes itself, one run per child.
+const RUN_INDEX = (() => { const i = args.indexOf('--run-index'); return i >= 0 ? Math.max(1, parseInt(args[i + 1], 10) || 1) : 0; })();
+const os = require('os');
+const loadAvg = () => os.loadavg().map((n) => n.toFixed(1)).join('/');
 
 const BASELINE_ELD_P99_MS = 1921;
 const BUDGET_ELD_P99_MS = 100;
@@ -55,6 +67,7 @@ async function oneRun(server, headers, run) {
     s.ms.push(ms);
     s.codes[status] = (s.codes[status] || 0) + 1;
   };
+  const loadStart = loadAvg();
   const deadline = now() + SECONDS * 1000;
   let seq = 0;
 
@@ -83,7 +96,8 @@ async function oneRun(server, headers, run) {
   const elapsed = (now() - t0) / 1000;
   const eld = await server.snapshot();
   const total = Object.values(stats).reduce((n, s) => n + s.ms.length, 0);
-  console.log(`run ${run}: ${total} requests in ${fmt(elapsed)} s = ${fmt(total / elapsed)} rps with ${CLIENTS} clients`);
+  console.log(`run ${run}: ${total} requests in ${fmt(elapsed)} s = ${fmt(total / elapsed)} rps with ${CLIENTS} clients ` +
+    `(fresh deal; host load 1/5/15 min ${loadStart} -> ${loadAvg()} at ${new Date().toISOString()})`);
   for (const [key, s] of Object.entries(stats).sort()) {
     const sorted = s.ms.slice().sort((a, b) => a - b);
     console.log(`  ${key.padEnd(28)} n=${String(sorted.length).padStart(5)} p50 ${fmt(percentile(sorted, 50)).padStart(7)} ` +
@@ -99,7 +113,8 @@ async function oneRun(server, headers, run) {
   return p99 <= BUDGET_ELD_P99_MS;
 }
 
-async function main() {
+// One fresh scratch deal + server, `run` measured once. Returns 0/1 failures.
+async function singleRun(run) {
   const setup = await scratch.setup({ username: 'perf-admin', role: 'admin' });
   const server = await startInstrumentedServer({ env: setup.childEnv, label: 'load-40', quiet: true, serverRoot: process.env.PERF_SERVER_ROOT || undefined });
   scratch.onStop(() => server.stop());
@@ -111,14 +126,32 @@ async function main() {
     });
     if (res.status !== 201) throw new Error(`seeding RAID entry ${i} answered ${res.status}`);
   }
-  console.log(`load-40: deal ${setup.dealId}, 40 RAID seeded, ${CLIENTS} closed-loop clients x ${SECONDS} s, ${RUNS} run(s)\n`);
+  console.log(`load-40 run ${run}: deal ${setup.dealId}, 40 RAID seeded, ${CLIENTS} closed-loop clients x ${SECONDS} s`);
+  return (await oneRun(server, headers, run)) ? 0 : 1;
+}
 
+// Parent of a multi-run invocation: one child process per run (fresh scratch,
+// deal and server each), output relayed, failures summed.
+async function main() {
+  if (RUN_INDEX) return singleRun(RUN_INDEX);
+  const { spawn } = require('child_process');
   let failures = 0;
+  console.log(`load-40: ${RUNS} runs, each on a FRESH scratch deal + server (the R2 profile shape: 40 RAID seeded, ${CLIENTS} clients x ${SECONDS} s)\n`);
   for (let run = 1; run <= RUNS; run++) {
-    if (!(await oneRun(server, headers, run))) failures++;
+    const argv = [__filename, '--assert', '--runs', '1', '--run-index', String(run), '--seconds', String(SECONDS), '--clients', String(CLIENTS)];
+    const code = await new Promise((resolve) => {
+      const child = spawn(process.execPath, argv, { stdio: 'inherit' });
+      const fwd = (sig) => () => { try { child.kill(sig); } catch (e) { /* gone */ } };
+      process.once('SIGINT', fwd('SIGINT'));
+      process.once('SIGTERM', fwd('SIGTERM'));
+      child.on('exit', (c, sig) => resolve(sig ? 130 : c));
+    });
+    if (code === 2 || code > 2) throw new Error(`run ${run} child failed (exit ${code})`);
+    if (code !== 0) failures++;
+    console.log('');
   }
-  console.log(`\n${failures ? 'OVER BUDGET' : 'WITHIN BUDGET'}: ${RUNS - failures}/${RUNS} runs had event-loop p99 <= ${BUDGET_ELD_P99_MS} ms ` +
-    `(tasks/employees/org reads are converted in later waves; 12-14 asserts the budget)`);
+  console.log(`${failures ? 'OVER BUDGET' : 'WITHIN BUDGET'}: ${RUNS - failures}/${RUNS} runs had event-loop p99 <= ${BUDGET_ELD_P99_MS} ms ` +
+    `(each on a fresh deal)`);
   return failures;
 }
 
