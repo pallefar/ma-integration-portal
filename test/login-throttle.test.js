@@ -143,15 +143,16 @@ test('throttle: a per-call maxDelayMs caps an admin account at 5 minutes while t
 
 // --- 2. throttleOptionsFor ---------------------------------------------------
 
-test('throttleOptionsFor: only an enabled admin account carries the 5-minute ceiling', () => {
+// WR-01 (Phase 10 review): the ceiling used to be 5 min for an enabled admin and
+// 15 min for everyone else — an admin-enumeration oracle via Retry-After and via
+// when the 429 lifts. It is now the SAME 5-minute ceiling for every name.
+test('throttleOptionsFor (WR-01): one ceiling for every account — role, existence and disabled state are not observable', () => {
   assert.strictEqual(app.ADMIN_MAX_BACKOFF_MS, 300000);
-  assert.strictEqual(app.throttleOptionsFor({ role: 'admin' }).maxDelayMs, 300000);
-  assert.deepStrictEqual(app.throttleOptionsFor({ role: 'pmo' }), {});
-  assert.deepStrictEqual(app.throttleOptionsFor({ role: 'hrbp' }), {});
-  assert.deepStrictEqual(app.throttleOptionsFor({ role: 'employee' }), {});
-  assert.deepStrictEqual(app.throttleOptionsFor({ role: 'admin', disabled: true }), {});
-  assert.deepStrictEqual(app.throttleOptionsFor(null), {});
-  assert.deepStrictEqual(app.throttleOptionsFor(undefined), {});
+  const expected = { maxDelayMs: 300000 };
+  for (const acct of [{ role: 'admin' }, { role: 'pmo' }, { role: 'hrbp' }, { role: 'employee' },
+    { role: 'admin', disabled: true }, null, undefined]) {
+    assert.deepStrictEqual(app.throttleOptionsFor(acct), expected, JSON.stringify(acct));
+  }
 });
 
 // --- 3. HTTP -------------------------------------------------------------------
@@ -223,4 +224,19 @@ test('HTTP: a successful sign-in clears that account\'s failure episode', async 
   for (let i = 0; i < 3; i++) assert.strictEqual((await login('bob', 'nope-' + i)).status, 401);
   assert.strictEqual((await login('bob', 'bob-correct-passphrase')).status, 200);
   for (let i = 0; i < 3; i++) assert.strictEqual((await login('bob', 'nope-again-' + i)).status, 401);
+});
+
+test('HTTP (WR-01): an enabled admin name and an unknown name get identical statuses, bodies AND Retry-After', async () => {
+  const run = async (name) => {
+    const out = [];
+    for (let i = 0; i < 7; i++) {
+      const r = await login(name, 'wrong-wr01-' + i);
+      out.push([r.status, r.status === 429 ? r.retryAfter : null, r.status === 429 ? JSON.stringify(r.json) : null]);
+    }
+    return out;
+  };
+  const adminSeq = await run('admin');
+  const ghostSeq = await run('ghost-wr01');
+  assert.ok(adminSeq.some(([s]) => s === 429), 'the admin name reached backoff');
+  assert.deepStrictEqual(adminSeq, ghostSeq, 'nothing in the throttled answer reveals an enabled admin');
 });

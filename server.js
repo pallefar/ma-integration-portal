@@ -891,25 +891,36 @@ function isAdminOrIlRequest(req) {
 //     names, deliberately not the primary control.
 // scrypt is deliberately expensive, so both are consulted BEFORE any hashing.
 const THROTTLE_WINDOW_MS = 15 * 60 * 1000;
-const ADMIN_MAX_BACKOFF_MS = 5 * 60 * 1000;
+// [security] WR-01 (Phase 10 review): ONE backoff ceiling for every account key.
+// The original split (5 min for an enabled admin, 15 min for everyone else)
+// made the throttle an enumeration oracle — `Retry-After: 300` vs `900`, and
+// equally the moment a 429 stops, told an attacker per name "this is a live
+// admin account", contradicting T-10-30. Reporting a uniform header while still
+// enforcing the split would not close the second channel, so the cap itself is
+// uniform: every account (known, unknown, disabled, any role) backs off to at
+// most 5 minutes. T-10-55's purpose (an admin cannot be locked out for a
+// quarter hour) is kept; the cost is a shorter ceiling for non-admin names,
+// which still bounds a single name to ~12 guesses/hour on top of the per-source
+// limit below and the password-length policy.
+const ACCOUNT_MAX_BACKOFF_MS = 5 * 60 * 1000;
+const ADMIN_MAX_BACKOFF_MS = ACCOUNT_MAX_BACKOFF_MS; // historical export name (T-10-55)
 const accountThrottle = createThrottle({
   windowMs: THROTTLE_WINDOW_MS, freeFailures: 5, baseDelayMs: 1000,
-  maxDelayMs: THROTTLE_WINDOW_MS, maxEntries: 10000,
+  maxDelayMs: ACCOUNT_MAX_BACKOFF_MS, maxEntries: 10000,
 });
 const sourceThrottle = createThrottle({
   windowMs: THROTTLE_WINDOW_MS, freeFailures: 50, baseDelayMs: 1000,
   maxDelayMs: THROTTLE_WINDOW_MS, maxEntries: 10000,
 });
-// T-10-55: a known admin username must not be lockable for a quarter of an
-// hour by one failed attempt per backoff window — admin-role backoff is capped
-// at 5 minutes. Anything else (other roles, unknown name, disabled account) gets
-// the instance default, so the cap is not an enumeration oracle beyond T-10-56
-// (accepted: needs a long logged failure run, the 429 body stays identical).
+// T-10-55 + WR-01: a known admin username must not be lockable for a quarter of
+// an hour — and the ceiling must not depend on WHO the name is. The answer is
+// deliberately independent of `account` (role, existence, disabled): the same
+// options object for every name, so neither the Retry-After header nor the
+// moment the 429 lifts can distinguish an enabled admin (T-10-30).
+const UNIFORM_THROTTLE_OPTIONS = Object.freeze({ maxDelayMs: ACCOUNT_MAX_BACKOFF_MS });
+// eslint-disable-next-line no-unused-vars
 function throttleOptionsFor(account) {
-  if (account && account.role === 'admin' && account.disabled !== true) {
-    return { maxDelayMs: ADMIN_MAX_BACKOFF_MS };
-  }
-  return {};
+  return UNIFORM_THROTTLE_OPTIONS;
 }
 // The submitted name goes into an operator-visible log line: strip anything a
 // client could use to forge log structure, and bound the length.
@@ -965,8 +976,8 @@ app.post('/api/auth/login', async (req, res, next) => {
     // readDb()/writeDb() model into control.db, reached only through
     // db/controlStore.js — a deal-bound request can never read/write the
     // account store through its own connection (T-03-16). The lookup is a PK
-    // read (no scrypt) and runs BEFORE the throttle check only so the account
-    // key can carry the role's backoff ceiling (throttleOptionsFor).
+    // read (no scrypt); the backoff ceiling is uniform for every name
+    // (throttleOptionsFor, WR-01), so the lookup no longer shapes the throttle.
     const submitted = String(username || '').trim().toLowerCase();
     const user = controlStore.findUser(submitted);
     const accountKey = 'u:' + submitted;

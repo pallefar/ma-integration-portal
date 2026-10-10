@@ -150,7 +150,8 @@ Node. Three settings tell the server about it:
   to https for a year, which is your decision to make.
 
 Sign-in throttling is **per account** (the first five failures inside 15 minutes are
-free, then an exponential backoff starting at one second, capped at 15 minutes) plus
+free, then an exponential backoff starting at one second, capped at 5 minutes for
+every account name alike, so the throttle cannot reveal which names are admins) plus
 a generous **per-source** limit (fifty failures), so one person mistyping a password
 cannot lock the rest of the team out. A throttled sign-in answers `429` with a
 `Retry-After` header and the same body whether the account exists or not.
@@ -158,8 +159,8 @@ cannot lock the rest of the team out. A throttled sign-in answers `429` with a
 ### Sign-in lockout recovery
 
 Throttle state is held only in the memory of the server process and is never
-persisted. An admin account's backoff is capped at **5 minutes** (other accounts:
-15). A locked-out admin therefore either waits it out or the operator **restarts**
+persisted. Every account's backoff is capped at **5 minutes** (the same ceiling for
+admins and everyone else). A locked-out admin therefore either waits it out or the operator **restarts**
 the service, which clears every throttle entry. If the admin password itself is lost
 or suspected compromised, stop the service, run
 `node scripts/bootstrap-admin.js --force-reset-admin` (it rotates the admin
