@@ -4584,7 +4584,7 @@ app.post('/api/org/positions', (req, res) => {
     // area grant checked at the top, so a caller reaching this path is
     // already cleared for every record the route can resolve — a
     // per-record filter would be a second, parallel check of the same fact.
-    if (conflictIfStale(req, res, item)) return;
+    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
     // Evaluate a shallow merge of the existing row and the incoming keys
     // BEFORE any field of the stored row is mutated — readDb() hands back a
     // shared cache, so a mutation followed by a refusal would stick.
@@ -4710,7 +4710,7 @@ app.delete('/api/org/positions/:id', (req, res) => {
   // a delete that is both stale AND blocked by direct reports returns 409,
   // not 400, so the caller learns their view is stale (the more fundamental
   // problem) before the business-rule refusal.
-  if (conflictIfStale(req, res, target)) return;
+  if (conflictIfStale(req, res, target, { requirePrecondition: true })) return;
   const directReports = lane.filter((p) => p.reportsToId === target.id);
   if (directReports.length) {
     return res.status(400).json({ error: `This position has ${directReports.length} direct report(s) — reassign them before deleting.` });
@@ -5118,7 +5118,7 @@ app.post('/api/org/flight-risk', (req, res) => {
     // above — after the not-found guard and the employee-existence check,
     // before the first field of the stored row is mutated. No
     // clearanceFilter, for the same reason given there.
-    if (conflictIfStale(req, res, item)) return;
+    if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
     if (b.employeeId !== undefined) item.employeeId = b.employeeId;
     if (b.riskLevel !== undefined) item.riskLevel = b.riskLevel;
     // WR-02 (06-REVIEW.md): a blank/whitespace-only owner defaults to the
@@ -5182,7 +5182,7 @@ app.delete('/api/org/flight-risk/:id', (req, res) => {
   const item = lane.find((r) => r.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Flight-risk entry not found.' });
   // CONC-02 (Phase 9, Plan 06 / D-08): stale-delete rejection.
-  if (conflictIfStale(req, res, item)) return;
+  if (conflictIfStale(req, res, item, { requirePrecondition: true })) return;
   db.orgFlightRisks = lane.filter((r) => r.id !== req.params.id);
   writeDb(db);
   res.json({ success: true });
@@ -5221,7 +5221,7 @@ app.post('/api/org/flight-risk/:id/convert', (req, res) => {
   // untouched (Pitfall 6) — nothing here has mutated anything yet. No
   // clearanceFilter, for the same reason given on the sibling routes above:
   // the whole route is already gated on a single `hr` area grant.
-  if (conflictIfStale(req, res, entry)) return;
+  if (conflictIfStale(req, res, entry, { requirePrecondition: true })) return;
 
   const source = 'org-flightrisk:' + entry.id;
   const employee = employeeRosterLane(db).find((e) => e.id === entry.employeeId);

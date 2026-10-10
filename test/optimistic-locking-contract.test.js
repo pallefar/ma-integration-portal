@@ -1116,7 +1116,7 @@ test('optimistic-locking-contract (26): a stale-version org-position update retu
     const { position } = await createRes.json();
     assert.strictEqual(position.version, undefined, 'a freshly created position carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.position.version, 1);
@@ -1152,7 +1152,7 @@ test('optimistic-locking-contract (27): a stale-version org flight-risk update r
     const { entry } = await createRes.json();
     assert.strictEqual(entry.version, undefined, 'a freshly created flight-risk entry carries no version field yet');
 
-    const firstEditRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'First real edit' });
+    const firstEditRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'First real edit', version: 0 });
     assert.strictEqual(firstEditRes.status, 200);
     const firstEditBody = await firstEditRes.json();
     assert.strictEqual(firstEditBody.entry.version, 1);
@@ -1236,7 +1236,7 @@ test('optimistic-locking-contract (30): an org-position update that is both stal
     const createRes = await postJSON(base, '/api/org/positions', token, { title: 'Combined fixture', level: 'Manager' });
     const { position } = await createRes.json();
 
-    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).position.version, 1);
 
     // Self-parent (reportsToId === own id) is positionGraphFailure()'s
@@ -1323,7 +1323,7 @@ test('optimistic-locking-contract (33): a stale-version flight-risk convert retu
     const { entry } = await createRes.json();
 
     // Stamp version:1 via an ordinary edit (does not touch linkedTaskIds/linkedRaidIds).
-    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).entry.version, 1);
 
     const staleConvertRes = await postJSON(base, `/api/org/flight-risk/${entry.id}/convert`, token, { toTask: true, toRaid: true, version: 0 });
@@ -1362,7 +1362,7 @@ test('optimistic-locking-contract (34): a current-version flight-risk convert su
     const createRes = await postJSON(base, '/api/org/flight-risk', token, { employeeId: employee.id, riskLevel: 'critical', owner: 'admin' });
     const { entry } = await createRes.json();
 
-    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).entry.version, 1);
 
     const convertRes = await postJSON(base, `/api/org/flight-risk/${entry.id}/convert`, token, { toTask: true, toRaid: true, version: 1 });
@@ -1541,7 +1541,7 @@ test('optimistic-locking-contract (39): DELETE /api/org/positions/:id — stale 
 
     const createRes = await postJSON(base, '/api/org/positions', token, { title: 'Delete fixture position', level: 'Manager' });
     const { position } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/positions', token, { id: position.id, title: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).position.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/org/positions/${position.id}`, token, 0);
@@ -1574,7 +1574,7 @@ test('optimistic-locking-contract (40): DELETE /api/org/flight-risk/:id — stal
 
     const createRes = await postJSON(base, '/api/org/flight-risk', token, { employeeId: employee.id, riskLevel: 'medium', owner: 'admin' });
     const { entry } = await createRes.json();
-    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped' });
+    const stampRes = await postJSON(base, '/api/org/flight-risk', token, { id: entry.id, notes: 'stamped', version: 0 });
     assert.strictEqual((await stampRes.json()).entry.version, 1);
 
     const staleRes = await delWithVersion(base, `/api/org/flight-risk/${entry.id}`, token, 0);
