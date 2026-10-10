@@ -494,7 +494,8 @@ function conflictIfStale(req, res, record, opts) {
     }
     return false;
   }
-  const currentVersion = (record && typeof record.version === 'number') ? record.version : 0;
+  // WR-04: one coercion rule with db/store.js's WHERE layer (comparableVersion).
+  const currentVersion = comparableVersion(record && record.version);
   if (parsed.version === currentVersion) return false;
   const filtered = options.clearanceFilter ? options.clearanceFilter(record) : record;
   res.status(409).json(conflictBody({
@@ -836,6 +837,7 @@ app.get('/healthz', (req, res) => {
 // truth on every call (RESEARCH.md Pitfall 3). db.json is retained on disk only
 // as a frozen, read-only pre-migration archive — no live code path reads/writes it.
 const { initDb, readDb, writeDb, getOrOpenConnection, isConflictError, currentDbContext } = require('./db/store');
+const { comparableVersion } = require('./db/collections');
 const sessions = require('./db/sessions');
 
 // ISO-01 (Phase 3 cutover): open the three live stores through the SAME

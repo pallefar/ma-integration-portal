@@ -1992,3 +1992,77 @@ test('CR-01 (d, store-layer parity): with an armed granting filter, the WHERE-la
   assert.deepStrictEqual(caught.conflictDetail.currentRecord, { id: 'ddreq_cr01d', area: 'financial', projected: true },
     'the armed filter output — not the raw record — is what the conflict detail carries');
 });
+
+// ---- WR-04 (09-REVIEW round 2): the route precheck and the WHERE layer must
+// agree on ONE coercion of a malformed stored version (db/collections.js
+// comparableVersion): anything that is not a non-negative safe integer is 0.
+// Before the fix the precheck coerced to 0 while the WHERE layer bound NULL
+// (`= NULL` never matches), so a row stored with version "v2" could never be
+// written again and its conflict body echoed "v2" — which the dialog's
+// reapply then sent back as `version` for zod to refuse with a 400. ----
+
+const { comparableVersion } = require('../db/collections.js');
+
+function seedRaidWithRawVersion(id, rawVersionJson) {
+  const create = store.readDb();
+  create.raidEntries.push({ id, type: 'risk', title: id + ' v0' });
+  store.writeDb(create);
+  store.getConnection()
+    .prepare(`UPDATE raidEntries SET data = json_set(data, '$.version', json(?)) WHERE id = ?`)
+    .run(rawVersionJson, id);
+}
+
+test('WR-04 (a): comparableVersion is the one rule — non-negative safe integers pass, everything else is 0', () => {
+  assert.strictEqual(comparableVersion(0), 0);
+  assert.strictEqual(comparableVersion(7), 7);
+  for (const bad of ['v2', '3', 1.5, true, -1, 1e300, null, undefined, NaN, [], {}]) {
+    assert.strictEqual(comparableVersion(bad), 0, 'expected 0 for ' + String(bad));
+  }
+});
+
+test('WR-04 (b): a row stored with a malformed version ("v2", 1.5, true, -1) is writable again and is re-stamped to version 1', () => {
+  [['wr04b_text', '"v2"'], ['wr04b_real', '1.5'], ['wr04b_true', 'true'], ['wr04b_neg', '-1']].forEach(([id, raw]) => {
+    seedRaidWithRawVersion(id, raw);
+    const snap = store.readDb();
+    snap.raidEntries.find((r) => r.id === id).title = id + ' edited';
+    let caught = null;
+    try { store.writeDb(snap); } catch (e) { caught = e; }
+    assert.strictEqual(caught, null, id + ': an edit of a malformed-version row must not self-conflict (was a permanent 409)');
+    const after = store.readDb().raidEntries.find((r) => r.id === id);
+    assert.strictEqual(after.title, id + ' edited');
+    assert.strictEqual(after.version, 1, id + ': malformed version compares as 0, so the edit stamps 0 + 1');
+  });
+});
+
+test('WR-04 (c): a WHERE-layer conflict against a malformed stored version reports currentVersion 0 (never the raw value), and a reapply carrying 0 succeeds', () => {
+  const id = 'wr04c';
+  const create = store.readDb();
+  create.raidEntries.push({ id, type: 'risk', title: 'wr04c v0' });
+  store.writeDb(create);
+  const stamp = store.readDb();
+  stamp.raidEntries.find((r) => r.id === id).title = 'wr04c v1';
+  store.writeDb(stamp); // version 1
+
+  const snapA = store.readDb(); // remembers version 1
+  // Another writer (an import / hand edit) leaves a malformed version behind.
+  store.getConnection()
+    .prepare(`UPDATE raidEntries SET data = json_set(data, '$.version', 'v2') WHERE id = ?`)
+    .run(id);
+
+  snapA.raidEntries.find((r) => r.id === id).title = 'stale attempt';
+  let caught = null;
+  try { store.writeDb(snapA); } catch (e) { caught = e; }
+  assert.ok(caught && store.isConflictError(caught), 'version 1 vs a stored "v2" (compares as 0) is a genuine conflict');
+  assert.strictEqual(caught.conflictDetail.currentVersion, 0,
+    'the conflict body must carry the coerced 0 — a value the zod validators accept on the reapply');
+
+  // The reapply: a fresh read (as the route does) carrying the reported version.
+  const fresh = store.readDb();
+  assert.strictEqual(comparableVersion(fresh.raidEntries.find((r) => r.id === id).version), caught.conflictDetail.currentVersion,
+    'the precheck rule and the WHERE layer agree on the stored value');
+  fresh.raidEntries.find((r) => r.id === id).title = 'reapplied';
+  store.writeDb(fresh);
+  const after = store.readDb().raidEntries.find((r) => r.id === id);
+  assert.strictEqual(after.title, 'reapplied');
+  assert.strictEqual(after.version, 1);
+});

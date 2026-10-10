@@ -10,7 +10,8 @@
 (function () {
   window.maVersionOf = function (rec) {
     var v = rec && rec.version;
-    return (typeof v === 'number' && Number.isInteger(v) && v >= 0) ? v : 0;
+    // WR-04: the same rule as db/collections.js comparableVersion().
+    return (Number.isSafeInteger(v) && v >= 0) ? v : 0;
   };
 })();
 
