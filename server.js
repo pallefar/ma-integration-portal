@@ -5910,8 +5910,22 @@ function orgFlightRiskLane(db) {
 // exact match; anything else (absent, a padded/cased variant, an array-
 // shaped query value) resolves to the current string — so a malformed
 // query can never accidentally reach the restricted branch un-gated.
+// D-12-02 (12-11): the org-design family reads only its own collections.
+// ORG_READ_SET is the union of the three org lanes; each route below names the
+// narrowest subset it actually touches (a throwing accessor proves a miss).
+const ORG_READ_SET = ['orgPositions', 'orgDecisions', 'orgFlightRisks'];
+const ORG_POSITIONS_SET = ['orgPositions'];
+// Pure body builder for GET /api/org/positions (exposed as
+// app.orgPositionsBody so test/read-sets-org-reports can assert it equals the
+// HTTP body over readDb() and over readCollections()). Clearance and audit
+// stay in the route, before this runs.
+function orgPositionsBody(db, requestedState) {
+  return orgPositionsLane(db).filter((p) => p.state === requestedState);
+}
+app.orgPositionsBody = orgPositionsBody;
+
 app.get('/api/org/positions', (req, res) => {
-  const db = readDb();
+  const db = readCollections(ORG_POSITIONS_SET);
   const deal = controlStore.getDeal(req.dealContext.dealId);
   const requestedState = req.query.state === orgValidators.ORG_STATE_TARGET
     ? orgValidators.ORG_STATE_TARGET
@@ -5941,8 +5955,7 @@ app.get('/api/org/positions', (req, res) => {
       subject: null, before: null, after: null, request: requestMeta(req),
     });
   }
-  const lane = orgPositionsLane(db);
-  res.json(lane.filter((p) => p.state === requestedState));
+  res.json(orgPositionsBody(db, requestedState));
 });
 
 // D-05/D-06: refuses a `reportsToId` that is self-referential, unknown,
@@ -5980,9 +5993,21 @@ function positionGraphFailure(lane, candidate) {
 // D-04 tier 1: any `hr`-area-cleared deal member may create/maintain org
 // structure, not only IL/admin. Upsert-by-id, mirroring the DD routes'
 // validate-before-mutate shape.
+// D-12-02 (12-11, PD-20): the common position write reads its own lane, plus
+// the roster lane ONLY when the body names an employeeId (the sole consumer of
+// employeeRosterLane() in this route). Every OTHER org write below (copy-to-
+// target, delete, import, decisions, flight-risk, convert) keeps readDb(): they
+// are rare/bulk or touch the task/RAID lanes too, so the whole-deal read is the
+// honest read set there.
+function orgPositionWriteSet(body) {
+  if (!body || !body.employeeId) return ORG_POSITIONS_SET;
+  const settings = readSingleton('settings');
+  const roster = settings && settings.demoMode === false ? 'customEmployees' : 'employees';
+  return ['orgPositions', 'settings', roster];
+}
 app.post('/api/org/positions', (req, res) => {
   const b = req.body || {};
-  const db = readDb();
+  const db = readCollections(orgPositionWriteSet(b));
   const deal = controlStore.getDeal(req.dealContext.dealId);
   if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
     return res.status(403).json({ error: 'You are not cleared to edit the org design.' });
@@ -6362,8 +6387,16 @@ function derivedDecisionFor(decisions, positionId) {
 // clearance boundary as target-state org structure, never open-tier like
 // current-state positions. Ordered most-recent-first; narrowed by an
 // optional `positionId` query value.
+// Pure body builder (exposed as app.orgDecisionsBody for the equality suite):
+// most-recent-first, narrowed by an optional positionId.
+function orgDecisionsBody(db, positionId) {
+  let lane = orgDecisionsLane(db);
+  if (positionId) lane = lane.filter((d) => d.positionId === positionId);
+  return lane.slice().sort((a, b) => String(b.decidedAt || '').localeCompare(String(a.decidedAt || '')));
+}
+app.orgDecisionsBody = orgDecisionsBody;
+
 app.get('/api/org/decisions', (req, res) => {
-  const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
   if (!accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr')) {
     // [security] T-ERM-07 (260810-erm): the decision log is RESTRICTED MNPI
@@ -6386,10 +6419,7 @@ app.get('/api/org/decisions', (req, res) => {
       subject: req.query.positionId || null, before: null, after: null, request: requestMeta(req),
     });
   }
-  let lane = orgDecisionsLane(db);
-  if (req.query.positionId) lane = lane.filter((d) => d.positionId === req.query.positionId);
-  const ordered = lane.slice().sort((a, b) => String(b.decidedAt || '').localeCompare(String(a.decidedAt || '')));
-  res.json(ordered);
+  res.json(orgDecisionsBody(readCollections(['orgDecisions']), req.query.positionId));
 });
 
 // D-04 tier 2: recording a decision is the most consequential act this app
@@ -6497,8 +6527,7 @@ app.get('/api/org/flight-risk', (req, res) => {
     actor: req.portalUser, action: 'org-flightrisk-read', dealId: req.dealContext.dealId,
     subject: null, before: null, after: null, request: requestMeta(req),
   });
-  const db = readDb();
-  res.json(orgFlightRiskLane(db));
+  res.json(orgFlightRiskLane(readCollections(['orgFlightRisks'])));
 });
 
 // Resolves the SAME employee roster lane GET/POST /api/employees itself
@@ -6828,9 +6857,11 @@ function orgSummaryFor(db, deal, user) {
 // already clearance-scoped BEFORE it is computed — exactly as
 // GET /api/dd/summary documents for itself, above.
 app.get('/api/org/summary', (req, res) => {
-  const db = readDb();
   const deal = controlStore.getDeal(req.dealContext.dealId);
-  res.json(orgSummaryFor(db, deal, req.portalUser));
+  // D-12-02: an uncleared caller's summary is the open tier only, which reads
+  // positions alone; the restricted tier also tallies decisions + flight-risks.
+  const set = accessPolicy.hasAreaGrant(deal, req.portalUser, 'hr') ? ORG_READ_SET : ORG_POSITIONS_SET;
+  res.json(orgSummaryFor(readCollections(set), deal, req.portalUser));
 });
 
 // =====================================================================
@@ -7673,6 +7704,19 @@ app.delete('/api/raid/:id', (req, res) => {
 // at all — a crafted request naming any of them is refused with 400 before
 // any lane is ever opened, with no branch to forget to update if a future
 // org/talent collection is added.
+// D-12-02 (12-11): the union of every collection the four datasets and the pack
+// read — the lane helpers they call (taskLane/raidLane/synergyLane choose the
+// custom or demo lane from `settings`; resolve*ClearanceArea consults
+// ddFindings for dd-finding: provenance; computeWorkstreamRollup reads the
+// first checklist template; the pack carries the `i18n` bundle). Named so the
+// equality suite and a throwing accessor catch a helper that grows a new read.
+const REPORT_SET = [
+  'settings', 'i18n', 'checklistTemplates', 'ddFindings',
+  'integrationTasks', 'customIntegrationTasks',
+  'raidEntries', 'customRaidEntries',
+  'synergyInitiatives', 'customSynergyInitiatives',
+];
+app.REPORT_SET = REPORT_SET;
 const ReportExportQuerySchema = z.object({
   dataset: z.enum(['workstreams', 'tasks', 'raid', 'synergies']),
   format: z.enum(['csv', 'json']),
@@ -7686,7 +7730,7 @@ app.get('/api/reports/export', (req, res) => {
   const { dataset, format } = parsed.data;
 
   try {
-    const db = readDb();
+    const db = readCollections(REPORT_SET);
     const deal = controlStore.getDeal(req.dealContext.dealId);
 
     let rows;
@@ -7815,6 +7859,49 @@ app.get('/api/reports/export', (req, res) => {
   }
 });
 
+// D-12-02 (12-11): the pack's DATA ASSEMBLY, extracted so the equality suite
+// can prove `buildPackModel(readCollections(REPORT_SET), ctx)` equals
+// `buildPackModel(readDb(), ctx)`. `ctx` carries everything request- or
+// clock-derived: { req, deal, language, generatedAt: Date, nowMs: number }.
+// Returns { hasAnyData, model, counts }; `model` is null for the entirely
+// empty deal (the route answers 409 before any render). Same shared
+// clearance-filtered helpers the CSV export calls (T-07-28/D-08) — no second
+// implementation.
+function buildPackModel(db, ctx) {
+  const { req, deal, language, generatedAt, nowMs } = ctx;
+  const raid = reportRaidRows(db, deal, req.portalUser);
+  const workstreams = computeWorkstreamRollup(db, deal, req.portalUser);
+  const tasks = reportTaskRows(db, deal, req.portalUser);
+  const synergyCtx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs };
+  // RPT-03 (D-04 Section 4, amended 2026-08-09): `stageAtBaseline` resolved
+  // server-side from baselines[] — lib/reportPack.js performs no database logic.
+  const synergies = reportSynergyRows(db, synergyCtx, synergyLinksVisibleTo(req, db)).map((item) => // IN-01
+    Object.assign({}, item, { stageAtBaseline: stageAtLastBaseline(item) })
+  );
+  const counts = { workstreams: workstreams.length, tasks: tasks.length, raid: raid.length, synergies: synergies.length };
+  const hasAnyData = raid.length > 0 || workstreams.length > 0 || tasks.length > 0 || synergies.length > 0;
+  if (!hasAnyData) return { hasAnyData, model: null, counts };
+
+  // T-05-47/D-01/WR-05: the SAME shared computeSynergyRollupSplit() helper
+  // GET /api/synergies/rollup calls, over the SAME enriched `synergies` array.
+  const { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount } = computeSynergyRollupSplit(synergies);
+  const model = {
+    deal: { name: (deal && deal.name) || '' }, // the CODENAME — deal.targetCompany is never read here (T-07-22).
+    language,
+    generatedAt: formatPackTimestamp(generatedAt),
+    generatedBy: req.portalUser.username,
+    i18n: db.i18n,
+    rollup: { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount },
+    workstreams,
+    tasks,
+    raid,
+    synergies,
+    staleThresholdDays: synergyStaleDays(db, dealSettingsFor(req)),
+  };
+  return { hasAnyData, model, counts };
+}
+app.buildPackModel = buildPackModel;
+
 // RPT-02/RPT-03/RPT-04 (07-06 Task 2): the steering-committee PDF pack. A
 // deliberate GET — the write-role policy (ROLE_WRITE_POLICY) only gates
 // non-read methods, so D-08's any-deal-member access falls out of the
@@ -7899,70 +7986,26 @@ app.get('/api/reports/pack', async (req, res, next) => {
   }
 
   try {
-    const db = readDb();
+    // D-12-02 (12-11): REPORT_SET, not the whole deal. The assembly itself —
+    // the same clearance-filtered helpers the CSV export calls (T-07-28/D-08)
+    // and the T-ERM-01/T-ERM-03 caller-aware task/workstream reads — lives in
+    // buildPackModel() beside the export handler so it is provable equal to
+    // the full-read result. The timestamp and username are resolved
+    // server-side from the same req.portalUser/clock this generation's audit
+    // event records below — never a client-supplied value (T-07-32).
+    const db = readCollections(REPORT_SET);
     const deal = controlStore.getDeal(req.dealContext.dealId);
-
-    // T-07-28/D-08: assembled from the EXACT SAME lane-read and clearance-
-    // filter functions GET /api/reports/export calls above — reportRaidRows()
-    // and reportSynergyRows() are the shared internal assembly this plan's
-    // own instruction requires, so a future change can never make the pack
-    // and the CSV disagree. No internal HTTP request to the app's own routes
-    // is issued anywhere in this handler — every read below is a direct
-    // function call.
-    // [security] T-ERM-01/T-ERM-03 (260810-erm): reportTaskRows() and the
-    // now caller-aware computeWorkstreamRollup() are the SAME clearance-
-    // filtered reads the CSV export uses above, so the pack's model.tasks,
-    // hasAnyData, and audit rowCounts.tasks all reflect the caller's own
-    // cleared set automatically.
-    const raid = reportRaidRows(db, deal, req.portalUser);
-    const workstreams = computeWorkstreamRollup(db, deal, req.portalUser);
-    const tasks = reportTaskRows(db, deal, req.portalUser);
-    const synergyCtx = { staleDays: synergyStaleDays(db, dealSettingsFor(req)), nowMs: Date.now() };
-    // RPT-03 (D-04 Section 4, amended 2026-08-09): each synergy row also
-    // carries `stageAtBaseline`, resolved server-side from the SAME
-    // baselines[] history POST /api/synergies/:id/rebaseline writes — never
-    // re-derived inside lib/reportPack.js, which performs no database logic.
-    const synergies = reportSynergyRows(db, synergyCtx, synergyLinksVisibleTo(req, db)).map((item) => // IN-01
-      Object.assign({}, item, { stageAtBaseline: stageAtLastBaseline(item) })
-    );
+    const built = buildPackModel(db, { req, deal, language, generatedAt: new Date(), nowMs: Date.now() });
 
     // A deal with NO workstream, task, RAID or synergy data at all cannot be
     // summarised — refused with 409 so the button can show it inline. A deal
-    // that merely has one empty section still generates normally (each
-    // section's own empty-state line covers that case) — this check is only
-    // for the entirely-empty case.
-    const hasAnyData = raid.length > 0 || workstreams.length > 0 || tasks.length > 0 || synergies.length > 0;
-    if (!hasAnyData) {
+    // that merely has one empty section still generates normally.
+    if (!built.hasAnyData) {
       return res.status(409).json({
         error: 'This deal has no data yet — a steering committee pack cannot summarise a deal with no workstreams, tasks, risks or synergies recorded.',
       });
     }
-
-    // T-05-47/D-01/WR-05: the SAME shared computeSynergyRollupSplit() helper
-    // GET /api/synergies/rollup calls, over the SAME enriched `synergies`
-    // array this handler already built above — never re-derived a second
-    // time (that IS the double-counting drift RPT-03 forbids, D-02). Only
-    // `staleCount` is read from the result below; the helper still computes
-    // the full set so both call sites can never drift from each other.
-    const { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount } = computeSynergyRollupSplit(synergies);
-
-    // Timestamp and username are resolved server-side, from the SAME
-    // req.portalUser/Date.now() pair this generation's audit event records
-    // below — never a client-supplied value (T-07-32).
-    const generatedAtDate = new Date();
-    const model = {
-      deal: { name: (deal && deal.name) || '' }, // the CODENAME — deal.targetCompany is never read here (T-07-22).
-      language,
-      generatedAt: formatPackTimestamp(generatedAtDate),
-      generatedBy: req.portalUser.username,
-      i18n: db.i18n,
-      rollup: { grossRealizedM, unphasedRealizedM, costIncurredM, netBenefitM, dealTargetM, staleCount },
-      workstreams,
-      tasks,
-      raid,
-      synergies,
-      staleThresholdDays: synergyStaleDays(db, dealSettingsFor(req)),
-    };
+    const { model, counts } = built;
 
     // Rendered off the main event loop (see packTask above). The test hook
     // makes the worker throw so the crash/respawn path is provable; it is
@@ -7990,7 +8033,7 @@ app.get('/api/reports/pack', async (req, res, next) => {
         before: null,
         after: {
           format: 'pdf', language,
-          rowCounts: { workstreams: workstreams.length, tasks: tasks.length, raid: raid.length, synergies: synergies.length },
+          rowCounts: counts,
         },
         request: requestMeta(req),
       });
