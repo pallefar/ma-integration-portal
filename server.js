@@ -3810,12 +3810,18 @@ app.post('/api/integration-tasks', (req, res) => {
   const lane = taskLane(db);
   if (b.id) {
     const task = lane.find(t => t.id === b.id);
-    if (!task) return res.status(404).json({ error: 'Task not found.' });
+    // [security] D-11-03 / R1-02: missing AND out-of-clearance both answer
+    // the central 404 `{ error: 'Not found' }` — placed BEFORE
+    // conflictIfStale() (its 409 body would echo the record) and before any
+    // field assignment below.
+    const deal = controlStore.getDeal(req.dealContext && req.dealContext.dealId);
+    assertRecordVisibleOr404(req, db, deal, task);
     // CONC-02 (Phase 9): the route-level precheck fast path — placed BEFORE
     // any field mutation below, including the status-flip branch (a kanban
     // quick action goes through the identical check as a full edit, D-02 —
-    // no exemptions for a single-field payload).
-    if (conflictIfStale(req, res, task)) return;
+    // no exemptions for a single-field payload). The clearanceFilter arms
+    // the same rule on the WHERE-layer conflict throw (CR-01 / UF-2).
+    if (conflictIfStale(req, res, task, { clearanceFilter: recordClearanceFilter(req, db, deal) })) return;
     // Validate EVERYTHING before touching the object — readDb() hands back the
     // shared cache, so a mutation followed by a 400 would silently stick.
     // VAL-01: status/phase enum membership is now owned exclusively by
@@ -5025,6 +5031,60 @@ function reportRaidRows(db, deal, portalUser) {
     const area = resolveRaidEntryClearanceArea(entry, db);
     return area === null || accessPolicy.hasAreaGrant(deal, portalUser, area);
   });
+}
+
+// [security] D-11-03 / R1-02 / T-11-20..22 (Phase 11): the by-id WRITE-path
+// twin of the read filters above. Reading a task/RAID list was always
+// clearance-filtered; an update, status flip, delete, synergy link or
+// conversion lookup that addresses a record BY ID was not, so an uncleared
+// deal member holding an id (ids leak via URLs/CSVs/screens — authorization
+// must not rest on id secrecy) could read the record back through the
+// optimistic-locking 409 echo, overwrite it, or delete it (R1-02,
+// 09-SECURITY UF-2).
+//
+// `RecordNotFoundError` carries `reason` ('missing' | 'clearance') so the
+// central 404 handler (error-middleware block, below) answers BOTH with the
+// byte-identical `{ error: 'Not found' }` body — never a 403, never a 409,
+// never any field of the record — while the reason stays available for the
+// rate-bounded denial audit Plan 11-04 hangs on that same branch.
+class RecordNotFoundError extends Error {
+  constructor(reason) {
+    super('Not found');
+    this.name = 'RecordNotFoundError';
+    this.status = 404;
+    this.reason = reason === 'clearance' ? 'clearance' : 'missing';
+  }
+}
+
+// True when the caller may know `record` exists. The area rule is the SHARED
+// task/RAID rule: stamped `clearanceArea` first, then `dd-finding:<id>` →
+// the finding's area, then `org-flightrisk:` → 'hr', else null =
+// unrestricted. resolveTaskClearanceArea() and
+// resolveRaidEntryClearanceArea() above are line-for-line the same rule
+// (their own comments say so), so one resolver serves both lanes here —
+// keep it that way: if the two ever diverge this helper must resolve per
+// lane instead.
+function recordVisibleTo(req, db, deal, record) {
+  if (!record) return false;
+  ddFindingsLane(db);
+  const area = resolveTaskClearanceArea(record, db);
+  return area === null || accessPolicy.hasAreaGrant(deal, req.portalUser, area);
+}
+
+// Throws RecordNotFoundError for a missing OR invisible record. MUST be
+// called BEFORE conflictIfStale() (a 409 body is the R1-02 oracle) and
+// before any field of the request body is applied. 404, not 403, so
+// existence of an out-of-clearance record is never confirmed.
+function assertRecordVisibleOr404(req, db, deal, record) {
+  if (!record) throw new RecordNotFoundError('missing');
+  if (!recordVisibleTo(req, db, deal, record)) throw new RecordNotFoundError('clearance');
+}
+
+// The clearanceFilter conflictIfStale() arms on the request's db context so
+// the store's WHERE-layer conflict can never echo an invisible record either
+// (CR-01 arming order — the filter is armed before any return).
+function recordClearanceFilter(req, db, deal) {
+  return (rec) => (recordVisibleTo(req, db, deal, rec) ? rec : null);
 }
 
 app.get('/api/raid', (req, res) => {
@@ -7848,6 +7908,22 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// [security] D-11-03 / R1-02 / T-11-22 (Phase 11): the central 404 for a task/
+// RAID record that is missing OR outside the caller's clearance
+// (assertRecordVisibleOr404 throws RecordNotFoundError). One fixed body for
+// both reasons, so the response can never distinguish "no such id" from "an
+// id you may not know exists" and never carries a record field. Plan 11-04
+// attaches the rate-bounded `err.reason === 'clearance'` denial audit at this
+// exact branch. The FIRST typed mapping an error meets (above the 503/409
+// handlers that follow).
+app.use((err, req, res, next) => {
+  if (err instanceof RecordNotFoundError) {
+    if (res.headersSent) return next(err);
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next(err);
+});
+
 // [security] D-06/CONC-01 (Phase 8): ONE central error middleware mapping
 // SQLite write-lock contention (SQLITE_BUSY / SQLITE_BUSY_SNAPSHOT, via
 // isBusyError() above) to a bounded 503 + Retry-After — covering every write
@@ -8041,6 +8117,11 @@ module.exports.resolveRaidEntryClearanceArea = resolveRaidEntryClearanceArea;
 // against a hand-built task, without a live convert-then-DELETE sequence.
 module.exports.resolveTaskClearanceArea = resolveTaskClearanceArea;
 module.exports.reportTaskRows = reportTaskRows;
+// D-11-03 (Phase 11): exposed so a test can unit-check the by-id clearance
+// guard and its typed error without a full HTTP round trip.
+module.exports.assertRecordVisibleOr404 = assertRecordVisibleOr404;
+module.exports.recordVisibleTo = recordVisibleTo;
+module.exports.RecordNotFoundError = RecordNotFoundError;
 // D-19/D-21 (06-07): exposed so Plan 08's seed verification and any
 // Phase-7 consumer can call the SAME rollup implementation this route uses,
 // without booting the HTTP server for every pure-tally case.
