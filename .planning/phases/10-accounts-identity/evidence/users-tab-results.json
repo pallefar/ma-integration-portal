@@ -1,0 +1,245 @@
+[
+  {
+    "scenario": "lane:real",
+    "step": "server booted, /api/auth/mode answers",
+    "status": "PASS",
+    "detail": {
+      "mode": "real",
+      "demoOpen": false,
+      "accountsWritable": true
+    }
+  },
+  {
+    "scenario": "lane:real",
+    "step": "bootstrap-admin created the first admin",
+    "status": "PASS",
+    "detail": {
+      "preBootstrapUserCount": 0
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the Users tab lists the bootstrap admin",
+    "status": "PASS",
+    "detail": [
+      "Edit",
+      "Reset password"
+    ]
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the signed-in admin’s own row offers Edit and Reset password but never Disable",
+    "status": "PASS",
+    "detail": [
+      "Edit",
+      "Reset password"
+    ]
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "table columns are Username/Name/Role/Status/Last sign-in/Actions",
+    "status": "PASS",
+    "detail": [
+      "Username",
+      "Name",
+      "Role",
+      "Status",
+      "Last sign-in",
+      "Actions"
+    ]
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "a temporary password was generated and shown",
+    "status": "PASS",
+    "detail": {
+      "length": 20
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice appears in the list as Active + Must change password",
+    "status": "PASS",
+    "detail": "ActiveMust change password"
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice’s role shows the display label PMO",
+    "status": "PASS",
+    "detail": "PMO"
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the modal input no longer holds the password (Done clears it)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice’s temp-password login lands on /change-password.html",
+    "status": "PASS",
+    "detail": "/change-password.html"
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice rotates her password and reaches the app",
+    "status": "PASS",
+    "detail": "/"
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice’s session reports role pmo",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "role": "pmo"
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the list shows alice as Employee after the edit",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice’s next API call reports role employee without re-login",
+    "status": "PASS",
+    "detail": {
+      "status": 200,
+      "role": "employee"
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the disable dialog names the effect (signs out on next request)",
+    "status": "PASS",
+    "detail": "Disabling alice signs them out everywhere on their next request and blocks sign-in. Their account and audit trail are kept; you can re-enable it later."
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the list shows alice as Disabled",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice’s next navigation ends on /login.html",
+    "status": "PASS",
+    "detail": "/login.html"
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the list shows alice as Active again after Enable",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "reset-password shows a new temporary password once",
+    "status": "PASS",
+    "detail": {
+      "length": 20
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "alice’s previous password no longer signs in after the reset",
+    "status": "PASS",
+    "detail": 401
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "demoting the only admin shows the last-admin message in the modal",
+    "status": "PASS",
+    "detail": "At least one enabled admin must remain."
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "the modal stays open (the refusal is not swallowed)",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "no page error (admin)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "390px: the Users tab has no horizontal overflow",
+    "status": "PASS",
+    "detail": {
+      "ok": true,
+      "scrollWidth": 390,
+      "innerWidth": 390
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "390px: the add-user modal sits inside the viewport",
+    "status": "PASS",
+    "detail": {
+      "inside": true,
+      "left": 32,
+      "right": 358,
+      "vw": 390,
+      "scrollWidth": 390
+    }
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "no page error (phone)",
+    "status": "PASS",
+    "detail": []
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "audit log has user-create for alice with actor admin",
+    "status": "PASS",
+    "detail": [
+      "user-password-reset",
+      "user-update",
+      "user-create"
+    ]
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "audit log has user-update for alice with actor admin",
+    "status": "PASS",
+    "detail": [
+      "user-password-reset",
+      "user-update",
+      "user-create"
+    ]
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "audit log has user-password-reset for alice with actor admin",
+    "status": "PASS",
+    "detail": [
+      "user-password-reset",
+      "user-update",
+      "user-create"
+    ]
+  },
+  {
+    "scenario": "usersTabLifecycle@real",
+    "step": "no temporary password appears in any audit row",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "scenario": "data-integrity",
+    "step": "committed data/demo.db and data/control.db (+ -wal) sha256 unchanged",
+    "status": "PASS",
+    "detail": "4 value(s) identical"
+  },
+  {
+    "scenario": "data-integrity",
+    "step": "`git status --porcelain -- data` unchanged",
+    "status": "PASS",
+    "detail": "clean"
+  }
+]

@@ -50,6 +50,8 @@ test('admin-users-ui: admin-users.js has no HTML-string sink and talks to the 10
   assert.doesNotMatch(usersJs, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\.srcdoc\s*=/);
   assert.match(usersJs, /\/api\/admin\/users/);
   assert.match(usersJs, /accountsWritable/);
+  assert.match(usersJs, /reset-password/);
+  assert.match(usersJs, /'PATCH'/);
 });
 
 test('admin-users-ui: the temporary password is never persisted client-side', () => {
@@ -87,4 +89,13 @@ test('admin-users-ui: admin.js SECTION_META has a users key', () => {
 
 test('admin-users-ui: the read-only note names start-real-deal', () => {
   assert.match(usersJs, /read-only on the demo database\. Start a real-deal host \(start-real-deal\)/);
+});
+
+test('admin-users-ui: Disable is never offered on the signed-in admin\u2019s own row, and row actions sit behind the writable gate', () => {
+  assert.match(usersJs, /if \(!own\) \{[\s\S]*?'Disable'/);
+  assert.match(usersJs, /if \(state\.writable\) renderRowActions\(c, u\)/);
+  ['openEditUser', 'openToggleDisabled', 'openResetPassword'].forEach((fn) => {
+    assert.match(usersJs, new RegExp('function ' + fn + '\\([^)]*\\) \\{\\s*if \\(!state\\.writable\\) return;'),
+      fn + ' must refuse to open when accounts are not writable');
+  });
 });

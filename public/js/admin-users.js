@@ -237,6 +237,10 @@
     var temp = document.createElement('input');
     temp.type = 'password';
     temp.setAttribute('autocomplete', 'new-password');
+    username.id = 'au-new-username';
+    name.id = 'au-new-name';
+    role.id = 'au-new-role';
+    temp.id = 'au-new-temp';
     form.appendChild(fieldLabel('Username', username, '3–40 characters: a–z, 0–9, dot, dash, underscore'));
     form.appendChild(fieldLabel('Full name', name));
     form.appendChild(fieldLabel('Role', role));
@@ -353,8 +357,143 @@
     return tr;
   }
 
-  // Per-row write actions (rendered only when accounts are writable).
-  function renderRowActions(container, u) { /* filled in by the row-actions task */ }
+  // ------------------------------------------------------- row actions
+  // Rendered only when accounts are writable (renderRow gates the call).
+  function actionButton(label, onClick) {
+    var b = el('button', 'btn btn-secondary', label);
+    b.type = 'button';
+    b.addEventListener('click', function () { onClick(b); });
+    return b;
+  }
+
+  function renderRowActions(container, u) {
+    var own = currentUsername() && u.username === currentUsername();
+    container.appendChild(actionButton('Edit', function (b) { openEditUser(u, b); }));
+    // The signed-in admin never gets a Disable on their own row (the server
+    // refuses it too — 409 self-disable).
+    if (!own) {
+      if (u.disabled) {
+        container.appendChild(actionButton('Enable', function (b) { openToggleDisabled(u, false, b); }));
+      } else {
+        container.appendChild(actionButton('Disable', function (b) { openToggleDisabled(u, true, b); }));
+      }
+    }
+    container.appendChild(actionButton('Reset password', function (b) { openResetPassword(u, b); }));
+  }
+
+  function userUrl(username) { return '/api/admin/users/' + encodeURIComponent(username); }
+
+  function openEditUser(u, trigger) {
+    if (!state.writable) return;
+    var shell = openModal('Edit user', 'Change the name or role for ' + u.username + '. A role change applies on their next request.', trigger);
+    var form = el('form', 'deal-modal-form');
+    form.setAttribute('novalidate', 'novalidate');
+    var name = textInput('off');
+    name.value = u.name || '';
+    var role = roleSelect(u.role);
+    name.id = 'au-edit-name';
+    role.id = 'au-edit-role';
+    form.appendChild(fieldLabel('Full name', name));
+    form.appendChild(fieldLabel('Role', role));
+    var err = errorLine();
+    form.appendChild(err);
+    var actions = el('div', 'deal-modal-actions');
+    var cancel = el('button', 'btn btn-secondary', 'Cancel');
+    cancel.type = 'button';
+    var save = el('button', 'btn btn-primary', 'Save');
+    save.type = 'submit';
+    actions.appendChild(cancel);
+    actions.appendChild(save);
+    form.appendChild(actions);
+    shell.body.appendChild(form);
+    cancel.addEventListener('click', shell.close);
+    focusFirst(shell.modal);
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      err.style.display = 'none';
+      var patch = {};
+      var newName = name.value.trim();
+      if (!newName) { showError(err, 'Enter the user’s full name.'); return; }
+      if (newName !== (u.name || '')) patch.name = newName;
+      if (role.value !== u.role) patch.role = role.value;
+      if (!Object.keys(patch).length) { shell.close(); return; }
+      save.disabled = true;
+      request('PATCH', userUrl(u.username), patch).then(function (res) {
+        save.disabled = false;
+        if (res.status === 200 && res.body && res.body.user) {
+          shell.close();
+          loadUsers();
+          return;
+        }
+        showError(err, errorText(res, 'Could not update the user'));
+      });
+    });
+  }
+
+  // A small confirm dialog. run() returns a promise of {status, body}; success
+  // is decided by isOk(res); the server's refusal text stays in the dialog.
+  function openConfirm(opts) {
+    var shell = openModal(opts.title, null, opts.trigger);
+    shell.body.appendChild(el('p', 'au-confirm-text', opts.text));
+    var err = errorLine();
+    shell.body.appendChild(err);
+    var actions = el('div', 'deal-modal-actions');
+    var cancel = el('button', 'btn btn-secondary', 'Cancel');
+    cancel.type = 'button';
+    var go = el('button', 'btn btn-primary', opts.confirmLabel);
+    go.type = 'button';
+    actions.appendChild(cancel);
+    actions.appendChild(go);
+    shell.body.appendChild(actions);
+    cancel.addEventListener('click', shell.close);
+    go.focus();
+    go.addEventListener('click', function () {
+      err.style.display = 'none';
+      go.disabled = true;
+      opts.run().then(function (res) {
+        go.disabled = false;
+        if (opts.isOk(res)) { opts.onSuccess(res, shell); return; }
+        showError(err, errorText(res, opts.failure));
+      });
+    });
+  }
+
+  function openToggleDisabled(u, disable, trigger) {
+    if (!state.writable) return;
+    openConfirm({
+      title: disable ? 'Disable ' + u.username + '?' : 'Enable ' + u.username + '?',
+      text: disable
+        ? 'Disabling ' + u.username + ' signs them out everywhere on their next request and blocks sign-in. Their account and audit trail are kept; you can re-enable it later.'
+        : 'Enabling ' + u.username + ' lets them sign in again. Any sessions they had were ended when the account was disabled, so they must sign in afresh.',
+      confirmLabel: disable ? 'Disable user' : 'Enable user',
+      failure: disable ? 'Could not disable the user' : 'Could not enable the user',
+      trigger: trigger,
+      run: function () { return request('PATCH', userUrl(u.username), { disabled: disable }); },
+      isOk: function (res) { return res.status === 200 && !!(res.body && res.body.user); },
+      onSuccess: function (res, shell) { shell.close(); loadUsers(); }
+    });
+  }
+
+  function openResetPassword(u, trigger) {
+    if (!state.writable) return;
+    openConfirm({
+      title: 'Reset password for ' + u.username + '?',
+      text: 'This generates a new temporary password, signs ' + u.username + ' out everywhere, and requires them to choose a new password at their next sign-in. The temporary password is shown once.',
+      confirmLabel: 'Reset password',
+      failure: 'Could not reset the password',
+      trigger: trigger,
+      run: function () { return request('POST', userUrl(u.username) + '/reset-password', {}); },
+      isOk: function (res) { return res.status === 200 && !!res.body && typeof res.body.tempPassword === 'string'; },
+      onSuccess: function (res, shell) {
+        var pw = res.body.tempPassword;
+        var who = (res.body.user && res.body.user.username) || u.username;
+        shell.close();
+        loadUsers();
+        openTempPasswordModal(who, pw, 'Password reset');
+      }
+    });
+  }
 
   function loadUsers() {
     var host = document.getElementById('users-list');
