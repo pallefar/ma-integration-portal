@@ -2969,7 +2969,134 @@ document.addEventListener('DOMContentLoaded', () => {
     revealConfigTabs();
   }
 
+  // --- External services (egress switch) panel ---
+  // [security] SAFE-06 / D-13-05 / PD-30 (plan 13-08): the only place an admin can
+  // allow portal data to leave for Google (Gemini), Hugging Face or YouTube. Built
+  // with createElement + textContent only (no markup from any server string), real
+  // checkboxes with labels (keyboard reachable), the third-party warning is always
+  // visible. GET/POST /api/admin/egress are admin-only on the server; a non-admin
+  // answer (403) simply builds nothing. Save posts only the changed keys and
+  // re-renders from the response, so the screen always shows the effective state.
+  const EGRESS_SERVICES = [
+    { key: 'gemini', i18n: 'admin.egress.gemini', label: 'Google Gemini - AI roadmaps and insights' },
+    { key: 'huggingface', i18n: 'admin.egress.huggingface', label: 'Hugging Face - in-browser AI model download' },
+    { key: 'youtube', i18n: 'admin.egress.youtube', label: 'YouTube - welcome video embeds' }
+  ];
+
+  function egressText(tag, text, i18nKey, css) {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (i18nKey) el.setAttribute('data-i18n', i18nKey);
+    if (css) el.style.cssText = css;
+    return el;
+  }
+
+  function renderEgressPanel(panel, snapshot) {
+    while (panel.firstChild) panel.removeChild(panel.firstChild);
+
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.appendChild(egressText('h2', 'External services', 'admin.egress.title'));
+    panel.appendChild(header);
+
+    const warning = egressText('p',
+      'Enabling a service sends portal data to a third party (Google, Hugging Face or YouTube). Keep these switched off for real deals unless your security team has approved the transfer.',
+      'admin.egress.warning',
+      'font-size: 0.82rem; line-height: 1.5; color: var(--text-secondary); margin: 0 0 1rem 0; padding: 0.6rem 0.75rem; border-left: 3px solid var(--te-orange); background: rgba(233, 131, 0, 0.06);');
+    warning.setAttribute('role', 'note');
+    panel.appendChild(warning);
+
+    const effective = (snapshot && snapshot.effective) || {};
+    const defaults = (snapshot && snapshot.defaults) || {};
+    const boxes = {};
+
+    EGRESS_SERVICES.forEach((svc) => {
+      const row = document.createElement('div');
+      row.className = 'form-group';
+      row.style.cssText = 'margin-bottom: 0.75rem;';
+
+      const label = document.createElement('label');
+      label.style.cssText = 'display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 600;';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.id = 'egress-' + svc.key;
+      box.checked = effective[svc.key] === true;
+      boxes[svc.key] = box;
+      label.appendChild(box);
+      label.appendChild(egressText('span', svc.label, svc.i18n));
+      row.appendChild(label);
+
+      const state = 'Currently ' + (effective[svc.key] === true ? 'on' : 'off') +
+        ' - default for this mode: ' + (defaults[svc.key] === true ? 'on' : 'off');
+      row.appendChild(egressText('div', state, null, 'font-size: 0.75rem; color: var(--text-secondary); margin: 0.2rem 0 0 1.6rem;'));
+      panel.appendChild(row);
+    });
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem;';
+    const saveBtn = egressText('button', 'Save external services', 'admin.egress.save');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-primary';
+    const status = egressText('span', '', null, 'font-size: 0.8rem; font-weight: 600;');
+    status.setAttribute('role', 'status');
+    actions.appendChild(saveBtn);
+    actions.appendChild(status);
+    panel.appendChild(actions);
+
+    saveBtn.addEventListener('click', () => {
+      const changed = {};
+      EGRESS_SERVICES.forEach((svc) => {
+        if (boxes[svc.key].checked !== (effective[svc.key] === true)) changed[svc.key] = boxes[svc.key].checked;
+      });
+      saveBtn.disabled = true;
+      status.textContent = '';
+      fetch('/api/admin/egress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changed)
+      })
+        .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+        .then((r) => {
+          if (!r.ok) {
+            saveBtn.disabled = false;
+            status.textContent = (r.body && r.body.error) ? String(r.body.error) : 'Could not save external services.';
+            return;
+          }
+          renderEgressPanel(panel, r.body);
+          const done = panel.querySelector('[role="status"]');
+          if (done) {
+            done.textContent = 'Saved';
+            done.setAttribute('data-i18n', 'admin.egress.saved');
+          }
+        })
+        .catch(() => {
+          saveBtn.disabled = false;
+          status.textContent = 'Could not save external services.';
+        });
+    });
+  }
+
+  function loadEgressPanel() {
+    const settingsCard = settingsForm && settingsForm.closest ? settingsForm.closest('.card') : null;
+    if (!settingsCard || !settingsCard.parentNode) return;
+    fetch('/api/admin/egress')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((snapshot) => {
+        if (!snapshot || !snapshot.effective) return;
+        let panel = document.getElementById('egress-panel');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.id = 'egress-panel';
+          panel.className = 'card card-glass';
+          settingsCard.parentNode.insertBefore(panel, settingsCard.nextSibling);
+        }
+        renderEgressPanel(panel, snapshot);
+      })
+      .catch((err) => console.error('Error loading external services panel:', err));
+  }
+
   // --- Initial runs ---
+  loadEgressPanel();
   loadSettings();
   loadQuestions();
   loadAssessmentsHistory();

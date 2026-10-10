@@ -18,7 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Active welcome video settings holder
   const activeVideoSettings = {
     welcomeVideoUrl: "",
-    welcomeVideoType: "local"
+    welcomeVideoType: "local",
+    // [security] SAFE-06 / D-13-05 / PD-38 (plan 13-08): YouTube is a third-party
+    // egress channel an admin must switch on. Fail closed: only an explicit
+    // `egress.youtube === true` in the settings answer allows the thumbnail or the
+    // embed, so a missing key / failed fetch / older server never reaches YouTube.
+    youtubeAllowed: false
   };
 
   let activeEmployee = null;
@@ -1663,6 +1668,36 @@ document.addEventListener('DOMContentLoaded', () => {
     return (match && match[2].length === 11) ? match[2] : null;
   }
 
+  // [security] SAFE-06 / D-13-05 (plan 13-08): the one predicate every YouTube
+  // surface in this file asks (thumbnail, embed). True when the welcome video is a
+  // YouTube link and the instance egress switch has not allowed YouTube.
+  function youtubeBlocked() {
+    return activeVideoSettings.welcomeVideoType === 'youtube' && activeVideoSettings.youtubeAllowed !== true;
+  }
+
+  // Neutral "switched off" card in place of the thumbnail / embed. Built with
+  // createElement + textContent (no markup from any server string); the text keeps
+  // an English fallback and a data-i18n key so a translation can replace it.
+  function renderYoutubeSwitchedOff(videoWrapper, playBtn, overlayCtrls, placeholderBg) {
+    if (placeholderBg) placeholderBg.style.display = 'block';
+    if (videoWrapper) videoWrapper.style.backgroundImage = '';
+    if (playBtn) playBtn.style.display = 'none';
+    if (overlayCtrls) {
+      const vTitle = overlayCtrls.querySelector('.video-title');
+      const vDur = overlayCtrls.querySelector('.video-duration');
+      if (vTitle) vTitle.style.display = 'none';
+      if (vDur) vDur.style.display = 'none';
+    }
+    if (!videoWrapper) return;
+    const notice = document.createElement('div');
+    notice.id = 'welcome-video-egress-off';
+    notice.setAttribute('data-i18n', 'egress.switchedOff');
+    notice.setAttribute('role', 'status');
+    notice.textContent = 'Video switched off by your administrator';
+    notice.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; font-weight: 700; padding: 0.75rem 1.5rem; font-size: 0.95rem; border-radius: var(--radius-full); background: rgba(255,255,255,0.15); color: white; backdrop-filter: blur(4px); text-align: center;';
+    videoWrapper.appendChild(notice);
+  }
+
   function updateVideoUI() {
     const url = activeVideoSettings.welcomeVideoUrl;
     const type = activeVideoSettings.welcomeVideoType;
@@ -1677,6 +1712,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Remove any existing dynamic CTA button
     const oldCta = document.getElementById('btn-add-video-cta');
     if (oldCta) oldCta.remove();
+    const oldOff = document.getElementById('welcome-video-egress-off');
+    if (oldOff) oldOff.remove();
     
     if (!url) {
       // If no video URL, display a beautiful localized CTA button
@@ -1704,6 +1741,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (vTitle) vTitle.style.display = 'none';
         if (vDur) vDur.style.display = 'none';
       }
+    } else if (youtubeBlocked()) {
+      // [security] SAFE-06 (plan 13-08): switch off -> no thumbnail URL is built and
+      // nothing from YouTube is requested; a neutral placeholder says why.
+      renderYoutubeSwitchedOff(videoWrapper, playBtn, overlayCtrls, placeholderBg);
     } else {
       // Restore standard elements
       if (playBtn) playBtn.style.display = 'flex';
@@ -1759,6 +1800,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentLang = localStorage.getItem('employeeLanguage') || 'en';
         activeVideoSettings.welcomeVideoUrl = settings[`welcomeVideoUrl_${currentLang}`] || settings.welcomeVideoUrl || "";
         activeVideoSettings.welcomeVideoType = settings[`welcomeVideoType_${currentLang}`] || settings.welcomeVideoType || "local";
+        activeVideoSettings.youtubeAllowed = !!(settings.egress && settings.egress.youtube === true);
         resetVideoPlayer();
       })
       .catch(err => console.error("Error loading welcome video settings:", err));
@@ -1796,6 +1838,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (videoAlert) videoAlert.style.display = 'none';
       
       if (type === 'youtube') {
+        // [security] SAFE-06 (plan 13-08): defence in depth - the play control is
+        // already hidden when YouTube is switched off; never build the iframe.
+        if (youtubeBlocked()) return;
         let youtubeId = getYoutubeId(url);
         if (!youtubeId && url.length === 11) youtubeId = url;
         
