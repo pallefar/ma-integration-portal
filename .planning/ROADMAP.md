@@ -169,7 +169,17 @@ screenshots. *Optional internal pilot checkpoint after Phase 16 (plain tag, no r
   3. A deal member outside a record's clearance area gets "not found" — never a body, a 409 echo or a silent overwrite — on read, update, status-flip and delete of tasks and RAID; no GET route changes state.
   4. Every 401/403 and clearance-404 appears as a rate-bounded security event with actor, route and reason.
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — ROLE_READ_POLICY read gate (tracer: employee→synergies), coverage test, full real-deal matrix (W1)
+- [ ] 11-02-PLAN.md — Config/content writes admin-only, public settings subset, deal-level values on the setup route (W1)
+- [ ] 11-03-PLAN.md — Clean-room 404 on task/RAID write/delete/409 paths + store-layer fail-closed backstop (W1)
+- [ ] 11-04-PLAN.md — Rate-bounded denial audit for gate/resolver 401/403 and clearance-404 (W2)
+- [ ] 11-05-PLAN.md — Personal-data reads: pulses projection + policy-aware notifications (W2)
+- [ ] 11-06-PLAN.md — No GET mutates: get-or-create → POST + instrumented every-GET test (W2)
+- [ ] 11-07-PLAN.md — Access map on /api/auth/me + hide controls that would 403 (W3)
+- [ ] 11-08-PLAN.md — Playwright evidence (real + demo lanes), DEPLOYMENT.md role matrix, validation sign-off (W4)
 **UI hint**: no
 
 ### Phase 12: Data-Layer Integrity & Performance
