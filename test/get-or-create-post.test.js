@@ -230,3 +230,33 @@ test('real deal, employee: get-or-create resolves ONLY the caller\'s own record 
     }
   });
 });
+
+test('WR-03 (Phase 11 review): the restricted lane never takes role / department / company from the body — server-minted defaults only; staff never see the self-assigned values', async () => {
+  const fx = realDeal('deal_gocwr03', 'gw');
+  const dealConn = store.getOrOpenConnection(dbFiles.dealDbPath('deal_gocwr03'), dbFiles.DEAL_SCHEMA_PATH);
+  await withServer(async (base) => {
+    const forged = ['<img src=x onerror=alert(1)>', 'Executive Board', 'TE Connectivity Forged'];
+    const r = await postGoc(base, fx.cookie('gw-employee'), {
+      role: forged[0], department: forged[1], company: forged[2], isLeader: true,
+    });
+    assert.strictEqual(r.status, 201, r.text);
+    const e = r.json.employee;
+    assert.match(e.id, /^emp_acct_[0-9a-f]{20}$/);
+    assert.strictEqual(e.role, 'Specialist', 'role is the server default');
+    assert.strictEqual(e.department, 'Operations', 'department is the server default');
+    assert.ok(!forged.includes(e.company), 'company is the deal\'s own, never the supplied one');
+    assert.strictEqual(e.isLeader, false);
+    const stored = JSON.parse(dealConn.prepare('SELECT data FROM employees WHERE id = ?').get(e.id).data);
+    assert.deepStrictEqual([stored.role, stored.department, stored.company], [e.role, e.department, e.company], 'the stored row matches');
+
+    const staff = await fetch(base + '/api/employees', { headers: { cookie: fx.cookie('gw-hrbp') } });
+    const text = await staff.text();
+    assert.strictEqual(staff.status, 200);
+    for (const s of forged) assert.ok(!text.includes(s), `the IL's roster carries none of the self-assigned value ${s}`);
+
+    // Roles allowed the roster keep supplying their own fields (unchanged behaviour).
+    const lead = await postGoc(base, fx.cookie('gw-hrbp'), { empId: 'emp_gw_staffmade', name: 'Staff Made', role: 'Analyst', department: 'Finance', company: 'Goc Co' });
+    assert.strictEqual(lead.status, 201, lead.text);
+    assert.deepStrictEqual([lead.json.employee.role, lead.json.employee.department, lead.json.employee.company], ['Analyst', 'Finance', 'Goc Co']);
+  });
+});

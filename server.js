@@ -7754,9 +7754,13 @@ app.post('/api/employees/get-or-create', (req, res) => {
     id: restricted ? ownId : (empId || newId('emp')),
     // restricted: the authoritative display name from the account, not a claim
     name: restricted ? (req.portalUser.name || req.portalUser.username) : (name || "Valued Team Member"),
-    role: role || "Specialist",
-    department: department || "Operations",
-    company: company || targetCompany || 'NextGen Sensors Ltd.',
+    // [security] WR-03 (Phase 11 review, amendment 5): the restricted lane is
+    // a minimal, server-minted row — the caller cannot self-assign a role,
+    // department or employer into the IL's roster (staff read GET
+    // /api/employees). Same defaults as any other server-minted profile.
+    role: restricted ? "Specialist" : (role || "Specialist"),
+    department: restricted ? "Operations" : (department || "Operations"),
+    company: restricted ? (targetCompany || 'NextGen Sensors Ltd.') : (company || targetCompany || 'NextGen Sensors Ltd.'),
     completedLessons: [],
     points: 0,
     badge: "New Recruit",
