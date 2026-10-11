@@ -47,7 +47,7 @@ DEPLOYMENT.md documents each Phase 13 control.
 | 1 (tracer) | `ef22586` | `lib/csp.js` default -> enforce; `csp-policy` default case flipped + rollback case; `csp-report` / `egress-settings` follow; `enf-stored-xss-dev.log`, `enf-walk-dev.log` |
 | 2 | `97b6ea2` | `test/csp-strict-gate.test.js`; `enf-walk-demo-open.log`, `enf-walk-real.log`, `enf-transformers-import.log` |
 | 2 (cont.) | `1725856` | `slide-sandbox.js` default-directory variant follows the new location; remaining enforced logs (storedXss real+demo-open, clientCorpus, egress, caching, slideSandbox) |
-| 2 (docs) | `(README)` | evidence README: enforced-run table |
+| 2 (docs) | `8f7c10c` | evidence README: enforced-run table |
 | 3 | `382c260` | DEPLOYMENT.md Content safety section + Known limitations |
 
 Tracer gate (autonomous policy): re-ran the tracer `<verify>` (csp-policy green, both enforced logs `EXIT=0`,
