@@ -310,6 +310,173 @@ test('the play handler never builds the embed while YouTube is off (defence in d
   assert.ok(branch > 0 && thumb > branch, 'the blocked branch precedes the thumbnail URL');
 });
 
+// ================================================= transitions.js: HF + Gemini
+test('Transformers import is reachable only behind the huggingface check', () => {
+  const needle = "import('/vendor/transformers/transformers.min.js')";
+  assert.strictEqual(TRANSITIONS_SRC.split(needle).length - 1, 1, 'exactly one dynamic import of the bundle');
+  const fn = extractBlock(TRANSITIONS_SRC, 'function runRealTransformersDownload(');
+  const gate = fn.indexOf('if (!huggingFaceAllowed())');
+  assert.ok(gate > 0 && fn.indexOf(needle) > gate, 'the check precedes the import');
+  assert.ok(/function huggingFaceAllowed\(\)[\s\S]{0,120}\.huggingface === true/.test(TRANSITIONS_SRC),
+    'allowed only on an explicit true (missing = off)');
+});
+
+test('selector: with huggingface off the downloadable models are disabled, simulated-duck stays, reason shown', () => {
+  const modal = extractBlock(TRANSITIONS_SRC, 'function injectAiInsightModal(');
+  const gate = modal.indexOf('if (!huggingFaceAllowed()) {');
+  assert.ok(gate > 0, 'selector gated on huggingFaceAllowed()');
+  const gated = modal.slice(gate, modal.indexOf('options.forEach(opt => {\n        opt.addEventListener'));
+  assert.ok(gated.includes("data-model') === 'simulated-duck'"), 'the non-AI option is exempt');
+  assert.ok(gated.includes('radio.disabled = true'), 'downloadable radios disabled');
+  assert.ok(gated.includes("'egress.switchedOff'") && gated.includes('switched off by your administrator'));
+  assert.ok(modal.includes("if (opt.classList.contains('disabled')) return;"), 'a disabled option never becomes selected');
+  assert.ok(modal.includes("if (!huggingFaceAllowed()) selectedModel = 'simulated-duck';"), 'download button falls back to the simulation');
+  assert.ok(!stripComments(gated).includes('innerHTML'), 'gated UI built without markup');
+});
+
+function runDownload(egress) {
+  const calls = { saved: [], timers: [] };
+  const sandbox = {
+    console, Promise,
+    setTimeout: (fn) => { calls.timers.push(fn); return 0; },
+    saveSettingsAndComplete: (m) => calls.saved.push(m),
+  };
+  vm.createContext(sandbox);
+  const code = [
+    `let aiModalEgress = ${JSON.stringify(egress)};`,
+    extractBlock(TRANSITIONS_SRC, 'function huggingFaceAllowed('),
+    extractBlock(TRANSITIONS_SRC, 'function runRealTransformersDownload('),
+    ';__exports = { runRealTransformersDownload };',
+  ].join('\n');
+  vm.runInContext(code, sandbox);
+  const label = { textContent: '' };
+  const status = { textContent: '' };
+  let threw = null;
+  try {
+    sandbox.__exports.runRealTransformersDownload('lamini-78m', {}, { style: {} }, {}, label, status);
+  } catch (e) { threw = e; }
+  return { calls, label, status, threw };
+}
+
+test('runRealTransformersDownload: off -> nothing imported, falls back to the non-AI path', () => {
+  for (const egress of [{ huggingface: false }, {}, null]) {
+    const r = runDownload(egress);
+    assert.strictEqual(r.threw, null);
+    assert.strictEqual(r.label.textContent, 'Model download switched off by your administrator');
+    assert.ok(!/Importing client-side/.test(r.label.textContent), 'the import path was never entered');
+    assert.strictEqual(r.calls.timers.length, 1);
+    r.calls.timers[0]();
+    assert.deepStrictEqual(r.calls.saved, ['simulated-duck']);
+  }
+});
+
+test('runRealTransformersDownload: on -> the library import path is entered (today\'s flow)', () => {
+  const r = runDownload({ huggingface: true });
+  assert.strictEqual(r.label.textContent, 'Importing client-side Deep Learning library...');
+  assert.strictEqual(r.status.textContent, 'Connecting to Hugging Face Hub...');
+});
+
+function runInsight(body) {
+  const timers = [];
+  const fetches = [];
+  const contentArea = makeEl('smol-insight-content');
+  const refresh = makeEl('btn-refresh-smol-insight');
+  refresh.style.display = 'flex';
+  const sandbox = {
+    console, Promise,
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return 0; },
+    document: {
+      querySelector: (sel) => (sel === '#smol-insight-content' ? contentArea : null),
+      getElementById: (id) => (id === 'btn-refresh-smol-insight' ? refresh : null),
+      createElement: (tag) => { const e = makeEl(''); e.tag = tag; return e; },
+    },
+    fetch: (url) => {
+      fetches.push(String(url));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(`${extractBlock(TRANSITIONS_SRC, 'function fetchSmolInsight(')};\n;__exports = { fetchSmolInsight };`, sandbox);
+  sandbox.__exports.fetchSmolInsight('hrbp');
+  return { timers, fetches, contentArea, refresh, settle: () => new Promise((r) => setImmediate(r)) };
+}
+
+test('AI-insight card: the egressDisabled marker is a rendered state, never retried', async () => {
+  const r = runInsight({ egressDisabled: 'gemini', message: 'Switched off' });
+  await r.settle(); await r.settle();
+  assert.strictEqual(r.fetches.length, 1, 'one request, no retry');
+  assert.strictEqual(r.timers.length, 0, 'no timer / retry scheduled');
+  const off = r.contentArea.children.find((c) => c.attrs['data-i18n'] === 'egress.switchedOff');
+  assert.ok(off, 'switched-off state rendered');
+  assert.match(off.textContent, /switched off by your administrator/);
+  assert.strictEqual(r.refresh.style.display, 'none', 'recalculate withdrawn so nothing re-asks');
+  assert.strictEqual(r.contentArea.innerHTML, '', 'no markup injected');
+});
+
+test('AI-insight card: a normal insight body still renders as before (control)', async () => {
+  const r = runInsight({ success: true, insight: 'Plan the day-30 gate.' });
+  await r.settle(); await r.settle();
+  assert.strictEqual(r.fetches.length, 1);
+  assert.strictEqual(r.timers.length, 1, 'today\'s fade-in timer is the only one');
+  assert.ok(!r.contentArea.children.some((c) => c.attrs['data-i18n'] === 'egress.switchedOff'));
+});
+
+// ================================================================ admin.js RAG
+test('RAG upload card starts hidden and is revealed only for dev|demo', () => {
+  const card = makeEl('rag-card');
+  const sandbox = { ragUploadCard: card };
+  vm.createContext(sandbox);
+  vm.runInContext(`${extractBlock(ADMIN_SRC, 'function setRagUploadVisible(')};\n;__exports = { setRagUploadVisible };`, sandbox);
+  const { setRagUploadVisible } = sandbox.__exports;
+  for (const mode of ['real', undefined, null, '', 'weird']) {
+    card.style.display = 'x';
+    setRagUploadVisible(mode);
+    assert.strictEqual(card.style.display, 'none', `mode ${mode} keeps it hidden`);
+  }
+  for (const mode of ['dev', 'demo']) {
+    card.style.display = 'none';
+    setRagUploadVisible(mode);
+    assert.strictEqual(card.style.display, '', `mode ${mode} reveals it`);
+  }
+  // default hidden BEFORE the probe is even sent
+  const hide = ADMIN_SRC.indexOf("ragUploadCard.style.display = 'none';\n    fetch('/api/auth/mode')");
+  assert.ok(hide > 0, 'hidden synchronously, then probed');
+  assert.ok(ADMIN_SRC.includes('.catch(() => { /* stays hidden */ })'), 'a failed probe leaves it hidden');
+});
+
+test('RAG upload: the egressDisabled answer shows the switched-off message and is not retried', () => {
+  const handler = extractBlock(ADMIN_SRC, 'function handleRagPdfFile(');
+  const code = stripComments(handler);
+  const markerAt = code.indexOf('data.egressDisabled');
+  const successAt = code.indexOf('data.success');
+  assert.ok(markerAt > 0 && markerAt < successAt, 'marker handled before the success branch');
+  const branch = code.slice(markerAt, code.indexOf('return;', markerAt) + 7);
+  assert.ok(branch.includes('showRagEgressOff()'));
+  for (const bad of ['fetch(', 'setTimeout(', 'setInterval(', 'alert(']) {
+    assert.ok(!branch.includes(bad), `marker branch has no ${bad}`);
+  }
+
+  const registry = {};
+  const parent = makeEl('p', registry);
+  const zone = makeEl('rag-upload-zone', registry);
+  zone.parentNode = parent;
+  parent.insertBefore = (c) => parent.appendChild(c);
+  const sandbox = {
+    ragUploadZone: zone,
+    document: {
+      getElementById: (id) => registry[id] || null,
+      createElement: (tag) => { const e = makeEl('', registry); e.tag = tag; return e; },
+    },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(`${extractBlock(ADMIN_SRC, 'function showRagEgressOff(')};\n;__exports = { showRagEgressOff };`, sandbox);
+  sandbox.__exports.showRagEgressOff();
+  const note = parent.children.find((c) => c.id === 'rag-egress-off-notice');
+  assert.ok(note);
+  assert.strictEqual(note.attrs['data-i18n'], 'egress.switchedOff');
+  assert.match(note.textContent, /switched off by your administrator/);
+});
+
 // ============================================================== HTTP (child)
 test('HTTP: admin POST /api/admin/egress { youtube:false } is visible in GET /api/settings for another role', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-egress-client-'));

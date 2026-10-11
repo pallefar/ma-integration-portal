@@ -3252,15 +3252,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
 
-          // Show the gorgeous prompt modal
-          setTimeout(injectAiInsightModal, 800); // slight delay for loading aesthetic entry
+          // Show the gorgeous prompt modal. [security] SAFE-06 / D-13-05 (plan 13-08):
+          // the effective egress switch rides in on the same settings answer; a
+          // missing `egress` (older server) is treated as "off" (PD-38).
+          setTimeout(function () { injectAiInsightModal(settings.egress); }, 800); // slight delay for loading aesthetic entry
         })
         .catch(err => console.error("Error checking AI Insight settings:", err));
     }
 
-    function injectAiInsightModal() {
+    // [security] SAFE-06 / D-13-05 / PD-38 (plan 13-08): the downloadable models
+    // pull weights from Hugging Face, a third-party channel an admin must switch
+    // on. Fail closed: only an explicit `egress.huggingface === true` allows it.
+    let aiModalEgress = null;
+    function huggingFaceAllowed() {
+      return !!(aiModalEgress && aiModalEgress.huggingface === true);
+    }
+
+    function injectAiInsightModal(egress) {
       // Avoid duplicate modals
       if (document.getElementById('ai-insight-modal')) return;
+      aiModalEgress = egress || null;
 
       const overlay = document.createElement('div');
       overlay.className = 'ai-insight-modal-overlay';
@@ -3327,8 +3338,32 @@ document.addEventListener('DOMContentLoaded', () => {
       const options = overlay.querySelectorAll('.ai-insight-model-option');
       let selectedModel = 'simulated-duck';
 
+      // With Hugging Face switched off only the non-AI path stays selectable: the
+      // downloadable models are disabled (never clickable, radio disabled) and the
+      // reason is stated; `simulated-duck` stays selected.
+      if (!huggingFaceAllowed()) {
+        options.forEach(opt => {
+          if (opt.getAttribute('data-model') === 'simulated-duck') return;
+          opt.classList.add('disabled');
+          opt.setAttribute('aria-disabled', 'true');
+          opt.style.opacity = '0.5';
+          opt.style.cursor = 'not-allowed';
+          const radio = opt.querySelector('.ai-insight-option-radio');
+          if (radio) radio.disabled = true;
+        });
+        const offNote = document.createElement('p');
+        offNote.id = 'ai-insight-egress-off';
+        offNote.setAttribute('data-i18n', 'egress.switchedOff');
+        offNote.setAttribute('role', 'status');
+        offNote.style.cssText = 'font-size: 0.8rem; font-weight: 700; color: var(--te-dark-teal); margin: 0.5rem 0 0 0;';
+        offNote.textContent = 'Model download switched off by your administrator';
+        const optionsBox = overlay.querySelector('#modal-options-container');
+        if (optionsBox && optionsBox.parentNode) optionsBox.parentNode.insertBefore(offNote, optionsBox.nextSibling);
+      }
+
       options.forEach(opt => {
         opt.addEventListener('click', () => {
+          if (opt.classList.contains('disabled')) return;
           options.forEach(o => o.classList.remove('active'));
           options.forEach(o => o.querySelector('.ai-insight-option-radio').checked = false);
           opt.classList.add('active');
@@ -3345,6 +3380,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Download/Start button
       overlay.querySelector('#btn-modal-download').addEventListener('click', () => {
+        // [security] SAFE-06 (plan 13-08): with Hugging Face off the only reachable
+        // path is the local simulation, whatever the selection state says.
+        if (!huggingFaceAllowed()) selectedModel = 'simulated-duck';
         // Hide options & actions
         overlay.querySelector('#modal-options-container').style.display = 'none';
         overlay.querySelector('#modal-actions-container').style.display = 'none';
@@ -3398,6 +3436,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function runRealTransformersDownload(model, overlay, fill, pctEl, labelEl, statusEl) {
+      // [security] SAFE-06 / D-13-05 (plan 13-08): defence in depth - the library
+      // import and every Hugging Face request sit behind this check. Switched off:
+      // nothing is imported or requested, the chatbot keeps its non-AI path.
+      if (!huggingFaceAllowed()) {
+        labelEl.textContent = 'Model download switched off by your administrator';
+        statusEl.textContent = 'Using the built-in TEodor engine instead.';
+        setTimeout(() => {
+          saveSettingsAndComplete('simulated-duck', overlay);
+        }, 1500);
+        return;
+      }
       const modelName = model === 'lamini-78m' ? 'Xenova/LaMini-Flan-T5-78M' : 'Xenova/Qwen1.5-0.5B-Chat';
       labelEl.textContent = "Importing client-side Deep Learning library...";
       statusEl.textContent = "Connecting to Hugging Face Hub...";
@@ -4133,6 +4182,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return res.json();
       })
       .then(data => {
+        if (data && data.egressDisabled) {
+          // [security] SAFE-06 / D-13-05 (plan 13-08): the Gemini switch is off - a
+          // final state, rendered once with textContent. No retry, no timer, and the
+          // Recalculate control is withdrawn so nothing re-asks.
+          contentArea.textContent = '';
+          const off = document.createElement('span');
+          off.setAttribute('data-i18n', 'egress.switchedOff');
+          off.style.cssText = 'display: inline-block; padding: 0.25rem 0; font-weight: 700; color: var(--te-dark-teal);';
+          off.textContent = 'AI insight switched off by your administrator';
+          contentArea.appendChild(off);
+          const refreshOff = document.getElementById('btn-refresh-smol-insight');
+          if (refreshOff) refreshOff.style.display = 'none';
+          return;
+        }
         if (data.success && data.insight) {
           contentArea.style.opacity = '0';
           contentArea.style.transition = 'opacity 0.3s ease';

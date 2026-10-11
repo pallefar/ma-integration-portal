@@ -1353,6 +1353,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return res.json();
       })
       .then(data => {
+        if (data && data.egressDisabled) {
+          // [security] SAFE-06 / D-13-05 (plan 13-08): the Gemini switch is off - an
+          // explicit, final state. Never retried; no timer is left running.
+          ragProcessingContainer.style.display = 'none';
+          showRagEgressOff();
+          ragFileInput.value = '';
+          return;
+        }
         if (data.success) {
           updateRagUploadProgress(90, "Compiling and building new active RAG index...");
           stepCognitive.querySelector('.step-bullet').textContent = '✅';
@@ -1390,6 +1398,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     reader.readAsDataURL(file);
+  }
+
+  // [security] SAFE-06 / D-13-05 / PD-29 (plan 13-08): the AI-training upload is a
+  // demo-only feature (the server answers 404 in a real deal). Its card starts
+  // HIDDEN and is revealed only once GET /api/auth/mode answers `dev` or `demo`, so
+  // a real deal never shows a control that could only fail (and nothing flashes).
+  // A failed probe leaves it hidden.
+  const ragUploadCard = ragUploadZone && ragUploadZone.closest ? ragUploadZone.closest('.card') : null;
+  function setRagUploadVisible(mode) {
+    if (!ragUploadCard) return;
+    ragUploadCard.style.display = (mode === 'dev' || mode === 'demo') ? '' : 'none';
+  }
+  function showRagEgressOff() {
+    if (!ragUploadZone || !ragUploadZone.parentNode) return;
+    let note = document.getElementById('rag-egress-off-notice');
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'rag-egress-off-notice';
+      note.setAttribute('data-i18n', 'egress.switchedOff');
+      note.setAttribute('role', 'status');
+      note.style.cssText = 'margin-top: 1rem; font-size: 0.82rem; font-weight: 700; color: var(--te-dark-teal);';
+      ragUploadZone.parentNode.insertBefore(note, ragUploadZone.nextSibling);
+    }
+    note.textContent = 'AI training is switched off by your administrator';
+  }
+  if (ragUploadCard) {
+    ragUploadCard.style.display = 'none';
+    fetch('/api/auth/mode')
+      .then(res => res.json())
+      .then(info => setRagUploadVisible(info && info.mode))
+      .catch(() => { /* stays hidden */ });
   }
 
   function updateRagUploadProgress(percent, statusText) {
