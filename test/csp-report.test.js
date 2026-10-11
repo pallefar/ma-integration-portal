@@ -93,7 +93,7 @@ test('tracer: a Chromium-shaped report is accepted anonymously and shows up, que
   const admin = await list('admin');
   assert.strictEqual(admin.status, 200);
   assert.deepStrictEqual(Object.keys(admin.json).sort(), ['count', 'mode', 'violations']);
-  assert.strictEqual(admin.json.mode, 'report-only');
+  assert.strictEqual(admin.json.mode, 'enforce', 'CSP_MODE is unset in this suite: the endpoint reports the (enforce) default, 13-13');
   assert.strictEqual(admin.json.count, 1);
   const v = admin.json.violations[0];
   assert.deepStrictEqual(Object.keys(v).sort(), [
