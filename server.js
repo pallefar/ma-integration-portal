@@ -260,6 +260,9 @@ app.use((req, res, next) => {
   const r = pathForms(req.path);
   const forms = r.ok ? r.forms : [String(req.path).toLowerCase().replace(/\/{2,}/g, '/')];
   if (forms.some((f) => f === '/api' || f.startsWith('/api/'))) {
+    // [security] SC-04 (13-SECURITY): this guard answers BEFORE the /api no-store
+    // middleware, so the 404 must carry the header itself (SAFE-07 (a)).
+    res.set('Cache-Control', 'no-store');
     return res.status(404).json({ error: 'Not found' });
   }
   next();
@@ -3103,18 +3106,44 @@ app.post('/api/admin/egress', (req, res) => {
   if (!EGRESS_KINDS.some((k) => Object.prototype.hasOwnProperty.call(patch, k))) {
     return res.status(400).json({ error: 'No egress key supplied' });
   }
+  // [security] T-13-13 (13-SECURITY): under DEMO_OPEN=1 the /api gate nulls
+  // req.portalUser after resolving the X-Admin-Token (open mode), yet
+  // isAdminRequest() re-admits the token here - so the actor is the SAME
+  // attributed break-glass identity the gate gives that token (never anonymous:
+  // recordSecurityEvent refuses a null actor by design).
+  const actor = req.portalUser || (isAdminRequest(req)
+    ? { username: 'admin-token', role: 'admin', sessionId: null, dealId: null }
+    : null);
+  // The audit row is written BEFORE the setting is, so a failed audit (no actor,
+  // audit.db unavailable / busy) throws here with nothing persisted - an
+  // egress change can never exist unaudited. `after` is the overlay set() will
+  // store (known keys, real booleans only); a busy/failed runtime.db write below
+  // still maps to the central 503/500 handlers, and then records a compensating
+  // `egress-settings-change-failed` row so the log never claims a change that
+  // did not happen.
   const before = { ...egress.current() };
-  egress.set(req.body || {});
-  const snap = egressSnapshot();
+  const after = { ...before };
+  for (const k of EGRESS_KINDS) {
+    if (typeof patch[k] === 'boolean') after[k] = patch[k];
+  }
+  const meta = requestMeta(req);
   auditHook.recordSecurityEvent({
-    actor: req.portalUser,
+    actor,
     action: 'egress-settings-changed',
     subject: 'egress',
     before,
-    after: snap.effective,
-    request: requestMeta(req),
+    after,
+    request: meta,
   });
-  res.json(snap);
+  try {
+    egress.set(patch);
+  } catch (e) {
+    try {
+      auditHook.recordSecurityEvent({ actor, action: 'egress-settings-change-failed', subject: 'egress', before, after, request: meta });
+    } catch (e2) { /* best effort - the original failure is what the caller sees */ }
+    throw e;
+  }
+  res.json(egressSnapshot());
 });
 
 // [security] SAFE-02 / D-13-03 / PD-25 (plan 13-07): the CSP violation channel.
@@ -3766,7 +3795,10 @@ app.post('/api/media', (req, res) => {
     // the central middleware here — the surrounding fs work (mkdir/write
     // file) keeps its existing generic handling for every other failure.
     if (isBusyError(e)) throw e;
-    console.error('Media upload failed:', e);
+    // [security] SC-05 (13-SECURITY): an fs error object carries the full target
+    // path including the admin-chosen file name (MNPI-bearing deck names) -
+    // log the error code only, never the object or its message (mirrors WR-A05).
+    console.error('Media upload failed:', (e && typeof e.code === 'string' && /^[A-Z0-9_]{1,40}$/.test(e.code)) ? e.code : 'unknown');
     res.status(500).json({ error: 'Media upload failed.' });
   }
 });
