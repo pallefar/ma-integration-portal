@@ -62,9 +62,11 @@ test('slide-sandbox-client (d): the overview deck still frames deck.html itself 
   const overview = readPublic('overview.html');
   assert.ok(/<iframe id="deckframe" src="\/overview-deck\/deck\.html"/.test(overview), 'overview.html frames deck.html directly');
   assert.ok(!/id="deckframe"[^>]*sandbox/.test(overview), 'the deck frame itself is not sandboxed (it is first-party markup)');
-  assert.ok(/d\.type === 'open-slide'[\s\S]{0,200}window\.openHtmlSlide\(d\.url/.test(overview), 'open-slide messages are routed to openHtmlSlide');
-  // 13-11 (D-13-03): the deck code moved from inline blocks to /js/overview-deck/*.js, so the bridge is
-  // asserted over the page markup plus the external scripts it loads (the same code, at the same position).
+  // SAFE-02 (13-10): the relay moved out of the inline block into /js/pages/overview-1.js, same code, same position.
+  const relay = readPublic('js', 'pages', 'overview-1.js');
+  assert.ok(/<script src="\/js\/pages\/overview-1\.js\?v=/.test(overview), 'overview.html loads the externalised relay');
+  assert.ok(/d\.type === 'open-slide'[\s\S]{0,200}window\.openHtmlSlide\(d\.url/.test(relay), 'open-slide messages are routed to openHtmlSlide');
+  // 13-11 (D-13-03): the deck code moved to /js/overview-deck/*.js — asserted over the markup plus the external scripts.
   const deckScripts = ['deck.js', 'deck-bridge.js'].map((f) => readPublic('js', 'overview-deck', f)).join('\n');
   const deck = readPublic('overview-deck', 'deck.html') + '\n' + deckScripts;
   assert.ok(/parent\.postMessage\(\{type:'open-slide'/.test(deck) && /parent\.postMessage\(\{type:'deck-overlay'/.test(deck));
