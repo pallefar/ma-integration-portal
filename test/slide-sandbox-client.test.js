@@ -62,7 +62,10 @@ test('slide-sandbox-client (d): the overview deck still frames deck.html itself 
   const overview = readPublic('overview.html');
   assert.ok(/<iframe id="deckframe" src="\/overview-deck\/deck\.html"/.test(overview), 'overview.html frames deck.html directly');
   assert.ok(!/id="deckframe"[^>]*sandbox/.test(overview), 'the deck frame itself is not sandboxed (it is first-party markup)');
-  assert.ok(/d\.type === 'open-slide'[\s\S]{0,200}window\.openHtmlSlide\(d\.url/.test(overview), 'open-slide messages are routed to openHtmlSlide');
+  // SAFE-02 (13-10): the relay moved out of the inline block into /js/pages/overview-1.js, same code, same position.
+  const relay = readPublic('js', 'pages', 'overview-1.js');
+  assert.ok(/<script src="\/js\/pages\/overview-1\.js\?v=/.test(overview), 'overview.html loads the externalised relay');
+  assert.ok(/d\.type === 'open-slide'[\s\S]{0,200}window\.openHtmlSlide\(d\.url/.test(relay), 'open-slide messages are routed to openHtmlSlide');
   const deck = readPublic('overview-deck', 'deck.html');
   assert.ok(/parent\.postMessage\(\{type:'open-slide'/.test(deck) && /parent\.postMessage\(\{type:'deck-overlay'/.test(deck));
   // built-in decks opened via openHtmlSlide must not depend on same-origin access
