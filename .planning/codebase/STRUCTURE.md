@@ -80,7 +80,6 @@ M&A/
 │   │       └── [*.wasm]           # ONNX model WebAssembly files
 │   │
 │   ├── sent_emails/               # Archive of admin-sent communications (HTML snapshots)
-│   ├── doom/                      # Easter egg: DOS emulator assets (js-dos.js, wdosbox.js)
 │   └── manifest.json              # PWA manifest
 │
 ├── .planning/
