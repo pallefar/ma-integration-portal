@@ -260,31 +260,25 @@ function extractHandlerStripLines(sourceText) {
 }
 
 // 13-01 (SAFE-01): lib/sanitizeHtml.js no longer carries a regex copy (it is
-// the vendored parser driven by lib/htmlPolicy.js), so this guard loses that
-// leg and keeps ONLY the page-layout.js <-> transitions.js client-copy parity.
-// Plans 13-06 and 13-09 retire those two client copies (MASafeHtml replaces
-// them); this test is then removed with them.
-test('xss-chain (b4): the two remaining client sanitizer copies carry byte-identical handler-strip rules (anti-drift) and lib/sanitizeHtml.js carries none', () => {
+// the vendored parser driven by lib/htmlPolicy.js), so that leg is asserted
+// absent. 13-06 (SAFE-01 client, D-13-02): public/js/page-layout.js no longer
+// carries one either — its CMS HTML renders through MASafeHtml
+// (public/js/safe-html.js, policy-parity-tested in
+// test/safe-html-policy.test.js) — so that leg is asserted absent too. What
+// remains is the single public/js/transitions.js client copy, retired by 13-09
+// (which routes [data-i18n-html] through MASafeHtml); this test is removed
+// with it.
+test('xss-chain (b4): only the transitions.js client sanitizer copy remains; lib/sanitizeHtml.js and page-layout.js carry no regex handler-strip rule', () => {
   const fromSanitizeHtml = extractHandlerStripLines(fs.readFileSync(SANITIZE_HTML_PATH, 'utf8'));
   assert.strictEqual(fromSanitizeHtml.length, 0, 'lib/sanitizeHtml.js must not carry a regex handler-strip rule — it is the parser sanitizer');
 
   const fromPageLayout = extractHandlerStripLines(pageLayoutJs);
+  assert.strictEqual(fromPageLayout.length, 0, 'public/js/page-layout.js must not carry a regex handler-strip rule — CMS HTML renders through MASafeHtml (13-06)');
+  assert.ok(/MASafeHtml\.render/.test(pageLayoutJs), 'public/js/page-layout.js must render CMS HTML through MASafeHtml.render');
+
   const fromTransitions = extractHandlerStripLines(transitionsJs);
-
-  const namedSequences = {
-    'public/js/page-layout.js': fromPageLayout,
-    'public/js/transitions.js': fromTransitions,
-  };
-  for (const [file, lines] of Object.entries(namedSequences)) {
-    assert.strictEqual(lines.length, 3, `expected exactly 3 handler-strip replace lines in ${file}, found ${lines.length}`);
-    for (const line of lines) {
-      assert.ok(line.includes('[\\s/]on\\w+'), `${file} handler-strip line does not carry the widened [\\s/] separator class: ${line}`);
-    }
+  assert.strictEqual(fromTransitions.length, 3, `expected exactly 3 handler-strip replace lines in public/js/transitions.js, found ${fromTransitions.length}`);
+  for (const line of fromTransitions) {
+    assert.ok(line.includes('[\\s/]on\\w+'), `public/js/transitions.js handler-strip line does not carry the widened [\\s/] separator class: ${line}`);
   }
-
-  assert.deepStrictEqual(
-    fromTransitions,
-    fromPageLayout,
-    'public/js/transitions.js and public/js/page-layout.js are independent hand-maintained copies of the same handler-strip rule that must be kept in sync by hand — they have drifted apart',
-  );
 });
