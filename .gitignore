@@ -1,5 +1,11 @@
 # Dependencies — committed so `node server.js` runs with no `npm install`.
 # (node_modules/ intentionally NOT ignored.)
+# IN-A01 (Phase 13 review): npm's HIDDEN lockfile is a local cache that npm
+# rewrites on its own and ignores whenever any node_modules dir is newer; a
+# tracked copy only goes stale and contradicts the tree (package-lock.json is the
+# source of truth). A missing hidden lockfile is always safe. This single path —
+# never node_modules/ itself — is ignored.
+node_modules/.package-lock.json
 
 # Large / unrelated artifacts
 ma-portal.zip
