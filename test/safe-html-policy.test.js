@@ -234,12 +234,10 @@ function jsScriptRefs(html) {
 test('safe-html (order): every page that loads transitions.js loads /js/safe-html.js?v= exactly once, before every other /js/ script', () => {
   const pages = fs.readdirSync(PUBLIC).filter((f) => f.endsWith('.html')).sort();
   const withChrome = [];
-  const ONLY = new Set(['admin.html', 'capability-hub.html', 'integration-excellence.html', 'playbook.html']); // TASK1-ONLY
   for (const f of pages) {
     const html = fs.readFileSync(path.join(PUBLIC, f), 'utf8');
     const refs = jsScriptRefs(html);
     if (!refs.some((r) => r.startsWith('/js/transitions.js'))) continue;
-    if (!ONLY.has(f)) continue; // TASK1-ONLY
     withChrome.push(f);
     const safeIdx = refs.map((r, i) => (r.startsWith('/js/safe-html.js?v=') ? i : -1)).filter((i) => i !== -1);
     assert.strictEqual(safeIdx.length, 1, `${f}: expected exactly one /js/safe-html.js?v= reference, found ${safeIdx.length}`);
@@ -248,5 +246,5 @@ test('safe-html (order): every page that loads transitions.js loads /js/safe-htm
     const tag = html.match(/<script\b[^>]*\/js\/safe-html\.js[^>]*>/i)[0];
     assert.ok(!/\b(?:async|defer)\b|type\s*=\s*["']module/i.test(tag), `${f}: safe-html.js tag must be parser-blocking (no async/defer/module): ${tag}`);
   }
-  assert.ok(withChrome.length >= 4, `expected at least 4 pages, found ${withChrome.length}`); // TASK1-ONLY
+  assert.ok(withChrome.length >= 18, `expected at least 18 pages that load transitions.js, found ${withChrome.length}`);
 });
