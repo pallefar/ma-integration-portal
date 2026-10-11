@@ -1079,7 +1079,13 @@
     fetch('/api/slides').then(r => r.json()).then(list => {
       slides = Array.isArray(list) ? list : [];
       renderSlides();
-    }).catch(() => { wrap.innerHTML = '<p style="text-align:center;color:#B91C1C;padding:1.5rem;">Failed to load slides.</p>'; });
+    }).catch(() => {
+      wrap.textContent = '';
+      const failed = document.createElement('p');
+      failed.style.cssText = 'text-align:center;color:#B91C1C;padding:1.5rem;';
+      failed.textContent = 'Failed to load slides.';
+      wrap.appendChild(failed);
+    });
   }
 
   function saveSlide(s) {
@@ -1089,7 +1095,7 @@
   function renderSlides() {
     const wrap = document.getElementById('slides-admin-list');
     if (!wrap) return;
-    wrap.innerHTML = '';
+    wrap.textContent = '';
     if (!slides.length) {
       const none = document.createElement('p');
       none.style.cssText = 'text-align:center;color:var(--text-dim);padding:1rem;'; none.textContent = 'No slides yet.';
@@ -1098,19 +1104,35 @@
     slides.forEach(s => {
       const row = document.createElement('div');
       row.className = 'cms-row';
-      // [security] SAFE-03 / T-13-24 (13-03): slide label/url/pages are admin-typed
-      // strings — the static markup carries no interpolation; the text is set via
-      // textContent so it can never be parsed as HTML.
-      row.innerHTML = `<div class="cms-row-main">
-          <span class="cms-row-title"></span>
-          <span class="cms-row-sub"></span></div>
-        <div style="display:flex;align-items:center;gap:0.4rem;">
-          <button type="button" class="cms-mini" data-open>Preview</button>
-          <button type="button" class="cms-mini" data-edit>Edit</button>
-          <button type="button" class="cms-mini danger" data-del>✕</button>
-        </div>`;
-      row.querySelector('.cms-row-title').textContent = (s.icon || '🖥️') + ' ' + (s.label || s.url || '');
-      row.querySelector('.cms-row-sub').textContent = (s.url || '') + ' · ' + (s.pages || 'all');
+      // [security] SAFE-03 / T-13-24 (13-03) + SAFE-01 (13-09): slide label/url/pages
+      // are admin-typed strings - the row is built with createElement and the text
+      // is set via textContent, so it can never be parsed as HTML and no innerHTML
+      // assignment remains on this path.
+      const main = document.createElement('div');
+      main.className = 'cms-row-main';
+      const titleEl = document.createElement('span');
+      titleEl.className = 'cms-row-title';
+      titleEl.textContent = (s.icon || '🖥️') + ' ' + (s.label || s.url || '');
+      const subEl = document.createElement('span');
+      subEl.className = 'cms-row-sub';
+      subEl.textContent = (s.url || '') + ' · ' + (s.pages || 'all');
+      main.appendChild(titleEl);
+      main.appendChild(subEl);
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
+      const mkBtn = (cls, attr, label) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = cls;
+        btn.setAttribute(attr, '');
+        btn.textContent = label;
+        return btn;
+      };
+      actions.appendChild(mkBtn('cms-mini', 'data-open', 'Preview'));
+      actions.appendChild(mkBtn('cms-mini', 'data-edit', 'Edit'));
+      actions.appendChild(mkBtn('cms-mini danger', 'data-del', '✕'));
+      row.appendChild(main);
+      row.appendChild(actions);
       row.querySelector('[data-open]').addEventListener('click', () => { if (window.openHtmlSlide) window.openHtmlSlide(s.url, s.label); else window.open(s.url, '_blank'); });
       row.querySelector('[data-edit]').addEventListener('click', () => editSlide(s));
       row.querySelector('[data-del]').addEventListener('click', () => {

@@ -110,8 +110,11 @@ test('slide-sandbox-client (f): HTML is sent as text, binary types as base64 wit
 test('slide-sandbox-client (g): the slide library list sets label/url/pages via textContent, never interpolating them into markup', () => {
   const region = stripComments(slideLibraryRegion());
   const list = region.slice(region.indexOf('function renderSlides() {'), region.indexOf('function editSlide('));
-  assert.ok(/\.cms-row-title'\)\.textContent\s*=/.test(list) && /\.cms-row-sub'\)\.textContent\s*=/.test(list));
-  const tpl = /row\.innerHTML = `([\s\S]*?)`;/.exec(list);
-  assert.ok(tpl, 'expected to locate the row template');
-  assert.ok(!/\$\{/.test(tpl[1]), 'the row template interpolates nothing');
+  // 13-09 (SAFE-01): the row is now built with createElement (the former static
+  // `row.innerHTML = \`...\`` template is gone); the label/url/pages text is still
+  // set via textContent on the .cms-row-title / .cms-row-sub elements.
+  assert.ok(/className = 'cms-row-title';[\s\S]*?titleEl\.textContent\s*=/.test(list), 'the title text is set via textContent');
+  assert.ok(/className = 'cms-row-sub';[\s\S]*?subEl\.textContent\s*=/.test(list), 'the sub text is set via textContent');
+  assert.ok(!/\.innerHTML\s*\+?=(?!=)/.test(list), 'the slide list assigns no innerHTML at all');
+  assert.ok(!/`[^`]*\$\{/.test(list), 'no template literal interpolation on the slide list path');
 });

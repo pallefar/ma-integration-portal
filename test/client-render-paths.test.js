@@ -199,18 +199,101 @@ function scanEntry(entry) {
 }
 
 // ----------------------------------------------------------- the gate table
+// kind: 'function' (anchor = `function name(`), 'callback' (anchor = the call
+// whose callback is the apply block), 'file' (anchor null = whole file).
+// `uses` = any-of tokens the region must contain (it renders through one of them).
 const ENUMERATED_PATHS = [
-  // chatbot messages: escaped text + markdown links, rendered by MASafeHtml (T-13-80)
-  { file: 'transitions.js', anchor: 'function addMessageBubble(', kind: 'function', uses: ['MASafeHtml.render'] },
+  // CMS pages: block renderer + legacy body (13-06), page-cms region, banners
+  { file: 'page-layout.js', anchor: null, kind: 'file', uses: ['MASafeHtml.render'], note: 'CMS page blocks + legacy body (13-06)' },
+  { file: 'page-cms.js', anchor: null, kind: 'file', uses: ['MASafeHtml.toFragment'], note: 'CMS page region' },
+  { file: 'banners.js', anchor: null, kind: 'file', uses: ['textContent'], note: 'banner title/message are textContent only' },
+  // HTML-slide launchers (13-03): overlay + admin slide list
+  { file: 'transitions.js', anchor: 'function openHtmlSlide(', kind: 'function', uses: ['textContent'], note: 'slide overlay title/label (13-03)' },
+  { file: 'admin-cms.js', anchor: 'function renderSlides(', kind: 'function', uses: ['textContent'], note: 'admin slide list rows' },
+  { file: 'admin-cms.js', anchor: 'function loadSlides(', kind: 'function', uses: ['textContent'], note: 'admin slide list load failure' },
+  // chatbot messages (T-13-80)
+  { file: 'transitions.js', anchor: 'function addMessageBubble(', kind: 'function', uses: ['MASafeHtml.render'], note: 'chatbot bubble' },
+  // i18n apply: [data-i18n] bold pass + [data-i18n-html] (T-13-81)
+  { file: 'transitions.js', anchor: 'window.applyPortalI18n = function', kind: 'function', uses: ['MASafeHtml.render'], note: 'app-wide i18n apply' },
+  { file: 'transitions.js', anchor: "querySelectorAll('[data-i18n-html]').forEach(", kind: 'callback', uses: ['setMarkup'], note: '[data-i18n-html] apply block' },
+  // AI insight card: model/RAG output (13-09 addition, found by 13-08)
+  { file: 'transitions.js', anchor: 'function fetchSmolInsight(', kind: 'function', uses: ['MASafeHtml.render'], note: 'AI insight card' },
+  { file: 'transitions.js', anchor: 'function setSmolInsightError(', kind: 'function', uses: ['textContent'], note: 'AI insight error state' },
+  // inline click-to-edit: editI18n restore, startPage, endPage restore, edit bar (T-13-81)
+  { file: 'inline-edit.js', anchor: null, kind: 'file', uses: ['MASafeHtml'], note: 'inline editing (editI18n, startPage, endPage, renderBar)' },
+  // lesson body (T-13-82)
+  { file: 'employee.js', anchor: 'function openLessonModal(', kind: 'function', uses: ['MASafeHtml.render'], note: 'lesson modal' },
+];
+
+// Owned and gated by plan 13-11 in the same wave (it rewrites these functions);
+// listed so the table is the complete enumeration, not scanned here.
+const GATED_ELSEWHERE = [
+  { file: 'transitions.js', anchor: 'addSlide', owner: '13-11', note: 'sidebar slide-link builder (label/icon)' },
 ];
 
 for (const entry of ENUMERATED_PATHS) {
-  test(`render path: ${entry.file} ${entry.anchor === null ? '(whole file)' : entry.anchor.replace(/\($/, '')} has no HTML-string sink`, () => {
+  const label = entry.anchor === null ? '(whole file)' : entry.anchor.replace(/\($/, '');
+  test(`render path: ${entry.file} ${label} has no HTML-string sink`, () => {
     const r = scanEntry(entry);
     assert.deepStrictEqual(r.lines, [], `HTML-string sink(s) on an enumerated render path:\n  ${r.lines.join('\n  ')}`);
     assert.ok(r.uses.length > 0, `region must render via ${(entry.uses || ['MASafeHtml', 'textContent', 'createElement']).join(' | ')}`);
   });
 }
+
+function walkJs(visit) {
+  (function walk(dir, rel) {
+    for (const name of fs.readdirSync(dir).sort()) {
+      if (name === 'vendor' || name === 'node_modules') continue;
+      const full = path.join(dir, name);
+      const r = rel ? `${rel}/${name}` : name;
+      if (fs.statSync(full).isDirectory()) { walk(full, r); continue; }
+      if (name.endsWith('.js')) visit(r, fs.readFileSync(full, 'utf8'));
+    }
+  })(PUBLIC_JS, '');
+}
+
+test('no client regex sanitizer remains in public/js (stripDangerousHtml and the on*= strip rules are gone)', () => {
+  const offenders = [];
+  walkJs((rel, src) => {
+    const { code } = lex(src);
+    if (/\bstripDangerousHtml\b/.test(code)) offenders.push(`${rel}: stripDangerousHtml`);
+    code.split('\n').forEach((line, i) => {
+      if (line.includes('.replace(') && line.includes('on\\w+')) offenders.push(`${rel}:${i + 1}: handler-strip replace rule`);
+    });
+  });
+  assert.deepStrictEqual(offenders, [], `client regex sanitizer remnants:\n  ${offenders.join('\n  ')}`);
+});
+
+test('gated-elsewhere entries are listed (13-11 owns the sidebar slide-link builder)', () => {
+  for (const g of GATED_ELSEWHERE) {
+    const { code } = lex(readJs(g.file));
+    assert.ok(code.includes(g.anchor), `${g.file}: expected to still define ${g.anchor} (owned by ${g.owner})`);
+  }
+});
+
+// ------------------------------------------------- not-enumerated inventory
+// Counts the same sink patterns across every public/js file (vendor excluded).
+// These are NOT silently ignored and NOT fixed here: each is bounded by the
+// strict CSP (D-13-03 / plan 13-13) and by D-13-03's "exhaustive audit deferred".
+test('not-enumerated sink inventory (printed per file; bounded by the CSP, D-13-03)', () => {
+  const rows = [];
+  walkJs((rel, src) => {
+    const lexed = lex(src);
+    const sinks = findSinks(lexed, 0, lexed.code.length);
+    const byKind = {};
+    sinks.forEach((x) => { byKind[x.kind] = (byKind[x.kind] || 0) + 1; });
+    if (sinks.length) rows.push({ file: rel, count: sinks.length, byKind });
+  });
+  const total = rows.reduce((n, r) => n + r.count, 0);
+  const lines = rows.sort((a, c) => c.count - a.count || a.file.localeCompare(c.file))
+    .map((r) => `  ${String(r.count).padStart(4)}  ${r.file}  ${JSON.stringify(r.byKind)}`);
+  console.log(`not-enumerated client sinks (public/js, excluding vendor): ${total} in ${rows.length} file(s)\n${lines.join('\n')}`);
+  // Enumerated whole-file entries must contribute nothing to the inventory.
+  for (const e of ENUMERATED_PATHS.filter((x) => x.anchor === null)) {
+    assert.ok(!rows.some((r) => r.file === e.file), `${e.file} is an enumerated whole-file path and must have no sinks`);
+  }
+  assert.ok(Number.isInteger(total) && total >= 0);
+});
 
 // --------------------------------------------------------- negative control
 test('scanner negative control: reports real sinks, ignores strings/comments/regex/reads/empty clears', () => {
