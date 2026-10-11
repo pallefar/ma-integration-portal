@@ -10,6 +10,18 @@
 //                            response is honoured in secure contexts only (https
 //                            or localhost); this clearing is the cross-context
 //                            guarantee (T-13-31, T-13-34).
+//   clearForNewSession()   — CR3-02/CR3-03 (Phase 13 quick fix): called by the
+//                            sign-in page on a SUCCESSFUL login. A new identity
+//                            starts from fresh browser state: the previous
+//                            person's per-user keys (task flags, cached role,
+//                            any stale credential-shaped value left by an older
+//                            build) are dropped, because the browser may have
+//                            been left without a UI sign-out (session expiry,
+//                            closed tab). Same allowlist as clearOnLogout, no
+//                            network, synchronous so the redirect that follows
+//                            can never race it. Cache Storage is left alone:
+//                            it holds only the shared model weights and is
+//                            cleared by a real logout.
 //   runLegacyCleanupOnce() — replaces the old per-page-load wipe that deleted
 //                            EVERY Cache Storage entry (including the
 //                            Transformers model cache) on every navigation
@@ -133,6 +145,20 @@
     });
   }
 
+  // CR3-02/CR3-03: new session => fresh per-user browser state. Everything in
+  // sessionStorage and every localStorage key except LANGUAGE_KEYS is removed
+  // (the allowlist is shared with clearOnLogout, never a second list). Never
+  // throws; returns the number of localStorage keys it removed.
+  function clearForNewSession() {
+    var removed = 0;
+    safe(function () { sessionStorage.clear(); });
+    localKeys().forEach(function (k) {
+      if (LANGUAGE_KEYS.indexOf(k) !== -1) return;
+      if (safe(function () { localStorage.removeItem(k); return true; }, false)) removed++;
+    });
+    return removed;
+  }
+
   function scriptPath(reg) {
     var w = reg && (reg.active || reg.waiting || reg.installing);
     var url = w && w.scriptURL;
@@ -168,6 +194,7 @@
     LEGACY_CACHE_NAMES: LEGACY_CACHE_NAMES,
     MODEL_CACHE_NAMES: MODEL_CACHE_NAMES,
     clearOnLogout: clearOnLogout,
+    clearForNewSession: clearForNewSession,
     runLegacyCleanupOnce: runLegacyCleanupOnce
   });
   window.MAClientStorage = api;

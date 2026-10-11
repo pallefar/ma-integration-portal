@@ -133,6 +133,13 @@
     }).then(function (res) {
       if (status === 200 && res && res.success) {
         var must = res.mustChangePassword === true || !!(res.user && res.user.mustChangePassword === true);
+        // [security] CR3-02/CR3-03: a successful sign-in is a new identity — drop
+        // whatever the previous person left in this browser (expired session,
+        // closed tab, no UI sign-out) before the app loads. Language preference
+        // survives. Synchronous, so it always completes before the redirect.
+        if (window.MAClientStorage && typeof window.MAClientStorage.clearForNewSession === 'function') {
+          window.MAClientStorage.clearForNewSession();
+        }
         window.location.href = policy.landingFor(res.user, must);
         return;
       }

@@ -567,8 +567,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // Production locks down every state-changing endpoint (POST/PUT/DELETE) and the
 // /api/admin/* routes behind a shared secret. Set ADMIN_TOKEN in the environment
 // to enable it; when unset (e.g. the local demo) the gate stays OPEN but logs a
-// warning, so the running demo is unaffected until you set the env var. The admin
-// browser UI sends the secret via the X-Admin-Token header (fetch bridge in transitions.js).
+// warning, so the running demo is unaffected until you set the env var. The secret
+// is for scripts/CLI only (CR3-02): the browser UI never sends X-Admin-Token, and a
+// request that carries a valid session cookie is never elevated by it.
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 // [security] D-10-06 / T-10-37: the old boot line claimed the write/admin API
 // was OPEN when ADMIN_TOKEN was unset — false since Phase 2 (a session is
@@ -1053,7 +1054,11 @@ app.use((req, res, next) => {
 //       have no session yet to resolve a deal binding from; /auth/me
 //       resolves its own session + open-mode check inline, see its handler,
 //       since it must stay reachable with zero session and never 401 here);
-//   (b) an X-Admin-Token bearer resolves to a stable, ATTRIBUTED break-glass
+//   (b) a VALID session cookie is the identity and nothing else can raise it
+//       (CR3-02): an X-Admin-Token riding on a live session is ignored, so a
+//       stale or foreign token can never elevate whoever signed in on that
+//       browser. Only a request with NO valid session falls to (b2);
+//   (b2) an X-Admin-Token bearer resolves to a stable, ATTRIBUTED break-glass
 //       identity (D-11) — {username:'admin-token', role:'admin'} — never an
 //       anonymous bypass, so Phase 3's audit log can attribute its actions;
 //   (c) otherwise, a valid, unexpired sessions-table row (looked up against
@@ -1092,7 +1097,14 @@ app.use('/api', (req, res, next) => {
   req.gatePathCanonical = shape.canonical;
 
   const suppliedToken = req.get('X-Admin-Token') || '';
-  if (ADMIN_TOKEN && suppliedToken && timingSafeEqualStr(suppliedToken, ADMIN_TOKEN)) {
+  // [security] CR3-02: the session cookie is resolved FIRST and wins. A valid
+  // session is the caller's identity; the break-glass header is honoured only
+  // when there is no valid session cookie (scripts/CLI, an expired cookie). The
+  // flag below is read by isAdminRequest() so the route handlers that re-check
+  // the header inline apply the same precedence as this gate.
+  const sessionIdentity = resolveSessionIdentity(readSessionCookie(req));
+  req.sessionOwnsIdentity = sessionIdentity !== null;
+  if (!sessionIdentity && ADMIN_TOKEN && suppliedToken && timingSafeEqualStr(suppliedToken, ADMIN_TOKEN)) {
     // D-11: attributed break-glass identity, not anonymous — Phase 3's audit
     // log (AUD-01) can attribute every action taken via this token to a
     // stable, named identity instead of a null/undefined actor. Never
@@ -1112,8 +1124,8 @@ app.use('/api', (req, res, next) => {
   } else {
     // D-10-04: the identity is re-resolved from control.db on every request,
     // never trusted from the login-time session snapshot (see
-    // resolveSessionIdentity()).
-    req.portalUser = resolveSessionIdentity(readSessionCookie(req)); // may be null here — see step (c) above
+    // resolveSessionIdentity(), called once above).
+    req.portalUser = sessionIdentity; // may be null here — see step (c) above
   }
 
   // [security] D-11-05: the resolver stays audit-free (same isolation rule as
@@ -1208,7 +1220,12 @@ app.use('/api', (req, res, next) => {
 function lockedDown(req) { return !isOpenMode(req); }
 function isAdminRequest(req) {
   const supplied = req.get('X-Admin-Token') || '';
-  if (ADMIN_TOKEN && supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return true;
+  // [security] CR3-02: same precedence as the /api gate — a request that carries
+  // a valid session cookie is judged on that session's role, never raised by
+  // the break-glass header (`sessionOwnsIdentity` is set by the gate; it is
+  // undefined on the few paths that never reach it, where the header keeps its
+  // documented script/break-glass meaning).
+  if (req.sessionOwnsIdentity !== true && ADMIN_TOKEN && supplied && timingSafeEqualStr(supplied, ADMIN_TOKEN)) return true;
   if (req.portalUser && req.portalUser.role === 'admin') return true;
   return false;
 }

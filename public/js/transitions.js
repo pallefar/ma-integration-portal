@@ -15,18 +15,20 @@
   };
 })();
 
-// Admin API auth bridge: when the server requires an admin token (production, i.e.
-// ADMIN_TOKEN is set), attach it to same-origin /api requests and prompt for it once
-// on a 401 write. Completely inert in the demo — the server leaves the API open when
-// ADMIN_TOKEN is unset, so no token is stored, no header is added, and writes never 401.
+// [security] CR3-02: there is NO browser bridge for the server's admin
+// break-glass header secret. That secret is a script/CLI credential; the browser never
+// prompts for it, never persists it in web storage and never sends it — the
+// identity of every browser request is the session cookie, nothing else. (The
+// earlier bridge turned a routine wrong-password 401 into a token prompt whose
+// answer was kept in localStorage and sent on every later request, so it
+// outlived the session and rode on the next person's login.)
 //
-// This wrapper also handles the fail-closed session gate (Plan 01): any /api 401
-// carrying { authRequired: true } means the session is missing or expired — a
-// distinct failure mode from the admin-token write-401 (different cause, different
-// remedy) — so it redirects to /login.html deterministically on ANY method (GET
-// reads included), rather than racing the best-effort /api/auth/me probe further
-// below. Checked first, falling through to the write-only token prompt only when
-// the 401 is NOT an authRequired session gate.
+// This wrapper handles the fail-closed session gate (Plan 01): any /api 401
+// carrying { authRequired: true } means the session is missing or expired, so it
+// redirects to /login.html deterministically on ANY method (GET reads
+// included), rather than racing the best-effort /api/auth/me probe further
+// below. Any other 401 (e.g. a wrong current password) is handed back to the
+// caller unchanged.
 //
 // D-07/CONC-01 (Phase 8 Plan 04): this same wrapper also owns the client half of
 // write-contention handling. A same-origin /api write that comes back 503 here is
@@ -40,28 +42,13 @@
 (function () {
   if (window.__adminAuthWrapped || !window.fetch) return;
   window.__adminAuthWrapped = true;
-  const KEY = 'admin_token';
   const origFetch = window.fetch.bind(window);
   const isApi = (url) => {
     try { const u = new URL(url, location.href); return u.origin === location.origin && u.pathname.startsWith('/api/'); }
     catch (e) { return false; }
   };
-  const withToken = (init, tok) => {
-    const h = new Headers((init && init.headers) || {});
-    h.set('X-Admin-Token', tok);
-    return Object.assign({}, init, { headers: h });
-  };
   const onLoginPage = () => window.location.pathname.includes('login.html');
   const onChangePasswordPage = () => window.location.pathname.includes('change-password.html');
-  const maybePromptForToken = (res, input, init, method) => {
-    if (method === 'GET' || typeof input !== 'string') return res;
-    const entered = window.prompt('Admin token required to save changes:');
-    if (entered && entered.trim()) {
-      localStorage.setItem(KEY, entered.trim());
-      return origFetch(input, withToken(init, entered.trim()));
-    }
-    return res;
-  };
 
   // D-08: the give-up surface when contention outlasts the retry budget below.
   // Built fresh here rather than reused: public/js/banners.js is a CMS-driven,
@@ -1094,16 +1081,14 @@
         if (!onLoginPage()) window.location.href = '/login.html';
         return res;
       }
-      return maybePromptForToken(res, input, init, method);
-    }).catch(() => maybePromptForToken(res, input, init, method));
+      return res;
+    }).catch(() => res);
   });
 
   window.fetch = function (input, init) {
     init = init || {};
     const url = typeof input === 'string' ? input : (input && input.url) || '';
     const method = (init.method || (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
-    const tok = localStorage.getItem(KEY);
-    if (tok && isApi(url)) init = withToken(init, tok);
     return attemptFetch(input, init, url, method, 0);
   };
 
@@ -1122,9 +1107,7 @@
   window.maConfirmDelete = function (message, url) {
     if (activeConflictSession) return Promise.resolve(null);
     return new Promise((resolve, reject) => {
-      let init = { method: 'DELETE' };
-      const tok = localStorage.getItem(KEY);
-      if (tok && isApi(url)) init = withToken(init, tok);
+      const init = { method: 'DELETE' };
       const session = {
         body: null, input: url, init, url, method: 'DELETE',
         originalRes: null, resolve, reject,
