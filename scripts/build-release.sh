@@ -429,7 +429,10 @@ for z in "$ZIP_ANY" "$ZIP_MAC" "$ZIP_WIN"; do
   else fail "$z fails unzip -t"; fi
 done
 
-zip_has() { unzip -Z1 "$OUT/$1" | grep -Fxq "$2"; }
+# NB: no `grep -q` on the right of a pipe — under `set -o pipefail` an early grep
+# exit SIGPIPEs unzip and the pipeline reports failure for a present member.
+zip_has() { unzip -Z1 "$OUT/$1" | grep -Fx -e "$2" >/dev/null; }
+zip_grep() { unzip -p "$OUT/$1" "$2" | grep -e "$3" >/dev/null; } # zip member pattern
 zip_mode() { unzip -Z "$OUT/$1" "$2" 2>/dev/null | awk 'NR==1 {print $1}'; }
 
 if zip_has "$ZIP_MAC" ma-integration-portal/node/bin/node; then
@@ -452,9 +455,9 @@ else pass "each platform zip carries only its own Node"; fi
 
 # Every zip: launcher intent is intact (demo-open vs fail-closed real-deal).
 for z in "$ZIP_ANY" "$ZIP_MAC" "$ZIP_WIN"; do
-  if unzip -p "$OUT/$z" ma-integration-portal/start.command | grep -q '^export DEMO_OPEN=1' \
-     && unzip -p "$OUT/$z" ma-integration-portal/start-real-deal.command | grep -q '^export MA_MODE=real' \
-     && unzip -p "$OUT/$z" ma-integration-portal/start-real-deal.command | grep -q '^unset DEMO_OPEN'; then
+  if zip_grep "$z" ma-integration-portal/start.command '^export DEMO_OPEN=1' \
+     && zip_grep "$z" ma-integration-portal/start-real-deal.command '^export MA_MODE=real' \
+     && zip_grep "$z" ma-integration-portal/start-real-deal.command '^unset DEMO_OPEN'; then
     pass "$z: demo launcher sets DEMO_OPEN=1; real-deal launcher sets MA_MODE=real and clears DEMO_OPEN"
   else fail "$z: launcher environment lines are not as expected"; fi
 done
@@ -480,9 +483,9 @@ for bat in start.bat start-real-deal.bat; do
     pass "Windows zip: $bat is CRLF on every line"
   else fail "Windows zip: $bat is not CRLF throughout"; fi
 done
-if unzip -p "$OUT/$ZIP_WIN" ma-integration-portal/start.bat | grep -q 'if not exist "%~dp0node_modules"' \
-   && unzip -p "$OUT/$ZIP_WIN" ma-integration-portal/start.bat | grep -q 'npm install --omit=dev' \
-   && unzip -p "$OUT/$ZIP_WIN" ma-integration-portal/start.bat | grep -q 'node\\node.exe'; then
+if zip_grep "$ZIP_WIN" ma-integration-portal/start.bat 'if not exist "%~dp0node_modules"' \
+   && zip_grep "$ZIP_WIN" ma-integration-portal/start.bat 'npm install --omit=dev' \
+   && zip_grep "$ZIP_WIN" ma-integration-portal/start.bat 'node\\node.exe'; then
   pass "Windows zip: start.bat install-guard and bundled-node lookup intact"
 else fail "Windows zip: start.bat install-guard / bundled-node lookup not found"; fi
 
@@ -508,7 +511,7 @@ HYG="$SCRATCH/hygiene"
 mkdir -p "$HYG"
 for z in "$ZIP_ANY" "$ZIP_MAC" "$ZIP_WIN"; do
   unzip -Z1 "$OUT/$z" > "$HYG/names.txt"
-  hits="$(grep -E -i '(^|/)\.planning(/|$)|(^|/)\.env($|\.)|\.pem$|(^|/)id_rsa|(^|/)db\.json|-wal$|-shm$|(^|/)\.claude(/|$)|(^|/)\.gsd(/|$)|(^|/)test/|\.sqlite3?$' "$HYG/names.txt" || true)"
+  hits="$(grep -E -i '^ma-integration-portal/(\.planning|\.claude|\.gsd|\.github|test)(/|$)|(^|/)\.env($|\.)|\.pem$|(^|/)id_rsa|(^|/)db\.json|-wal$|-shm$|\.sqlite3?$' "$HYG/names.txt" || true)"
   dbs="$(grep -E '\.db$' "$HYG/names.txt" | grep -v -E '^ma-integration-portal/data/(demo|control)\.db$' || true)"
   mails="$(grep -E '^ma-integration-portal/public/sent_emails/.' "$HYG/names.txt" | grep -v -F 'ma-integration-portal/public/sent_emails/comm_1783454326531.html' || true)"
   hits="$(printf '%s\n%s\n%s\n' "$hits" "$dbs" "$mails" | sed '/^$/d')"
