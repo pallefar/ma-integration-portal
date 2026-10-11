@@ -41,7 +41,13 @@ const sha16 = (buf) => crypto.createHash('sha256').update(buf).digest('hex').sli
 
 // page -> the external files (in document order) that replaced its inline code.
 const OWNED = {
+  'dashboard.html': ['dashboard-1.js', 'dashboard-2.js'],
+  'index.html': ['index-1.js'],
   'insights.html': ['insights-1.js'],
+  'overview.html': ['overview-1.js'],
+  'playbook.html': ['playbook-1.js'],
+  'signage.html': ['signage-1.js'],
+  'admin.html': ['admin-actions.js'],
 };
 
 let server;
@@ -147,3 +153,50 @@ for (const [page, files] of Object.entries(OWNED)) {
     assert.deepStrictEqual(inlineViolations(html), [], `${page} as served must be inline-free`);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Behaviour-preserving replacements named by the plan
+// ---------------------------------------------------------------------------
+function jsRefs(page) {
+  const html = stripComments(fs.readFileSync(path.join(PUBLIC, page), 'utf8'));
+  const refs = [];
+  const re = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) if (m[1].startsWith('/js/')) refs.push(m[1]);
+  return refs;
+}
+
+test('signage.html: /js/safe-html.js?v= is the FIRST /js/ script, exactly once, and [data-i18n-html] renders through MASafeHtml', () => {
+  const refs = jsRefs('signage.html');
+  assert.ok(refs.length > 0);
+  assert.ok(refs[0].startsWith('/js/safe-html.js?v='), `first /js/ script must be safe-html.js, got ${refs[0]}`);
+  assert.strictEqual(refs.filter((r) => r.startsWith('/js/safe-html.js')).length, 1);
+  const js = fs.readFileSync(path.join(PUBLIC, 'js', 'pages', 'signage-1.js'), 'utf8');
+  assert.ok(/MASafeHtml\.render\(/.test(js), 'signage-1.js must render data-i18n-html through MASafeHtml.render');
+  assert.ok(!/\.(?:inner|outer)HTML\s*=/.test(js), 'signage-1.js must not assign inner/outerHTML');
+});
+
+test('admin.html: handlers are data-action delegates in /js/pages/admin-actions.js, loaded after ted-launcher.js', () => {
+  const html = fs.readFileSync(path.join(PUBLIC, 'admin.html'), 'utf8');
+  assert.match(html, /id="btn-admin-view-pmo"[^>]*data-action="open-pmo"/);
+  assert.match(html, /id="btn-admin-launch-doom"[^>]*data-action="launch-ted"/);
+  const refs = jsRefs('admin.html');
+  const ted = refs.findIndex((r) => r.startsWith('/js/ted-launcher.js'));
+  const act = refs.findIndex((r) => r.startsWith('/js/pages/admin-actions.js'));
+  assert.ok(ted > -1 && act > ted, 'admin-actions.js must load after ted-launcher.js');
+  const js = fs.readFileSync(path.join(PUBLIC, 'js', 'pages', 'admin-actions.js'), 'utf8');
+  assert.ok(/'\/pmo\.html'/.test(js) && /window\.launchDoomProtocol\(\)/.test(js));
+});
+
+test('dashboard.html: print button is data-action="print" (handled in dashboard-2.js); the slide anchors are href="#" under the [data-html-slide] delegate', () => {
+  const html = fs.readFileSync(path.join(PUBLIC, 'dashboard.html'), 'utf8');
+  assert.match(html, /<button[^>]*data-action="print"/);
+  const slides = html.match(/<a\b[^>]*\bdata-html-slide=/g) || [];
+  assert.strictEqual(slides.length, 8, `expected the eight Working-in-a-Matrix slide anchors, found ${slides.length}`);
+  for (const a of slides) assert.match(a, /\bhref="#"/, `slide anchor must be href="#": ${a.slice(0, 80)}`);
+  const js = fs.readFileSync(path.join(PUBLIC, 'js', 'pages', 'dashboard-2.js'), 'utf8');
+  assert.ok(/data-action="print"/.test(js) && /window\.print\(\)/.test(js));
+  // the delegate that handles [data-html-slide] clicks must preventDefault (so href="#" never navigates)
+  const tr = fs.readFileSync(path.join(PUBLIC, 'js', 'transitions.js'), 'utf8');
+  assert.match(tr, /closest\('\[data-html-slide\]'\);\s*if \(t\) \{ e\.preventDefault\(\)/);
+});

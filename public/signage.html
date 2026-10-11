@@ -535,34 +535,11 @@
 
   </div>
 
+  <!-- SAFE-01: the one client HTML renderer, first /js/ script (this kiosk page does not load transitions.js). -->
+  <script src="/js/safe-html.js?v=1"></script>
   <script src="/js/signage.js?v=1791800101"></script>
   <!-- Minimal i18n bootstrap: this kiosk page does not load transitions.js, so it
        applies data-i18n itself. Language via ?lang= or the shared employeeLanguage key. -->
-  <script>
-    (function () {
-      var params = new URLSearchParams(location.search);
-      var lang = params.get('lang') || localStorage.getItem('employeeLanguage') || 'en';
-      var dict = null;
-      function pick(key) {
-        if (!dict || !dict.strings) return null;
-        var s = dict.strings;
-        return (s[lang] && s[lang][key] != null ? s[lang][key] : (s.en && s.en[key])) ?? null;
-      }
-      function apply() {
-        if (!dict) return;
-        document.querySelectorAll('[data-i18n]').forEach(function (el) { var v = pick(el.getAttribute('data-i18n')); if (v != null) el.textContent = v; });
-        document.querySelectorAll('[data-i18n-html]').forEach(function (el) { var v = pick(el.getAttribute('data-i18n-html')); if (v != null) el.innerHTML = v; });
-        document.querySelectorAll('[data-i18n-ph]').forEach(function (el) { var v = pick(el.getAttribute('data-i18n-ph')); if (v != null) el.setAttribute('placeholder', v); });
-        document.documentElement.setAttribute('lang', lang);
-      }
-      fetch('/api/i18n').then(function (r) { return r.json(); }).then(function (d) {
-        dict = d;
-        apply();
-        // signage.js rebuilds some regions (calendar headers) on its own timers — re-apply.
-        setTimeout(apply, 1500); setTimeout(apply, 4000);
-        setInterval(apply, 15000);
-      }).catch(function () {});
-    })();
-  </script>
+  <script src="/js/pages/signage-1.js?v=1"></script>
 </body>
 </html>

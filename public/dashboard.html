@@ -103,7 +103,7 @@
               <h2 id="dashboard-target-name" style="font-size: 1.8rem; margin-top: 0.25rem;">NextGen Sensors Integration</h2>
             </div>
             <div style="display: flex; gap: 1rem;">
-              <button data-i18n="dashboard.btn_print_report" onclick="window.print()" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem;">Print Report</button>
+              <button data-i18n="dashboard.btn_print_report" data-action="print" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem;">Print Report</button>
               <a data-i18n="dashboard.btn_reassess" href="/" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.5rem 1rem;">Re-Assess Target</a>
             </div>
           </div>
@@ -949,47 +949,7 @@
                 #employee-feedback-card .ef-stars{ font-size:.85rem; font-weight:700; white-space:nowrap; }
                 #employee-feedback-card .ef-comment-body{ font-size:.85rem; color:var(--text-secondary); line-height:1.45; }
               </style>
-              <script>
-                (function(){
-                  var card=document.getElementById('employee-feedback-card'); if(!card) return;
-                  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
-                  function setText(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
-                  fetch('/api/pulses').then(function(r){return r.json();}).then(function(pulses){
-                    var items=(Array.isArray(pulses)?pulses:[]).map(function(p){
-                      return { name:p.employeeName||p.name||'Anonymous', rating:Number(p.rating)||0, comment:p.comment||'', ts:p.timestamp||'' };
-                    }).filter(function(p){ return p.rating>0; });
-                    var n=items.length;
-                    var avg=n? items.reduce(function(s,p){return s+p.rating;},0)/n : 0;
-                    var pos=items.filter(function(p){return p.rating>=4;}).length;
-                    var att=items.filter(function(p){return p.rating<=2;}).length;
-                    setText('ef-avg', n? avg.toFixed(1)+' / 5':'–');
-                    setText('ef-count', n||'0');
-                    setText('ef-positive', n? Math.round(pos/n*100)+'%':'–');
-                    setText('ef-attention', att);
-                    var co=document.getElementById('ef-callout');
-                    if(n){
-                      var msg = att>0 ? ('⚠️ '+att+' employee'+(att>1?'s':'')+' rated onboarding ≤2 — reach out directly to unblock them.')
-                        : (avg>=4 ? ('✅ Sentiment is strong ('+avg.toFixed(1)+'/5). Keep the cadence and reinforce what’s working.')
-                        : ('Sentiment is mixed ('+avg.toFixed(1)+'/5). Review the comments below for common themes.'));
-                      co.textContent=msg; co.style.display='block';
-                    }
-                    var list=document.getElementById('ef-comments');
-                    if(!n){ list.innerHTML='<p style="text-align:center;color:var(--text-dim);font-size:.85rem;padding:1rem;">No employee feedback submitted yet.</p>'; return; }
-                    var shown=items.filter(function(p){return p.comment && p.comment.trim();});
-                    if(!shown.length) shown=items;
-                    shown.sort(function(a,b){ return a.rating-b.rating; });
-                    list.innerHTML=shown.slice(0,12).map(function(p){
-                      var r=Math.max(0,Math.min(5,p.rating));
-                      var stars=Array(r+1).join('★')+Array(6-r).join('☆');
-                      var tone=p.rating<=2?'#C2410C':(p.rating>=4?'#5C9654':'#C77700');
-                      return '<div class="ef-comment" style="border-left:3px solid '+tone+';">'
-                        +'<div class="ef-comment-head"><strong>'+esc(p.name)+'</strong><span class="ef-stars" style="color:'+tone+'">'+stars+' '+p.rating+'/5</span></div>'
-                        +(p.comment?'<div class="ef-comment-body">'+esc(p.comment)+'</div>':'')
-                        +'</div>';
-                    }).join('');
-                  }).catch(function(){ var l=document.getElementById('ef-comments'); if(l) l.innerHTML='<p style="color:var(--text-dim);font-size:.85rem;">Feedback unavailable.</p>'; });
-                })();
-              </script>
+              <script src="/js/pages/dashboard-1.js?v=1"></script>
 
               <!-- Megaphone Guided Alert -->
               <div class="megaphone-alert-card">
@@ -1158,17 +1118,17 @@
               <div class="card" style="margin-top:1.5rem; padding:1.5rem;">
                 <div class="card-header" style="border-bottom:1px solid var(--border-color); padding-bottom:.5rem; margin-bottom:.35rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
                   <h3 data-i18n="dashboard.wim_heading">🧩 Working in a Matrix — 7 scenario cards</h3>
-                  <a href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html" data-html-slide-label="Working in a Matrix — all scenarios" style="font-size:.8rem; font-weight:800; color:var(--te-orange); text-decoration:none; white-space:nowrap;">Open all →</a>
+                  <a href="#" data-html-slide="/overview-deck/working-in-a-matrix.html" data-html-slide-label="Working in a Matrix — all scenarios" style="font-size:.8rem; font-weight:800; color:var(--te-orange); text-decoration:none; white-space:nowrap;">Open all →</a>
                 </div>
                 <p style="font-size:.85rem; color:var(--text-secondary); margin-bottom:1rem;">Seven situations, one way of working — <strong>alignment, not authority</strong>. Click any scenario to open its full card.</p>
                 <div class="wim-grid">
-                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-0" data-html-slide-label="Working in a Matrix Organization"><span class="wim-num">★ Start here</span><span class="wim-title">Working in a Matrix Organization</span><span class="wim-sit">The mindset for getting cross-functional work done — when no one hands you the authority.</span></a>
-                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-1" data-html-slide-label="Ownership without Authority"><span class="wim-num">Scenario 01</span><span class="wim-title">Ownership without Authority</span><span class="wim-sit">You're driving work through people who don't report to you.</span></a>
-                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-2" data-html-slide-label="Stakeholder Alignment"><span class="wim-num">Scenario 02</span><span class="wim-title">Stakeholder Alignment</span><span class="wim-sit">Many stakeholders, many priorities — and you need them rowing together.</span></a>
-                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-3" data-html-slide-label="Making Decisions in a Matrix"><span class="wim-num">Scenario 03</span><span class="wim-title">Making Decisions in a Matrix</span><span class="wim-sit">A call has to be made, but no single owner holds full authority to make it.</span></a>
-                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-4" data-html-slide-label="Managing Conflict Across Functions"><span class="wim-num">Scenario 04</span><span class="wim-title">Managing Conflict Across Functions</span><span class="wim-sit">Tension with a partner function is starting to cost trust and progress.</span></a>
-                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-5" data-html-slide-label="Escalation in a Matrix"><span class="wim-num">Scenario 05</span><span class="wim-title">Escalation in a Matrix</span><span class="wim-sit">You've tried to align, but progress is blocked and the risk keeps growing.</span></a>
-                  <a class="wim-card" href="javascript:void(0)" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-6" data-html-slide-label="Moving with Pace"><span class="wim-num">Scenario 06</span><span class="wim-title">Moving with Pace</span><span class="wim-sit">Everything feels urgent — how do you move fast without cutting corners?</span></a>
+                  <a class="wim-card" href="#" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-0" data-html-slide-label="Working in a Matrix Organization"><span class="wim-num">★ Start here</span><span class="wim-title">Working in a Matrix Organization</span><span class="wim-sit">The mindset for getting cross-functional work done — when no one hands you the authority.</span></a>
+                  <a class="wim-card" href="#" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-1" data-html-slide-label="Ownership without Authority"><span class="wim-num">Scenario 01</span><span class="wim-title">Ownership without Authority</span><span class="wim-sit">You're driving work through people who don't report to you.</span></a>
+                  <a class="wim-card" href="#" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-2" data-html-slide-label="Stakeholder Alignment"><span class="wim-num">Scenario 02</span><span class="wim-title">Stakeholder Alignment</span><span class="wim-sit">Many stakeholders, many priorities — and you need them rowing together.</span></a>
+                  <a class="wim-card" href="#" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-3" data-html-slide-label="Making Decisions in a Matrix"><span class="wim-num">Scenario 03</span><span class="wim-title">Making Decisions in a Matrix</span><span class="wim-sit">A call has to be made, but no single owner holds full authority to make it.</span></a>
+                  <a class="wim-card" href="#" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-4" data-html-slide-label="Managing Conflict Across Functions"><span class="wim-num">Scenario 04</span><span class="wim-title">Managing Conflict Across Functions</span><span class="wim-sit">Tension with a partner function is starting to cost trust and progress.</span></a>
+                  <a class="wim-card" href="#" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-5" data-html-slide-label="Escalation in a Matrix"><span class="wim-num">Scenario 05</span><span class="wim-title">Escalation in a Matrix</span><span class="wim-sit">You've tried to align, but progress is blocked and the risk keeps growing.</span></a>
+                  <a class="wim-card" href="#" data-html-slide="/overview-deck/working-in-a-matrix.html#scene-6" data-html-slide-label="Moving with Pace"><span class="wim-num">Scenario 06</span><span class="wim-title">Moving with Pace</span><span class="wim-sit">Everything feels urgent — how do you move fast without cutting corners?</span></a>
                 </div>
               </div>
               <style>
@@ -1290,44 +1250,7 @@
               .ilac-mod.done .ilac-mod-head{ background:rgba(92,150,84,.08); }
               .ilac-complete.done{ background:#5C9654; color:#fff; border-color:#5C9654; }
             </style>
-            <script>
-              (function(){
-                var root = document.getElementById('tab-il-academy'); if(!root) return;
-                var KEY = 'il_academy_progress_v1';
-                var done = {};
-                try { done = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch(e){ done = {}; }
-                var mods = root.querySelectorAll('.ilac-mod');
-                function refresh(){
-                  var n = 0;
-                  mods.forEach(function(m){
-                    var id = m.getAttribute('data-mod');
-                    var isDone = !!done[id];
-                    m.classList.toggle('done', isDone);
-                    var btn = m.querySelector('.ilac-complete');
-                    if (btn){ btn.classList.toggle('done', isDone); btn.textContent = isDone ? 'Completed ✓' : 'Mark module complete ✓'; }
-                    if (isDone) n++;
-                  });
-                  var fill = document.getElementById('ilac-progress-fill');
-                  var count = document.getElementById('ilac-progress-count');
-                  if (fill) fill.style.width = Math.round(n / mods.length * 100) + '%';
-                  if (count) count.textContent = n;
-                }
-                mods.forEach(function(m){
-                  var head = m.querySelector('.ilac-mod-head');
-                  if (head) head.addEventListener('click', function(){ m.classList.toggle('open'); });
-                  var btn = m.querySelector('.ilac-complete');
-                  if (btn) btn.addEventListener('click', function(e){
-                    e.stopPropagation();
-                    var id = m.getAttribute('data-mod');
-                    done[id] = !done[id];
-                    try { localStorage.setItem(KEY, JSON.stringify(done)); } catch(err){}
-                    refresh();
-                  });
-                });
-                if (mods[0]) mods[0].classList.add('open');
-                refresh();
-              })();
-            </script>
+            <script src="/js/pages/dashboard-2.js?v=1"></script>
 
           </section>
         </div>

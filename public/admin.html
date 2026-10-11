@@ -648,7 +648,7 @@
               </div>
 
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-secondary" id="btn-admin-view-pmo" style="flex: 1; min-width: 120px; font-size: 0.8rem; padding: 0.5rem 0.75rem; text-align: center; margin: 0; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;" onclick="window.location.href='/pmo.html'">
+                <button type="button" class="btn btn-secondary" id="btn-admin-view-pmo" style="flex: 1; min-width: 120px; font-size: 0.8rem; padding: 0.5rem 0.75rem; text-align: center; margin: 0; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;" data-action="open-pmo">
                   <span>Open PMO Desk</span>
                 </button>
                 <button type="button" class="btn btn-dark" id="btn-admin-reset-pmo" style="flex: 1; min-width: 120px; font-size: 0.8rem; padding: 0.5rem 0.75rem; text-align: center; margin: 0; background-color: #EF4444; border-color: #EF4444; color: white; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;">
@@ -666,7 +666,7 @@
               <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
                 Authorized administration bypass allows initiating the retro TEd game gateway. Play the full custom platformer inside the browser portal.
               </p>
-              <button type="button" class="btn" id="btn-admin-launch-doom" style="width: 100%; font-size: 0.85rem; padding: 0.6rem 0.75rem; text-align: center; margin: 0; background: var(--te-orange); border: 1px solid var(--te-orange); color: white; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; box-shadow: 0 0 10px rgba(233, 131, 0, 0.15); transition: all 0.2s;" onclick="window.launchDoomProtocol()">
+              <button type="button" class="btn" id="btn-admin-launch-doom" style="width: 100%; font-size: 0.85rem; padding: 0.6rem 0.75rem; text-align: center; margin: 0; background: var(--te-orange); border: 1px solid var(--te-orange); color: white; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; box-shadow: 0 0 10px rgba(233, 131, 0, 0.15); transition: all 0.2s;" data-action="launch-ted">
                 <span>👾 RUN TEd</span>
               </button>
             </div>
@@ -1219,5 +1219,6 @@
   <script src="/js/admin-users.js?v=1791700301"></script>
   <script src="/js/page-layout.js?v=1784900001"></script>
   <script src="/js/admin-cms.js?v=1791800101"></script>
+  <script src="/js/pages/admin-actions.js?v=1"></script>
 </body>
 </html>
