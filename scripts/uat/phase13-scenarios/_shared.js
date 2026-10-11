@@ -119,4 +119,27 @@ async function assertInert(ctx, page, label) {
   return { st, violations: v };
 }
 
-module.exports = { REPO_ROOT, loadCorpus, xssExpr, arm, pointAtCanary, sampleVectors, auditDom, execState, requestsTo, assertInert };
+// ---------------------------------------------------------------- legacy rows
+// The lane's content store file (the DEAL database in the real lane, the demo copy elsewhere). Scenarios
+// that must prove RENDER-time neutralisation of values the write path now refuses (CR-B01 / WR-B04: stored
+// `javascript:` links) put those legacy values straight into the store, below the API - exactly what a
+// database written by an older release holds.
+function laneStoreFile(ctx, fixture) {
+  return ctx.lane === 'real'
+    ? path.join(ctx.dataDir, 'deals', fixture.dealId + '.db')
+    : path.join(ctx.dataDir, 'demo.db');
+}
+
+function withStore(file, fn) {
+  const Database = require(path.join(REPO_ROOT, 'node_modules', 'better-sqlite3'));
+  const conn = new Database(file);
+  try {
+    conn.pragma('busy_timeout = 8000');
+    return fn(conn);
+  } finally {
+    try { conn.pragma('wal_checkpoint(PASSIVE)'); } catch (e) { /* best effort */ }
+    conn.close();
+  }
+}
+
+module.exports = { REPO_ROOT, loadCorpus, xssExpr, arm, pointAtCanary, sampleVectors, auditDom, execState, requestsTo, assertInert, laneStoreFile, withStore };

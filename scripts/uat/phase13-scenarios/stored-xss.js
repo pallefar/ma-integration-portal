@@ -104,15 +104,40 @@ async function storedXss(ctx) {
     ctx.check('server stored the body already sanitised (structurally inert at rest)',
       atRest.length > 0 && restViolations.length === 0, { len: atRest.length, violations: restViolations.slice(0, 5) });
 
-    const layout = [
+    // Since the CR-B01 / WR-B04 review fixes the write path REFUSES a `javascript:` block href (validators
+    // urlField), so the hostile hrefs reach the store only the way a pre-fix database holds them: below the
+    // API. The render-time neutralisation check further down is unchanged.
+    const hostileHref = 'javascript:' + expr;
+    const layoutBlocks = (withHrefs) => [
       { id: 'p13-b1', type: 'richtext', order: 1, visible: true, data: { html: { en: richHtml(M.layout) } } },
-      { id: 'p13-b2', type: 'hero', order: 2, visible: true, data: { title: { en: oneLiner }, subtitle: { en: oneLiner }, cta: { en: 'Go' }, ctaHref: 'javascript:' + expr } },
+      { id: 'p13-b2', type: 'hero', order: 2, visible: true, data: Object.assign({ title: { en: oneLiner }, subtitle: { en: oneLiner }, cta: { en: 'Go' } }, withHrefs ? { ctaHref: hostileHref } : {}) },
       // `items` is a plain "Title | description | icon" lines string (admin-cms.js sends it unlocalised).
       { id: 'p13-b3', type: 'cards', order: 3, visible: true, data: { heading: { en: oneLiner }, items: oneLiner + ' | ' + oneLiner + ' | x' } },
-      { id: 'p13-b4', type: 'cta', order: 4, visible: true, data: { heading: { en: oneLiner }, text: { en: oneLiner }, button: { en: 'Open' }, href: 'javascript:' + expr } },
+      { id: 'p13-b4', type: 'cta', order: 4, visible: true, data: Object.assign({ heading: { en: oneLiner }, text: { en: oneLiner }, button: { en: 'Open' } }, withHrefs ? { href: hostileHref } : {}) },
     ];
-    const rLayout = await upsertPage(CMS_SLUG_LAYOUT, { layout, published: true });
-    ctx.check('author stored the layout blocks (richtext + hero/cards/cta text + javascript: hrefs)', rLayout.status === 200, { status: rLayout.status });
+    const refused = await ctx.api(author, 'POST', '/api/pages', { slug: 'p13-href-probe', title: { en: 'p13' }, layout: layoutBlocks(true), published: true });
+    ctx.check('the write path refuses javascript: hero/cta block hrefs (400, CR-B01 / WR-B04 urlField rule)', refused.status === 400, { status: refused.status });
+    const probeList = await ctx.api(author, 'GET', '/api/pages');
+    ctx.check('the refused layout write stored nothing', !(Array.isArray(probeList.json) && probeList.json.some((p) => p && p.slug === 'p13-href-probe')), null);
+    const rLayout = await upsertPage(CMS_SLUG_LAYOUT, { layout: layoutBlocks(false), published: true });
+    ctx.check('author stored the layout blocks (richtext + hero/cards/cta text)', rLayout.status === 200, { status: rLayout.status });
+    {
+      // Put the legacy javascript: hrefs into the stored row, below the API (what an older release's database holds).
+      const listed = await ctx.api(author, 'GET', '/api/pages?slug=' + CMS_SLUG_LAYOUT);
+      const pageId = (rLayout.json && rLayout.json.page && rLayout.json.page.id) || (listed.json && listed.json.id) || '';
+      const patched = S.withStore(S.laneStoreFile(ctx, fx), (conn) => {
+        const row = conn.prepare('SELECT id, data FROM pages WHERE id = ?').get(pageId);
+        if (!row) return 0;
+        const rec = JSON.parse(row.data);
+        (rec.layout || []).forEach((b) => {
+          if (b && b.id === 'p13-b2') b.data.ctaHref = hostileHref;
+          if (b && b.id === 'p13-b4') b.data.href = hostileHref;
+        });
+        conn.prepare('UPDATE pages SET data = ? WHERE id = ?').run(JSON.stringify(rec), pageId);
+        return 1;
+      });
+      ctx.check('legacy javascript: hero/cta hrefs placed in the stored page row below the API', patched === 1, { pageId: pageId ? 'found' : 'missing' });
+    }
 
     const course = {
       title: { en: 'P13 proof course' }, published: true,

@@ -432,9 +432,11 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
     }
 
     // One fixture per lane server, shared by every scenario (sequential).
-    //   real:      a deal with members author2 (admin), il (hrbp), emp, pmo; every
-    //              session bound to the deal (that is what resolves the REAL store).
-    //   dev:       admin author + a SECOND admin session, karen (hrbp), employee.
+    //   real:      a deal with members author2 (admin), il (hrbp), emp, pmo, cache (a second
+    //              hrbp reserved for UI sign-out scenarios); every session bound to the deal
+    //              (that is what resolves the REAL store).
+    //   dev:       admin author + a SECOND admin session, karen (hrbp), employee, and a separate
+    //              karen session (`cache`) for UI sign-out scenarios.
     //   demo-open: the anonymous showcase visitor is author and victim (cookie null).
     let fixturePromise = null;
     function fixture() {
@@ -449,6 +451,10 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
             il: ['p13.il', 'Phase Thirteen Integration Lead', 'hrbp'],
             emp: ['p13.emp', 'Phase Thirteen Employee', 'employee'],
             pmo: ['p13.pmo', 'Phase Thirteen Workstream Lead', 'pmo'],
+            // A SECOND Integration Lead account reserved for scenarios that sign out through the UI
+            // (caching): logging out revokes the session it used, so it must never be a session another
+            // scenario in the same lane still needs (a full multi-scenario run shares one fixture).
+            cache: ['p13.cache', 'Phase Thirteen Sign-out Lead', 'hrbp'],
           };
           for (const key of Object.keys(names)) {
             const n = names[key];
@@ -481,6 +487,8 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
           f.users.il = { username: 'karen', role: 'hrbp', cookie: await freshSession('il', 'karen', pw) };
           f.users.pmo = { username: 'pmo', role: 'pmo', cookie: await freshSession('pmo', 'pmo', pw) };
           f.users.emp = { username: 'employee-demo', role: 'employee', cookie: await freshSession('emp', 'employee-demo', pw) };
+          // A separate session of the IL account for scenarios that sign out through the UI (see the real lane).
+          f.users.cache = { username: 'karen', role: 'hrbp', cookie: await freshSession('cache', 'karen', pw) };
         }
         return f;
       })();
