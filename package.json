@@ -1,6 +1,6 @@
 {
   "name": "te-ma-integration-portal",
-  "version": "1.0.0",
+  "version": "3.0.0-rc.1",
   "description": "TE Connectivity Post-Merger Integration Portal - First 100 Days",
   "main": "server.js",
   "scripts": {

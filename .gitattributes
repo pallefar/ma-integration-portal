@@ -1,5 +1,30 @@
-# Files excluded from `git archive` (the release zips). Phase 21 extends this
-# file for .planning/ and test/.
+# Files excluded from `git archive` (the release zips). scripts/build-release.sh
+# ALSO removes these from its staging tree (defence in depth): the built bundles
+# are identical whichever mechanism does the work.
+#
+# Patterns with a leading slash are anchored at the repository root, so they never
+# touch same-named files inside the committed node_modules/ (e.g. mime-db/db.json,
+# vendored packages' own test/ directories).
+
+# GSD planning artifacts, agent instructions, CI and git hooks - never shipped.
+/.planning export-ignore
+/.claude export-ignore
+/.gsd export-ignore
+/.github export-ignore
+/.githooks export-ignore
+
+# Tests and developer tooling.
+/test export-ignore
+/scripts/uat export-ignore
+/scripts/soak.js export-ignore
+/scripts/test-gate.js export-ignore
+
+# Legacy pre-SQLite artifacts, not read at runtime: db.json is read only by
+# ragService.js behind an existsSync guard (its ragUploads is empty); the server
+# opens data/demo.db / control.db / runtime.db / audit/* / deals/* and never
+# data/ma-portal.db (db/store.js keeps it only as an unused no-argument default).
+/db.json export-ignore
+/data/ma-portal.db export-ignore
 
 # D-12-08: the browser smoke harness is developer tooling, never shipped.
 scripts/smoke/ export-ignore
