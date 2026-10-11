@@ -603,6 +603,224 @@ protected by its read-only attribute and the user-profile ACLs.
   above); it never loses the first denial of a window.
 - A purge does not remove the control-plane residue listed in 5.
 
+## Content safety
+
+A deal host stores content that people author (pages, lessons, banners, translations,
+slides) and renders it to other people who are signed in. Three layers keep that
+content from running as script in someone else's session:
+
+1. **Sanitising.** Stored HTML is reduced to a fixed allowlist of elements,
+   attributes and URL schemes when it is written (server) and is built from the same
+   allowlist again when it is rendered (browser).
+2. **A strict Content-Security-Policy, enforced.** Script that survives both
+   layers still cannot run: the policy permits no inline script, no `eval` and no
+   third-party script origin.
+3. **Third-party services are off unless an admin switches them on** in a real-deal
+   instance, and uploaded slides run in a sandbox with no access to the portal.
+
+This section lists the controls, their defaults and the one-variable rollback.
+
+### CSP and `CSP_MODE`
+
+Every response carries one `Content-Security-Policy` header whose `script-src` is
+exactly `'self' 'wasm-unsafe-eval'`: no inline `<script>`, no inline `on*=` handler,
+no `javascript:` URL, no `eval`, no nonce, no third-party script origin. The shipped
+pages and decks contain no inline code, and a static test over the whole `public/`
+tree keeps it that way. The real-deal default (every external service off, so no
+`https:` token anywhere):
+
+```
+default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; report-uri /api/csp-report
+```
+
+`img-src`, `connect-src`, `frame-src` and `media-src` gain the origins of exactly the
+external services an admin has switched on (next subsection); nothing else changes.
+
+| `CSP_MODE` | What the server sends |
+|---|---|
+| unset, empty or `enforce` (default) | the strict policy above as `Content-Security-Policy`, nothing else |
+| `report-only` (rollback) | the previous enforcing policy (`script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'`) as `Content-Security-Policy`, and the strict policy as `Content-Security-Policy-Report-Only` |
+| anything else | treated as `enforce`; one `[security]` warning is logged at boot |
+
+The server logs the active mode once at boot (`[security] CSP_MODE=…`).
+
+**Rollback.** If a page or the in-browser AI-model flow misbehaves after an upgrade,
+set `CSP_MODE=report-only` in the service environment and restart; no code change and
+no data change is involved. Everything the strict policy would have blocked is then
+reported instead of blocked, and the list below tells you what. Remove the variable
+and restart to return to enforcing.
+
+**Violations list.** `GET /api/admin/csp-violations` (admin only) answers
+`{ mode, count, violations }`: the last 100 *distinct* violations (directive, blocked
+URI, source file, line, count, first and last seen). It lives in the memory of the
+server process, so a restart empties it and a second process has its own list; query
+strings and fragments are dropped before storage. Browsers post to
+`POST /api/csp-report`, which cannot require a session: its body is limited to 4 KB
+for every content type (any other type is refused `415` unread), it allows 60 reports
+per minute per client address before any body is read (set `TRUST_PROXY` behind a
+proxy, see above), it keeps only reports about pages the portal actually serves, and
+when the store is full it evicts reports from other origins (browser extensions)
+first. Treat the list as **advisory**: anyone can post a report and a browser may drop
+one, so judge a rollout by walking the pages as well as by reading the list.
+
+An expected entry: the vendored Transformers.js bundle probes for the global object
+with a guarded `new Function("return this")`. Under the enforced policy that call is
+blocked once and appears as a `script-src` entry with blocked URI `eval` from
+`/vendor/transformers/transformers.min.js`. It is harmless: the bundle still imports
+and the WebAssembly runtime still compiles (checked in a real browser).
+
+### External services (the egress switch)
+
+Admin console, **Settings** tab, **External services** card. Three independent
+switches, stored per instance in `runtime.db` (not per deal). A change takes effect on
+the next request in every process without a restart, and every change is audited as
+`egress-settings-changed` with the actor and the before/after values.
+
+| Switch | What it enables | Origins it adds to the policy |
+|---|---|---|
+| Gemini | the server's Gemini calls (AI Insight, the AI-training upload, assessment plan and PDF review) | none: the call is made by the server, not the browser |
+| Hugging Face | downloading the in-browser model weights (AI-Insight wizard) | `connect-src` `huggingface.co`, `*.huggingface.co`, `cdn-lfs.huggingface.co`, `cdn-lfs-us-1.huggingface.co`; `img-src` `*.huggingface.co` |
+| YouTube | video thumbnails and embedded videos (employee welcome video) | `frame-src` `www.youtube.com`, `www.youtube-nocookie.com`, `youtube.com`; `img-src` `img.youtube.com`, `i.ytimg.com`; `media-src` `*.youtube.com` |
+
+**Defaults.** Real-deal mode: **all three off**, so a real host contacts no third
+party until an admin decides otherwise. Dev and demo: all three on, as before.
+
+- **Gemini off:** the server makes no outbound call. `GET /api/ai/insight` and
+  `POST /api/rag/upload` answer HTTP `200` with `{ "egressDisabled": "gemini", "message": … }`,
+  which the browser shows once as a "switched off" state and never retries; the
+  assessment plan and PDF review fall back to the built-in local engine.
+- **Hugging Face off:** the downloadable model options are disabled and the wizard
+  uses the local simulation; the model bundle is not even requested.
+- **YouTube off:** no thumbnail or embed is built. The card shows a neutral
+  "switched off by your administrator" placeholder.
+- **The AI-training upload (`/api/rag/upload`) is `404` in real-deal mode**
+  regardless of the switch, and its card is hidden in the console.
+- **Fonts are local.** Inter and Outfit are vendored under `public/vendor/fonts`
+  (SIL OFL texts alongside); no font CDN origin exists anywhere in the policy.
+- **Dev mode is not offline.** A host without `MA_MODE=real` and without `DEMO_OPEN`
+  inherits the demo defaults, so an ordinary laptop-local run *does* contact YouTube
+  (video thumbnails) and, in the AI-Insight wizard, Hugging Face. Use real-deal mode
+  for anything that must not.
+- **Under `DEMO_OPEN=1`** the console cannot change the switches: open mode has no
+  signed-in identity, and `POST /api/admin/egress` (like
+  `GET /api/admin/csp-violations`) answers `403` to every caller unless the request
+  carries the `X-Admin-Token` header of a configured `ADMIN_TOKEN`. The External
+  services card still renders there, but **Save** is refused with that `403`.
+  Showcase defaults are all on, so nothing is lost; to read the violations list on a
+  demo-open host, use the break-glass header or read it on a dev or real instance.
+- `POST /api/admin/egress` with no egress key (`{}`) is refused `400`
+  `No egress key supplied`; nothing is written or audited.
+
+### Slides
+
+The admin **Slides** tab accepts `.html`, `.htm`, `.pdf`, `.png`, `.jpg`, `.jpeg` and
+`.webp`. The extension, the declared type (when the browser supplies one) and, for
+the binary types, the magic bytes must agree; anything else is refused before any
+file is written.
+
+| Limit | Value | Refusal |
+|---|---|---|
+| file type | allowlist above | `415` `This file type is not allowed for slides.` |
+| one file | 10 MB | `413` `Slide file is larger than 10 MB.` |
+| slide library | `MA_SLIDE_QUOTA_MB`, default **100** (positive integer; an invalid value logs a warning and keeps 100) | `413` `The slide library is full.` |
+
+- **Where slides live.** Uploaded slides are stored **outside the public web root**:
+  `<instance data dir>/slides`, i.e. `data/slides` on a dev/demo host and
+  `<MA_DATA_DIR>/slides` (default `data/real/slides`) on a real-deal host. The
+  directory is created `0700` and is never committed (`data/slides/` and `data/real/`
+  are gitignored). `MA_SLIDES_UPLOAD_DIR` overrides the location. Slides are served
+  only through `/uploads/slides/<name>`.
+- **Back up the slide directory** together with the data directory: it holds uploaded
+  deck files, possibly deal material.
+- **Sandbox.** HTML and image slides are served with
+  `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'`
+  plus `X-Content-Type-Options: nosniff`, and the portal frames them in an
+  `<iframe sandbox="allow-scripts">`. A slide's own scripts run, but in an opaque
+  origin with no cookies, no storage, no portal API and no network. Slides that relied
+  on external images, fonts or scripts render without them; re-upload them with the
+  assets inlined.
+- **PDFs are not sandboxed.** A sandboxing policy would stop the browser's built-in
+  PDF viewer, so a PDF keeps the application policy plus `nosniff`; the file is
+  verified to be a PDF by its first bytes before it is stored.
+- **Mount names.** `/uploads/slides/` serves only a single file name of letters,
+  digits, `.`, `_` and `-` (not starting with a dot, at most 200 characters) with an
+  allowlisted extension; anything else is `404`.
+- **Windows hosts.** Request paths containing a backslash, a NUL, a path segment
+  ending in `.` or a space, and (outside `/api`) `:` or `~` are answered `404` by
+  design: they are Windows path-alias spellings, and no page or API of the portal
+  uses them.
+- **Deleting a slide in the admin UI also deletes its uploaded file**, once no other
+  slide record of the same deal references it, which frees library quota. Upload temp
+  files (`*.tmp`) never count toward the quota; ones older than an hour are removed
+  at boot.
+- **Slide reads are not authenticated yet.** The slide directory is outside
+  `public/`, but anyone who knows a `/uploads/slides/<name>` URL can fetch it. Do not
+  treat a slide URL as secret; authenticated, per-deal file storage arrives with the
+  deal file store in Phase 14.
+
+**Upgrading an existing host.** Earlier releases kept slides in
+`public/uploads/slides`. On the first boot after the upgrade, with
+`MA_SLIDES_UPLOAD_DIR` unset, the server moves the files whose names the slide URL
+can serve into the new directory; a file whose name already exists there is left
+where it is and never overwritten. The boot log prints a count only,
+`[slides] legacy slide move: N file(s) moved …`, never a file name. Afterwards check
+`public/uploads/slides`: anything left there was skipped (a name collision or a
+non-slide file). Move it by hand if a slide record still points at it, then delete
+it. If `MA_SLIDES_UPLOAD_DIR` is set, nothing is moved automatically: copy the legacy
+files into that directory yourself.
+
+### Caching and sign-out
+
+- Every `/api` response, at every status including errors, carries
+  `Cache-Control: no-store`, so a shared browser or proxy cache never keeps a
+  person's data.
+- **Sign-out clears the browser.** A logout that carried a session cookie answers
+  `Clear-Site-Data: "cache", "storage"` (a cross-site auto-submitted logout form
+  without a session no longer wipes anything), and the page also clears
+  `sessionStorage`, `localStorage`, Cache Storage and service-worker registrations
+  itself. Only the language preference (`employeeLanguage`) survives.
+- **`Clear-Site-Data` is honoured by browsers only on a secure context** (https, or
+  `localhost`). On a plain-HTTP LAN host the header is ignored and only the
+  page-side clearing runs, so **run a shared host behind TLS** (see "Behind a reverse
+  proxy / TLS"). The remaining gap there: a person who signs out on a shared browser
+  without TLS depends on the page-side clearing alone.
+- The Transformers.js model cache (`transformers-cache`) now survives page loads (the
+  per-load cache wipe is gone) and is cleared at sign-out. `public/sw.js` is a
+  self-unregistering stub and `manifest.json` no longer ships.
+
+### Upgrade: stored HTML is re-sanitised once (migration deal/002)
+
+On the first boot of this release, every **deal database** the server opens runs
+migration `deal/002 resanitize-html` before it serves requests: it re-sanitises every
+stored page body, layout rich-text block and lesson body with the same allowlist the
+write path now uses, and rewrites **only the values that change** (a row with nothing
+to change keeps its bytes). The boot log prints one `[migrate] deal/002 …` summary
+line per file with the number of changed values, and per changed value a collection,
+a hashed id and a before/after digest — never content or a verbatim row id. No audit
+rows are written (a boot-time repair).
+
+- **Back up first.** The migration is forward-only and rewrites content in place. Copy
+  the whole data directory (every `deals/*.db` and its `-wal`/`-shm` sidecars with the
+  service stopped) before the first boot, as for the audit upgrade in section 6
+  above. Rollback is a restore of that copy together with the previous release; a
+  sanitised value cannot be un-sanitised.
+- **Expect rewritten markup.** A value the old sanitiser let through (a handler
+  attribute, a `javascript:` link, an unknown element) is stored without it. A page or
+  lesson that depended on such markup will show differently; fix it in the editor.
+- **Limits that now apply on write.** An HTML field nested deeper than 2000 elements
+  is stored as escaped text, not markup (fail-closed). An i18n map carries at most 20
+  language variants. `HTML_MAX` (20 000 characters per HTML field) is also the
+  sanitiser's cost bound: raise it only together with `test/sanitize-html.test.js`.
+- **The committed demo database was regenerated.** `data/demo.db` ships at schema
+  version 2 (no demo value changed). A running server never migrates the committed
+  demo or control databases in place: use the file from the release, and for a
+  rollback restore the previous release's `data/demo.db` with the previous release.
+  Real-deal hosts never open the committed databases.
+
+### Client-side notes
+
+<!-- Filled by the orchestrator after the client review fixes are merged. -->
+
 ## ADMIN_TOKEN (optional break-glass, discouraged)
 
 `ADMIN_TOKEN` is an optional shared secret: a request carrying it in the
@@ -645,17 +863,41 @@ warning at boot.
   AI-Insight feature fetches Transformers.js model weights from the Hugging Face
   Hub on first use, which departs from the otherwise self-contained / no-CDN
   posture. It is **user-gated** — unreachable unless a user explicitly opens the
-  AI-Insight wizard — and is **deferred to a follow-up task** (vendoring the
-  weights or gating the feature to demo mode). Real-deal hosts that must stay
-  fully offline should not use the AI-Insight feature until this is resolved.
+  AI-Insight wizard — and, since Phase 13, **off by default in real-deal mode**:
+  the Hugging Face switch (see Content safety, External services) is off there, the
+  policy lists no Hugging Face origin and the wizard uses the local simulation. An
+  admin who switches it on accepts the download; vendoring the weights is still
+  deferred to a follow-up task. Dev and demo hosts have the switch on.
 - **A RAID entry or task with a malformed clearance area is hidden from everyone,
   admin included (fail-closed, accepted).** The app only ever writes a valid
   clearance area; a value that is not one (only possible by editing the deal file
   directly) makes the row invisible in every list, export and report rather than
   risk showing it to someone uncleared. If an admin reports "a row I can't see",
   check that row's `clearanceArea` in the deal database first.
-- **Client-side XSS sink audit is partial.** The milestone security review
-  traced the highest-risk stored-string→`innerHTML` sinks and fixed the
-  confirmed ones; the full sink class across the legacy frontend is not
-  exhaustively proven. Treat any new user-authored free-text rendering as
-  requiring explicit escaping.
+- **Client-side XSS sink audit is partial; the enforced CSP is the backstop.**
+  Every enumerated render path that turns stored or message-sourced markup into DOM
+  (CMS page bodies and layout blocks, lesson bodies, `[data-i18n-html]` values,
+  banners, the chatbot, the slide launcher, inline editing, the slide list) is built
+  from the allowlist renderer or from `textContent`, and a static scan keeps it so.
+  About **300 other client HTML sinks** (`innerHTML` template builds of app-sourced
+  data across the legacy frontend) are not individually audited; they are bounded by
+  the enforced policy (no inline or eval'd script can run from them), not proven
+  safe one by one. Treat any new user-authored free-text rendering as requiring
+  explicit escaping or `textContent`.
+- **`style-src` still allows inline styles.** The strict policy governs script only;
+  inline `style` attributes and `<style>` blocks are permitted, so style-based
+  tricks (layout overlay, CSS-driven requests to origins the policy allows) are not
+  prevented by it. Stored `style` values are filtered through a property allowlist.
+- **Multi-thread Transformers.js inference is not verified under the strict policy.**
+  A threaded WebAssembly runtime starts its workers with `importScripts(blob:)`
+  inside a blob worker, which inherits `script-src 'self'` and would be blocked. The
+  app runs the single-thread runtime (an enforced-policy run imports the bundle and
+  compiles `/vendor/transformers/ort-wasm-simd.wasm` without a violation), so this is
+  not exercised. If the AI-model flow regresses on a host, `CSP_MODE=report-only`
+  plus a restart is the rollback.
+- **Deleting a slide record can remove a file another deal's slide record still
+  points at.** The "no other record references this URL" check runs inside the
+  current deal's database only (opening every deal on a delete would cross
+  clean-room lines), while the slide directory is shared by the instance. Upload
+  each deal's slides separately rather than pasting one uploaded URL into several
+  deals.
