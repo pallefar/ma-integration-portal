@@ -309,9 +309,9 @@ As the Integration Leader, you are the critical bridge. Use these coaching scrip
 ${coachingTips}
 
 #### **Top 3 Core Playbook Links for the Integration Leader:**
-1.  [Culture and Values Playbook](file:///Users/karstenhaldan/M&A/public/playbook.html#culture) — Guidelines on holding town halls and values alignment workshops.
-2.  [Talent Mapping & Retention Guide](file:///Users/karstenhaldan/M&A/public/playbook.html#talent) — Templates for key personnel bonus structures and career blueprints.
-3.  [Value Synergy Playbook](file:///Users/karstenhaldan/M&A/public/playbook.html#value) — Step-by-step trackers for operational consolidation and customer transfer.
+1.  [Culture and Values Playbook](/playbook.html#culture) — Guidelines on holding town halls and values alignment workshops.
+2.  [Talent Mapping & Retention Guide](/playbook.html#talent) — Templates for key personnel bonus structures and career blueprints.
+3.  [Value Synergy Playbook](/playbook.html#value) — Step-by-step trackers for operational consolidation and customer transfer.
 ${ragSection}
 ---
 *Plan generated on 2026-05-21T22:15:00Z by the TE post-merger integration expert RAG service. All details are kept confidential in accordance with TE Connectivity Compliance policies.*`;
