@@ -2185,6 +2185,35 @@ app.get('/api/deals', (req, res) => {
   res.json(projectDealsForRole(controlStore.listDealsForUser(req.portalUser), req.portalUser && req.portalUser.role));
 });
 
+// [security] F-1 (v3.0.0-rc.1 milestone review; generalises T-11-13): EVERY
+// `/api/deals/:id` and `/api/deals/:id/*` route is control-plane
+// (db/resolver.js isControlPlanePath), so the resolver's bind-time membership
+// refusal never runs for them, and the gate's role rules ('/api/deals' in
+// ROLE_WRITE_POLICY / ROLE_READ_POLICY) prove only the ROLE — never WHICH deal.
+// Mitigation: ONE mount-level membership rule, registered BELOW the static
+// siblings (`/api/deals/wizard/basics`, `/api/deals/select` — any new static
+// `/api/deals/<name>` route MUST also be registered above this line) and ABOVE
+// every `:id` handler, so a future `/api/deals/:id/<x>` route inherits it
+// instead of having to remember a per-handler copy. Admin (session or the
+// attributed break-glass identity) is a member of every deal (isDealMember);
+// every other role must be on the deal's members[] list. A non-member gets the
+// response byte-identical to a missing deal — `404 { error: 'Deal not found.' }`,
+// the same body /setup and every handler below send for an unknown id — so the
+// refusal confirms neither the deal's existence nor its membership (T-03-17
+// anti-enumeration), and like that missing-deal branch it is unaudited. The
+// role checks in the consolidated /api gate still run first (a pmo/employee
+// keeps its id-independent 403). `req.params.id` here is decoded by the SAME
+// router step that hands the handler its `req.params.id`, so a percent-encoded
+// spelling cannot name one deal to this check and another to the handler; case
+// variants of the prefix do not dispatch (`case sensitive routing`), and dot
+// segments / undecodable escapes were already refused by the gate (CR-01).
+app.use('/api/deals/:id', (req, res, next) => {
+  if (!controlStore.isDealMember(req.params.id, req.portalUser)) {
+    return res.status(404).json({ error: 'Deal not found.' });
+  }
+  next();
+});
+
 // D-03: membership edits are admin-only. ROLE_WRITE_POLICY's flat prefix
 // table has no wildcard for "admin+hrbp on /api/deals in general, but
 // admin-only on this one dynamic-:id-segment route" — the broader
@@ -2316,10 +2345,11 @@ app.post('/api/deals/:id/setup', (req, res) => {
 // superset/subset/neither.
 //
 // Both routes 404 when the deal id does not exist, mirroring the members
-// route's own 404 branch immediately above — a deal id is already enumerable
-// through GET /api/deals for a member and through the admin list, so the
-// deal-level anti-enumeration rule governing /api/deals/select does not apply
-// to this admin/IL surface.
+// route's own 404 branch immediately above. [security] F-1 (v3.0.0-rc.1
+// review): a NON-MEMBER Integration Lead never reaches these handlers — the
+// mount-level `/api/deals/:id` membership rule above answers them with the
+// SAME `404 { error: 'Deal not found.' }`, so neither a deal's existence nor
+// its roster/clearance map is learnable one route over from /setup.
 app.get('/api/deals/:id/grants', (req, res) => {
   // [security] Deviation from plan text (Rule 1/2 auto-fix): GET requests
   // bypass ROLE_WRITE_POLICY entirely except for '/api/admin'-prefixed paths
