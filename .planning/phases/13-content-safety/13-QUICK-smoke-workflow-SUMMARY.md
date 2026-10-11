@@ -98,6 +98,12 @@ synthetic zip is a proxy for the layout, not a release asset.
 3. **Real asset names.** The patterns follow the brief (`*-windows.zip`, `*-macos.zip`,
    `ma-integration-portal-<tag>.zip`); the scripted build (REL-01, Phase 21) does not exist yet. A
    different naming makes the download step fail with the asset list printed, not pass silently.
+   Corroboration (read-only `unzip -l` / `unzip -Z` on the v2.1.0 turnkey zips found in the shared
+   session scratch area): the assets were named `ma-integration-portal-v2.1.0-macos.zip` and
+   `-windows.zip`, each with a single `ma-integration-portal/` root folder, `node/node.exe` /
+   `node/bin/node`, both launcher pairs, `data/control.db` + `data/demo.db`, and `-rwxr-xr-x` on the
+   macOS launchers and bundled node. `scripts/bootstrap-admin.js` is a Phase 10 file and so is
+   absent there, as expected; a v3 asset is the first that can pass that inventory check.
    The `SHA256SUMS` check assumes `sha256sum` text format (`<hash>  <file>`); the asset must be
    named exactly `SHA256SUMS`.
 4. **The shipped bundled node** on windows/macos (node present, runs, >= 22, loads the committed
