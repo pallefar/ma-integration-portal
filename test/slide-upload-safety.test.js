@@ -240,7 +240,9 @@ test('slide-upload-safety (d): DEFAULT directory (MA_SLIDES_UPLOAD_DIR unset) â€
   fs.writeFileSync(path.join(legacyDir, legacyName), legacyBody);
   let uploadedFile = null;
   try {
-    const env = cleanEnv({ ...isolatedPaths(TMP_DIR), GSD_COOKIE: cookie(token), GSD_LEGACY_NAME: legacyName });
+    // MA_TEST_LEGACY_SLIDE_MOVE=1: under node --test the boot move is opt-in, so no
+    // other suite's incidental boot can move this probe first.
+    const env = cleanEnv({ ...isolatedPaths(TMP_DIR), GSD_COOKIE: cookie(token), GSD_LEGACY_NAME: legacyName, MA_TEST_LEGACY_SLIDE_MOVE: '1' });
     assert.strictEqual(env.MA_SLIDES_UPLOAD_DIR, undefined, 'the child must run with MA_SLIDES_UPLOAD_DIR unset');
     const result = await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ['-e', DEFAULT_CHILD], { cwd: REPO, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -454,6 +456,20 @@ test('slide-upload-safety (m): CR-A01 (b) â€” the legacy move: allowlisted regul
     { moved: 0, skipped: 0, failed: 0 });
   // an override means the operator placed the files: the boot hook does nothing
   assert.strictEqual(slideUpload.migrateLegacySlidesAtBoot({ from, to }).overridden, true, 'MA_SLIDES_UPLOAD_DIR is set in this suite');
+  // under node --test the boot move is opt-in (MA_TEST_LEGACY_SLIDE_MOVE=1)
+  const saved = process.env.MA_SLIDES_UPLOAD_DIR;
+  delete process.env.MA_SLIDES_UPLOAD_DIR;
+  try {
+    fs.writeFileSync(path.join(from, '5_ee_optin.html'), 'opt-in');
+    assert.strictEqual(slideUpload.migrateLegacySlidesAtBoot({ from, to, log: () => {} }).testSkipped, true, 'an incidental test boot moves nothing');
+    assert.ok(fs.existsSync(path.join(from, '5_ee_optin.html')));
+    process.env.MA_TEST_LEGACY_SLIDE_MOVE = '1';
+    assert.strictEqual(slideUpload.migrateLegacySlidesAtBoot({ from, to, log: () => {} }).moved, 1);
+    assert.ok(fs.existsSync(path.join(to, '5_ee_optin.html')));
+  } finally {
+    process.env.MA_SLIDES_UPLOAD_DIR = saved;
+    delete process.env.MA_TEST_LEGACY_SLIDE_MOVE;
+  }
 });
 
 // ================================================================== Task 2 ===
