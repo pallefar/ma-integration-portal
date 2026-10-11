@@ -63,11 +63,14 @@ test('slide-sandbox-client (d): the overview deck still frames deck.html itself 
   assert.ok(/<iframe id="deckframe" src="\/overview-deck\/deck\.html"/.test(overview), 'overview.html frames deck.html directly');
   assert.ok(!/id="deckframe"[^>]*sandbox/.test(overview), 'the deck frame itself is not sandboxed (it is first-party markup)');
   assert.ok(/d\.type === 'open-slide'[\s\S]{0,200}window\.openHtmlSlide\(d\.url/.test(overview), 'open-slide messages are routed to openHtmlSlide');
-  const deck = readPublic('overview-deck', 'deck.html');
+  // 13-11 (D-13-03): the deck code moved from inline blocks to /js/overview-deck/*.js, so the bridge is
+  // asserted over the page markup plus the external scripts it loads (the same code, at the same position).
+  const deckScripts = ['deck.js', 'deck-bridge.js'].map((f) => readPublic('js', 'overview-deck', f)).join('\n');
+  const deck = readPublic('overview-deck', 'deck.html') + '\n' + deckScripts;
   assert.ok(/parent\.postMessage\(\{type:'open-slide'/.test(deck) && /parent\.postMessage\(\{type:'deck-overlay'/.test(deck));
   // built-in decks opened via openHtmlSlide must not depend on same-origin access
   for (const f of ['slide5.html', 'slide6.html', 'easter-egg.html', 'working-in-a-matrix.html', 'agenda.html']) {
-    const html = stripComments(readPublic('overview-deck', f));
+    const html = stripComments(readPublic('overview-deck', f) + '\n' + readPublic('js', 'overview-deck', f.replace(/\.html$/, '.js')));
     assert.ok(!/localStorage|sessionStorage|document\.cookie|indexedDB|fetch\(|XMLHttpRequest|parent\.|window\.top|top\.location/.test(html),
       `${f} must not need same-origin storage/network/parent access (it is framed sandboxed)`);
   }

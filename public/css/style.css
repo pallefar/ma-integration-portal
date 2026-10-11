@@ -8440,3 +8440,6 @@ body.cms-inline-on [data-i18n-html]:hover {
   .proc-sides-arrow { justify-content: center; transform: rotate(90deg); }
   .proc-grid { grid-template-columns: 1fr; }
 }
+
+/* SAFE-02 (13-11, PD-42): notification-panel item hover — replaces the generated onmouseover/onmouseout handlers. */
+.sidebar-notif-item:hover { background: rgba(233, 131, 0, 0.08); }
