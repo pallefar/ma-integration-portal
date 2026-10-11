@@ -4,7 +4,7 @@
 // can talk to it over HTTP - several children can share one data directory
 // (the cross-process egress case) or run MA_MODE=real (the real-mode default).
 //
-//   const s = await startServer({ dir, mode: 'dev' | 'real' });
+//   const s = await startServer({ dir, mode: 'dev' | 'real', env: { extra: 'vars' } });
 //   s.base, s.tokens.admin / s.tokens.hrbp, await s.request('/login.html'), s.stop()
 //
 // The child seeds two accounts + session cookies itself (db/sessions.js,
@@ -52,7 +52,7 @@ function seedDevDir(dir) {
   fs.copyFileSync(path.join(REPO, 'data', 'demo.db'), path.join(dir, 'demo.db'));
 }
 
-function startServer({ dir, mode, timeoutMs } = {}) {
+function startServer({ dir, mode, timeoutMs, env: extraEnv } = {}) {
   const real = mode === 'real';
   let env;
   if (real) {
@@ -69,7 +69,7 @@ function startServer({ dir, mode, timeoutMs } = {}) {
   }
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['-e', CHILD_SCRIPT], {
-      cwd: REPO, env: cleanEnv(env), stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: REPO, env: cleanEnv({ ...env, ...(extraEnv || {}) }), stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';

@@ -115,6 +115,29 @@ const app = express();
 // trailing-slash variant still dispatches, and is covered because pathForms()
 // strips the trailing slash before any table is consulted.
 app.set('case sensitive routing', true);
+
+// [security] CR-A01 (13-REVIEW, defence in depth): the FIRST middleware — before
+// every route, static handler and gate. A request path whose once-decoded form
+// carries a Windows-only spelling (`\` separator, NUL, a segment ending in `.` or
+// a space, and — outside /api — an NTFS `:` stream or `~` 8.3 short name) is
+// answered with a fixed 404 here, so no later prefix test written in POSIX terms
+// can be walked around on a Windows host (where `send` resolves
+// `/uploads./slides/x.html` and `/uploads%5Cslides%5Cx.htm` to the same file as
+// the canonical spelling). The predicate is lib/requestPath.js
+// windowsAmbiguousPath(); exact `.`/`..` segments and undecodable escapes keep
+// their existing pinned handling further down. The structural fix is that slides
+// no longer live under public/ at all (lib/slideUpload.js slidesDir()).
+const { windowsAmbiguousPath } = require('./lib/requestPath');
+app.use((req, res, next) => {
+  if (!windowsAmbiguousPath(req.path)) return next();
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (req.path === '/api' || req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  return res.status(404).type('text/plain').send('Not found');
+});
+
 const PORT = process.env.PORT || 3000;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 // db.json (D-01): the live persistence layer is SQLite (db/store.js) as of
@@ -384,22 +407,30 @@ function htmlRequestVerdict(rawPath) {
 // [security] SAFE-03 / D-13-04 (b) / R1-04 / T-13-20 / T-13-26 (plan 13-03):
 // admin-uploaded slides are untrusted markup. They are served ONLY from this
 // dedicated mount, which sets the sandbox CSP (opaque origin, no network, no
-// portal cookies — even when the URL is opened top-level) and nosniff. It MUST
-// precede the terminal `.html` middleware below: that middleware answers every
-// canonical `*.html` file under public/ through sendHtml() with the app CSP, so
-// in the DEFAULT configuration (MA_SLIDES_UPLOAD_DIR unset -> public/uploads/
-// slides) a mount placed after it would never see a slide (plan-check B-1).
-// The mount is TERMINAL for its prefix (the trailing handler answers 404), so
-// neither sendHtml nor the public express.static can serve a slide path — which
-// also stops legacy files left in public/uploads/slides from being served
-// unsandboxed when MA_SLIDES_UPLOAD_DIR points elsewhere. Routing here is
+// portal cookies — even when the URL is opened top-level) and nosniff.
+// [security] CR-A01 (13-REVIEW): the DEFAULT slide directory is OUTSIDE the
+// public static root (<instance data dir>/slides — data/slides in dev/demo,
+// data/real/slides or MA_DATA_DIR/slides in real mode; MA_SLIDES_UPLOAD_DIR
+// overrides), so neither sendHtml() nor the public express.static can resolve
+// ANY spelling of a request path to a slide file — the Windows `%5C` /
+// trailing-period / 8.3 / NTFS-stream spellings that walked around the prefix
+// regex below no longer name a file under public/ at all. Legacy files in
+// public/uploads/slides are moved out once at boot (slideUpload.
+// migrateLegacySlidesAtBoot(), only when MA_SLIDES_UPLOAD_DIR is unset) so the
+// stored `/uploads/slides/<name>` record URLs keep working.
+// Layers that remain (defence in depth): the mount still precedes the terminal
+// `.html` middleware (plan-check B-1) and is TERMINAL for its prefix (the
+// trailing handler answers 404), so a legacy file left in public/uploads/slides
+// (a skipped name collision, or an override pointing elsewhere) is never served
+// unsandboxed through the canonical spelling; inside the mount only a strict
+// file-name allowlist is served (one segment, [A-Za-z0-9._-], no leading dot,
+// allowlisted extension — slideUpload.mountFileName()). Routing is
 // case-sensitive (`case sensitive routing`), so the mount answers only the exact
 // `/uploads/slides` spelling: any other spelling of the prefix (case variants,
 // percent-encoded, dot segments, duplicate slashes) is answered 404 by the guard
-// below and can never reach sendHtml or the public express.static — on a
-// case-insensitive filesystem `/UPLOADS/Slides/x.html` would otherwise resolve to
-// the same file with the app CSP.
+// below, and the Windows-only spellings by the first middleware of this file.
 const slideUpload = require('./lib/slideUpload');
+slideUpload.migrateLegacySlidesAtBoot();
 const SLIDE_URL_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/i;
 const SLIDE_MOUNT_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/;
 const slideNotFound = (req, res) => res.status(404).type('text/plain').send('Not found');
@@ -412,10 +443,11 @@ app.use((req, res, next) => {
   return next();
 });
 app.use('/uploads/slides', (req, res, next) => {
-  // Only the allowlisted slide extensions are ever served from this prefix.
-  let decoded;
-  try { decoded = decodeURIComponent(req.path); } catch (e) { return slideNotFound(req, res); }
-  if (!slideUpload.servableExt(path.extname(decoded))) return slideNotFound(req, res);
+  // CR-A01 (c): only a strict, single-segment, allowlisted file name (the shape
+  // the upload route generates) with an allowlisted extension is ever served from
+  // this prefix; everything else (backslash, `:` streams, `~` short names, any
+  // `%` escape, trailing dot/space, sub-paths) is the fixed 404.
+  if (!slideUpload.mountFileName(req.path)) return slideNotFound(req, res);
   return next();
 });
 app.use('/uploads/slides', express.static(slideUpload.slidesDir(), {
@@ -3406,7 +3438,8 @@ app.delete('/api/slides/:id', (req, res) => {
 });
 
 // Upload a slide file -> saved under slideUpload.slidesDir() (MA_SLIDES_UPLOAD_DIR,
-// default public/uploads/slides) and returned as a servable URL. Behind the same
+// default <instance data dir>/slides, outside public/ — CR-A01) and returned as a
+// servable URL (always through the /uploads/slides mount). Behind the same
 // admin-write gate as other writes. SAFE-03 / D-13-04 (a): HTML is sent as utf8
 // text, PDF/PNG/JPEG/WebP as base64 (`encoding: 'base64'`); extension AND declared
 // type AND (binary) magic bytes must agree, > 10 MB or over the library quota is
@@ -3423,7 +3456,7 @@ app.post('/api/slides/upload', (req, res) => {
   if (!verdict.ok) return res.status(verdict.status).json(verdict.body);
   const dir = slideUpload.slidesDir();
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    slideUpload.ensureSlidesDir(dir);
     const fname = Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '_' + verdict.safeName;
     fs.writeFileSync(path.join(dir, fname), verdict.buffer, { flag: 'wx' });
     res.json({ success: true, url: '/uploads/slides/' + fname });

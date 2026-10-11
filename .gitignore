@@ -43,6 +43,11 @@ data/audit/
 
 # Uploaded media (runtime-generated)
 public/uploads/
+# [security] CR-A01 (Phase 13 review): the default slide library lives OUTSIDE
+# the public static root, under the instance data directory (data/slides in
+# dev/demo; data/real/slides in real mode is covered by data/real/ below).
+# Uploaded decks can be deal material — never committed.
+data/slides/
 
 # Local dev / verification artifacts
 .playwright-mcp/
