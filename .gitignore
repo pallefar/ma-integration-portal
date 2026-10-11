@@ -92,3 +92,9 @@ public/sent_emails/*
 # [security] Real-deal mode (MA_MODE=real) data directory — MNPI: accounts, deal
 # databases, sessions and the audit trail. Never committed (D-10-01).
 data/real/
+# [security] UF-1 (Phase 10 audit): a non-default MA_DATA_DIR placed in a NEW
+# subfolder of data/ (e.g. data/prod) is covered too. No tracked file lives in any
+# data/ subdirectory (the committed databases sit at data/*.db), so this is safe.
+# An MA_DATA_DIR elsewhere inside the install folder is NOT covered — keep it
+# outside the install folder (DEPLOYMENT.md, "Real-deal first run").
+data/*/

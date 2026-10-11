@@ -55,8 +55,11 @@ effect — if you see that line on a real-deal host, stop and switch launchers.
 1. **Start with the real-deal launcher** (`start-real-deal.command` /
    `start-real-deal.bat`). It exports `MA_MODE=real`. On first boot the server
    creates the real-deal data directory — `data/real` under the install folder, or
-   the folder named by `MA_DATA_DIR` — with mode `0700`. It is gitignored and
-   excluded from the in-app download. `control.db` there is seeded from the
+   the folder named by `MA_DATA_DIR` — with mode `0700`. Only the default
+   `data/real` is both gitignored and excluded from the in-app download. Point
+   `MA_DATA_DIR` at a folder **outside the install folder**: a new subfolder of
+   `data/` is gitignored but still reaches the in-app download, and any other
+   folder inside the install folder is neither. `control.db` there is seeded from the
    committed one with **every demo account removed** (no users, no deals), and
    `demo.db` is a plain copy. Environment variables `MA_CONTROL_DB_PATH`,
    `MA_RUNTIME_DB_PATH`, `MA_AUDIT_DB_PATH`, `MA_DEMO_DB_PATH` and `MA_DEALS_DIR`
