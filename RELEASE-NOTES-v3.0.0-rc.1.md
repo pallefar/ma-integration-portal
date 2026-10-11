@@ -110,11 +110,24 @@ time of this draft; treat its items as "merged, review in progress".
   are public by design. Real-deal use requires `MA_MODE=real` (the
   `start-real-deal.*` launchers) and `scripts/bootstrap-admin.js`; never put real
   data on a host started with `start.command` / `start.bat` (they set `DEMO_OPEN=1`).
-- **Legacy surfaces still exist until Phase 14:** the sessionless `/sent_emails` and
-  `/uploads` static mounts, and the admin `download-zip` route. Do not rely on the
-  portal to keep uploaded files private from someone who can reach the port.
 - **`compression` is still 1.8.1.** The bump to ≥ 1.8.2 is held by the supply-chain
   age check until 2026-10-11T11:17Z and lands no later than Phase 21.
+- **`proxy-addr` 2.0.7 (via express 4.22.2) has an open advisory.** Client-IP
+  spoofing is possible only if `TRUST_PROXY` is set to an IPv4-mapped-IPv6 subnet
+  such as `::ffff:10.0.0.0/104`; the documented hop-count form (`TRUST_PROXY=1`) is
+  not affected. The bump is age-gated.
+- **Request bodies up to 50 MB are parsed before authentication** until Phase 14.
+- **The `/sent_emails` and `/uploads` mounts are readable without a session** until
+  Phase 14: a real deal's communication bodies and uploaded files are readable by
+  anyone who has the link and can reach the port.
+- **The admin "Download ZIP" feature is synchronous**, can take minutes, and also
+  packs uploaded media. It is removed in Phase 14.
+- **Do not set `ADMIN_TOKEN` on a real-deal host.** The shared token grants full
+  admin until it is removed in Phase 20.
+- **The launchers do not restart the server after a crash.** Run it under a
+  supervisor if it must stay up.
+- **In real-deal mode, select a deal before entering data.** A session with no
+  selected deal shows the shared demo workspace.
 - **Single host, single process.** SQLite in WAL mode on local disk; one instance,
   no clustering. Real deal databases are not encrypted at the application layer —
   enable OS full-disk encryption (see `DEPLOYMENT.md`).
