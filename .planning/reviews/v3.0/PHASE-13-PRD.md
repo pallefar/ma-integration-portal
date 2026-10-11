@@ -47,6 +47,12 @@ identical. `worker-src 'self' blob:` and `'wasm-unsafe-eval'` stay (Transformers
 (directive, blocked-uri, source-file) tuples in memory; `GET /api/admin/csp-violations` is admin-only and is what the walks
 assert on). Flip to enforcing only after the demo walk and the IL walk report ZERO violations; the final state enforces;
 `CSP_MODE=report-only` env remains as a documented rollback (DEPLOYMENT.md).
+*Addendum (orchestrator decision, 2026-10-11 — Phase 13 code review IN-A04 / PD-8):* the shipped policy keeps
+`frame-ancestors 'self'`, NOT the `'none'` written above. The app frames its OWN pages — the overview deck and the playbook
+PDF/slide viewer are same-origin iframes — and `'none'` would break that first-party framing; `'self'` still refuses every
+foreign framer (clickjacking from another origin stays impossible) and matches `X-Frame-Options: SAMEORIGIN`. "Keep" in the
+list above is therefore read as "never loosen beyond same-origin", and `'self'` is the locked value. The literal deviation is
+recorded here so it is no longer pending user confirmation.
 **D-13-04 Slides & uploads (SAFE-03).** (a) `POST /api/slides/upload` accepts only an allowlist (HTML, PDF, PNG, JPEG, WebP;
 SVG refused) by extension AND declared type, with per-file ≤ 10 MB and per-instance slide-library quota (default 100 MB,
 env/admin-setting) — over-quota or other type ⇒ 4xx with a fixed body, nothing written. (b) HTML slides are served with

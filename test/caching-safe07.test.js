@@ -84,12 +84,24 @@ function postJSON(base, p, token, body) {
 // handler all run — only the thrower is synthetic.
 function installProvocationRoutes() {
   const stack = app._router.stack;
-  // The middleware under test is registered immediately before express.json.
+  // The middleware under test is registered before express.json. WR-A01
+  // (13-REVIEW): the CSP-report limiter now sits between the two (it must run
+  // before any body parser), so the no-store layer is the nearest one before
+  // express.json whose source is the /api no-store middleware — and only the
+  // limiter may sit in between.
   const jsonIdx = stack.findIndex((l) => l && l.name === 'jsonParser');
   assert.ok(jsonIdx > 0, 'express.json must be present in the live router');
-  const idx = jsonIdx - 1;
-  const src = stack[idx].handle.toString();
-  assert.ok(/res\.setHeader\('Cache-Control', 'no-store'\)/.test(src) && /startsWith\('\/api\/'\)/.test(src), 'the layer immediately before express.json must be the /api no-store middleware');
+  const isNoStore = (l) => {
+    const s = l && l.handle ? l.handle.toString() : '';
+    return /res\.setHeader\('Cache-Control', 'no-store'\)/.test(s) && /startsWith\('\/api\/'\)/.test(s);
+  };
+  let idx = jsonIdx - 1;
+  while (idx > 0 && !isNoStore(stack[idx])) {
+    assert.ok(/cspReportLimiter\.take\(req\.ip\)/.test(stack[idx].handle.toString()),
+      'only the CSP-report limiter may sit between the /api no-store middleware and express.json');
+    idx -= 1;
+  }
+  assert.ok(isNoStore(stack[idx]), 'the /api no-store middleware must be registered before express.json');
   app.get('/api/__safe07__/boom', (req, res, next) => next(new Error('safe07 deterministic 500')));
   app.get('/api/__safe07__/busy', (req, res, next) => next(Object.assign(new Error('safe07 busy'), { code: 'SQLITE_BUSY' })));
   const added = stack.splice(stack.length - 2, 2);
@@ -190,6 +202,33 @@ test('SAFE-07 (b): POST /api/auth/logout answers Clear-Site-Data "cache", "stora
     assert.ok(/ma_session=;/.test(setCookie) || /Max-Age=0/i.test(setCookie) || /Expires=Thu, 01 Jan 1970/i.test(setCookie), `the session cookie must be cleared (got: ${setCookie})`);
     const after = await fetch(`${base}/api/raid`, { headers: cookie(token) });
     assert.strictEqual(after.status, 401, 'the session row is revoked server-side');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('SAFE-07 (b) / WR-A04: a sessionless logout POST (the shape of a cross-site auto-submitted form) carries NO Clear-Site-Data', async () => {
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    // cross-site form post: urlencoded body, foreign Origin, no cookie (SameSite=Strict keeps it off)
+    const form = await fetch(`${base}/api/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' },
+      body: 'x=1',
+    });
+    await form.text();
+    assert.strictEqual(form.status, 200);
+    assert.strictEqual(form.headers.get('clear-site-data'), null, 'no storage wipe without a session cookie');
+    // a plain sessionless JSON logout: same
+    const plain = await postJSON(base, '/api/auth/logout', null, {});
+    await plain.text();
+    assert.strictEqual(plain.headers.get('clear-site-data'), null);
+    // and a real logout right after still gets it
+    const token = newSession('admin', 'admin');
+    const real = await postJSON(base, '/api/auth/logout', token, {});
+    await real.text();
+    assert.strictEqual(real.headers.get('clear-site-data'), '"cache", "storage"');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -336,8 +375,12 @@ test('static: /js/client-storage.js is on the single credential-lockdown static 
 test('static: the no-store middleware sits before the body parsers in server.js', () => {
   const src = readRoot('server.js');
   const mw = src.indexOf("res.setHeader('Cache-Control', 'no-store');\n  }\n  next();");
-  const json = src.indexOf("app.use(express.json({ limit: '50mb' }));");
+  // WR-A01 (13-REVIEW): the app-wide parser now carries a `type` function that
+  // skips /api/csp-report; the CSP-report limiter sits between no-store and it.
+  const json = src.indexOf("app.use(express.json({\n  limit: '50mb',");
   assert.ok(mw !== -1 && json !== -1 && mw < json, 'the no-store middleware must be registered before express.json');
+  const limiter = src.indexOf('if (!cspReportLimiter.take(req.ip))');
+  assert.ok(limiter !== -1 && mw < limiter && limiter < json, 'the CSP-report limiter runs after no-store and before the body parsers');
 });
 
 // ============================================================ Task 2 rows

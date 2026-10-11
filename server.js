@@ -115,6 +115,29 @@ const app = express();
 // trailing-slash variant still dispatches, and is covered because pathForms()
 // strips the trailing slash before any table is consulted.
 app.set('case sensitive routing', true);
+
+// [security] CR-A01 (13-REVIEW, defence in depth): the FIRST middleware — before
+// every route, static handler and gate. A request path whose once-decoded form
+// carries a Windows-only spelling (`\` separator, NUL, a segment ending in `.` or
+// a space, and — outside /api — an NTFS `:` stream or `~` 8.3 short name) is
+// answered with a fixed 404 here, so no later prefix test written in POSIX terms
+// can be walked around on a Windows host (where `send` resolves
+// `/uploads./slides/x.html` and `/uploads%5Cslides%5Cx.htm` to the same file as
+// the canonical spelling). The predicate is lib/requestPath.js
+// windowsAmbiguousPath(); exact `.`/`..` segments and undecodable escapes keep
+// their existing pinned handling further down. The structural fix is that slides
+// no longer live under public/ at all (lib/slideUpload.js slidesDir()).
+const { windowsAmbiguousPath } = require('./lib/requestPath');
+app.use((req, res, next) => {
+  if (!windowsAmbiguousPath(req.path)) return next();
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (req.path === '/api' || req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(404).json({ error: 'Not found' });
+  }
+  return res.status(404).type('text/plain').send('Not found');
+});
+
 const PORT = process.env.PORT || 3000;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 // db.json (D-01): the live persistence layer is SQLite (db/store.js) as of
@@ -292,8 +315,43 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// [security] WR-A01 (13-REVIEW) / D-13-03 "unauthenticated but body <= 4 KB, per-IP
+// rate-limited": POST /api/csp-report is a PUBLIC path (it passes credential
+// lockdown too), so the app-wide 50 MB parsers below must never read its body —
+// otherwise an anonymous `application/json` / form body is buffered, inflated and
+// parsed in full BEFORE the route's limiter and 4 KB parser run. Two rules:
+//   1. the per-IP limiter (lib/cspReports.js, 60/min, req.ip is TRUST_PROXY-aware)
+//      runs HERE, before any parser, so it is the first thing that sees a report;
+//   2. the global parsers skip this path (type function), so the route's own
+//      `express.json({ type: report types, limit: '4kb' })` is the ONLY reader and
+//      any other content type is answered 415 without its body being read.
+// The path test is the canonical form (lib/requestPath.js, trailing slash /
+// `//` / once-decoded) — the spellings the case-sensitive router still dispatches
+// to the route — so no spelling of the route reaches it through the 50 MB parsers.
+const cspReports = require('./lib/cspReports');
+const cspReportLimiter = cspReports.createLimiter({ perMinute: 60 });
+const CSP_REPORT_PATH = '/api/csp-report';
+function isCspReportPath(req) {
+  const r = pathForms(req.path);
+  return r.ok && r.canonical === CSP_REPORT_PATH;
+}
+app.use((req, res, next) => {
+  if (req.method !== 'POST' || !isCspReportPath(req)) return next();
+  if (!cspReportLimiter.take(req.ip)) {
+    res.set('Retry-After', '60');
+    return res.status(429).json({ error: 'Too many reports.' });
+  }
+  next();
+});
+app.use(express.json({
+  limit: '50mb',
+  type: (req) => !isCspReportPath(req) && Boolean(req.is('application/json')),
+}));
+app.use(express.urlencoded({
+  limit: '50mb',
+  extended: true,
+  type: (req) => !isCspReportPath(req) && Boolean(req.is('application/x-www-form-urlencoded')),
+}));
 // VAL-01: a malformed JSON body (including a bare top-level `null`, which
 // body-parser's strict mode rejects as invalid JSON — only object/array are
 // valid top-level JSON in strict mode) must 400, never fall through to the
@@ -384,22 +442,31 @@ function htmlRequestVerdict(rawPath) {
 // [security] SAFE-03 / D-13-04 (b) / R1-04 / T-13-20 / T-13-26 (plan 13-03):
 // admin-uploaded slides are untrusted markup. They are served ONLY from this
 // dedicated mount, which sets the sandbox CSP (opaque origin, no network, no
-// portal cookies — even when the URL is opened top-level) and nosniff. It MUST
-// precede the terminal `.html` middleware below: that middleware answers every
-// canonical `*.html` file under public/ through sendHtml() with the app CSP, so
-// in the DEFAULT configuration (MA_SLIDES_UPLOAD_DIR unset -> public/uploads/
-// slides) a mount placed after it would never see a slide (plan-check B-1).
-// The mount is TERMINAL for its prefix (the trailing handler answers 404), so
-// neither sendHtml nor the public express.static can serve a slide path — which
-// also stops legacy files left in public/uploads/slides from being served
-// unsandboxed when MA_SLIDES_UPLOAD_DIR points elsewhere. Routing here is
+// portal cookies — even when the URL is opened top-level) and nosniff.
+// [security] CR-A01 (13-REVIEW): the DEFAULT slide directory is OUTSIDE the
+// public static root (<instance data dir>/slides — data/slides in dev/demo,
+// data/real/slides or MA_DATA_DIR/slides in real mode; MA_SLIDES_UPLOAD_DIR
+// overrides), so neither sendHtml() nor the public express.static can resolve
+// ANY spelling of a request path to a slide file — the Windows `%5C` /
+// trailing-period / 8.3 / NTFS-stream spellings that walked around the prefix
+// regex below no longer name a file under public/ at all. Legacy files in
+// public/uploads/slides are moved out once at boot (slideUpload.
+// migrateLegacySlidesAtBoot(), only when MA_SLIDES_UPLOAD_DIR is unset) so the
+// stored `/uploads/slides/<name>` record URLs keep working.
+// Layers that remain (defence in depth): the mount still precedes the terminal
+// `.html` middleware (plan-check B-1) and is TERMINAL for its prefix (the
+// trailing handler answers 404), so a legacy file left in public/uploads/slides
+// (a skipped name collision, or an override pointing elsewhere) is never served
+// unsandboxed through the canonical spelling; inside the mount only a strict
+// file-name allowlist is served (one segment, [A-Za-z0-9._-], no leading dot,
+// allowlisted extension — slideUpload.mountFileName()). Routing is
 // case-sensitive (`case sensitive routing`), so the mount answers only the exact
 // `/uploads/slides` spelling: any other spelling of the prefix (case variants,
 // percent-encoded, dot segments, duplicate slashes) is answered 404 by the guard
-// below and can never reach sendHtml or the public express.static — on a
-// case-insensitive filesystem `/UPLOADS/Slides/x.html` would otherwise resolve to
-// the same file with the app CSP.
+// below, and the Windows-only spellings by the first middleware of this file.
 const slideUpload = require('./lib/slideUpload');
+slideUpload.migrateLegacySlidesAtBoot();
+slideUpload.sweepStaleTmp(); // WR-A02: upload temps a crash left behind (> 1 h old)
 const SLIDE_URL_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/i;
 const SLIDE_MOUNT_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/;
 const slideNotFound = (req, res) => res.status(404).type('text/plain').send('Not found');
@@ -412,10 +479,11 @@ app.use((req, res, next) => {
   return next();
 });
 app.use('/uploads/slides', (req, res, next) => {
-  // Only the allowlisted slide extensions are ever served from this prefix.
-  let decoded;
-  try { decoded = decodeURIComponent(req.path); } catch (e) { return slideNotFound(req, res); }
-  if (!slideUpload.servableExt(path.extname(decoded))) return slideNotFound(req, res);
+  // CR-A01 (c): only a strict, single-segment, allowlisted file name (the shape
+  // the upload route generates) with an allowlisted extension is ever served from
+  // this prefix; everything else (backslash, `:` streams, `~` short names, any
+  // `%` escape, trailing dot/space, sub-paths) is the fixed 404.
+  if (!slideUpload.mountFileName(req.path)) return slideNotFound(req, res);
   return next();
 });
 app.use('/uploads/slides', express.static(slideUpload.slidesDir(), {
@@ -1357,7 +1425,13 @@ app.post('/api/auth/logout', (req, res) => {
   // Honoured in secure contexts only (https / localhost) — a plain-http LAN host
   // ignores it, which is why public/js/client-storage.js clears the same state
   // client-side regardless (T-13-34, PD-19).
-  res.setHeader('Clear-Site-Data', '"cache", "storage"');
+  // [security] WR-A04 (13-REVIEW): ONLY for a genuine logout — one that carried a
+  // session cookie. The route is public and accepts a form body, so any web page
+  // can auto-submit a cross-site POST here; SameSite=Strict keeps the cookie off
+  // that request, and without this condition the response would still wipe the
+  // visitor's portal storage and Cache Storage (incl. the model cache acceptance 5
+  // wants kept). The cookie-clearing Set-Cookie above stays unconditional (inert).
+  if (token) res.setHeader('Clear-Site-Data', '"cache", "storage"');
   res.json({ success: true });
 });
 
@@ -3011,9 +3085,16 @@ function egressSnapshot() {
 app.get('/api/admin/egress', (req, res) => {
   res.json(egressSnapshot());
 });
+const { EGRESS_KINDS } = require('./lib/egress');
 app.post('/api/admin/egress', (req, res) => {
   if (!isAdminRequest(req)) {
     return res.status(403).json({ error: 'Your role cannot perform this action.' });
+  }
+  // IN-A02 (13-REVIEW): a body naming no egress key (`{}`) changes nothing — refuse
+  // it before any runtime.db write or audit row (no before==after audit noise).
+  const patch = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!EGRESS_KINDS.some((k) => Object.prototype.hasOwnProperty.call(patch, k))) {
+    return res.status(400).json({ error: 'No egress key supplied' });
   }
   const before = { ...egress.current() };
   egress.set(req.body || {});
@@ -3033,29 +3114,26 @@ app.post('/api/admin/egress', (req, res) => {
 // POST /api/csp-report is on PUBLIC_API_PATHS (a browser report carries no
 // session) and is the ONLY route in this block an anonymous caller reaches, so
 // it is bounded three ways BEFORE the handler: a per-IP limiter (60/min, req.ip
-// is TRUST_PROXY-aware), a route-level parser that accepts only the two report
-// content types at 4 KB, and lib/cspReports.js normalisation (distinct tuples,
-// query/fragment dropped, truncated, last 100 kept). 204, no body. Nothing here
-// renders HTML; GET /api/admin/csp-violations is JSON for admins only (the
-// `/api/admin` prefix is admin-only for every method - checked again inline).
-const cspReports = require('./lib/cspReports');
-const cspReportLimiter = cspReports.createLimiter({ perMinute: 60 });
+// is TRUST_PROXY-aware — WR-A01: mounted BEFORE the app-wide body parsers, beside
+// them, as the first reader of the request), a route-level parser that accepts
+// only the two report content types at 4 KB (the app-wide 50 MB parsers skip this
+// path, so it is the only reader), and lib/cspReports.js normalisation (distinct
+// tuples, query/fragment dropped, truncated, last 100 kept). 204, no body.
+// Nothing here renders HTML; GET /api/admin/csp-violations is JSON for admins
+// only (the `/api/admin` prefix is admin-only for every method - checked again
+// inline).
 app.post(
   '/api/csp-report',
-  (req, res, next) => {
-    if (!cspReportLimiter.take(req.ip)) {
-      res.set('Retry-After', '60');
-      return res.status(429).json({ error: 'Too many reports.' });
-    }
-    next();
-  },
   express.json({ type: cspReports.SUPPORTED_TYPES, limit: '4kb' }),
   (req, res) => {
     const type = String(req.get('content-type') || '').split(';')[0].trim().toLowerCase();
     if (!cspReports.SUPPORTED_TYPES.includes(type)) {
       return res.status(415).json({ error: 'Unsupported report content type.' });
     }
-    for (const tuple of cspReports.normalize(type, req.body)) cspReports.record(tuple);
+    // WR-A07: the origin the report was posted to decides which source-files are
+    // foreign (evicted first); reports about pages this app does not serve are dropped.
+    const origin = `${req.protocol}://${req.get('host')}`;
+    for (const tuple of cspReports.normalize(type, req.body)) cspReports.record(tuple, { origin });
     res.status(204).end();
   },
   // Route-local error mapping: the generic handlers at the bottom of this file
@@ -3400,13 +3478,20 @@ app.post('/api/slides', (req, res) => {
 
 app.delete('/api/slides/:id', (req, res) => {
   const db = readDb();
-  db.slides = (db.slides || []).filter(x => x.id !== req.params.id);
+  const all = db.slides || [];
+  const removed = all.filter(x => x.id === req.params.id);
+  db.slides = all.filter(x => x.id !== req.params.id);
   writeDb(db);
+  // WR-A03 (13-REVIEW): once the record delete has committed, remove the uploaded
+  // file it pointed at unless another slide record still references the same URL
+  // (basename only, resolved inside slidesDir() — the stored URL is never a path).
+  for (const s of removed) slideUpload.removeUnreferencedUpload(s && s.url, db.slides);
   res.json({ success: true });
 });
 
 // Upload a slide file -> saved under slideUpload.slidesDir() (MA_SLIDES_UPLOAD_DIR,
-// default public/uploads/slides) and returned as a servable URL. Behind the same
+// default <instance data dir>/slides, outside public/ — CR-A01) and returned as a
+// servable URL (always through the /uploads/slides mount). Behind the same
 // admin-write gate as other writes. SAFE-03 / D-13-04 (a): HTML is sent as utf8
 // text, PDF/PNG/JPEG/WebP as base64 (`encoding: 'base64'`); extension AND declared
 // type AND (binary) magic bytes must agree, > 10 MB or over the library quota is
@@ -3423,9 +3508,10 @@ app.post('/api/slides/upload', (req, res) => {
   if (!verdict.ok) return res.status(verdict.status).json(verdict.body);
   const dir = slideUpload.slidesDir();
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    slideUpload.ensureSlidesDir(dir);
     const fname = Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '_' + verdict.safeName;
-    fs.writeFileSync(path.join(dir, fname), verdict.buffer, { flag: 'wx' });
+    // WR-A02: `<fname>.tmp` (exclusive) then rename — a failed write leaves no fragment.
+    slideUpload.writeSlideAtomic(dir, fname, verdict.buffer);
     res.json({ success: true, url: '/uploads/slides/' + fname });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save slide file.' });

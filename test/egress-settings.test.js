@@ -97,6 +97,11 @@ test('dev: default CSP lists today\'s third-party origins; admin toggle changes 
     assert.strictEqual(bad1.status, 400);
     const bad2 = await s.request('/api/admin/egress', { method: 'POST', body: { youtub: false }, token: 'admin' });
     assert.strictEqual(bad2.status, 400);
+    // IN-A02: no recognised key -> 400, no runtime.db write, no audit row (asserted below: exactly 1 row)
+    const empty = await s.request('/api/admin/egress', { method: 'POST', body: {}, token: 'admin' });
+    assert.strictEqual(empty.status, 400);
+    assert.deepStrictEqual(empty.body, { error: 'No egress key supplied' });
+    assert.deepStrictEqual((await s.request('/api/admin/egress', { token: 'admin' })).body.stored, {}, 'nothing was stored');
 
     // admin toggle: next response has no youtube origin; huggingface untouched
     const ok = await s.request('/api/admin/egress', { method: 'POST', body: { youtube: false }, token: 'admin' });

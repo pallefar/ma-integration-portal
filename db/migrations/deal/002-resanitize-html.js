@@ -32,8 +32,10 @@
 // NO AUDIT ROWS. A migration runs at boot, outside any request and outside a
 // deal write transaction; it is a system-actor repair, not an edit. What it
 // leaves behind is one log line per file plus, per changed value,
-// collection/id/path with sha256 of the value before and after — never the
-// content itself (MNPI), and never a deal id (files are tagged by name digest). Rollback is the pre-upgrade data-directory backup
+// collection/#row-id-digest/path with sha256 of the value before and after —
+// never the content itself (MNPI), never a row id (an author-chosen slug, WR-A05:
+// logged as sha256(id).slice(0,8)), and never a deal id (files are tagged by name
+// digest). Rollback is the pre-upgrade data-directory backup
 // (DEPLOYMENT.md §6): migrations are forward-only and this one sets no
 // `backup: true` (a VACUUM INTO of every deal file for a rewrite expected to
 // touch ~0 values).
@@ -153,8 +155,14 @@ function up(conn, ctx) {
       update.run(JSON.stringify(record), row.id);
       changedRows += 1;
       changedValues += changes.length;
+      // [security] WR-A05 (13-REVIEW): the row id is an author-chosen slug (CMS
+      // page/course ids are free text, ID_MAX 120) that can name the target or
+      // the project code name — MNPI in a boot log that gets pasted into support
+      // channels. It is logged as an 8-hex digest, like the file name; the value
+      // digests below stay the operator's stable handle.
+      const rowTag = `#${crypto.createHash('sha256').update(String(row.id)).digest('hex').slice(0, 8)}`;
       for (const c of changes) {
-        lines.push(`[migrate] deal/002 resanitize-html ${table}/${row.id} ${c.path} sha256 ${c.before} -> ${c.after}`);
+        lines.push(`[migrate] deal/002 resanitize-html ${table}/${rowTag} ${c.path} sha256 ${c.before} -> ${c.after}`);
       }
     }
   }

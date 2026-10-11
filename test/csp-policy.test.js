@@ -162,8 +162,13 @@ test('child server, real mode + CSP_MODE=enforce: one header, strict, no https: 
 // It is conditional on the 13-03 mount being present (a sandbox directive on the
 // slide response); before that plan is merged it records a skip, after it the
 // assertion is live.
+// IN-A03 / CR-A01 (13-REVIEW): the upload goes to a temp MA_SLIDES_UPLOAD_DIR —
+// never into the checkout's default slide directory (now <repo>/data/slides,
+// outside public/; it used to be public/uploads/slides).
 test('PD-37: a served slide carries no Content-Security-Policy-Report-Only header', async (t) => {
-  const s = await startServer({ dir: fs.mkdtempSync(path.join(DIR, 'slide-')), mode: 'dev' });
+  const slideDir = fs.mkdtempSync(path.join(DIR, 'slide-'));
+  const slidesUploadDir = path.join(slideDir, 'uploaded-slides');
+  const s = await startServer({ dir: slideDir, mode: 'dev', env: { MA_SLIDES_UPLOAD_DIR: slidesUploadDir } });
   let uploaded = null;
   try {
     const up = await s.request('/api/slides/upload', {
@@ -183,7 +188,8 @@ test('PD-37: a served slide carries no Content-Security-Policy-Report-Only heade
   } finally {
     await s.stop();
     if (uploaded && /^\/uploads\/slides\/[A-Za-z0-9._-]+$/.test(uploaded)) {
-      try { fs.rmSync(path.join(__dirname, '..', 'public', uploaded), { force: true }); } catch (e) { /* ignore */ }
+      assert.ok(fs.existsSync(path.join(slidesUploadDir, path.basename(uploaded))), 'the slide was written into the temp MA_SLIDES_UPLOAD_DIR');
+      try { fs.rmSync(path.join(slidesUploadDir, path.basename(uploaded)), { force: true }); } catch (e) { /* ignore */ }
     }
   }
 });

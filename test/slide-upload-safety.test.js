@@ -3,16 +3,21 @@
 //   Task 1 (tracer): an uploaded HTML slide is served from the dedicated
 //     /uploads/slides mount with the sandbox CSP + nosniff and no
 //     Report-Only header — in a temp upload directory AND in the DEFAULT
-//     directory (MA_SLIDES_UPLOAD_DIR unset, B-1 negative control: it fails if
-//     the mount sits after the terminal `.html` middleware, which a temp
-//     directory outside public/ cannot detect);
+//     directory (MA_SLIDES_UPLOAD_DIR unset);
 //   Task 2: the type allowlist, the 10 MB limit and the library quota, with
-//     fixed refusal bodies and side-effect-free refusals.
+//     fixed refusal bodies and side-effect-free refusals;
+//   CR-A01 (13-REVIEW): the DEFAULT directory is <instance data dir>/slides —
+//     OUTSIDE public/ (data/slides in dev/demo, <MA_DATA_DIR>/slides in real
+//     mode); legacy public/uploads/slides files are moved out once at boot; the
+//     Windows-only path spellings (`%5C`, trailing-period segment, NTFS `::$DATA`
+//     stream, `~1` short name) are 404 at the first middleware AND at the mount's
+//     file-name allowlist, each layer proven on its own.
 //
 // Isolation: every MA_* path is a throwaway directory and MA_SLIDES_UPLOAD_DIR
-// is a temp directory, except the single default-directory case, which writes
-// into THIS checkout's public/uploads/slides (gitignored) and deletes its own
-// file in `finally`.
+// is a temp directory, except the default-directory case (d), which boots a
+// child with MA_SLIDES_UPLOAD_DIR unset: its upload lands in THIS checkout's
+// data/slides (gitignored) and its legacy probe in public/uploads/slides
+// (gitignored); both are deleted in `finally`.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -181,14 +186,24 @@ test('slide-upload-safety (c): structural — the /uploads/slides mount precedes
   assert.ok(/removeHeader\('Content-Security-Policy-Report-Only'\)/.test(setHeaders), 'a Report-Only header is removed on slide responses');
   assert.ok(/'X-Content-Type-Options', 'nosniff'/.test(setHeaders), 'nosniff on slide responses');
   assert.ok(/dotfiles: 'deny'/.test(setHeaders) && /index: false/.test(setHeaders));
+  // CR-A01 (c)/(d): the mount serves only allowlisted names, and the Windows-spelling
+  // guard is the FIRST middleware of the app (before every route, static handler and gate).
+  assert.ok(/slideUpload\.mountFileName\(req\.path\)/.test(src.slice(src.indexOf("app.use('/uploads/slides', (req"), mount)),
+    'the mount checks the strict file-name allowlist before express.static');
+  // (raw source here: stripComments() is a naive scanner that a `/*` inside a regex literal can derail)
+  const raw = fs.readFileSync(path.join(REPO, 'server.js'), 'utf8');
+  const firstUse = raw.search(/^app\.use\(/m);
+  assert.ok(firstUse > 0 && /^app\.use\(\(req, res, next\) => \{\s*if \(!windowsAmbiguousPath\(req\.path\)\) return next\(\);/.test(raw.slice(firstUse)),
+    'the first app.use() is the windowsAmbiguousPath guard');
 });
 
-// ---- the DEFAULT-directory case (B-1 negative control) ------------------------
+// ---- the DEFAULT-directory case (CR-A01: outside public/; B-1 still pinned) --
 const DEFAULT_CHILD = `
   const app = require('./server.js');
+  const slideUpload = require('./lib/slideUpload.js');
   const server = app.listen(0, '127.0.0.1', async () => {
     const base = 'http://127.0.0.1:' + server.address().port;
-    const out = {};
+    const out = { slidesDir: slideUpload.slidesDir() };
     const pick = async (label, res) => {
       out[label] = { status: res.status, csp: res.headers.get('content-security-policy'),
         nosniff: res.headers.get('x-content-type-options'), reportOnly: res.headers.get('content-security-policy-report-only'),
@@ -203,6 +218,7 @@ const DEFAULT_CHILD = `
       await pick('plain', await fetch(base + url));
       await pick('upper', await fetch(base + url.replace('/uploads/slides/', '/UPLOADS/Slides/')));
       await pick('encoded', await fetch(base + url.replace('/uploads/', '/%75ploads/')));
+      await pick('legacy', await fetch(base + '/uploads/slides/' + process.env.GSD_LEGACY_NAME));
     } catch (e) { out.error = String(e && e.message); }
     process.stdout.write('\\nDEFAULT_RESULT ' + JSON.stringify(out) + '\\n');
     server.close();
@@ -210,16 +226,23 @@ const DEFAULT_CHILD = `
   });
 `;
 
-test('slide-upload-safety (d): DEFAULT directory (MA_SLIDES_UPLOAD_DIR unset) — the shipped configuration serves the slide with the sandbox CSP, never the app CSP (B-1)', async () => {
+test('slide-upload-safety (d): DEFAULT directory (MA_SLIDES_UPLOAD_DIR unset) — slides land in <data dir>/slides OUTSIDE public/, a legacy public/uploads/slides file is moved out at boot, and both are served with the sandbox CSP (CR-A01, B-1)', async () => {
   const token = adminToken('slide-admin-d');
-  const defaultDir = path.join(REPO, 'public', 'uploads', 'slides');
+  const defaultDir = path.join(REPO, 'data', 'slides');
+  const legacyDir = path.join(REPO, 'public', 'uploads', 'slides');
   const uploadsDir = path.join(REPO, 'public', 'uploads');
-  const hadSlidesDir = fs.existsSync(defaultDir);
+  const hadDefaultDir = fs.existsSync(defaultDir);
+  const hadLegacyDir = fs.existsSync(legacyDir);
   const hadUploadsDir = fs.existsSync(uploadsDir);
-  const before = listing(defaultDir);
+  const legacyName = `${Date.now()}_c0ffee_legacy-probe.html`;
+  const legacyBody = '<p id="legacy-probe">legacy</p>';
+  fs.mkdirSync(legacyDir, { recursive: true });
+  fs.writeFileSync(path.join(legacyDir, legacyName), legacyBody);
   let uploadedFile = null;
   try {
-    const env = cleanEnv({ ...isolatedPaths(TMP_DIR), GSD_COOKIE: cookie(token) });
+    // MA_TEST_LEGACY_SLIDE_MOVE=1: under node --test the boot move is opt-in, so no
+    // other suite's incidental boot can move this probe first.
+    const env = cleanEnv({ ...isolatedPaths(TMP_DIR), GSD_COOKIE: cookie(token), GSD_LEGACY_NAME: legacyName, MA_TEST_LEGACY_SLIDE_MOVE: '1' });
     assert.strictEqual(env.MA_SLIDES_UPLOAD_DIR, undefined, 'the child must run with MA_SLIDES_UPLOAD_DIR unset');
     const result = await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ['-e', DEFAULT_CHILD], { cwd: REPO, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -233,13 +256,19 @@ test('slide-upload-safety (d): DEFAULT directory (MA_SLIDES_UPLOAD_DIR unset) �
         clearTimeout(timer);
         const m = /DEFAULT_RESULT (.*)\n/.exec(stdout);
         if (!m) return reject(new Error(`no result\n${stdout}\n${stderr}`));
-        resolve(JSON.parse(m[1]));
+        const r = JSON.parse(m[1]);
+        r.stdout = stdout;
+        resolve(r);
       });
     });
     assert.strictEqual(result.error, undefined, result.error);
+    assert.strictEqual(path.resolve(result.slidesDir), path.resolve(defaultDir), 'the default slide directory is <repo>/data/slides in dev mode');
+    const rel = path.relative(path.join(REPO, 'public'), result.slidesDir);
+    assert.ok(rel.startsWith('..') || path.isAbsolute(rel), 'the default slide directory is OUTSIDE the public static root');
     assert.strictEqual(result.upload.status, 200, JSON.stringify(result.upload));
     uploadedFile = path.join(defaultDir, path.basename(result.upload.body.url));
-    assert.ok(fs.existsSync(uploadedFile), 'the file landed in the default public/uploads/slides directory');
+    assert.ok(fs.existsSync(uploadedFile), 'the file landed in the default data/slides directory');
+    assert.ok(!fs.existsSync(path.join(legacyDir, path.basename(result.upload.body.url))), 'nothing is written under public/');
 
     assert.strictEqual(result.plain.status, 200);
     assert.strictEqual(result.plain.csp, EXACT_CSP, 'default-directory slide must carry the sandbox CSP, not the app CSP');
@@ -252,12 +281,195 @@ test('slide-upload-safety (d): DEFAULT directory (MA_SLIDES_UPLOAD_DIR unset) �
     if (result.upper.status === 200) assert.strictEqual(result.upper.csp, EXACT_CSP);
     // Percent-encoded spelling of the prefix: refused, never answered by sendHtml/express.static.
     assert.strictEqual(result.encoded.status, 404);
+
+    // CR-A01 (b): the legacy file was moved (not copied) and its old URL still works, sandboxed.
+    assert.ok(!fs.existsSync(path.join(legacyDir, legacyName)), 'the legacy file is gone from public/uploads/slides');
+    assert.strictEqual(fs.readFileSync(path.join(defaultDir, legacyName), 'utf8'), legacyBody, 'the legacy file now lives in data/slides');
+    assert.strictEqual(result.legacy.status, 200, 'the legacy record URL keeps working');
+    assert.strictEqual(result.legacy.csp, EXACT_CSP);
+    assert.ok(result.legacy.body.includes('legacy-probe'));
+    assert.match(result.stdout, /\[slides\] legacy slide move: \d+ file\(s\) moved/, 'the boot logs a count');
+    assert.ok(!result.stdout.includes(legacyName), 'the boot log never names a slide file');
   } finally {
-    if (uploadedFile) fs.rmSync(uploadedFile, { force: true });
-    if (!hadSlidesDir) { try { fs.rmdirSync(defaultDir); } catch (e) { /* not empty or absent */ } }
+    for (const f of [uploadedFile, path.join(defaultDir, legacyName), path.join(legacyDir, legacyName)]) {
+      if (f) fs.rmSync(f, { force: true });
+    }
+    if (!hadDefaultDir) { try { fs.rmdirSync(defaultDir); } catch (e) { /* not empty or absent */ } }
+    if (!hadLegacyDir) { try { fs.rmdirSync(legacyDir); } catch (e) { /* not empty or absent */ } }
     if (!hadUploadsDir) { try { fs.rmdirSync(uploadsDir); } catch (e) { /* not empty or absent */ } }
   }
-  assert.deepStrictEqual(listing(defaultDir), before, 'public/uploads/slides listing is identical before/after');
+});
+
+// ---- CR-A01: Windows path spellings (platform-independent proof) -------------
+// The review's spellings, plus an NTFS stream and 8.3 short names. Each is first
+// shown to be DANGEROUS under Win32 resolution (simulated with path.win32 plus
+// the documented Win32 rule that trims trailing periods/spaces from every path
+// component and resolves `::$DATA` to the file's default stream), then shown to
+// be refused by each layer ON ITS OWN — the first middleware
+// (requestPath.windowsAmbiguousPath) and the mount's file-name allowlist
+// (slideUpload.mountFileName) — and finally end-to-end over HTTP.
+const { windowsAmbiguousPath } = require('../lib/requestPath.js');
+const WIN_SPELLINGS = [
+  { url: '/uploads/slides%5Cx.htm', file: 'x.htm' },
+  { url: '/uploads%5Cslides%5Cx.htm', file: 'x.htm' },
+  { url: '/uploads./slides/x.html', file: 'x.html' },
+  { url: '/uploads/slides./x.html', file: 'x.html' },
+  { url: '/uploads/slides/x.htm::$DATA', file: 'x.htm', mount: '/x.htm::$DATA' },
+  { url: '/uploads/slides/X~1.HTM', file: 'x.htm', shortName: true, mount: '/X~1.HTM' },
+  { url: '/UPLOAD~1/slides/x.htm', file: 'x.htm', shortName: true },
+  { url: '/uploads/slides/x.html.', file: 'x.html', mount: '/x.html.' },
+  { url: '/uploads/slides/x.html%20', file: 'x.html', mount: '/x.html%20' },
+];
+
+/** What `send` + the Win32 file system resolve a request path to (8.3 names are filesystem-dependent and not simulated). */
+function win32Resolve(root, urlPath) {
+  const decoded = decodeURIComponent(urlPath);
+  const joined = path.win32.join(root, path.win32.normalize('.' + path.win32.sep + decoded));
+  return joined.split('\\').map((seg, i) => (i === 0 ? seg : seg.replace(/::\$DATA$/i, '').replace(/[. ]+$/, ''))).join('\\');
+}
+
+test('slide-upload-safety (i): CR-A01 — each Windows spelling resolves to the slide under Win32, and is refused by the first middleware AND by the mount allowlist independently', () => {
+  const root = 'C:\\portal\\public';
+  for (const s of WIN_SPELLINGS) {
+    if (!s.shortName) {
+      assert.strictEqual(win32Resolve(root, s.url).toLowerCase(), `${root}\\uploads\\slides\\${s.file}`.toLowerCase(),
+        `${s.url}: under Win32 this spelling names the legacy slide file (the threat is real)`);
+    }
+    assert.strictEqual(windowsAmbiguousPath(s.url), true, `${s.url}: the first middleware refuses it`);
+    if (s.mount) assert.strictEqual(slideUpload.mountFileName(s.mount), null, `${s.mount}: the mount allowlist refuses it on its own`);
+  }
+  // The mount allowlist on its own, for the separator/encoding spellings that reach it as one segment.
+  for (const m of ['/x%5Cy.htm', '/a\\b.htm', '/sub/x.html', '/.hidden.html', '/x.svg', '/x.html.tmp', '/', '', `/${'a'.repeat(196)}.html`]) {
+    assert.strictEqual(slideUpload.mountFileName(m), null, `${JSON.stringify(m)}: refused by the mount allowlist`);
+  }
+  assert.strictEqual(slideUpload.mountFileName('/1712345678901_ab12cd_deck.html'), '1712345678901_ab12cd_deck.html');
+  assert.strictEqual(slideUpload.mountFileName(`/${'a'.repeat(195)}.html`), `${'a'.repeat(195)}.html`, '200 chars is the inclusive bound');
+  // Canonical paths and the exact dot-segment / undecodable spellings keep their existing handling.
+  for (const ok of ['/', '/index.html', '/js/app.js', '/uploads/slides/1_ab_x.html', '/api/pages/a:b~c', '/x/../y', '/./x', '/%zz']) {
+    assert.strictEqual(windowsAmbiguousPath(ok), false, `${ok}: not refused by the first middleware`);
+  }
+});
+
+test('slide-upload-safety (j): CR-A01 — over HTTP every Windows spelling is a 404 that never carries slide bytes (first middleware + mount)', async () => {
+  fs.mkdirSync(SLIDES_TMP, { recursive: true });
+  fs.writeFileSync(path.join(SLIDES_TMP, 'x.htm'), '<p>WINPROBE</p>');
+  fs.writeFileSync(path.join(SLIDES_TMP, 'x.html'), '<p>WINPROBE</p>');
+  try {
+    await withServer(async (base, port) => {
+      for (const s of WIN_SPELLINGS) {
+        const r = await rawGet(port, s.url);
+        assert.strictEqual(r.status, 404, `${s.url} must be 404, got ${r.status}`);
+        assert.ok(!r.body.toString('utf8').includes('WINPROBE'), `${s.url} must not leak the slide`);
+      }
+      const ok = await rawGet(port, '/uploads/slides/x.htm');
+      assert.strictEqual(ok.status, 200, 'the canonical spelling still serves the slide');
+      assert.strictEqual(ok.headers['content-security-policy'], EXACT_CSP);
+      const api = await rawGet(port, '/api/x%5Cy');
+      assert.strictEqual(api.status, 404);
+      assert.deepStrictEqual(JSON.parse(api.body.toString('utf8')), { error: 'Not found' }, 'an /api spelling gets the JSON 404 body');
+    });
+  } finally {
+    for (const f of ['x.htm', 'x.html']) fs.rmSync(path.join(SLIDES_TMP, f), { force: true });
+  }
+});
+
+test('slide-upload-safety (k): CR-A01 — LIVE on a Windows host: the spellings are 404 even with a legacy file left in public/uploads/slides',
+  { skip: process.platform !== 'win32' ? 'Windows-only: proves the Win32 path resolution itself (the platform-independent proof is (i)/(j))' : false },
+  async () => {
+    const uploadsDir = path.join(REPO, 'public', 'uploads');
+    const legacyDir = path.join(uploadsDir, 'slides');
+    const hadLegacy = fs.existsSync(legacyDir);
+    const hadUploads = fs.existsSync(uploadsDir);
+    fs.mkdirSync(legacyDir, { recursive: true });
+    fs.mkdirSync(SLIDES_TMP, { recursive: true });
+    const placed = [path.join(legacyDir, 'x.htm'), path.join(legacyDir, 'x.html'), path.join(SLIDES_TMP, 'x.htm'), path.join(SLIDES_TMP, 'x.html')];
+    const created = [];
+    try {
+      for (const f of placed) {
+        if (fs.existsSync(f)) throw new Error(`refusing to overwrite an existing ${path.basename(f)}`);
+        fs.writeFileSync(f, '<p>WINPROBE</p><script>1</script>');
+        created.push(f);
+      }
+      await withServer(async (base, port) => {
+        for (const s of WIN_SPELLINGS) {
+          const r = await rawGet(port, s.url);
+          assert.strictEqual(r.status, 404, `${s.url} must be 404 on Windows, got ${r.status}`);
+          assert.ok(!r.body.toString('utf8').includes('WINPROBE'), `${s.url} must not leak the slide on Windows`);
+        }
+      });
+    } finally {
+      for (const f of created) fs.rmSync(f, { force: true });
+      if (!hadLegacy) { try { fs.rmdirSync(legacyDir); } catch (e) { /* not empty */ } }
+      if (!hadUploads) { try { fs.rmdirSync(uploadsDir); } catch (e) { /* not empty */ } }
+    }
+  });
+
+test('slide-upload-safety (l): CR-A01 — the default directory follows the instance data dir (dev: <repo>/data/slides; real: <MA_DATA_DIR>/slides); MA_SLIDES_UPLOAD_DIR overrides', () => {
+  const { spawnSync } = require('child_process');
+  const probe = "process.stdout.write(require('./lib/slideUpload.js').slidesDir())";
+  const run = (env) => spawnSync(process.execPath, ['-e', probe], { cwd: REPO, env: cleanEnv(env), encoding: 'utf8' });
+  const dev = run({});
+  assert.strictEqual(dev.status, 0, dev.stderr);
+  assert.strictEqual(path.resolve(dev.stdout), path.join(REPO, 'data', 'slides'));
+  const realDir = path.join(TMP_DIR, 'real-data');
+  const real = run({ MA_MODE: 'real', MA_DATA_DIR: realDir });
+  assert.strictEqual(real.status, 0, real.stderr);
+  assert.strictEqual(path.resolve(real.stdout), path.join(realDir, 'slides'));
+  const over = run({ MA_SLIDES_UPLOAD_DIR: path.join(TMP_DIR, 'override') });
+  assert.strictEqual(over.status, 0, over.stderr);
+  assert.strictEqual(path.resolve(over.stdout), path.join(TMP_DIR, 'override'));
+  for (const out of [dev.stdout, real.stdout]) {
+    const rel = path.relative(path.join(REPO, 'public'), path.resolve(out));
+    assert.ok(rel.startsWith('..') || path.isAbsolute(rel), `${out} must be outside public/`);
+  }
+});
+
+test('slide-upload-safety (m): CR-A01 (b) — the legacy move: allowlisted regular files only, never overwrites, idempotent, counts-only log, never throws', () => {
+  const from = fs.mkdtempSync(path.join(TMP_DIR, 'legacy-from-'));
+  const to = path.join(fs.mkdtempSync(path.join(TMP_DIR, 'legacy-to-')), 'slides');
+  fs.writeFileSync(path.join(from, '1_aa_one.html'), 'one');
+  fs.writeFileSync(path.join(from, '2_bb_two.pdf'), '%PDF-two');
+  fs.writeFileSync(path.join(from, '3_cc_clash.html'), 'legacy-clash');
+  fs.writeFileSync(path.join(from, 'notes.txt'), 'not a slide');
+  fs.writeFileSync(path.join(from, '.hidden.html'), 'dot');
+  fs.mkdirSync(path.join(from, 'sub.html'));
+  fs.mkdirSync(to, { recursive: true });
+  fs.writeFileSync(path.join(to, '3_cc_clash.html'), 'current');
+  const logs = [];
+  const r = slideUpload.migrateLegacySlides({ from, to, log: (m) => logs.push(m) });
+  assert.deepStrictEqual(r, { moved: 2, skipped: 4, failed: 0 });
+  assert.strictEqual(fs.readFileSync(path.join(to, '1_aa_one.html'), 'utf8'), 'one');
+  assert.strictEqual(fs.readFileSync(path.join(to, '2_bb_two.pdf'), 'utf8'), '%PDF-two');
+  assert.ok(!fs.existsSync(path.join(from, '1_aa_one.html')) && !fs.existsSync(path.join(from, '2_bb_two.pdf')), 'moved, not copied');
+  assert.strictEqual(fs.readFileSync(path.join(to, '3_cc_clash.html'), 'utf8'), 'current', 'a name collision never overwrites');
+  assert.strictEqual(fs.readFileSync(path.join(from, '3_cc_clash.html'), 'utf8'), 'legacy-clash', 'the colliding legacy file is left in place');
+  for (const n of ['notes.txt', '.hidden.html']) assert.ok(fs.existsSync(path.join(from, n)), `${n} is not a slide and stays`);
+  assert.strictEqual(logs.length, 1);
+  assert.match(logs[0], /2 file\(s\) moved/);
+  assert.ok(!/one|two|clash/.test(logs[0]), 'the log carries counts only, never names');
+  // idempotent: a second run moves nothing and logs nothing
+  const again = slideUpload.migrateLegacySlides({ from, to, log: (m) => logs.push(m) });
+  assert.strictEqual(again.moved, 0);
+  assert.strictEqual(logs.length, 1);
+  // absent legacy dir: a silent no-op
+  assert.deepStrictEqual(slideUpload.migrateLegacySlides({ from: path.join(TMP_DIR, 'does-not-exist'), to, log: () => assert.fail('no log') }),
+    { moved: 0, skipped: 0, failed: 0 });
+  // an override means the operator placed the files: the boot hook does nothing
+  assert.strictEqual(slideUpload.migrateLegacySlidesAtBoot({ from, to }).overridden, true, 'MA_SLIDES_UPLOAD_DIR is set in this suite');
+  // under node --test the boot move is opt-in (MA_TEST_LEGACY_SLIDE_MOVE=1)
+  const saved = process.env.MA_SLIDES_UPLOAD_DIR;
+  delete process.env.MA_SLIDES_UPLOAD_DIR;
+  try {
+    fs.writeFileSync(path.join(from, '5_ee_optin.html'), 'opt-in');
+    assert.strictEqual(slideUpload.migrateLegacySlidesAtBoot({ from, to, log: () => {} }).testSkipped, true, 'an incidental test boot moves nothing');
+    assert.ok(fs.existsSync(path.join(from, '5_ee_optin.html')));
+    process.env.MA_TEST_LEGACY_SLIDE_MOVE = '1';
+    assert.strictEqual(slideUpload.migrateLegacySlidesAtBoot({ from, to, log: () => {} }).moved, 1);
+    assert.ok(fs.existsSync(path.join(to, '5_ee_optin.html')));
+  } finally {
+    process.env.MA_SLIDES_UPLOAD_DIR = saved;
+    delete process.env.MA_TEST_LEGACY_SLIDE_MOVE;
+  }
 });
 
 // ================================================================== Task 2 ===
@@ -393,4 +605,118 @@ test('slide-upload-safety (h): valid PNG/JPEG/WebP/PDF are stored byte-for-byte;
   } finally {
     clearDir(SLIDES_TMP);
   }
+});
+
+// ================================================================== WR-A02 ===
+test('slide-upload-safety (n): WR-A02 — a failed write leaves no fragment: injected partial write / rename failure -> nothing servable, nothing quota-counted, route answers the fixed 500', async () => {
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'atomic-'));
+  const enospc = () => Object.assign(new Error('injected ENOSPC'), { code: 'ENOSPC' });
+  // (1) unit: the write dies half way (some bytes on disk, then ENOSPC)
+  const partialFs = { ...fs, writeFileSync: (fd, buf) => { fs.writeSync(fd, buf.subarray(0, 5)); throw enospc(); } };
+  assert.throws(() => slideUpload.writeSlideAtomic(dir, '1_aa_deck.html', Buffer.from('<p>0123456789</p>'), partialFs), /ENOSPC/);
+  assert.deepStrictEqual(fs.readdirSync(dir), [], 'neither the final name nor the .tmp survives a partial write');
+  // (2) unit: the rename fails
+  const renameFs = { ...fs, renameSync: () => { throw enospc(); } };
+  assert.throws(() => slideUpload.writeSlideAtomic(dir, '2_bb_deck.html', Buffer.from('<p>x</p>'), renameFs), /ENOSPC/);
+  assert.deepStrictEqual(fs.readdirSync(dir), [], 'a failed rename leaves no .tmp behind');
+  // (3) unit: success writes exactly the final name; an existing final name is never replaced
+  slideUpload.writeSlideAtomic(dir, '3_cc_deck.html', Buffer.from('<p>ok</p>'));
+  assert.deepStrictEqual(fs.readdirSync(dir), ['3_cc_deck.html']);
+  assert.throws(() => slideUpload.writeSlideAtomic(dir, '3_cc_deck.html', Buffer.from('<p>other</p>')), (e) => e.code === 'EEXIST');
+  assert.strictEqual(fs.readFileSync(path.join(dir, '3_cc_deck.html'), 'utf8'), '<p>ok</p>');
+  assert.deepStrictEqual(fs.readdirSync(dir), ['3_cc_deck.html']);
+  // (4) the quota ignores *.tmp; the mount never serves one
+  fs.writeFileSync(path.join(dir, '4_dd_deck.html.tmp'), Buffer.alloc(1000));
+  assert.strictEqual(slideUpload.libraryBytes(dir), Buffer.byteLength('<p>ok</p>'), '*.tmp is not counted toward the quota');
+  assert.strictEqual(slideUpload.mountFileName('/4_dd_deck.html.tmp'), null);
+  // (5) route: an injected rename failure during a real upload -> fixed 500, directory unchanged
+  clearDir(SLIDES_TMP);
+  const token = adminToken('slide-admin-n');
+  const realRename = fs.renameSync;
+  fs.renameSync = (from, to) => { if (String(from).endsWith('.tmp')) throw enospc(); return realRename(from, to); };
+  try {
+    await withServer(async (base) => {
+      const before = listing(SLIDES_TMP);
+      const r = await upload(base, token, { filename: 'fails.html', content: '<p>fails</p>' });
+      assert.strictEqual(r.status, 500);
+      assert.deepStrictEqual(r.body, { error: 'Failed to save slide file.' });
+      assert.deepStrictEqual(listing(SLIDES_TMP), before, 'a failed upload leaves the slide directory unchanged');
+    });
+  } finally {
+    fs.renameSync = realRename;
+    clearDir(SLIDES_TMP);
+  }
+});
+
+// ================================================================== WR-A03 ===
+async function slideApi(base, token, method, p, body) {
+  const res = await fetch(base + p, {
+    method,
+    headers: { Cookie: cookie(token), 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => null) };
+}
+
+test('slide-upload-safety (p): WR-A03 — deleting a slide record removes its uploaded file and frees quota; a URL shared by two records survives until the last is deleted', async () => {
+  clearDir(SLIDES_TMP);
+  const token = adminToken('slide-admin-p');
+  try {
+    await withServer(async (base) => {
+      // single reference: upload -> record -> delete -> file gone, quota freed
+      const up = await upload(base, token, { filename: 'solo.html', content: 'a'.repeat(4000) });
+      assert.strictEqual(up.status, 200, JSON.stringify(up.body));
+      const file = path.join(SLIDES_TMP, path.basename(up.body.url));
+      const rec = await slideApi(base, token, 'POST', '/api/slides', { url: up.body.url, label: 'Solo' });
+      assert.strictEqual(rec.status, 200, JSON.stringify(rec.body));
+      assert.ok(slideUpload.libraryBytes(SLIDES_TMP) >= 4000);
+      const del = await slideApi(base, token, 'DELETE', `/api/slides/${encodeURIComponent(rec.body.slide.id)}`, {});
+      assert.strictEqual(del.status, 200, JSON.stringify(del.body));
+      assert.ok(!fs.existsSync(file), 'the uploaded file is removed with its last record');
+      assert.strictEqual(slideUpload.libraryBytes(SLIDES_TMP), 0, 'the quota is freed');
+      assert.strictEqual((await fetch(base + up.body.url)).status, 404, 'the old URL no longer serves the deck');
+
+      // shared reference: the file survives the first delete, goes with the second
+      const up2 = await upload(base, token, { filename: 'shared.html', content: '<p>shared</p>' });
+      const file2 = path.join(SLIDES_TMP, path.basename(up2.body.url));
+      const a = await slideApi(base, token, 'POST', '/api/slides', { url: up2.body.url, label: 'A' });
+      const b = await slideApi(base, token, 'POST', '/api/slides', { url: up2.body.url, label: 'B' });
+      assert.strictEqual((await slideApi(base, token, 'DELETE', `/api/slides/${encodeURIComponent(a.body.slide.id)}`, {})).status, 200);
+      assert.ok(fs.existsSync(file2), 'still referenced by record B — kept');
+      assert.strictEqual((await slideApi(base, token, 'DELETE', `/api/slides/${encodeURIComponent(b.body.slide.id)}`, {})).status, 200);
+      assert.ok(!fs.existsSync(file2), 'the last reference is gone — removed');
+    });
+  } finally {
+    clearDir(SLIDES_TMP);
+  }
+  // unit: only an uploaded-slide URL that passes the name allowlist, resolved inside the directory
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'unlink-'));
+  fs.writeFileSync(path.join(dir, '1_aa_x.html'), 'x');
+  const outside = path.join(TMP_DIR, 'outside.html');
+  fs.writeFileSync(outside, 'outside');
+  for (const url of ['/uploads/slides/../outside.html', '/uploads/slides/..%2Foutside.html', 'https://example.test/uploads/slides/1_aa_x.html',
+    '/uploads/1_aa_x.html', '/uploads/slides/sub/1_aa_x.html', null, 42]) {
+    assert.strictEqual(slideUpload.removeUnreferencedUpload(url, [], dir), false, `${url}: never touches the disk`);
+  }
+  assert.ok(fs.existsSync(outside) && fs.existsSync(path.join(dir, '1_aa_x.html')));
+  assert.strictEqual(slideUpload.removeUnreferencedUpload('/uploads/slides/1_aa_x.html', [{ url: '/uploads/slides/1_aa_x.html' }], dir), false, 'still referenced');
+  assert.strictEqual(slideUpload.removeUnreferencedUpload('/uploads/slides/1_aa_x.html', [], dir), true);
+  assert.strictEqual(slideUpload.removeUnreferencedUpload('/uploads/slides/1_aa_x.html', [], dir), false, 'already gone: no throw');
+});
+
+test('slide-upload-safety (o): WR-A02 — the boot sweep removes only *.tmp files older than an hour', () => {
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'sweep-'));
+  const now = Date.now();
+  const old = (now - 2 * 60 * 60 * 1000) / 1000;
+  fs.writeFileSync(path.join(dir, '1_aa_old.html.tmp'), 'stale');
+  fs.utimesSync(path.join(dir, '1_aa_old.html.tmp'), old, old);
+  fs.writeFileSync(path.join(dir, '2_bb_young.html.tmp'), 'in progress');
+  fs.writeFileSync(path.join(dir, '3_cc_old.html'), 'a real slide');
+  fs.utimesSync(path.join(dir, '3_cc_old.html'), old, old);
+  assert.strictEqual(slideUpload.sweepStaleTmp(dir, now), 1);
+  assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['2_bb_young.html.tmp', '3_cc_old.html']);
+  assert.strictEqual(slideUpload.sweepStaleTmp(path.join(dir, 'absent'), now), 0, 'an absent directory is a no-op');
+  const src = fs.readFileSync(path.join(REPO, 'server.js'), 'utf8');
+  assert.ok(/slideUpload\.sweepStaleTmp\(\);/.test(src), 'server.js sweeps at boot');
+  assert.ok(/slideUpload\.writeSlideAtomic\(dir, fname, verdict\.buffer\)/.test(src), 'the upload route writes through writeSlideAtomic');
 });

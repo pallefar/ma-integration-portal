@@ -180,9 +180,10 @@ test('101 distinct tuples keep the last 100 (least recently seen evicted); a rep
 
 test('application/reports+json: an array with two csp-violation entries and one other type yields two tuples', async () => {
   const body = [
-    { type: 'csp-violation', url: 'http://h.test/p', body: { documentURL: 'http://h.test/p?q=1', effectiveDirective: 'script-src-elem', blockedURL: 'inline', sourceFile: 'http://h.test/p', lineNumber: 7 } },
+    // WR-A07: document paths name pages this app really serves (others are dropped).
+    { type: 'csp-violation', url: 'http://h.test/index.html', body: { documentURL: 'http://h.test/index.html?q=1', effectiveDirective: 'script-src-elem', blockedURL: 'inline', sourceFile: 'http://h.test/p', lineNumber: 7 } },
     { type: 'deprecation', body: { id: 'x', message: 'old api' } },
-    { type: 'csp-violation', body: { documentURL: 'http://h.test/q', effectiveDirective: 'script-src-attr', blockedURL: 'inline', lineNumber: 9 } },
+    { type: 'csp-violation', body: { documentURL: 'http://h.test/', effectiveDirective: 'script-src-attr', blockedURL: 'inline', lineNumber: 9 } },
   ];
   const r = await postReport(body, { type: 'application/reports+json' });
   assert.strictEqual(r.status, 204);
@@ -190,7 +191,7 @@ test('application/reports+json: an array with two csp-violation entries and one 
   assert.strictEqual(admin.json.count, 2);
   assert.deepStrictEqual(admin.json.violations.map((v) => v.directive).sort(), ['script-src-attr', 'script-src-elem']);
   const elem = admin.json.violations.find((v) => v.directive === 'script-src-elem');
-  assert.strictEqual(elem.documentPath, '/p');
+  assert.strictEqual(elem.documentPath, '/index.html');
   assert.strictEqual(elem.sourceFile, 'http://h.test/p');
 });
 
@@ -222,6 +223,59 @@ test('unknown shapes, wrong content types and malformed JSON store nothing', asy
   assert.strictEqual((await list('admin')).json.count, 0);
 });
 
+// ---- WR-A07 (13-REVIEW): the list is advisory; foreign noise cannot displace first-party signal
+test('WR-A07: a report about a page the app does not serve is dropped (204, nothing stored)', async () => {
+  for (const doc of ['http://127.0.0.1:3000/no-such-page.html', 'http://127.0.0.1:3000/x', 'http://127.0.0.1:3000/vendor/a.html',
+    'http://127.0.0.1:3000/uploads/slides/1_ab_x.html', 'about:blank']) {
+    assert.strictEqual((await postReport(chromium({ 'document-uri': doc, 'blocked-uri': `https://n.test/${encodeURIComponent(doc)}` }))).status, 204);
+  }
+  assert.strictEqual(cspReports.size(), 0, 'only reports about served pages are kept');
+  for (const doc of ['http://127.0.0.1:3000/', 'http://127.0.0.1:3000/login.html', 'http://127.0.0.1:3000/admin.html?tab=x#y']) {
+    await postReport(chromium({ 'document-uri': doc, 'blocked-uri': `https://k.test/${encodeURIComponent(doc)}` }));
+  }
+  assert.strictEqual(cspReports.size(), 3, '`/` and existing pages under public/ are kept');
+});
+
+test('WR-A07: a full store evicts foreign-origin tuples before first-party ones (live route, posted-to origin decides)', async () => {
+  // one first-party tuple (source-file on the origin the report is posted to), seen FIRST
+  const firstParty = chromium({ 'source-file': `${base}/index.html`, 'blocked-uri': 'inline', 'document-uri': `${base}/index.html` });
+  assert.strictEqual((await postReport(firstParty)).status, 204);
+  // 120 foreign tuples from several addresses (an extension / another origin)
+  const ips = [freshIp(), freshIp(), freshIp()];
+  for (let i = 0; i < 120; i++) {
+    await postReport(chromium({ 'source-file': 'chrome-extension://abcdef/inject.js', 'blocked-uri': `https://noise${i}.test/s.js` }), { ip: ips[Math.floor(i / 50)] });
+  }
+  const admin = await list('admin');
+  assert.strictEqual(admin.json.count, 100);
+  assert.ok(admin.json.violations.some((v) => v.sourceFile === `${base}/index.html`), 'the first-party tuple survives 120 foreign inserts');
+  assert.ok(!admin.json.violations.some((v) => 'foreign' in v), 'the internal flag never leaves the store');
+});
+
+test('WR-A07 unit: eviction order and the foreign/first-party classification', () => {
+  const store = cspReports.createStore({ max: 3, isKnownPage: () => true });
+  const t = (blockedUri, sourceFile) => ({ directive: 'script-src-elem', blockedUri, sourceFile, lineNumber: null, documentPath: '/' });
+  const origin = 'https://portal.test';
+  store.record(t('a', 'inline'), { origin });                       // first-party, least recently seen
+  store.record(t('f1', 'https://evil.test/x.js'), { origin });      // foreign
+  store.record(t('f2', 'moz-extension://id/x.js'), { origin });     // foreign
+  store.record(t('b', 'https://portal.test/app.js'), { origin });   // first-party -> evicts f1, not a
+  assert.deepStrictEqual(store.list().map((v) => v.blockedUri).sort(), ['a', 'b', 'f2']);
+  store.record(t('c', ''), { origin });                             // evicts f2 (last foreign)
+  store.record(t('d', '/js/x.js'), { origin });                     // no foreign left -> plain LRU: evicts a
+  assert.deepStrictEqual(store.list().map((v) => v.blockedUri).sort(), ['b', 'c', 'd']);
+  assert.strictEqual(cspReports.createStore({ isKnownPage: () => false }).record(t('z', '')), false, 'refused when not a served page');
+  const f = cspReports.isForeignSource;
+  assert.strictEqual(f('inline', origin), false);
+  assert.strictEqual(f('https://portal.test/a.js', origin), false);
+  assert.strictEqual(f('https://portal.test:8443/a.js', origin), true, 'another port is another origin');
+  assert.strictEqual(f('data:', origin), true);
+  assert.strictEqual(f('https://x.test/a.js', undefined), false, 'unknown posted-to origin: no reprioritisation');
+  assert.strictEqual(cspReports.isServedPage('/'), true);
+  assert.strictEqual(cspReports.isServedPage('/overview.html'), true);
+  assert.strictEqual(cspReports.isServedPage('/vendor/transformers/x.html'), false);
+  assert.strictEqual(cspReports.isServedPage(''), false);
+});
+
 test('only POST is served on /api/csp-report: every other method reaches no handler (404)', async () => {
   for (const method of ['GET', 'PUT', 'DELETE']) {
     const res = await fetch(base + '/api/csp-report', { method });
@@ -238,4 +292,128 @@ test('lib/cspReports normalize: both formats, bounded per request', () => {
   assert.strictEqual(cspReports.normalize('application/reports+json; charset=utf-8', many).length, 20);
   assert.deepStrictEqual(cspReports.normalize('application/csp-report', null), []);
   assert.deepStrictEqual(cspReports.normalize('text/html', chromium()), []);
+});
+
+// ---- WR-A01 (13-REVIEW): the 4 KB bound holds for EVERY content type ---------
+// The app-wide 50 MB parsers skip /api/csp-report and the limiter runs before any
+// parser. Proof by byte counter: the client declares (or streams) 5 MB but sends
+// only the first 64 KB and then waits — the server must answer while the rest of
+// the body has never been sent. Before the fix the global express.json /
+// express.urlencoded waited for (and buffered) all 5 MB before any answer.
+const http = require('http');
+const FIVE_MB = 5 * 1024 * 1024;
+const FIRST_CHUNK = 64 * 1024;
+
+function earlyAnswer({ type, ip, urlPath = '/api/csp-report', chunked = false, fill = '[' }) {
+  return new Promise((resolve, reject) => {
+    const { port } = server.address();
+    const headers = { 'content-type': type, 'x-forwarded-for': ip || freshIp() };
+    if (!chunked) headers['content-length'] = String(FIVE_MB);
+    let written = 0;
+    const timer = setTimeout(() => {
+      req.destroy();
+      reject(new Error(`no answer after ${written} of ${FIVE_MB} bytes — the body is being read past the bound`));
+    }, 15000);
+    const req = http.request({ host: '127.0.0.1', port, path: urlPath, method: 'POST', headers }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => { clearTimeout(timer); req.destroy(); resolve({ status: res.statusCode, body, written }); });
+    });
+    req.on('error', (e) => { if (e.code !== 'ECONNRESET' && e.code !== 'EPIPE') { clearTimeout(timer); reject(e); } });
+    const chunk = Buffer.alloc(FIRST_CHUNK, fill);
+    req.write(chunk);
+    written += chunk.length;
+  });
+}
+
+test('WR-A01: a 5 MB application/json or form body to /api/csp-report is refused 415 after <= 64 KB was ever sent (never buffered by the 50 MB parsers)', async () => {
+  for (const [label, opts, expected] of [
+    ['json, content-length', { type: 'application/json' }, 415],
+    ['json, chunked', { type: 'application/json', chunked: true }, 415],
+    ['json, charset param', { type: 'application/json; charset=utf-8' }, 415],
+    ['urlencoded', { type: 'application/x-www-form-urlencoded', fill: 'a' }, 415],
+    // `/api/csp-report/` is not on PUBLIC_API_PATHS (exact match), so the gate
+    // answers 401 — but still without the 50 MB parsers having read the body.
+    ['json, trailing-slash spelling', { type: 'application/json', urlPath: '/api/csp-report/' }, 401],
+  ]) {
+    const r = await earlyAnswer(opts);
+    assert.strictEqual(r.status, expected, `${label}: ${r.status} ${r.body}`);
+    assert.ok(r.written <= FIRST_CHUNK, `${label}: answered after ${r.written} bytes`);
+  }
+  assert.strictEqual(cspReports.size(), 0);
+});
+
+/** POST a full `bytes`-long body (content-length or chunked), resolving with the status. */
+function fullPost({ type, bytes, chunked = false, ip }) {
+  return new Promise((resolve, reject) => {
+    const { port } = server.address();
+    const headers = { 'content-type': type, 'x-forwarded-for': ip || freshIp() };
+    if (!chunked) headers['content-length'] = String(bytes);
+    const req = http.request({ host: '127.0.0.1', port, path: '/api/csp-report', method: 'POST', headers }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', (e) => { if (e.code !== 'ECONNRESET' && e.code !== 'EPIPE') reject(e); });
+    const chunk = Buffer.alloc(FIRST_CHUNK, '[');
+    let sent = 0;
+    const pump = () => {
+      while (sent < bytes) {
+        const n = Math.min(chunk.length, bytes - sent);
+        sent += n;
+        if (!req.write(n === chunk.length ? chunk : chunk.subarray(0, n))) return req.once('drain', pump);
+      }
+      req.end();
+    };
+    pump();
+  });
+}
+
+test('WR-A01: a 5 MB report-typed body is 413 from the route\'s 4 KB parser, and the app-wide 50 MB parsers never consumed it (spy)', async () => {
+  // A spy spliced in right AFTER the app-wide urlencoded parser records whether
+  // either app-wide parser consumed a /api/csp-report body (`req._body`).
+  // body-parser 1.x dumps (reads and discards, never buffers) the rest of a
+  // refused body before answering, so a 413 is not an early answer — the proof
+  // here is that only the route's 4 KB parser ever buffered it.
+  const stack = app._router.stack;
+  const urlIdx = stack.findIndex((l) => l && l.name === 'urlencodedParser');
+  assert.ok(urlIdx > 0);
+  const seen = [];
+  app.use(function wrA01Spy(req, res, next) {
+    if (req.path.startsWith('/api/csp-report')) seen.push(req._body === true);
+    next();
+  });
+  const spy = stack.pop();
+  stack.splice(urlIdx + 1, 0, spy);
+  try {
+    for (const [label, opts, expected] of [
+      ['csp-report, content-length', { type: 'application/csp-report' }, 413],
+      ['csp-report, chunked', { type: 'application/csp-report', chunked: true }, 413],
+      ['reports+json, content-length', { type: 'application/reports+json' }, 413],
+      ['json, content-length', { type: 'application/json' }, 415],
+      ['urlencoded, chunked', { type: 'application/x-www-form-urlencoded', chunked: true }, 415],
+    ]) {
+      assert.strictEqual(await fullPost({ ...opts, bytes: FIVE_MB }), expected, label);
+    }
+  } finally {
+    stack.splice(stack.indexOf(spy), 1);
+  }
+  assert.strictEqual(seen.length, 5, 'every request passed the spy');
+  assert.deepStrictEqual(seen, [false, false, false, false, false], 'no app-wide parser consumed a /api/csp-report body');
+  assert.strictEqual(cspReports.size(), 0);
+});
+
+test('WR-A01: the limiter is the first reader — 100 rapid requests from one IP: 60 reach the route, 40 are 429, and a 5 MB body is 429 unread once the window is spent', async () => {
+  const ip = freshIp();
+  const results = await Promise.all(Array.from({ length: 100 }, () => postReport(null, { ip, type: 'application/json', raw: '{"a":1}' })));
+  const counts = results.reduce((acc, r) => { acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
+  assert.deepStrictEqual(counts, { 415: 60, 429: 40 }, JSON.stringify(counts));
+  for (const r of results.filter((x) => x.status === 429)) assert.strictEqual(r.headers.get('retry-after'), '60');
+  const limited = await earlyAnswer({ type: 'application/json', ip });
+  assert.strictEqual(limited.status, 429);
+  assert.ok(limited.written <= FIRST_CHUNK, `answered after ${limited.written} bytes`);
+  // other routes still get the app-wide parsers (the skip is path-exact)
+  const login = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{not json' });
+  await login.text();
+  assert.strictEqual(login.status, 400, 'a malformed JSON body elsewhere is still parsed (and refused 400) by the app-wide parser');
 });

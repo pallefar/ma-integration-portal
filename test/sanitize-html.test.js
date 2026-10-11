@@ -365,3 +365,93 @@ test('cms golden: banner title/message stay outside the tagged set (never saniti
     assert.strictEqual(s.title, u.value);
   }
 });
+
+// ===================================================== WR-A06 (13-REVIEW) ===
+// Sanitizer cost is superlinear in nesting depth. Two bounds now hold it:
+//   - a fail-closed nesting cap INSIDE lib/sanitizeHtml.js (MAX_NESTING = 2000,
+//     linear pre-scan; above it the input is returned entity-escaped as text);
+//   - validators/cms.js HTML_MAX (20 000 chars per HTML leaf) and the i18n map's
+//     key bound (<= 20 languages).
+// [coupling] The first test below pins the worst case AT EXACTLY HTML_MAX: if
+// someone raises HTML_MAX in validators/cms.js, this test re-measures the new
+// worst case — raise the two together, never HTML_MAX alone.
+// Timings are best-of-3 wall clock (the shared host runs at very high load).
+function bestOf3Ms(fn) {
+  let best = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const t = process.hrtime.bigint();
+    fn();
+    best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6);
+  }
+  return best;
+}
+const HTML_MAX = Number(/const HTML_MAX = (\d+);/.exec(fs.readFileSync(path.join(ROOT, 'validators', 'cms.js'), 'utf8'))[1]);
+
+test('WR-A06: the worst-case nested input at exactly HTML_MAX chars sanitizes in < 100 ms (both sides of the nesting cap)', () => {
+  assert.ok(HTML_MAX >= 1000, `HTML_MAX read from validators/cms.js: ${HTML_MAX}`);
+  sanitizeHtml('<p>warm-up</p>');
+  const overCap = '<b>'.repeat(Math.ceil(HTML_MAX / 3)).slice(0, HTML_MAX);
+  const atCap = ('<b>'.repeat(sanitizeHtml.MAX_NESTING) + 'x'.repeat(HTML_MAX)).slice(0, HTML_MAX);
+  const divs = ('<div>'.repeat(sanitizeHtml.MAX_NESTING) + 'y'.repeat(HTML_MAX)).slice(0, HTML_MAX);
+  for (const [label, input] of [['<b> x HTML_MAX/3 (over the cap)', overCap], ['<b> x MAX_NESTING through the parser', atCap], ['<div> x MAX_NESTING through the parser', divs]]) {
+    assert.strictEqual(input.length, HTML_MAX, label);
+    const ms = bestOf3Ms(() => sanitizeHtml(input));
+    assert.ok(ms < 100, `${label}: ${ms.toFixed(1)} ms`);
+  }
+  assert.ok(sanitizeHtml.nestingEstimate(atCap) <= sanitizeHtml.MAX_NESTING, 'atCap really goes through the parser');
+});
+
+test('WR-A06: 200 000 nested <b> / <div> return inert escaped text in < 100 ms (was ~50 s / ~36 s)', () => {
+  sanitizeHtml('<p>warm-up</p>');
+  for (const [label, input, boundMs] of [
+    ['<b> x 200 000', '<b>'.repeat(200000), 100],
+    ['<div> x 200 000', '<div>'.repeat(200000), 100],
+    // the review's 2.2 MB open+close variant: linear now, but its 4.6 MB escaped
+    // output alone is a large copy, so the bound is looser (was 35.9 s)
+    ['<div> x 200 000 + </div> x 200 000', '<div>'.repeat(200000) + '</div>'.repeat(200000), 1000],
+  ]) {
+    const before = sanitizeHtml.depthFallbacks;
+    let out;
+    const ms = bestOf3Ms(() => { out = sanitizeHtml(input); });
+    assert.ok(ms < boundMs, `${label}: ${ms.toFixed(1)} ms (bound ${boundMs})`);
+    assert.strictEqual(sanitizeHtml.depthFallbacks - before, 3, `${label}: the nesting cap engaged`);
+    assert.ok(!out.includes('<') && !out.includes('>'), `${label}: inert (no markup survives)`);
+  }
+});
+
+test('WR-A06: normal content never reaches the cap — every corpus/golden value is under MAX_NESTING and its output is unchanged by the cap', () => {
+  const strings = [];
+  const walk = (v) => {
+    if (typeof v === 'string') strings.push(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+  };
+  walk(CORPUS);
+  walk(GOLDEN);
+  assert.ok(strings.length > 300);
+  const before = sanitizeHtml.depthFallbacks;
+  for (const s of strings) {
+    assert.ok(sanitizeHtml.nestingEstimate(s) <= sanitizeHtml.MAX_NESTING, 'a real value is far below the cap');
+    sanitizeHtml(s);
+  }
+  assert.strictEqual(sanitizeHtml.depthFallbacks, before, 'the cap never engaged on real content (output identical to the parser path)');
+  // the estimate: void and implicitly-closed tags never build depth; closes unwind it
+  const est = sanitizeHtml.nestingEstimate;
+  assert.strictEqual(est('<p>a'.repeat(5000)), 0);
+  assert.strictEqual(est('<li>a<br><img src=x><hr>'.repeat(5000)), 0);
+  assert.strictEqual(est('<b>a</b>'.repeat(5000)), 1);
+  assert.strictEqual(est('</div></div><b>'), 1, 'closes floor at 0');
+  assert.strictEqual(est('<b>'.repeat(2001)), 2001);
+  assert.strictEqual(est('<B>'.repeat(10) + '<!-- <b> -->'), 11, 'case-insensitive; over-counts inside comments (errs toward the fail-closed side)');
+  assert.strictEqual(est('<b>'.repeat(5000), 2000), 2001, 'the scan stops just above the limit');
+});
+
+test('WR-A06 (c): an i18n map carries at most 20 language variants (validators/cms.js)', () => {
+  const { PageUpsertSchema } = require('../validators/cms.js');
+  const map = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`l${i}`, '<p>x</p>']));
+  assert.strictEqual(PageUpsertSchema.safeParse({ body: map(4) }).success, true);
+  assert.strictEqual(PageUpsertSchema.safeParse({ body: map(20) }).success, true);
+  assert.strictEqual(PageUpsertSchema.safeParse({ body: map(21) }).success, false);
+  assert.strictEqual(PageUpsertSchema.safeParse({ title: map(21) }).success, false);
+  assert.strictEqual(PageUpsertSchema.safeParse({ body: '<p>plain string still fine</p>' }).success, true);
+});
