@@ -361,11 +361,12 @@ function seedReports(dealId) {
     store.writeDb(db);
   });
 }
-function packCtx(dealId, ident) {
+function packCtx(dealId, ident, nowMs) {
   const deal = require('../db/controlStore.js').getDeal(dealId);
+  const at = nowMs === undefined ? Date.parse('2026-10-10T12:00:00.000Z') : nowMs;
   return {
     req: { portalUser: { username: ident.name, role: ident.role }, dealContext: { dealId }, isDemo: false },
-    deal, language: 'en', generatedAt: new Date('2026-10-10T12:00:00.000Z'), nowMs: Date.parse('2026-10-10T12:00:00.000Z'),
+    deal, language: 'en', generatedAt: new Date(at), nowMs: at,
   };
 }
 function pickIdents(...names) { return IDENTITIES.filter((i) => names.includes(i.name)); }
@@ -407,10 +408,18 @@ test('read-sets-reports (pack): the entirely empty deal still answers hasAnyData
 test('read-sets-reports (export): every dataset x format x identity serves the full-read rows; csv is the same rows; audit row unchanged', async () => {
   const dealId = makeFixture();
   seedReports(dealId);
+  // The export route reads the live clock (Date.now()) for synergy staleDays, so a
+  // hard-coded expected nowMs goes stale as real days pass. Capture the instant ONCE and
+  // freeze Date.now to it for the test (route + expected side share one clock, so the
+  // byte-for-byte comparison stays exact and cannot straddle midnight); restored in finally.
+  const frozenNowMs = Date.now();
+  const realDateNow = Date.now;
+  Date.now = () => frozenNowMs;
+  try {
   await withServer(async (base) => {
     for (const ident of pickIdents('karen', 'pmo_it', 'pmo_hr')) {
       const token = newSession(ident.name, ident.role, dealId);
-      const reference = inDeal(dealId, () => app.buildPackModel(store.readDb(), packCtx(dealId, ident)).model);
+      const reference = inDeal(dealId, () => app.buildPackModel(store.readDb(), packCtx(dealId, ident, frozenNowMs)).model);
       const expectedJson = {
         workstreams: JSON.stringify(reference.workstreams),
         tasks: JSON.stringify(reference.tasks),
@@ -441,6 +450,7 @@ test('read-sets-reports (export): every dataset x format x identity serves the f
     const bad = await httpGet(base, '/api/reports/export?dataset=orgPositions&format=csv', itToken);
     assert.strictEqual(bad.status, 400);
   });
+  } finally { Date.now = realDateNow; }
 });
 
 test('read-sets-reports (pack route): still a PDF over the partial read set; empty deal still 409', async () => {
