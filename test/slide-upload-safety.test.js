@@ -590,3 +590,61 @@ test('slide-upload-safety (h): valid PNG/JPEG/WebP/PDF are stored byte-for-byte;
     clearDir(SLIDES_TMP);
   }
 });
+
+// ================================================================== WR-A02 ===
+test('slide-upload-safety (n): WR-A02 — a failed write leaves no fragment: injected partial write / rename failure -> nothing servable, nothing quota-counted, route answers the fixed 500', async () => {
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'atomic-'));
+  const enospc = () => Object.assign(new Error('injected ENOSPC'), { code: 'ENOSPC' });
+  // (1) unit: the write dies half way (some bytes on disk, then ENOSPC)
+  const partialFs = { ...fs, writeFileSync: (fd, buf) => { fs.writeSync(fd, buf.subarray(0, 5)); throw enospc(); } };
+  assert.throws(() => slideUpload.writeSlideAtomic(dir, '1_aa_deck.html', Buffer.from('<p>0123456789</p>'), partialFs), /ENOSPC/);
+  assert.deepStrictEqual(fs.readdirSync(dir), [], 'neither the final name nor the .tmp survives a partial write');
+  // (2) unit: the rename fails
+  const renameFs = { ...fs, renameSync: () => { throw enospc(); } };
+  assert.throws(() => slideUpload.writeSlideAtomic(dir, '2_bb_deck.html', Buffer.from('<p>x</p>'), renameFs), /ENOSPC/);
+  assert.deepStrictEqual(fs.readdirSync(dir), [], 'a failed rename leaves no .tmp behind');
+  // (3) unit: success writes exactly the final name; an existing final name is never replaced
+  slideUpload.writeSlideAtomic(dir, '3_cc_deck.html', Buffer.from('<p>ok</p>'));
+  assert.deepStrictEqual(fs.readdirSync(dir), ['3_cc_deck.html']);
+  assert.throws(() => slideUpload.writeSlideAtomic(dir, '3_cc_deck.html', Buffer.from('<p>other</p>')), (e) => e.code === 'EEXIST');
+  assert.strictEqual(fs.readFileSync(path.join(dir, '3_cc_deck.html'), 'utf8'), '<p>ok</p>');
+  assert.deepStrictEqual(fs.readdirSync(dir), ['3_cc_deck.html']);
+  // (4) the quota ignores *.tmp; the mount never serves one
+  fs.writeFileSync(path.join(dir, '4_dd_deck.html.tmp'), Buffer.alloc(1000));
+  assert.strictEqual(slideUpload.libraryBytes(dir), Buffer.byteLength('<p>ok</p>'), '*.tmp is not counted toward the quota');
+  assert.strictEqual(slideUpload.mountFileName('/4_dd_deck.html.tmp'), null);
+  // (5) route: an injected rename failure during a real upload -> fixed 500, directory unchanged
+  clearDir(SLIDES_TMP);
+  const token = adminToken('slide-admin-n');
+  const realRename = fs.renameSync;
+  fs.renameSync = (from, to) => { if (String(from).endsWith('.tmp')) throw enospc(); return realRename(from, to); };
+  try {
+    await withServer(async (base) => {
+      const before = listing(SLIDES_TMP);
+      const r = await upload(base, token, { filename: 'fails.html', content: '<p>fails</p>' });
+      assert.strictEqual(r.status, 500);
+      assert.deepStrictEqual(r.body, { error: 'Failed to save slide file.' });
+      assert.deepStrictEqual(listing(SLIDES_TMP), before, 'a failed upload leaves the slide directory unchanged');
+    });
+  } finally {
+    fs.renameSync = realRename;
+    clearDir(SLIDES_TMP);
+  }
+});
+
+test('slide-upload-safety (o): WR-A02 — the boot sweep removes only *.tmp files older than an hour', () => {
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'sweep-'));
+  const now = Date.now();
+  const old = (now - 2 * 60 * 60 * 1000) / 1000;
+  fs.writeFileSync(path.join(dir, '1_aa_old.html.tmp'), 'stale');
+  fs.utimesSync(path.join(dir, '1_aa_old.html.tmp'), old, old);
+  fs.writeFileSync(path.join(dir, '2_bb_young.html.tmp'), 'in progress');
+  fs.writeFileSync(path.join(dir, '3_cc_old.html'), 'a real slide');
+  fs.utimesSync(path.join(dir, '3_cc_old.html'), old, old);
+  assert.strictEqual(slideUpload.sweepStaleTmp(dir, now), 1);
+  assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['2_bb_young.html.tmp', '3_cc_old.html']);
+  assert.strictEqual(slideUpload.sweepStaleTmp(path.join(dir, 'absent'), now), 0, 'an absent directory is a no-op');
+  const src = fs.readFileSync(path.join(REPO, 'server.js'), 'utf8');
+  assert.ok(/slideUpload\.sweepStaleTmp\(\);/.test(src), 'server.js sweeps at boot');
+  assert.ok(/slideUpload\.writeSlideAtomic\(dir, fname, verdict\.buffer\)/.test(src), 'the upload route writes through writeSlideAtomic');
+});

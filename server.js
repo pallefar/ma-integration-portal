@@ -466,6 +466,7 @@ function htmlRequestVerdict(rawPath) {
 // below, and the Windows-only spellings by the first middleware of this file.
 const slideUpload = require('./lib/slideUpload');
 slideUpload.migrateLegacySlidesAtBoot();
+slideUpload.sweepStaleTmp(); // WR-A02: upload temps a crash left behind (> 1 h old)
 const SLIDE_URL_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/i;
 const SLIDE_MOUNT_PREFIX_RE = /^\/uploads\/slides(?:\/|$)/;
 const slideNotFound = (req, res) => res.status(404).type('text/plain').send('Not found');
@@ -3487,7 +3488,8 @@ app.post('/api/slides/upload', (req, res) => {
   try {
     slideUpload.ensureSlidesDir(dir);
     const fname = Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '_' + verdict.safeName;
-    fs.writeFileSync(path.join(dir, fname), verdict.buffer, { flag: 'wx' });
+    // WR-A02: `<fname>.tmp` (exclusive) then rename — a failed write leaves no fragment.
+    slideUpload.writeSlideAtomic(dir, fname, verdict.buffer);
     res.json({ success: true, url: '/uploads/slides/' + fname });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save slide file.' });
