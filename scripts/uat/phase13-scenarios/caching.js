@@ -65,7 +65,10 @@ async function caching(ctx) {
   });
 
   // ---- (2) the model cache survives ten app page loads -----------------------
-  const page = await ctx.newPage({ cookies: [fx.users.il.cookie] });
+  // The browser that is later signed out through the UI uses its OWN session (fx.users.cache): the UI
+  // logout revokes the session it used, and the shared IL session (fx.users.il) is still needed by the
+  // scenarios that run after this one in a full multi-scenario run.
+  const page = await ctx.newPage({ cookies: [fx.users.cache.cookie] });
   await page.goto(ctx.base + '/dashboard.html', { waitUntil: 'load' });
   await ctx.settle(page, 600);
   await page.evaluate(async ({ name, key }) => {
@@ -124,8 +127,10 @@ async function caching(ctx) {
   await Promise.all(logoutSeen);
   ctx.check('the logout response carried Clear-Site-Data: "cache", "storage"', !!logoutHeaders && logoutHeaders['clear-site-data'] === '"cache", "storage"', logoutHeaders && logoutHeaders['clear-site-data']);
   // /api/auth/me answers 200 {authEnabled:true,user:null} for an unknown/revoked session.
-  const me = await ctx.api(fx.users.il.cookie, 'GET', '/api/auth/me');
+  const me = await ctx.api(fx.users.cache.cookie, 'GET', '/api/auth/me');
+  const stillIl = await ctx.api(fx.users.il.cookie, 'GET', '/api/auth/me');
   ctx.check('the session is really revoked (the old cookie now resolves to no user)', me.status === 401 || (me.status === 200 && me.json && me.json.user === null), { status: me.status, user: me.json && me.json.user });
+  ctx.check('the shared IL fixture session is untouched by the sign-out (later scenarios still need it)', stillIl.status === 200 && !!(stillIl.json && stillIl.json.user), { status: stillIl.status });
 
   const ev = await ctx.endpointViolations();
   ctx.check('GET /api/admin/csp-violations is empty after the caching walk', ev.count === 0, { count: ev.count, tuples: ev.violations.slice(0, 5) });

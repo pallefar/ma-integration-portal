@@ -22,12 +22,18 @@
 //                   runner reads the violation list with a generated
 //                   X-Admin-Token (ADMIN_TOKEN is set on this child only).
 //   dev-defaultdir  dev with MA_SLIDES_UPLOAD_DIR UNSET so uploaded slides land in
-//                   the worktree's real public/uploads/slides (B-1: a temp dir
-//                   outside public/ cannot detect a slide answered by the
-//                   terminal `.html` middleware). The scenario deletes what it
-//                   uploads and compares the listing before/after.
+//                   the PRODUCT'S DEFAULT slide directory (B-1). Since the CR-A01
+//                   fix (13-REVIEW-FIX-S) that default is OUTSIDE the public
+//                   static root: `<instance data dir>/slides`, i.e. `<repo>/data/slides`
+//                   for this non-real lane (gitignored, created 0700 at the first
+//                   upload) - NOT public/uploads/slides any more. The scenarios
+//                   delete what they upload (removing data/slides again when the
+//                   run created it) and compare the listing before/after, and
+//                   assert nothing is ever written under public/uploads/slides.
 //
-// Every child gets CSP_MODE=<--csp-mode> (report-only default). Committed
+// Every child gets CSP_MODE=<--csp-mode> (enforce by default - the product
+// default since plan 13-13; `--csp-mode report-only` is the documented rollback
+// pair and stays selectable). Committed
 // data/demo.db* and data/control.db* are sha256-hashed before/after the whole
 // run (main files exact; -wal absent == empty; -shm ignored) and
 // `git status --porcelain -- data public/sent_emails` is compared. Any change is
@@ -41,7 +47,7 @@
 // Usage:
 //   PLAYWRIGHT_PATH=/path/to/node_modules/playwright \
 //     node scripts/uat/phase13-xss.js [--scenario name]... [--lane name]...
-//       [--csp-mode report-only|enforce] [--out dir] [--headed]
+//       [--csp-mode enforce|report-only] [--out dir] [--headed]
 //
 // Exit codes: 0 every check PASS, 1 any FAIL, 2 Playwright not resolvable.
 
@@ -70,7 +76,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---------------------------------------------------------------- argv
 function parseArgs(argv) {
   const out = {
-    scenarios: [], lanes: [], outDir: null, headed: false, cspMode: 'report-only', scenarioDir: null,
+    scenarios: [], lanes: [], outDir: null, headed: false, cspMode: 'enforce', scenarioDir: null,
     chromium: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || null,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -240,11 +246,15 @@ function prepareLane(lane, tmp, cspMode) {
     }
   }
   if (lane === 'dev-defaultdir') {
-    // Per-scenario child-env override that UNSETS a key (B-1): the slide lands in
-    // <repo>/public/uploads/slides, where the terminal `.html` middleware lives.
+    // Per-scenario child-env override that UNSETS a key (B-1): the slide lands in the
+    // product's DEFAULT slide directory, <instance data dir>/slides - for this
+    // non-real lane <repo>/data/slides (db/dbFiles.js DATA_DIR; lib/slideUpload.js
+    // slidesDir()), outside the public static root since the CR-A01 fix. It is NOT
+    // public/uploads/slides any more; scenarios must not read or write that path
+    // except to assert nothing lands there.
     delete env.MA_SLIDES_UPLOAD_DIR;
     delete env.MA_SLIDE_QUOTA_MB;
-    slidesDir = path.join(REPO_ROOT, 'public', 'uploads', 'slides');
+    slidesDir = path.join(DATA_DIR, 'slides');
   } else {
     slidesDir = path.join(tmp, 'slides');
     fs.mkdirSync(slidesDir, { recursive: true });
@@ -422,9 +432,11 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
     }
 
     // One fixture per lane server, shared by every scenario (sequential).
-    //   real:      a deal with members author2 (admin), il (hrbp), emp, pmo; every
-    //              session bound to the deal (that is what resolves the REAL store).
-    //   dev:       admin author + a SECOND admin session, karen (hrbp), employee.
+    //   real:      a deal with members author2 (admin), il (hrbp), emp, pmo, cache (a second
+    //              hrbp reserved for UI sign-out scenarios); every session bound to the deal
+    //              (that is what resolves the REAL store).
+    //   dev:       admin author + a SECOND admin session, karen (hrbp), employee, and a separate
+    //              karen session (`cache`) for UI sign-out scenarios.
     //   demo-open: the anonymous showcase visitor is author and victim (cookie null).
     let fixturePromise = null;
     function fixture() {
@@ -439,6 +451,10 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
             il: ['p13.il', 'Phase Thirteen Integration Lead', 'hrbp'],
             emp: ['p13.emp', 'Phase Thirteen Employee', 'employee'],
             pmo: ['p13.pmo', 'Phase Thirteen Workstream Lead', 'pmo'],
+            // A SECOND Integration Lead account reserved for scenarios that sign out through the UI
+            // (caching): logging out revokes the session it used, so it must never be a session another
+            // scenario in the same lane still needs (a full multi-scenario run shares one fixture).
+            cache: ['p13.cache', 'Phase Thirteen Sign-out Lead', 'hrbp'],
           };
           for (const key of Object.keys(names)) {
             const n = names[key];
@@ -471,6 +487,8 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
           f.users.il = { username: 'karen', role: 'hrbp', cookie: await freshSession('il', 'karen', pw) };
           f.users.pmo = { username: 'pmo', role: 'pmo', cookie: await freshSession('pmo', 'pmo', pw) };
           f.users.emp = { username: 'employee-demo', role: 'employee', cookie: await freshSession('emp', 'employee-demo', pw) };
+          // A separate session of the IL account for scenarios that sign out through the UI (see the real lane).
+          f.users.cache = { username: 'karen', role: 'hrbp', cookie: await freshSession('cache', 'karen', pw) };
         }
         return f;
       })();
@@ -578,12 +596,29 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
       return p;
     };
 
+    // The violation list lives in the lane server's memory and is shared by every scenario of a
+    // multi-scenario run, so a scenario's "the list is empty" check is judged against the list as it
+    // was when THAT scenario started: a tuple an earlier scenario produced (the expected, recorded
+    // `eval` probe of the vendored Transformers bundle, PD-44) is not charged to a later one, but any
+    // NEW tuple - or a higher count on an old one - is. For a single-scenario invocation the baseline
+    // is empty and this is exactly the raw list.
+    const vioKey = (v) => [v.directive, v.blockedUri, v.sourceFile, v.lineNumber, v.documentPath].join('|');
     for (const name of scenarioNames) {
       const tag = name + '@' + lane;
+      let baselineVio = new Map();
+      try {
+        const rawNow = await endpointViolations();
+        baselineVio = new Map((rawNow.violations || []).map((v) => [vioKey(v), v.count || 1]));
+      } catch (e) { /* no admin session available: raw list semantics */ }
+      const scenarioViolations = async () => {
+        const raw = await endpointViolations();
+        const fresh = (raw.violations || []).filter((v) => !(baselineVio.has(vioKey(v)) && (v.count || 1) <= baselineVio.get(vioKey(v))));
+        return Object.assign({}, raw, { count: fresh.length, violations: fresh, preexisting: (raw.violations || []).length - fresh.length });
+      };
       const ctx = {
         lane, base, outDir, tmp, dataDir, slidesDir, browser, canary, repoRoot: REPO_ROOT,
         cspMode: args.cspMode,
-        newPage, settle, pageViolations, endpointViolations, shot, sleep,
+        newPage, settle, pageViolations, endpointViolations: scenarioViolations, shot, sleep,
         api, loginFull, adminCookie, createAccount, freshSession, fixture,
         publishedDemoPassword,
         viewports: { desktop: VIEWPORT_DESKTOP, phone: VIEWPORT_PHONE },
@@ -595,7 +630,7 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
       try {
         await registry[name].fn(ctx);
       } catch (e) {
-        record(tag, 'scenario threw', 'FAIL', String(e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e));
+        record(tag, 'scenario threw', 'FAIL', String(e && e.stack ? e.stack.split('\n').slice(0, 14).join(' | ') : e));
       }
     }
   } catch (e) {
