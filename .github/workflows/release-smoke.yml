@@ -1,0 +1,760 @@
+# Release smoke: boot the DOWNLOADED release bundles on real Windows, macOS and
+# Linux runners, so "opens on Windows and Mac" is proven from the release assets
+# themselves and not from a developer checkout.
+#
+# HOW TO RUN (manual only - there is deliberately no push / pull_request /
+# schedule trigger; a release is smoke-tested on request, before it is published):
+#
+#   gh workflow run release-smoke.yml -f tag=v3.0.0-rc.1
+#   gh workflow run release-smoke.yml -f tag=v3.0.0-rc.1 -f include_draft=false
+#
+# The release is meant to be created as a DRAFT first, smoke-tested here, and
+# only then published. `include_draft` (default true) says a draft is acceptable;
+# with `include_draft=false` the run fails fast if the release is still a draft.
+#
+# WHAT EACH JOB DOES (windows-latest, macos-latest, ubuntu-latest, in parallel):
+#   1. downloads exactly ONE zip from the release:
+#        windows  <- *-windows.zip
+#        macos    <- *-macos.zip
+#        linux    <- ma-integration-portal-<tag>.zip   (the any-OS zip)
+#      (the three patterns cannot match each other's asset; the job also fails
+#      unless exactly one zip came down), verifies SHA256SUMS when the release
+#      carries one, and unpacks it into a fresh directory;
+#   2. LANE 1, open-demo boot as the launcher does it (the bundled node on
+#      windows/macos, the runner's Node 22 on linux; PORT=<free>, DEMO_OPEN=1):
+#      /healthz -> 200 within 60 s, /login.html -> 200 with the login form,
+#      /api/auth/mode -> demo mode, /api/auth/me -> open, no uncaught-error lines;
+#   3. LANE 2, real-deal boot from the same bundle (MA_MODE=real + a temp
+#      MA_DATA_DIR): scripts/bootstrap-admin.js with a throw-away password made
+#      in the job (masked, never echoed), boot, POST /api/auth/login as the
+#      bootstrapped admin succeeds (a forced-rotation response is expected), and
+#      the published demo accounts do NOT sign in;
+#   4. always stops the server, prints the server-log tails on failure and
+#      uploads the logs as an artifact.
+#
+# WHAT THIS PROVES: the shipped bytes unpack and boot on each OS, the committed
+# native SQLite binding loads there, the launcher's node + env contract holds,
+# demo-open and real-deal modes both come up, and real mode keeps its credential
+# lockdown.
+#
+# WHAT IT DOES NOT PROVE: browser behaviour (no UI is driven), the double-click
+# experience (Finder / Explorer, Gatekeeper or SmartScreen prompts that appear
+# only for a browser-downloaded file), Intel macOS or Windows-on-ARM (the runners
+# are arm64 macOS and x64 Windows), glibc older than the runner's Linux, load or
+# soak behaviour, or that the PUBLISHED asset equals the draft asset (re-run
+# after publishing if that matters).
+#
+# [security] Hardening: `contents: write` is the ONLY permission and it is here
+# for one reason - a token without push access cannot see DRAFT release assets
+# (the REST "get release by tag" endpoint never returns a draft, so `gh release
+# download <tag>` has to list releases, which needs push access). No other
+# permission is granted. The only secret used is the built-in `github.token`,
+# handed to the two steps that call `gh`. There is no checkout: no repository
+# code is executed, only the released artifact. Workflow inputs reach shell code
+# only through `env:` (never interpolated into a script body) and the tag is
+# validated against a strict character set first. The three actions are pinned by
+# MAJOR tag, as in test.yml (SHA pinning is Phase 21 release engineering).
+#
+# Status: this file is verified as text and by a local dry run of its bash lane
+# logic against a synthetic bundle. Its first real execution on GitHub is the
+# first `gh workflow run` against a real draft release; the PowerShell lane has
+# never run anywhere yet.
+name: release-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to smoke-test, e.g. v3.0.0-rc.1'
+        required: true
+        type: string
+      include_draft:
+        description: 'Accept a DRAFT release (the normal pre-publish flow); false fails if the release is a draft'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.kind }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: windows
+            os: windows-latest
+          - kind: macos
+            os: macos-latest
+          - kind: linux
+            os: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      INCLUDE_DRAFT: ${{ inputs.include_draft }}
+      KIND: ${{ matrix.kind }}
+    steps:
+      - name: Node 22 (linux lane runs the any-OS zip on the runner's Node)
+        if: matrix.kind == 'linux'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # ------------------------------------------------------------------
+      # macOS + Linux (bash)
+      # ------------------------------------------------------------------
+      - name: Download the release asset and verify checksums
+        if: matrix.kind != 'windows'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            ''|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*) echo "::error::tag input has unexpected characters"; exit 1 ;;
+          esac
+          case "$INCLUDE_DRAFT" in true|false) ;; *) echo "::error::include_draft must be true or false"; exit 1 ;; esac
+          case "$KIND" in
+            macos) PATTERN='*-macos.zip' ;;
+            linux) PATTERN="ma-integration-portal-${TAG}.zip" ;;
+            *) echo "::error::unexpected lane kind"; exit 1 ;;
+          esac
+
+          WORK="$RUNNER_TEMP/smoke"
+          rm -rf "$WORK"
+          mkdir -p "$WORK/dl" "$WORK/sums" "$WORK/logs"
+
+          echo "Release $TAG - assets:"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets \
+            --jq '"draft=\(.isDraft) prerelease=\(.isPrerelease)", (.assets[] | "  \(.name)  \(.size) bytes")'
+          IS_DRAFT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+          if [ "$IS_DRAFT" = "true" ] && [ "$INCLUDE_DRAFT" != "true" ]; then
+            echo "::error::release $TAG is a draft but include_draft=false"
+            exit 1
+          fi
+          HAS_SUMS=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq 'any(.assets[]; .name == "SHA256SUMS")')
+
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$PATTERN" --dir "$WORK/dl"
+          COUNT=$(find "$WORK/dl" -maxdepth 1 -name '*.zip' | wc -l | tr -d ' ')
+          if [ "$COUNT" != "1" ]; then
+            echo "::error::pattern '$PATTERN' matched $COUNT zips, expected exactly 1"
+            exit 1
+          fi
+          ZIP=$(find "$WORK/dl" -maxdepth 1 -name '*.zip' | head -n 1)
+          ZIP_NAME=$(basename "$ZIP")
+          if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL=$(sha256sum "$ZIP" | awk '{print tolower($1)}')
+          else
+            ACTUAL=$(shasum -a 256 "$ZIP" | awk '{print tolower($1)}')
+          fi
+          echo "asset  $ZIP_NAME"
+          echo "sha256 $ACTUAL"
+
+          if [ "$HAS_SUMS" = "true" ]; then
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'SHA256SUMS' --dir "$WORK/sums"
+            EXPECTED=$(awk -v f="$ZIP_NAME" '$2 == f || $2 == "*" f { print tolower($1) }' "$WORK/sums/SHA256SUMS" | head -n 1)
+            if [ -z "$EXPECTED" ]; then
+              echo "::error::SHA256SUMS has no entry for $ZIP_NAME"
+              exit 1
+            fi
+            if [ "$EXPECTED" != "$ACTUAL" ]; then
+              echo "::error::SHA256 mismatch for $ZIP_NAME (SHA256SUMS says $EXPECTED, downloaded file is $ACTUAL)"
+              exit 1
+            fi
+            echo "SHA256SUMS verified"
+          else
+            echo "::notice::release carries no SHA256SUMS asset - checksum verification skipped"
+          fi
+
+          echo "SMOKE_WORK=$WORK" >> "$GITHUB_ENV"
+          echo "SMOKE_LOGS=$WORK/logs" >> "$GITHUB_ENV"
+          echo "SMOKE_ZIP=$ZIP" >> "$GITHUB_ENV"
+          {
+            echo "### release-smoke ($KIND)"
+            echo "- release \`$TAG\` asset \`$ZIP_NAME\`"
+            echo "- sha256 \`$ACTUAL\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Unpack into a fresh directory and inspect the bundle
+        if: matrix.kind != 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="$SMOKE_WORK/bundle"
+          rm -rf "$DEST"
+          mkdir -p "$DEST"
+          unzip -q "$SMOKE_ZIP" -d "$DEST"
+
+          # The zip holds one top-level folder (or none); find the one server.js.
+          HITS=0
+          BUNDLE=""
+          for d in "$DEST" "$DEST"/*/; do
+            d="${d%/}"
+            if [ -f "$d/server.js" ]; then
+              HITS=$((HITS + 1))
+              BUNDLE="$d"
+            fi
+          done
+          if [ "$HITS" != "1" ]; then
+            echo "::error::expected exactly one server.js at the top of the bundle, found $HITS"
+            ls -la "$DEST"
+            exit 1
+          fi
+
+          MISSING=""
+          for f in server.js scripts/bootstrap-admin.js public/login.html data/control.db data/demo.db \
+                   node_modules/express node_modules/better-sqlite3 start.command start-real-deal.command; do
+            [ -e "$BUNDLE/$f" ] || MISSING="$MISSING $f"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::bundle is missing:$MISSING"
+            exit 1
+          fi
+
+          # Launcher hygiene. macOS Gatekeeper quarantine does not apply to files
+          # fetched by gh on a runner (no xattr), but make the bit explicit anyway.
+          for l in start.command start-real-deal.command; do
+            if [ ! -x "$BUNDLE/$l" ]; then
+              echo "::warning::$l is not executable inside the zip (a double-click would fail until chmod +x)"
+            fi
+            if grep -q "$(printf '\r')" "$BUNDLE/$l"; then
+              echo "::error::$l has CRLF line endings (the shebang line would break)"
+              exit 1
+            fi
+          done
+          grep -q 'DEMO_OPEN=1' "$BUNDLE/start.command" || { echo "::error::start.command no longer sets DEMO_OPEN=1"; exit 1; }
+          grep -q 'MA_MODE=real' "$BUNDLE/start-real-deal.command" || { echo "::error::start-real-deal.command no longer sets MA_MODE=real"; exit 1; }
+          chmod +x "$BUNDLE/start.command" "$BUNDLE/start-real-deal.command"
+
+          if [ "$KIND" = "macos" ]; then
+            if [ ! -f "$BUNDLE/node/bin/node" ]; then
+              echo "::error::the macOS bundle has no bundled node at node/bin/node"
+              exit 1
+            fi
+            chmod +x "$BUNDLE/node/bin/node"
+            xattr -dr com.apple.quarantine "$BUNDLE" 2>/dev/null || true
+            NODE_BIN="$BUNDLE/node/bin/node"
+          else
+            NODE_BIN="$(command -v node)"
+          fi
+          echo "node: $NODE_BIN"
+          "$NODE_BIN" -p 'process.version + " " + process.platform + "/" + process.arch'
+          MAJOR=$("$NODE_BIN" -p 'process.versions.node.split(".")[0]')
+          if [ "$MAJOR" -lt 22 ]; then
+            echo "::error::node $MAJOR is below the required 22"
+            exit 1
+          fi
+
+          echo "SMOKE_BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
+          echo "SMOKE_NODE=$NODE_BIN" >> "$GITHUB_ENV"
+
+          # Shared helpers for the two lanes.
+          cat > "$SMOKE_WORK/lib.sh" <<'LIBSH'
+          fail() { echo "::error::$*"; exit 1; }
+
+          free_port() {
+            "$SMOKE_NODE" -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})'
+          }
+
+          # http_code URL OUTFILE [extra curl args] -> prints the status code (000 = no answer)
+          http_code() {
+            local url=$1 out=$2
+            shift 2
+            curl -sS -o "$out" -w '%{http_code}' --max-time 20 "$@" "$url" 2>>"$SMOKE_LOGS/curl.err.log" || true
+          }
+
+          # wait_healthy PORT PID SECONDS
+          wait_healthy() {
+            local port=$1 pid=$2 limit=${3:-60} start=$SECONDS code=000
+            while [ $((SECONDS - start)) -lt "$limit" ]; do
+              if ! kill -0 "$pid" 2>/dev/null; then
+                echo "server process $pid exited before /healthz answered 200"
+                return 1
+              fi
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$port/healthz" || true)
+              if [ "$code" = 200 ]; then
+                echo "/healthz 200 after $((SECONDS - start))s"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "/healthz did not answer 200 within ${limit}s (last status $code)"
+            return 1
+          }
+
+          # assert_json FILE 'JS expression over j'
+          assert_json() {
+            (cd "$SMOKE_WORK" && "$SMOKE_NODE" -e '
+              const fs = require("fs");
+              let j;
+              try { j = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); }
+              catch (e) { console.error("response is not JSON: " + e.message); process.exit(1); }
+              const ok = new Function("j", "return (" + process.argv[2] + ");")(j);
+              if (!ok) { console.error("assertion failed: " + process.argv[2] + "  body=" + JSON.stringify(j)); process.exit(1); }
+            ' "$1" "$2")
+          }
+
+          stop_server() {
+            [ -f "$1" ] || return 0
+            local pid
+            pid=$(cat "$1")
+            if kill -0 "$pid" 2>/dev/null; then
+              kill "$pid" 2>/dev/null || true
+              for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 1
+              done
+              kill -9 "$pid" 2>/dev/null || true
+            fi
+            rm -f "$1"
+          }
+
+          # scan_log FILE... - fail on uncaught/fatal lines or a logged stack trace.
+          scan_log() {
+            local f bad=0
+            for f in "$@"; do
+              [ -f "$f" ] || continue
+              if grep -n -i -E 'uncaughtException|unhandledRejection|MODULE_NOT_FOUND|Cannot find module|ERR_DLOPEN_FAILED|Segmentation fault|FATAL|^[[:space:]]+at .+:[0-9]+:[0-9]+\)?[[:space:]]*$' "$f"; then
+                bad=1
+              fi
+            done
+            [ "$bad" = 0 ] || fail "uncaught/fatal error line(s) in the server log (see above)"
+          }
+          LIBSH
+
+      - name: "LANE 1 - open-demo boot (DEMO_OPEN=1)"
+        if: matrix.kind != 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$SMOKE_WORK/lib.sh"
+          cd "$SMOKE_BUNDLE"
+          unset MA_MODE MA_DATA_DIR
+          PORT=$(free_port)
+          export PORT
+          export DEMO_OPEN=1
+          echo "lane 1 on port $PORT"
+          "$SMOKE_NODE" server.js >"$SMOKE_LOGS/lane1-server.out.log" 2>"$SMOKE_LOGS/lane1-server.err.log" </dev/null &
+          SERVER_PID=$!
+          echo "$SERVER_PID" > "$SMOKE_WORK/lane1.pid"
+          wait_healthy "$PORT" "$SERVER_PID" 60
+          BASE="http://127.0.0.1:$PORT"
+
+          code=$(http_code "$BASE/healthz" "$SMOKE_WORK/l1-healthz.json")
+          [ "$code" = 200 ] || fail "/healthz answered $code"
+          assert_json "$SMOKE_WORK/l1-healthz.json" 'j.status === "ok"'
+
+          code=$(http_code "$BASE/login.html" "$SMOKE_WORK/l1-login.html")
+          [ "$code" = 200 ] || fail "/login.html answered $code"
+          grep -q 'id="login-form"' "$SMOKE_WORK/l1-login.html" || fail "/login.html has no login form marker"
+
+          code=$(http_code "$BASE/api/auth/mode" "$SMOKE_WORK/l1-mode.json")
+          [ "$code" = 200 ] || fail "/api/auth/mode answered $code"
+          assert_json "$SMOKE_WORK/l1-mode.json" 'j.mode === "demo" && j.demoOpen === true'
+
+          code=$(http_code "$BASE/api/auth/me" "$SMOKE_WORK/l1-me.json")
+          [ "$code" = 200 ] || fail "/api/auth/me answered $code"
+          assert_json "$SMOKE_WORK/l1-me.json" 'j.authEnabled === false'
+
+          kill -0 "$SERVER_PID" 2>/dev/null || fail "server process died while being probed"
+          stop_server "$SMOKE_WORK/lane1.pid"
+          scan_log "$SMOKE_LOGS/lane1-server.out.log" "$SMOKE_LOGS/lane1-server.err.log"
+          echo "- LANE 1 (open demo): pass" >> "$GITHUB_STEP_SUMMARY"
+          echo "LANE 1 pass"
+
+      - name: "LANE 2 - real-deal boot (MA_MODE=real, bootstrap admin, login)"
+        if: matrix.kind != 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$SMOKE_WORK/lib.sh"
+          cd "$SMOKE_BUNDLE"
+          PW=$("$SMOKE_NODE" -p 'require("crypto").randomBytes(16).toString("hex")')
+          echo "::add-mask::$PW"
+          unset DEMO_OPEN
+          export MA_MODE=real
+          export MA_DATA_DIR="$SMOKE_WORK/real-data"
+          rm -rf "$MA_DATA_DIR"
+
+          # DEPLOYMENT.md "Real-deal first run" step 2: the password comes from
+          # MA_BOOTSTRAP_PASSWORD, never argv.
+          MA_BOOTSTRAP_PASSWORD="$PW" "$SMOKE_NODE" scripts/bootstrap-admin.js \
+            >"$SMOKE_LOGS/lane2-bootstrap.log" 2>&1 </dev/null || {
+              cat "$SMOKE_LOGS/lane2-bootstrap.log"
+              fail "scripts/bootstrap-admin.js failed"
+            }
+          grep -q "Created account 'admin'" "$SMOKE_LOGS/lane2-bootstrap.log" || fail "bootstrap-admin did not report creating the admin"
+
+          PORT=$(free_port)
+          export PORT
+          echo "lane 2 on port $PORT"
+          "$SMOKE_NODE" server.js >"$SMOKE_LOGS/lane2-server.out.log" 2>"$SMOKE_LOGS/lane2-server.err.log" </dev/null &
+          SERVER_PID=$!
+          echo "$SERVER_PID" > "$SMOKE_WORK/lane2.pid"
+          wait_healthy "$PORT" "$SERVER_PID" 60
+          BASE="http://127.0.0.1:$PORT"
+
+          code=$(http_code "$BASE/api/auth/mode" "$SMOKE_WORK/l2-mode.json")
+          [ "$code" = 200 ] || fail "/api/auth/mode answered $code"
+          assert_json "$SMOKE_WORK/l2-mode.json" 'j.mode === "real" && j.demoOpen === false && j.accountsWritable === true'
+
+          code=$(http_code "$BASE/api/auth/me" "$SMOKE_WORK/l2-me.json")
+          [ "$code" = 200 ] || fail "/api/auth/me answered $code"
+          assert_json "$SMOKE_WORK/l2-me.json" 'j.authEnabled === true && j.user === null'
+
+          # The bootstrapped admin signs in. The body goes through a file so the
+          # password is never an argv entry.
+          (cd "$SMOKE_WORK" && MA_PW="$PW" "$SMOKE_NODE" -e 'process.stdout.write(JSON.stringify({username:"admin",password:process.env.MA_PW}))') > "$SMOKE_WORK/l2-login-body.json"
+          code=$(http_code "$BASE/api/auth/login" "$SMOKE_WORK/l2-login.json" \
+            -X POST -H 'Content-Type: application/json' --data-binary "@$SMOKE_WORK/l2-login-body.json")
+          [ "$code" = 200 ] || fail "bootstrapped admin login answered $code (expected 200)"
+          assert_json "$SMOKE_WORK/l2-login.json" 'j.success === true'
+          echo "admin login ok (forced rotation reported: $(cd "$SMOKE_WORK" && "$SMOKE_NODE" -p 'JSON.parse(require("fs").readFileSync("l2-login.json","utf8")).mustChangePassword'))"
+          rm -f "$SMOKE_WORK/l2-login-body.json" "$SMOKE_WORK/l2-login.json"
+
+          # The published demo accounts must NOT sign in on a real-deal host.
+          for u in admin karen pmo; do
+            printf '{"username":"%s","password":"%s"}' "$u" 'TEdemo!2026' > "$SMOKE_WORK/l2-demo-body.json"
+            code=$(http_code "$BASE/api/auth/login" "$SMOKE_WORK/l2-demo.json" \
+              -X POST -H 'Content-Type: application/json' --data-binary "@$SMOKE_WORK/l2-demo-body.json")
+            case "$code" in
+              401|429) echo "demo account '$u' refused ($code)" ;;
+              *) fail "published demo account '$u' answered $code on a real-deal host (expected 401)" ;;
+            esac
+          done
+
+          kill -0 "$SERVER_PID" 2>/dev/null || fail "server process died while being probed"
+          stop_server "$SMOKE_WORK/lane2.pid"
+          scan_log "$SMOKE_LOGS/lane2-server.out.log" "$SMOKE_LOGS/lane2-server.err.log" "$SMOKE_LOGS/lane2-bootstrap.log"
+          echo "- LANE 2 (real-deal boot, bootstrap admin, demo accounts refused): pass" >> "$GITHUB_STEP_SUMMARY"
+          echo "LANE 2 pass"
+
+      - name: Stop servers
+        if: always() && matrix.kind != 'windows'
+        shell: bash
+        run: |
+          set +e
+          [ -f "$SMOKE_WORK/lib.sh" ] || exit 0
+          . "$SMOKE_WORK/lib.sh"
+          stop_server "$SMOKE_WORK/lane1.pid"
+          stop_server "$SMOKE_WORK/lane2.pid"
+          exit 0
+
+      - name: Server log tails (failure only)
+        if: failure() && matrix.kind != 'windows'
+        shell: bash
+        run: |
+          for f in "$SMOKE_LOGS"/*.log; do
+            [ -f "$f" ] || continue
+            echo "::group::$(basename "$f") (last 120 lines)"
+            tail -n 120 "$f"
+            echo "::endgroup::"
+          done
+
+      # ------------------------------------------------------------------
+      # Windows (PowerShell)
+      # ------------------------------------------------------------------
+      - name: Download the release asset and verify checksums
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:TAG -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { Write-Host '::error::tag input has unexpected characters'; exit 1 }
+          if ($env:INCLUDE_DRAFT -notin 'true','false') { Write-Host '::error::include_draft must be true or false'; exit 1 }
+          $pattern = '*-windows.zip'
+
+          $work = Join-Path $env:RUNNER_TEMP 'smoke'
+          if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+          New-Item -ItemType Directory -Path (Join-Path $work 'dl'), (Join-Path $work 'sums'), (Join-Path $work 'logs') | Out-Null
+
+          $json = gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json 'isDraft,isPrerelease,assets'
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::could not read release $($env:TAG)"; exit 1 }
+          $rel = $json | ConvertFrom-Json
+          Write-Host "Release $($env:TAG): draft=$($rel.isDraft) prerelease=$($rel.isPrerelease)"
+          foreach ($a in $rel.assets) { Write-Host "  $($a.name)  $($a.size) bytes" }
+          if ($rel.isDraft -and $env:INCLUDE_DRAFT -ne 'true') {
+            Write-Host "::error::release $($env:TAG) is a draft but include_draft=false"; exit 1
+          }
+          $hasSums = @($rel.assets | Where-Object { $_.name -eq 'SHA256SUMS' }).Count -gt 0
+
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern $pattern --dir (Join-Path $work 'dl')
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::gh release download failed for pattern $pattern"; exit 1 }
+          $zips = @(Get-ChildItem -LiteralPath (Join-Path $work 'dl') -Filter '*.zip' -File)
+          if ($zips.Count -ne 1) { Write-Host "::error::pattern '$pattern' matched $($zips.Count) zips, expected exactly 1"; exit 1 }
+          $zip = $zips[0]
+          $actual = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLower()
+          Write-Host "asset  $($zip.Name)"
+          Write-Host "sha256 $actual"
+
+          if ($hasSums) {
+            gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern 'SHA256SUMS' --dir (Join-Path $work 'sums')
+            if ($LASTEXITCODE -ne 0) { Write-Host '::error::could not download SHA256SUMS'; exit 1 }
+            $expected = $null
+            foreach ($line in Get-Content -LiteralPath (Join-Path $work 'sums\SHA256SUMS')) {
+              if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$' -and $Matches[2] -eq $zip.Name) { $expected = $Matches[1].ToLower(); break }
+            }
+            if (-not $expected) { Write-Host "::error::SHA256SUMS has no entry for $($zip.Name)"; exit 1 }
+            if ($expected -ne $actual) {
+              Write-Host "::error::SHA256 mismatch for $($zip.Name) (SHA256SUMS says $expected, downloaded file is $actual)"; exit 1
+            }
+            Write-Host 'SHA256SUMS verified'
+          } else {
+            Write-Host '::notice::release carries no SHA256SUMS asset - checksum verification skipped'
+          }
+
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "SMOKE_WORK=$work"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "SMOKE_LOGS=$(Join-Path $work 'logs')"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "SMOKE_ZIP=$($zip.FullName)"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "### release-smoke (windows)"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- release ``$($env:TAG)`` asset ``$($zip.Name)``"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- sha256 ``$actual``"
+
+      - name: Unpack into a fresh directory and inspect the bundle
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Extract close to the drive root (long-path limits) with the .NET zip
+          # reader, which is far faster than Expand-Archive on a node_modules tree.
+          $dest = Join-Path $env:SMOKE_WORK 'b'
+          if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($env:SMOKE_ZIP, $dest)
+
+          $candidates = @($dest) + @(Get-ChildItem -LiteralPath $dest -Directory | ForEach-Object { $_.FullName })
+          $hits = @($candidates | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'server.js') -PathType Leaf })
+          if ($hits.Count -ne 1) { Write-Host "::error::expected exactly one server.js at the top of the bundle, found $($hits.Count)"; exit 1 }
+          $bundle = $hits[0]
+
+          $missing = @()
+          foreach ($f in 'server.js','scripts\bootstrap-admin.js','public\login.html','data\control.db','data\demo.db',
+                         'node_modules\express','node_modules\better-sqlite3','start.bat','start-real-deal.bat','node\node.exe') {
+            if (-not (Test-Path -LiteralPath (Join-Path $bundle $f))) { $missing += $f }
+          }
+          if ($missing.Count -gt 0) { Write-Host "::error::bundle is missing: $($missing -join ' ')"; exit 1 }
+
+          $startBat = Get-Content -LiteralPath (Join-Path $bundle 'start.bat') -Raw
+          if ($startBat -notmatch 'DEMO_OPEN=1') { Write-Host '::error::start.bat no longer sets DEMO_OPEN=1'; exit 1 }
+          if ($startBat -notmatch 'node\\node\.exe') { Write-Host '::error::start.bat no longer prefers the bundled node\node.exe'; exit 1 }
+          $realBat = Get-Content -LiteralPath (Join-Path $bundle 'start-real-deal.bat') -Raw
+          if ($realBat -notmatch 'MA_MODE=real') { Write-Host '::error::start-real-deal.bat no longer sets MA_MODE=real'; exit 1 }
+
+          $node = Join-Path $bundle 'node\node.exe'
+          Write-Host "node: $node"
+          & $node -p 'process.version + " " + process.platform + "/" + process.arch'
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the bundled node.exe does not run'; exit 1 }
+          $major = [int](& $node -p 'process.versions.node.split(".")[0]')
+          if ($major -lt 22) { Write-Host "::error::node $major is below the required 22"; exit 1 }
+
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "SMOKE_BUNDLE=$bundle"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "SMOKE_NODE=$node"
+
+          # Shared helpers for the two lanes.
+          $lib = @'
+          function Fail([string]$Message) { Write-Host "::error::$Message"; throw $Message }
+
+          function Get-FreePort {
+            $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+            $l.Start()
+            $port = $l.LocalEndpoint.Port
+            $l.Stop()
+            return $port
+          }
+
+          # Status 0 = no answer. Non-2xx responses are returned, not thrown.
+          function Invoke-Http {
+            param([string]$Url, [string]$Method = 'GET', [string]$Body = '')
+            $p = @{ Uri = $Url; Method = $Method; UseBasicParsing = $true; TimeoutSec = 20; SkipHttpErrorCheck = $true }
+            if ($Body) { $p.Body = $Body; $p.ContentType = 'application/json' }
+            try {
+              $r = Invoke-WebRequest @p
+              return [pscustomobject]@{ Status = [int]$r.StatusCode; Content = [string]$r.Content }
+            } catch {
+              return [pscustomobject]@{ Status = 0; Content = [string]$_.Exception.Message }
+            }
+          }
+
+          function Wait-Healthy {
+            param([int]$Port, $Proc, [int]$Seconds = 60)
+            $deadline = (Get-Date).AddSeconds($Seconds)
+            while ((Get-Date) -lt $deadline) {
+              if ($Proc.HasExited) { Fail "server process exited before /healthz answered 200" }
+              $r = Invoke-Http "http://127.0.0.1:$Port/healthz"
+              if ($r.Status -eq 200) { Write-Host '/healthz 200'; return }
+              Start-Sleep -Seconds 1
+            }
+            Fail "/healthz did not answer 200 within $Seconds s"
+          }
+
+          function Stop-ServerFromPidFile {
+            param([string]$PidFile)
+            if (-not (Test-Path -LiteralPath $PidFile)) { return }
+            $id = [int]((Get-Content -LiteralPath $PidFile -Raw).Trim())
+            Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 500
+            Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
+          }
+
+          function Test-LogClean {
+            param([string[]]$Files)
+            $pat = 'uncaughtException|unhandledRejection|MODULE_NOT_FOUND|Cannot find module|ERR_DLOPEN_FAILED|FATAL|^\s+at .+:\d+:\d+\)?\s*$'
+            $bad = $false
+            foreach ($f in $Files) {
+              if (Test-Path -LiteralPath $f) {
+                $hits = @(Select-String -LiteralPath $f -Pattern $pat)
+                if ($hits.Count -gt 0) { $hits | ForEach-Object { Write-Host $_.ToString() }; $bad = $true }
+              }
+            }
+            if ($bad) { Fail 'uncaught/fatal error line(s) in the server log (see above)' }
+          }
+          '@
+          Set-Content -LiteralPath (Join-Path $env:SMOKE_WORK 'lib.ps1') -Value $lib -Encoding utf8
+
+      - name: "LANE 1 - open-demo boot (DEMO_OPEN=1)"
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . (Join-Path $env:SMOKE_WORK 'lib.ps1')
+          Set-Location -LiteralPath $env:SMOKE_BUNDLE
+          Remove-Item Env:MA_MODE, Env:MA_DATA_DIR -ErrorAction SilentlyContinue
+          $port = Get-FreePort
+          $env:PORT = "$port"
+          $env:DEMO_OPEN = '1'
+          Write-Host "lane 1 on port $port"
+          $out = Join-Path $env:SMOKE_LOGS 'lane1-server.out.log'
+          $err = Join-Path $env:SMOKE_LOGS 'lane1-server.err.log'
+          $proc = Start-Process -FilePath $env:SMOKE_NODE -ArgumentList 'server.js' -WorkingDirectory $env:SMOKE_BUNDLE `
+            -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
+          Set-Content -LiteralPath (Join-Path $env:SMOKE_WORK 'lane1.pid') -Value $proc.Id
+          Wait-Healthy -Port $port -Proc $proc -Seconds 60
+          $base = "http://127.0.0.1:$port"
+
+          $r = Invoke-Http "$base/healthz"
+          if ($r.Status -ne 200) { Fail "/healthz answered $($r.Status)" }
+          if (($r.Content | ConvertFrom-Json).status -ne 'ok') { Fail "/healthz body is not status ok: $($r.Content)" }
+
+          $r = Invoke-Http "$base/login.html"
+          if ($r.Status -ne 200) { Fail "/login.html answered $($r.Status)" }
+          if (-not $r.Content.Contains('id="login-form"')) { Fail '/login.html has no login form marker' }
+
+          $r = Invoke-Http "$base/api/auth/mode"
+          if ($r.Status -ne 200) { Fail "/api/auth/mode answered $($r.Status)" }
+          $j = $r.Content | ConvertFrom-Json
+          if ($j.mode -ne 'demo' -or $j.demoOpen -ne $true) { Fail "/api/auth/mode is not open demo: $($r.Content)" }
+
+          $r = Invoke-Http "$base/api/auth/me"
+          if ($r.Status -ne 200) { Fail "/api/auth/me answered $($r.Status)" }
+          if (($r.Content | ConvertFrom-Json).authEnabled -ne $false) { Fail "/api/auth/me is not open: $($r.Content)" }
+
+          if ($proc.HasExited) { Fail 'server process died while being probed' }
+          Stop-ServerFromPidFile (Join-Path $env:SMOKE_WORK 'lane1.pid')
+          Test-LogClean @($out, $err)
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '- LANE 1 (open demo): pass'
+          Write-Host 'LANE 1 pass'
+
+      - name: "LANE 2 - real-deal boot (MA_MODE=real, bootstrap admin, login)"
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . (Join-Path $env:SMOKE_WORK 'lib.ps1')
+          Set-Location -LiteralPath $env:SMOKE_BUNDLE
+          $pw = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(16)).ToLower()
+          Write-Host "::add-mask::$pw"
+          Remove-Item Env:DEMO_OPEN -ErrorAction SilentlyContinue
+          $env:MA_MODE = 'real'
+          $env:MA_DATA_DIR = Join-Path $env:SMOKE_WORK 'real-data'
+          if (Test-Path -LiteralPath $env:MA_DATA_DIR) { Remove-Item -LiteralPath $env:MA_DATA_DIR -Recurse -Force }
+
+          # DEPLOYMENT.md "Real-deal first run" step 2: the password comes from
+          # MA_BOOTSTRAP_PASSWORD, never argv.
+          $env:MA_BOOTSTRAP_PASSWORD = $pw
+          $bootLog = Join-Path $env:SMOKE_LOGS 'lane2-bootstrap.log'
+          $bootErr = Join-Path $env:SMOKE_LOGS 'lane2-bootstrap.err.log'
+          $b = Start-Process -FilePath $env:SMOKE_NODE -ArgumentList 'scripts\bootstrap-admin.js' -WorkingDirectory $env:SMOKE_BUNDLE `
+            -Wait -PassThru -NoNewWindow -RedirectStandardOutput $bootLog -RedirectStandardError $bootErr
+          Remove-Item Env:MA_BOOTSTRAP_PASSWORD -ErrorAction SilentlyContinue
+          Get-Content -LiteralPath $bootLog, $bootErr -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+          if ($b.ExitCode -ne 0) { Fail "scripts/bootstrap-admin.js exited $($b.ExitCode)" }
+          if (-not (Select-String -LiteralPath $bootLog -SimpleMatch "Created account 'admin'" -Quiet)) { Fail 'bootstrap-admin did not report creating the admin' }
+
+          $port = Get-FreePort
+          $env:PORT = "$port"
+          Write-Host "lane 2 on port $port"
+          $out = Join-Path $env:SMOKE_LOGS 'lane2-server.out.log'
+          $err = Join-Path $env:SMOKE_LOGS 'lane2-server.err.log'
+          $proc = Start-Process -FilePath $env:SMOKE_NODE -ArgumentList 'server.js' -WorkingDirectory $env:SMOKE_BUNDLE `
+            -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
+          Set-Content -LiteralPath (Join-Path $env:SMOKE_WORK 'lane2.pid') -Value $proc.Id
+          Wait-Healthy -Port $port -Proc $proc -Seconds 60
+          $base = "http://127.0.0.1:$port"
+
+          $r = Invoke-Http "$base/api/auth/mode"
+          if ($r.Status -ne 200) { Fail "/api/auth/mode answered $($r.Status)" }
+          $j = $r.Content | ConvertFrom-Json
+          if ($j.mode -ne 'real' -or $j.demoOpen -ne $false -or $j.accountsWritable -ne $true) { Fail "/api/auth/mode is not real-deal: $($r.Content)" }
+
+          $r = Invoke-Http "$base/api/auth/me"
+          if ($r.Status -ne 200) { Fail "/api/auth/me answered $($r.Status)" }
+          $j = $r.Content | ConvertFrom-Json
+          if ($j.authEnabled -ne $true -or $null -ne $j.user) { Fail "/api/auth/me is not fail-closed: $($r.Content)" }
+
+          # The bootstrapped admin signs in (forced rotation is expected).
+          $r = Invoke-Http "$base/api/auth/login" 'POST' (@{ username = 'admin'; password = $pw } | ConvertTo-Json -Compress)
+          if ($r.Status -ne 200) { Fail "bootstrapped admin login answered $($r.Status) (expected 200)" }
+          $j = $r.Content | ConvertFrom-Json
+          if ($j.success -ne $true) { Fail "bootstrapped admin login did not succeed: $($r.Content)" }
+          Write-Host "admin login ok (forced rotation reported: $($j.mustChangePassword))"
+
+          # The published demo accounts must NOT sign in on a real-deal host.
+          foreach ($u in 'admin','karen','pmo') {
+            $r = Invoke-Http "$base/api/auth/login" 'POST' (@{ username = $u; password = 'TEdemo!2026' } | ConvertTo-Json -Compress)
+            if ($r.Status -notin 401,429) { Fail "published demo account '$u' answered $($r.Status) on a real-deal host (expected 401)" }
+            Write-Host "demo account '$u' refused ($($r.Status))"
+          }
+
+          if ($proc.HasExited) { Fail 'server process died while being probed' }
+          Stop-ServerFromPidFile (Join-Path $env:SMOKE_WORK 'lane2.pid')
+          Test-LogClean @($out, $err, $bootLog, $bootErr)
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '- LANE 2 (real-deal boot, bootstrap admin, demo accounts refused): pass'
+          Write-Host 'LANE 2 pass'
+
+      - name: Stop servers
+        if: always() && matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          if (-not $env:SMOKE_WORK -or -not (Test-Path -LiteralPath (Join-Path $env:SMOKE_WORK 'lib.ps1'))) { exit 0 }
+          . (Join-Path $env:SMOKE_WORK 'lib.ps1')
+          Stop-ServerFromPidFile (Join-Path $env:SMOKE_WORK 'lane1.pid')
+          Stop-ServerFromPidFile (Join-Path $env:SMOKE_WORK 'lane2.pid')
+          exit 0
+
+      - name: Server log tails (failure only)
+        if: failure() && matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          if (-not $env:SMOKE_LOGS) { exit 0 }
+          foreach ($f in Get-ChildItem -LiteralPath $env:SMOKE_LOGS -Filter '*.log' -File -ErrorAction SilentlyContinue) {
+            Write-Host "::group::$($f.Name) (last 120 lines)"
+            Get-Content -LiteralPath $f.FullName -Tail 120
+            Write-Host '::endgroup::'
+          }
+
+      # ------------------------------------------------------------------
+      # All lanes
+      # ------------------------------------------------------------------
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs-${{ matrix.kind }}
+          path: ${{ runner.temp }}/smoke/logs
+          if-no-files-found: warn
+          retention-days: 14
