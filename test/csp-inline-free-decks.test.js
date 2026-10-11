@@ -53,6 +53,17 @@ test.after(async () => {
 
 // ---------------------------------------------------------------- inline-free checker ---
 
+// [security] WR-B06 (Phase 13 review, Part B): attribute values are judged the way
+// the browser reads them - character references decoded, tab/newline/controls
+// dropped - so `&#106;avascript:` / `java&Tab;script:` cannot pass as text.
+const NAMED_ENTITIES = { tab: '\t', newline: '\n', colon: ':', lpar: '(', rpar: ')', sol: '/', quot: '"', apos: "'", amp: '&', lt: '<', gt: '>', nbsp: ' ' };
+function decodeEntities(s) {
+  return s.replace(/&#x([0-9a-f]+);?/gi, (m, h) => String.fromCodePoint(Math.min(parseInt(h, 16), 0x10ffff) || 0xfffd))
+    .replace(/&#(\d+);?/g, (m, d) => String.fromCodePoint(Math.min(Number(d), 0x10ffff) || 0xfffd))
+    .replace(/&([a-z]+);/gi, (m, n) => (Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, n.toLowerCase()) ? NAMED_ENTITIES[n.toLowerCase()] : m));
+}
+const compactScheme = (s) => decodeEntities(s).replace(/[\u0000- \u007f- ­​]/g, '');
+
 /** Violations of the strict policy in one HTML document (comments are ignored). */
 function inlineViolations(html) {
   const out = [];
@@ -60,14 +71,20 @@ function inlineViolations(html) {
   const scriptRe = /<script\b([^>]*)>/gi;
   let m;
   while ((m = scriptRe.exec(body)) !== null) {
-    if (!/\bsrc\s*=/i.test(m[1])) out.push('inline <script> (no src): ' + m[0]);
+    const srcAttr = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(m[1]);
+    if (!srcAttr) { out.push('inline <script> (no src): ' + m[0]); continue; }
+    const url = compactScheme(srcAttr[1] || srcAttr[2] || srcAttr[3] || '');
+    if (!/^\/(?:js|vendor)\//.test(url)) out.push('<script src> outside /js/ and /vendor/: ' + url.slice(0, 60));
   }
   const tagRe = /<[a-zA-Z][^>]*>/g;
   while ((m = tagRe.exec(body)) !== null) {
-    const handler = /\son[a-z]+\s*=/i.exec(m[0]);
+    const attrs = m[0].replace(/"[^"]*"|'[^']*'/g, '""');
+    const handler = /[\s/]on[a-z]+\s*=/i.exec(attrs);
     if (handler) out.push('inline handler attribute ' + handler[0].trim() + ' in ' + m[0].slice(0, 80));
-    if (/\b(?:href|src|action|formaction|xlink:href)\s*=\s*["']?\s*javascript:/i.test(m[0])) {
-      out.push('javascript: URL in ' + m[0].slice(0, 80));
+    const urlAttr = /\b(?:href|src|action|formaction|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+    let u;
+    while ((u = urlAttr.exec(m[0])) !== null) {
+      if (/^javascript:/i.test(compactScheme(u[1] || u[2] || u[3] || ''))) out.push('javascript: URL in ' + m[0].slice(0, 80));
     }
   }
   return out;
@@ -88,6 +105,20 @@ test('checker self-test: it flags inline scripts, handlers and javascript: URLs 
   assert.strictEqual(inlineViolations('<button onclick="x()">y</button>').length, 1);
   assert.strictEqual(inlineViolations('<a href="javascript:void(0)">y</a>').length, 1);
   assert.strictEqual(inlineViolations('<!-- <script>var a=1;</script> --><p>ok</p>').length, 0);
+});
+
+test('checker negative control (WR-B06): slash-separated handlers, encoded schemes and non-/js/ script sources are caught', () => {
+  for (const html of [
+    '<img/onerror="alert(1)" src=x>',
+    '<svg/onload=alert(1)>',
+    '<a href="&#106;avascript:alert(1)">a</a>',
+    '<a href="&#x6A;avascript:alert(1)">a</a>',
+    '<a href="java&Tab;script:alert(1)">a</a>',
+    '<a href=javascript:alert(1)>a</a>',
+    '<script src="data:text/javascript,alert(1)"></script>',
+    '<script src="https://cdn.example/x.js"></script>',
+  ]) assert.ok(inlineViolations(html).length >= 1, `must be caught: ${html}`);
+  assert.strictEqual(inlineViolations('<script src="/js/overview-deck/deck.js?v=1"></script><a href="agenda.html" title="on=x">x</a>').length, 0);
 });
 
 for (const deck of DECKS) {
@@ -187,7 +218,11 @@ const JAVASCRIPT_SCHEME_GUARD_LINES = new Set([
   "if (href.indexOf('javascript:') === 0) return '';", // transitions.js tokenOf: javascript: hrefs carry no menu token
 ]);
 
-const HANDLER_ATTR_IN_STRING = /[\s"'`]on[a-z]+\s*=\s*\\?["'`]/;
+// WR-B06: no quote is required after `=` (an unquoted `onerror=alert(1)` runs just
+// the same) and a slash separator counts (`<img/onerror=…>`); a handler set by
+// name through setAttribute('on…') is the same thing built by DOM.
+const HANDLER_ATTR_IN_STRING = /[\s"'`/]on[a-z]+\s*=/;
+const HANDLER_SET_ATTRIBUTE = /\.setAttribute\(\s*['"`]on/i;
 
 test('client JS tree: no string literal carries an inline handler attribute or a javascript: URL', () => {
   const files = clientJsFiles();
@@ -200,7 +235,9 @@ test('client JS tree: no string literal carries an inline handler attribute or a
       const trimmed = line.trim();
       if (/^(?:\/\/|\/\*|\*)/.test(trimmed)) return; // comment-only line
       if (HANDLER_ATTR_IN_STRING.test(line)) hits.push(`${rel}:${idx + 1}: inline handler attribute: ${trimmed.slice(0, 120)}`);
-      if (/javascript\s*:/i.test(line) && !JAVASCRIPT_SCHEME_GUARD_LINES.has(trimmed)) {
+      if (HANDLER_SET_ATTRIBUTE.test(line)) hits.push(`${rel}:${idx + 1}: setAttribute of an on* handler: ${trimmed.slice(0, 120)}`);
+      // WR-B06: judged decoded + whitespace-free (`'&#106;avascript:'` in a markup string).
+      if (/javascript:/i.test(compactScheme(line)) && !JAVASCRIPT_SCHEME_GUARD_LINES.has(trimmed)) {
         hits.push(`${rel}:${idx + 1}: javascript: URL: ${trimmed.slice(0, 120)}`);
       }
     });
@@ -213,4 +250,12 @@ test('client JS gate self-test: the handler pattern catches the shapes transitio
   assert.ok(HANDLER_ATTR_IN_STRING.test(`'<a style="" onmouseover="this.style.background=\\'x\\'" onmouseout="...">'`));
   assert.ok(!HANDLER_ATTR_IN_STRING.test(`btn.onclick = function () {}`));
   assert.ok(!HANDLER_ATTR_IN_STRING.test(`a.addEventListener('click', fn)`));
+  // WR-B06 negative controls: the shapes the quoted-only pattern missed.
+  assert.ok(HANDLER_ATTR_IN_STRING.test(`'<img src=x onerror=alert(1)>'`));
+  assert.ok(HANDLER_ATTR_IN_STRING.test('`<img/onerror=alert(1)>`'));
+  assert.ok(HANDLER_SET_ATTRIBUTE.test(`el.setAttribute('onclick', handlerSrc)`));
+  assert.ok(HANDLER_SET_ATTRIBUTE.test('el.setAttribute( "onload" , f)'));
+  assert.ok(!HANDLER_SET_ATTRIBUTE.test(`el.setAttribute('data-on', 'x')`));
+  assert.ok(/javascript:/i.test(compactScheme(`el.innerHTML = '<a href="&#106;avascript:alert(1)">x</a>';`)));
+  assert.ok(/javascript:/i.test(compactScheme(`'<a href="java&Tab;script:alert(1)">'`)));
 });
