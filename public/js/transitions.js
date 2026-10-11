@@ -2200,7 +2200,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="sidebar-link-label">Execution Hub</span>
         </a>` : ''}
         ${(activeRole === 'admin' || activeRole === 'pmo' || activeRole === 'hrbp') ? `
-        <a href="javascript:void(0)" class="sidebar-link" id="sidebar-survey-link" title="Survey Scorecard">
+        <a href="#" class="sidebar-link" id="sidebar-survey-link" title="Survey Scorecard">
           <span class="sidebar-link-icon">\u{1F4CB}</span>
           <span class="sidebar-link-label">Survey</span>
         </a>` : ''}
@@ -2211,7 +2211,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="sidebar-link-icon">\u{2699}️</span>
         <span class="sidebar-link-label">Admin Console</span>
       </a>
-      <a href="javascript:void(0)" class="sidebar-link sidebar-egg" data-html-slide="/overview-deck/easter-egg.html" data-html-slide-label="Simply The Best" title="You're simply the best ✨" style="opacity:.55;">
+      <a href="#" class="sidebar-link sidebar-egg" data-html-slide="/overview-deck/easter-egg.html" data-html-slide-label="Simply The Best" title="You're simply the best ✨" style="opacity:.55;">
         <span class="sidebar-link-icon">⭐</span>
         <span class="sidebar-link-label">The Best</span>
       </a>
@@ -2240,7 +2240,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Survey scorecard modal trigger
     const sidebarSurveyLink = sidebar.querySelector('#sidebar-survey-link');
     if (sidebarSurveyLink) {
-      sidebarSurveyLink.addEventListener('click', () => {
+      sidebarSurveyLink.addEventListener('click', (e) => {
+        // href="#" (no javascript: URL — SAFE-02): keep the click from navigating to the fragment.
+        e.preventDefault();
         if (typeof window.showSurveyModal === 'function') window.showSurveyModal();
         document.body.classList.remove('sidebar-open-mobile');
       });
@@ -2750,6 +2752,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (href.indexOf('survey') > -1) return 'survey';
         if (href === '/' || href === '') return '/';
         if (href.indexOf('javascript:') === 0) return '';
+        // SAFE-02: handler-only launchers (egg, slide links) now use href="#" instead of
+        // javascript:void(0); like the old scheme they carry no menu token (otherwise
+        // "#" would resolve to the current page path and collide with a menu item).
+        if (href === '#') return '';
         const a = document.createElement('a'); a.href = href;
         return a.pathname + (a.hash || '');
       };
