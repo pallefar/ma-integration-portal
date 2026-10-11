@@ -33,3 +33,26 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=<chromium binary, only if the package's revision 
 
 Scenarios: `storedXss`, `clientCorpus`, `slideSandbox`, `egress`, `caching`, `transformersImport`, `demoWalk`,
 `ilWalk`. Lanes: `real`, `dev`, `demo-open`, `dev-defaultdir` (dev with `MA_SLIDES_UPLOAD_DIR` unset, B-1).
+
+## Enforced run (plan 13-13) - `--csp-mode enforce`, the shipped default
+
+The same scenarios re-run after the default flipped to the ENFORCING strict policy (`CSP_MODE` unset ->
+`script-src 'self' 'wasm-unsafe-eval'` as `Content-Security-Policy`, no Report-Only header; the child servers are
+started with `CSP_MODE=enforce` explicitly, which is the same policy). Every log ends `EXIT=0`; screenshots were
+written to a scratch directory and are not committed (the `p13-*.jpg` set above is the visual record).
+
+| File | Scenario x lanes | Result |
+| ---- | ---------------- | ------ |
+| `enf-stored-xss-dev.log` | storedXss x dev (the 13-13 tracer) | 81 PASS, violations=0 canaryHits=0 |
+| `enf-stored-xss.log` | storedXss x real, demo-open | 159 PASS, violations=0 canaryHits=0 in both lanes |
+| `enf-walk-dev.log` | demoWalk x dev | 57 PASS, `violations=0 endpoint=0 inpage=0` (48 checkpoints, 46 steps) |
+| `enf-walk-demo-open.log` | demoWalk x demo-open | `violations=0 endpoint=0 inpage=0` (46 checkpoints, 45 steps) |
+| `enf-walk-real.log` | ilWalk x real | `violations=0 endpoint=0 inpage=0` (51 checkpoints, 32 steps) |
+| `enf-transformers-import.log` | transformersImport x demo-open | `transformersImport wasm-compile PASS`: bundle import resolves (501 exports), `WebAssembly.compile(ort-wasm-simd.wasm)` clean, 2 eval-class `script-src` reports from the bundle RECORDED (PD-44), no other violation |
+| `enf-client-corpus.log` | clientCorpus x dev | 16 checks PASS |
+| `enf-egress.log` | egress x real, dev, demo-open | 81 PASS; real: 278 requests, thirdPartyAttempts=0, violations=0; dev / demo-open: the showcase's one YouTube thumbnail attempt, violations=0 |
+| `enf-caching.log` | caching x real, dev | 43 PASS, violations=0 |
+| `enf-slide-sandbox.log` | slideSandbox x real, dev, dev-defaultdir | 107 PASS; dev-defaultdir prints `slideSandbox default-dir PASS` (slide in `data/slides`, nothing under `public/uploads/slides`) |
+
+Measured, not asserted away: the only enforced-run report in any log is the vendored Transformers.js bundle's guarded
+`new Function("return this")` probe (blocked once, no effect).
