@@ -9,7 +9,10 @@
 //     each, the enclosing function / callback / file is extracted with a brace
 //     counter over a LEXED copy of the source (comments, string bodies, template
 //     text and regex literals blanked), and the region must contain no
-//     innerHTML/outerHTML assignment, insertAdjacentHTML or document.write call.
+//     innerHTML/outerHTML/srcdoc assignment, insertAdjacentHTML, document.write,
+//     setHTMLUnsafe, createContextualFragment, DOMParser.parseFromString,
+//     importNode/adoptNode or insertAdjacentElement call (WR-B02); `uses` is
+//     judged on code only, and markup paths must call MASafeHtml literally.
 //     Reads of `.innerHTML` (no `=`) and clearing assignments of an empty string
 //     literal are allowed - neither can carry markup.
 //   * The scanner is proven by a negative control on synthetic source.
@@ -144,14 +147,31 @@ function lex(src) {
 
 // ------------------------------------------------------------- sink scan
 // Returns [{ kind, index }] for HTML-string sinks in a lexed source slice.
-function findSinks(lexed, from, to) {
+// `file` (relative to public/js) exempts safe-html.js from the parser-call rule:
+// it is the one module allowed to call DOMParser.parseFromString (it parses into
+// an inert document and BUILDS the output; test/safe-html-policy.test.js pins
+// that parsed nodes are never re-attached).
+//
+// [security] WR-B02 (Phase 13 review, Part B): besides the classic string sinks,
+// every other way of turning a string into LIVE nodes is a sink - setHTMLUnsafe,
+// Range.createContextualFragment, iframe srcdoc, DOMParser output (inert only
+// inside the parser document; adopted/imported nodes carry live on* and
+// javascript: URLs), importNode/adoptNode and insertAdjacentElement (the
+// re-attachment half of the DOMParser-adopt shape).
+function findSinks(lexed, from, to, file) {
   const out = [];
   const mask = lexed.mask.slice(from, to);
   const patterns = [
     { kind: 'innerHTML/outerHTML assignment', re: /\.\s*(?:innerHTML|outerHTML)\s*\+?=(?!=)/g, assign: true },
     { kind: 'insertAdjacentHTML', re: /\.\s*insertAdjacentHTML\s*\(/g },
     { kind: 'document.write', re: /\bdocument\s*\.\s*write(?:ln)?\s*\(/g },
+    { kind: 'setHTMLUnsafe', re: /\bsetHTMLUnsafe\s*\(/g },
+    { kind: 'createContextualFragment', re: /\bcreateContextualFragment\s*\(/g },
+    { kind: 'srcdoc assignment', re: /\.\s*srcdoc\s*=(?!=)/g, assign: true },
+    { kind: 'importNode/adoptNode', re: /\b(?:importNode|adoptNode)\s*\(/g },
+    { kind: 'insertAdjacentElement', re: /\binsertAdjacentElement\s*\(/g },
   ];
+  if (file !== 'safe-html.js') patterns.push({ kind: 'DOMParser.parseFromString', re: /\bparseFromString\s*\(/g });
   for (const p of patterns) {
     let m;
     while ((m = p.re.exec(mask)) !== null) {
@@ -162,10 +182,10 @@ function findSinks(lexed, from, to) {
     }
   }
   // Bracket form: el['innerHTML'] = ... (the key is a string, blanked in mask).
-  const bracket = /\[\s*(['"`])(?:innerHTML|outerHTML)\1\s*\]\s*\+?=(?!=)/g;
+  const bracket = /\[\s*(['"`])(?:innerHTML|outerHTML|srcdoc)\1\s*\]\s*\+?=(?!=)/g;
   const codeSlice = lexed.code.slice(from, to);
   let b;
-  while ((b = bracket.exec(codeSlice)) !== null) out.push({ kind: 'bracket innerHTML/outerHTML assignment', index: from + b.index });
+  while ((b = bracket.exec(codeSlice)) !== null) out.push({ kind: 'bracket innerHTML/outerHTML/srcdoc assignment', index: from + b.index });
   return out.sort((a, c) => a.index - c.index);
 }
 
@@ -188,41 +208,54 @@ function regionOf(lexed, anchor) {
   throw new Error(`unbalanced braces after anchor: ${anchor}`);
 }
 
+// WR-B02: `uses` is judged on the MASKED region (string bodies, template text
+// and comments blanked), so a token inside a string literal cannot satisfy it;
+// a render-kind entry must contain the literal renderer CALL.
+const RENDER_CALL_RE = /\bMASafeHtml\s*\.\s*(?:render|toFragment)\s*\(/;
+function regionVerdict(lexed, from, to, entry) {
+  const sinks = findSinks(lexed, from, to, entry.file);
+  const body = lexed.mask.slice(from, to);
+  const uses = (entry.uses || ['MASafeHtml', 'textContent', 'createElement']).filter((tok) => body.includes(tok));
+  const renderCall = RENDER_CALL_RE.test(body);
+  return { sinks, uses, renderCall };
+}
+
 function scanEntry(entry) {
   const lexed = lex(readJs(entry.file));
   const { from, to } = regionOf(lexed, entry.anchor);
-  const sinks = findSinks(lexed, from, to);
-  const body = lexed.code.slice(from, to);
-  const uses = (entry.uses || ['MASafeHtml', 'textContent', 'createElement']).filter((tok) => body.includes(tok));
+  const { sinks, uses, renderCall } = regionVerdict(lexed, from, to, entry);
   const lineOf = (idx) => lexed.code.slice(0, idx).split('\n').length;
-  return { lexed, from, to, sinks, uses, lines: sinks.map((s) => `${entry.file}:${lineOf(s.index)} ${s.kind}`) };
+  return { lexed, from, to, sinks, uses, renderCall, lines: sinks.map((s) => `${entry.file}:${lineOf(s.index)} ${s.kind}`) };
 }
 
 // ----------------------------------------------------------- the gate table
 // kind: 'function' (anchor = `function name(`), 'callback' (anchor = the call
 // whose callback is the apply block), 'file' (anchor null = whole file).
-// `uses` = any-of tokens the region must contain (it renders through one of them).
+// `uses` = any-of tokens the region must contain (it renders through one of them),
+// judged on code only (strings/comments blanked). `render: true` = the region
+// renders stored MARKUP and must contain the literal MASafeHtml.render( or
+// MASafeHtml.toFragment( call (WR-B02).
 const ENUMERATED_PATHS = [
   // CMS pages: block renderer + legacy body (13-06), page-cms region, banners
-  { file: 'page-layout.js', anchor: null, kind: 'file', uses: ['MASafeHtml.render'], note: 'CMS page blocks + legacy body (13-06)' },
-  { file: 'page-cms.js', anchor: null, kind: 'file', uses: ['MASafeHtml.toFragment'], note: 'CMS page region' },
+  { file: 'page-layout.js', anchor: null, kind: 'file', render: true, uses: ['MASafeHtml.render'], note: 'CMS page blocks + legacy body (13-06)' },
+  { file: 'page-cms.js', anchor: null, kind: 'file', render: true, uses: ['MASafeHtml.toFragment'], note: 'CMS page region' },
   { file: 'banners.js', anchor: null, kind: 'file', uses: ['textContent'], note: 'banner title/message are textContent only' },
   // HTML-slide launchers (13-03): overlay + admin slide list
   { file: 'transitions.js', anchor: 'function openHtmlSlide(', kind: 'function', uses: ['textContent'], note: 'slide overlay title/label (13-03)' },
   { file: 'admin-cms.js', anchor: 'function renderSlides(', kind: 'function', uses: ['textContent'], note: 'admin slide list rows' },
   { file: 'admin-cms.js', anchor: 'function loadSlides(', kind: 'function', uses: ['textContent'], note: 'admin slide list load failure' },
   // chatbot messages (T-13-80)
-  { file: 'transitions.js', anchor: 'function addMessageBubble(', kind: 'function', uses: ['MASafeHtml.render'], note: 'chatbot bubble' },
+  { file: 'transitions.js', anchor: 'function addMessageBubble(', kind: 'function', render: true, uses: ['MASafeHtml.render'], note: 'chatbot bubble' },
   // i18n apply: [data-i18n] bold pass + [data-i18n-html] (T-13-81)
-  { file: 'transitions.js', anchor: 'window.applyPortalI18n = function', kind: 'function', uses: ['MASafeHtml.render'], note: 'app-wide i18n apply' },
+  { file: 'transitions.js', anchor: 'window.applyPortalI18n = function', kind: 'function', render: true, uses: ['MASafeHtml.render'], note: 'app-wide i18n apply' },
   { file: 'transitions.js', anchor: "querySelectorAll('[data-i18n-html]').forEach(", kind: 'callback', uses: ['setMarkup'], note: '[data-i18n-html] apply block' },
   // AI insight card: model/RAG output (13-09 addition, found by 13-08)
-  { file: 'transitions.js', anchor: 'function fetchSmolInsight(', kind: 'function', uses: ['MASafeHtml.render'], note: 'AI insight card' },
+  { file: 'transitions.js', anchor: 'function fetchSmolInsight(', kind: 'function', render: true, uses: ['MASafeHtml.render'], note: 'AI insight card' },
   { file: 'transitions.js', anchor: 'function setSmolInsightError(', kind: 'function', uses: ['textContent'], note: 'AI insight error state' },
   // inline click-to-edit: editI18n restore, startPage, endPage restore, edit bar (T-13-81)
-  { file: 'inline-edit.js', anchor: null, kind: 'file', uses: ['MASafeHtml'], note: 'inline editing (editI18n, startPage, endPage, renderBar)' },
+  { file: 'inline-edit.js', anchor: null, kind: 'file', render: true, uses: ['MASafeHtml'], note: 'inline editing (editI18n, startPage, endPage, renderBar)' },
   // lesson body (T-13-82)
-  { file: 'employee.js', anchor: 'function openLessonModal(', kind: 'function', uses: ['MASafeHtml.render'], note: 'lesson modal' },
+  { file: 'employee.js', anchor: 'function openLessonModal(', kind: 'function', render: true, uses: ['MASafeHtml.render'], note: 'lesson modal' },
   // recommended-modules card on the IL/admin dashboard: pmo-writable module records,
   // playbookLink -> href through MASafeHtml.safeHref (CR-B01, Phase 13 review Part B)
   { file: 'dashboard.js', anchor: 'function renderActionModules(', kind: 'function', uses: ['MASafeHtml.safeHref'], note: 'recommended-modules card (CR-B01)' },
@@ -240,6 +273,7 @@ for (const entry of ENUMERATED_PATHS) {
     const r = scanEntry(entry);
     assert.deepStrictEqual(r.lines, [], `HTML-string sink(s) on an enumerated render path:\n  ${r.lines.join('\n  ')}`);
     assert.ok(r.uses.length > 0, `region must render via ${(entry.uses || ['MASafeHtml', 'textContent', 'createElement']).join(' | ')}`);
+    if (entry.render) assert.ok(r.renderCall, 'a markup render path must call MASafeHtml.render( or MASafeHtml.toFragment( literally');
   });
 }
 
@@ -282,7 +316,7 @@ test('not-enumerated sink inventory (printed per file; bounded by the CSP, D-13-
   const rows = [];
   walkJs((rel, src) => {
     const lexed = lex(src);
-    const sinks = findSinks(lexed, 0, lexed.code.length);
+    const sinks = findSinks(lexed, 0, lexed.code.length, rel);
     const byKind = {};
     sinks.forEach((x) => { byKind[x.kind] = (byKind[x.kind] || 0) + 1; });
     if (sinks.length) rows.push({ file: rel, count: sinks.length, byKind });
@@ -332,4 +366,57 @@ test('scanner negative control: reports real sinks, ignores strings/comments/reg
   const tricky = lex('var q = s.replace(/"/g, "&quot;");\nfunction z(){ x.innerHTML = y; }');
   const reg = regionOf(tricky, 'function z(');
   assert.strictEqual(findSinks(tricky, reg.from, reg.to).length, 1, 'sink after a quote-bearing regex is still found');
+});
+
+// WR-B02 negative controls: every false-pass probe shape from the Phase 13 review
+// (Part B) is reported by the hardened matcher, inside an enumerated-style region.
+test('scanner negative control (WR-B02): the review probe shapes are all caught', () => {
+  const probes = [
+    ['setHTMLUnsafe', 'function p(){ el.setHTMLUnsafe(html); }'],
+    ['createContextualFragment', 'function p(){ el.append(document.createRange().createContextualFragment(html)); }'],
+    ['DOMParser.parseFromString', "function p(){ el.append(...new DOMParser().parseFromString(html,'text/html').body.childNodes); }"],
+    ['srcdoc assignment', 'function p(){ fr.srcdoc = html; }'],
+    ['bracket innerHTML/outerHTML/srcdoc assignment', "function p(){ fr['srcdoc'] = html; }"],
+    ['insertAdjacentElement', "function p(){ el.insertAdjacentElement('beforeend', parsed.firstElementChild); }"],
+    ['importNode/adoptNode', 'function p(){ el.appendChild(document.importNode(tpl, true)); }'],
+    ['importNode/adoptNode', 'function p(){ el.appendChild(document.adoptNode(parsed.body)); }'],
+    ['innerHTML/outerHTML assignment', 'function p(){ el.innerHTML = html; }'],
+  ];
+  for (const [kind, src] of probes) {
+    const lexed = lex(src);
+    const { from, to } = regionOf(lexed, 'function p(');
+    const kinds = findSinks(lexed, from, to, 'some-page.js').map((x) => x.kind);
+    assert.ok(kinds.includes(kind), `probe must be reported as ${kind}: ${src} (got ${JSON.stringify(kinds)})`);
+  }
+  // parseFromString is exempt ONLY in safe-html.js (the inert-parse renderer).
+  const dp = lex("function p(){ var d = new DOMParser().parseFromString(s, 'text/html'); }");
+  const r = regionOf(dp, 'function p(');
+  assert.strictEqual(findSinks(dp, r.from, r.to, 'safe-html.js').length, 0);
+  assert.strictEqual(findSinks(dp, r.from, r.to, 'dashboard.js').length, 1);
+  // Prose and strings naming the new sinks are not hits.
+  const prose = lex('function p(){ var s = "el.setHTMLUnsafe(x); fr.srcdoc = y"; /* importNode( */ }');
+  const pr = regionOf(prose, 'function p(');
+  assert.strictEqual(findSinks(prose, pr.from, pr.to, 'x.js').length, 0);
+});
+
+test('scanner negative control (WR-B02): `uses` ignores strings; render-kind needs the literal renderer call', () => {
+  const entry = { file: 'x.js', uses: ['MASafeHtml', 'textContent', 'createElement'] };
+  // A token that only appears inside a string literal does not satisfy `uses`.
+  const strOnly = lex('function p(){ var s = "createElement textContent MASafeHtml"; el.append(node); }');
+  let reg = regionOf(strOnly, 'function p(');
+  assert.deepStrictEqual(regionVerdict(strOnly, reg.from, reg.to, entry).uses, []);
+  // An unrelated createElement satisfies `uses` but NOT the render-kind call.
+  const unrelated = lex('function p(){ var d = document.createElement("div"); d.className = "x"; }');
+  reg = regionOf(unrelated, 'function p(');
+  const v = regionVerdict(unrelated, reg.from, reg.to, entry);
+  assert.deepStrictEqual(v.uses, ['createElement']);
+  assert.strictEqual(v.renderCall, false);
+  // The renderer named only in a string is not a call either.
+  const fake = lex('function p(){ log("MASafeHtml.render(el, v)"); }');
+  reg = regionOf(fake, 'function p(');
+  assert.strictEqual(regionVerdict(fake, reg.from, reg.to, entry).renderCall, false);
+  // The real call is.
+  const real = lex('function p(){ window.MASafeHtml.render(el, v); }');
+  reg = regionOf(real, 'function p(');
+  assert.strictEqual(regionVerdict(real, reg.from, reg.to, entry).renderCall, true);
 });
