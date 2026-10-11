@@ -339,7 +339,14 @@ test('deal-lifecycle (f): adding a member grants list+select access; removing re
         method: 'POST', headers: { Cookie: cookieHeader(hrbpToken), 'Content-Type': 'application/json' },
         body: JSON.stringify({ members: ['admin', 'karen'] }),
       });
-      assert.strictEqual(hrbpAttempt.status, 403, 'hrbp must be refused editing deal membership (admin-only)');
+      // [security] F-1 (v3.0.0-rc.1 review): karen is NOT a member of this deal,
+      // so the mount-level /api/deals/:id membership rule refuses her first with
+      // the missing-deal 404 (a MEMBER hrbp still gets the admin-only 403 — see
+      // test/deal-membership-control-plane.test.js (c)). Either way: refused,
+      // membership unchanged.
+      assert.strictEqual(hrbpAttempt.status, 404, 'a non-member hrbp must be refused editing deal membership');
+      assert.deepStrictEqual(await hrbpAttempt.json(), { error: 'Deal not found.' });
+      assert.deepStrictEqual(controlStore.getDeal(deal.id).members, ['admin'], 'the refused edit must not change membership');
     } finally {
       sessionsDb.deleteSession(runtimeConn, hrbpToken);
     }
