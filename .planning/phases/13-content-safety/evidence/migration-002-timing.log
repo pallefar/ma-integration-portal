@@ -1,0 +1,22 @@
+# started 2026-10-11T08:17:20Z
+# uptime at start: 10:17  up 31 days,  2:51, 9 users, load averages: 7.67 10.01 28.00
+migration-002-timing: node v22.18.0; host load 7.67 / 10.01 / 28.00 (1/5/15 min); 11 CPUs
+
+variant A: perf volume deal as the Phase 12 scripts build it (template content, nothing legacy)
+  file size before migration : 3.05 MiB
+  first open (runs 002)      : 35.8 ms; user_version 1 -> 2
+  migration summary line     : [migrate] deal/002 resanitize-html deal-file#2061eb9d: 0 value(s) changed in 0 row(s)
+  changed values logged      : 0 (per-value digest lines)
+  second open (already v2)   : 2.7 ms; migration lines: 0
+
+variant B: A + 300 legacy pages (every 4th carries markup the old sanitiser passed) + 150 legacy lessons (every 3rd dirty)
+  file size before migration : 4.89 MiB
+  first open (runs 002)      : 97.0 ms; user_version 1 -> 2
+  migration summary line     : [migrate] deal/002 resanitize-html deal-file#17761cc0: 200 value(s) changed in 90 row(s)
+  changed values logged      : 200 (per-value digest lines)
+  second open (already v2)   : 3.0 ms; migration lines: 0
+
+MIGRATION-002-TIMING DONE
+# finished 2026-10-11T08:17:20Z
+# uptime at end: 10:17  up 31 days,  2:51, 9 users, load averages: 7.67 10.01 28.00
+EXIT=0
