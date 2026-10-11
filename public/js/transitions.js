@@ -3769,8 +3769,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let htmlContent = escapeHtml(text)
           .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
           .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-        
-        bubble.innerHTML = htmlContent;
+
+        // [security] SAFE-01 / D-13-02 (13-09): the message text is escaped first,
+        // then the markdown transforms build a small HTML string - and that string
+        // is rendered by building DOM from the allowlist (MASafeHtml), never
+        // assigned to innerHTML. The scheme allowlist drops a javascript:/data:
+        // href (`[x](javascript:alert(1))` keeps its text, loses its link); http(s)
+        // links keep their href and always carry rel="noopener noreferrer". If the
+        // renderer is missing the bubble fails closed to plain text.
+        if (window.MASafeHtml && typeof window.MASafeHtml.render === 'function') {
+          window.MASafeHtml.render(bubble, htmlContent);
+        } else {
+          bubble.textContent = text;
+        }
         chatHistory.appendChild(bubble);
         chatHistory.scrollTop = chatHistory.scrollHeight;
       }
