@@ -2789,8 +2789,13 @@ document.addEventListener('DOMContentLoaded', () => {
               if (gc && a.parentElement === gc) gc.appendChild(a);
             }
           } else if (it.custom && !hidden && it.href && t && t !== 'survey') {
+            // [security] WR-B04 (Phase 13 review, Part B): a custom menu href is
+            // stored data - only a MASafeHtml-approved scheme (relative, http(s),
+            // mailto, tel) reaches the link; anything else is not rendered.
+            const customHref = window.MASafeHtml && typeof window.MASafeHtml.safeHref === 'function' ? window.MASafeHtml.safeHref(it.href) : '';
+            if (!customHref) return;
             const link = document.createElement('a');
-            link.href = it.href;
+            link.href = customHref;
             link.className = 'sidebar-link sidebar-sub-link';
             const text = lbl(it.label) || it.href;
             link.title = text;

@@ -1179,6 +1179,13 @@ function initDemoDashboard() {
   }
 
   // Helper: Escape HTML strings safely
+  // [security] WR-B04 (Phase 13 review, Part B): every stored/API value written
+  // into an href/src passes the MASafeHtml scheme check (relative, http(s),
+  // mailto, tel) and is escaped at the interpolation site; else fails closed to '#'.
+  function safeLink(value) {
+    return (window.MASafeHtml && typeof window.MASafeHtml.safeHref === 'function' && window.MASafeHtml.safeHref(value)) || '#';
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return str
@@ -2353,7 +2360,7 @@ function initDemoDashboard() {
                   <span>${dateStr}</span>
                 </div>
               </div>
-              <a href="${c.htmlEmailPath}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem; text-decoration: none; border-radius: 4px; border: 1.5px solid rgba(233,131,0,0.2); background: transparent; color: var(--te-orange); font-weight: bold; cursor: pointer;">
+              <a href="${escapeHtml(safeLink(c.htmlEmailPath))}" target="_blank" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem; text-decoration: none; border-radius: 4px; border: 1.5px solid rgba(233,131,0,0.2); background: transparent; color: var(--te-orange); font-weight: bold; cursor: pointer;">
                 <span>🔍</span> HTML
               </a>
             </div>

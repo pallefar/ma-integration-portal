@@ -332,6 +332,133 @@ test('not-enumerated sink inventory (printed per file; bounded by the CSP, D-13-
   assert.ok(Number.isInteger(total) && total >= 0);
 });
 
+// ------------------------------------------- URL attribute gate (WR-B04)
+// [security] WR-B04 / CR-B01 (Phase 13 review, Part B): escaping stops an
+// attribute breakout but not a `javascript:` scheme. Every value interpolated
+// at the START of an href/src/action/formaction/poster attribute in markup must
+// be BOTH scheme-checked and escaped - `escapeHtml(safeLink(v))` and friends -
+// and every `.href =` / `.src =` / `setAttribute('href'|'src'|…, v)` must take a
+// string literal, a template with a fixed same-origin / http(s) / mailto prefix,
+// or the result of a scheme check. Values that are provably not stored data
+// (constants, blob: URLs, a same-host-filtered navigation, a data object that is
+// not a DOM node) are listed in URL_ATTR_EXEMPT with the reason; a stale
+// exemption fails too, so the list cannot rot.
+const URL_ATTRS = 'href|src|action|formaction|poster';
+const ESCAPERS = '(?:escapeHtml|esc|cmsEsc|escN)';
+const CHECKERS = '(?:safeLink|safeUrl|safeVdrUrl|safeHref|playbookHref|(?:window\\.)?MASafeHtml\\.safeHref)';
+const SAFE_MARKUP_EXPR = new RegExp(`^\\s*${ESCAPERS}\\(\\s*${CHECKERS}\\(`);
+const SAFE_PROP_EXPR = new RegExp(`^\\s*(?:${CHECKERS}\\(|${ESCAPERS}\\(\\s*${CHECKERS}\\()`);
+const SAFE_LITERAL_PREFIX = /^(?:\/(?![/\\])|#|\?|mailto:|https?:\/\/[\w.-]+\/|[\w-]+\.html\b)/i;
+
+const URL_ATTR_EXEMPT = [
+  { file: 'transitions.js', expr: 'item.href', reason: 'renderSideLink: portalCatalog / resource constants in the same function, never stored data' },
+  { file: 'transitions.js', expr: 'PDF', reason: "openPlaybookSlide: PDF is the constant '/playbook/hr-ma-guidebook.pdf'" },
+  { file: 'transitions.js', expr: 'escN(it.href)', reason: 'notification panel: it.href values are server constants (server.js notifications builder), escaped' },
+  { file: 'transitions.js', expr: 'customHref', reason: 'applyMenuOverrides: local variable holding the MASafeHtml.safeHref() result (WR-B04)' },
+  { file: 'transitions.js', expr: 'safeUrl', reason: 'openHtmlSlide: local variable holding the http(s)-checked URL (13-03)' },
+  { file: 'transitions.js', expr: 'href', reason: 'applyMenuOverrides tokenOf: detached anchor used only to read pathname/hash, never rendered' },
+  { file: 'transitions.js', expr: 'destination', reason: 'page-exit transition: only same-host link targets are intercepted' },
+  { file: 'transitions.js', expr: "roleHomePages[newRole] || '/'", reason: 'role switch: constant role -> home-page map' },
+  { file: 'due-diligence.js', expr: 'safe', reason: 'VDR links: local variable holding the safeVdrUrl() result' },
+  { file: 'execution.js', expr: 'url', reason: 'report export: URL.createObjectURL(blob) download anchor' },
+  { file: 'dashboard.js', expr: 'config.src', reason: 'welcome-kit customizer: constant layoutConfigs image paths' },
+  { file: 'pages/index-1.js', expr: 'data.href', reason: 'landing role cards: constant roleData map in the same file' },
+  { file: 'overview-deck/working-in-a-matrix.js', expr: 's.img', reason: 'static deck scenario table in the same file' },
+  { file: 'admin-cms.js', expr: "form.querySelector('#cms-m-href').value.trim()", reason: 'menu editor: writes the plain data object `it`, not a DOM attribute (server urlField validates it)' },
+  { file: 'login.js', expr: 'policy.landingFor(me.user, me.user.mustChangePassword === true)', reason: 'post-login redirect: constant role landing map (role-policy.js)' },
+  { file: 'login.js', expr: 'policy.landingFor(res.user, must)', reason: 'post-login redirect: constant role landing map (role-policy.js)' },
+];
+
+// Returns [{ file, kind, expr, line }] for URL-attribute writes that are not
+// provably safe. `exempt` is consulted by the caller.
+function findUrlAttrWrites(rel, src) {
+  const lexed = lex(src);
+  const code = lexed.code;
+  const mask = lexed.mask;
+  const lineOf = (idx) => code.slice(0, idx).split('\n').length;
+  const out = [];
+  // (a) markup: attr="${ expr }" - the expression decides the scheme.
+  const tpl = new RegExp(`\\b(?:${URL_ATTRS})\\s*=\\s*["']\\$\\{`, 'gi');
+  let m;
+  while ((m = tpl.exec(code)) !== null) {
+    let i = m.index + m[0].length;
+    let depth = 1;
+    const start = i;
+    for (; i < code.length && depth > 0; i++) {
+      if (code[i] === '{') depth++;
+      else if (code[i] === '}') depth--;
+    }
+    const expr = code.slice(start, i - 1).trim();
+    if (!SAFE_MARKUP_EXPR.test(expr)) out.push({ file: rel, kind: 'markup interpolation', expr, line: lineOf(m.index) });
+  }
+  // (a2) markup by concatenation: attr="' + expr + '…
+  const cat = new RegExp(`\\b(?:${URL_ATTRS})\\s*=\\s*["']['"]\\s*\\+\\s*`, 'gi');
+  while ((m = cat.exec(code)) !== null) {
+    const rest = code.slice(m.index + m[0].length, m.index + m[0].length + 200);
+    const expr = (/^(.*?)\s*\+\s*['"`]/.exec(rest) || [null, rest.split('\n')[0]])[1].trim();
+    if (!SAFE_MARKUP_EXPR.test(expr)) out.push({ file: rel, kind: 'markup concatenation', expr, line: lineOf(m.index) });
+  }
+  // (b) DOM: el.href = expr / el.src = expr / setAttribute('href', expr)
+  const judgeProp = (idx, rhsStart, kind) => {
+    const rhs = code.slice(rhsStart).split(/[;\n]/)[0].trim().replace(/\)\s*$/, (s) => (kind === 'setAttribute' ? '' : s)).trim();
+    const q = rhs.charAt(0);
+    if (q === '\'' || q === '"') { if (!/^['"]\s*javascript:/i.test(rhs)) return; }
+    else if (q === '`') {
+      const lit = rhs.slice(1).split('${')[0];
+      if (!rhs.includes('${') || SAFE_LITERAL_PREFIX.test(lit)) return;
+    } else if (SAFE_PROP_EXPR.test(rhs)) return;
+    out.push({ file: rel, kind, expr: rhs, line: lineOf(idx) });
+  };
+  const prop = new RegExp(`\\.\\s*(?:${URL_ATTRS}|formAction)\\s*=(?!=)`, 'g');
+  while ((m = prop.exec(mask)) !== null) judgeProp(m.index, m.index + m[0].length, 'property assignment');
+  const sa = new RegExp(`\\bsetAttribute\\(\\s*(['"])(?:${URL_ATTRS}|xlink:href)\\1\\s*,`, 'gi');
+  while ((m = sa.exec(code)) !== null) judgeProp(m.index, m.index + m[0].length, 'setAttribute');
+  return out;
+}
+
+test('URL attribute gate (WR-B04): every href/src/action write from data is scheme-checked (and escaped in markup)', () => {
+  const offenders = [];
+  const used = new Set();
+  walkJs((rel, src) => {
+    for (const hit of findUrlAttrWrites(rel, src)) {
+      const ex = URL_ATTR_EXEMPT.findIndex((e) => e.file === rel && e.expr === hit.expr);
+      if (ex >= 0) { used.add(ex); continue; }
+      offenders.push(`${hit.file}:${hit.line} ${hit.kind}: ${hit.expr}`);
+    }
+  });
+  assert.deepStrictEqual(offenders, [], `unchecked URL attribute write(s) - wrap in escapeHtml(safeLink(...)) / MASafeHtml.safeHref:\n  ${offenders.join('\n  ')}`);
+  const stale = URL_ATTR_EXEMPT.filter((e, i) => !used.has(i)).map((e) => `${e.file}: ${e.expr}`);
+  assert.deepStrictEqual(stale, [], `stale URL_ATTR_EXEMPT entries:\n  ${stale.join('\n  ')}`);
+});
+
+test('URL attribute gate negative control (WR-B04): the review sinks and their shapes are caught; safe forms pass', () => {
+  const bad = [
+    'function a(m){ return `<a href="${m.playbookLink || \'/playbook.html\'}">x</a>`; }',
+    'function a(m){ return `<a href="${escapeHtml(m.playbookLink)}">x</a>`; }',
+    'function a(l){ return `<a href="${cmsEsc(l.playbookLink)}">x</a>`; }',
+    'function a(url){ return `<video src="${url}"></video>`; }',
+    "function a(it){ return '<a href=\"' + it.href + '\">x</a>'; }",
+    'function a(link, it){ link.href = it.href; }',
+    "function a(el, v){ el.setAttribute('href', v); }",
+    "function a(el, v){ el.setAttribute('src', escapeHtml(v)); }",
+    'function a(f, v){ f.action = v; }',
+    "function a(a){ a.href = 'javascript:void(0)'; }",
+    'function a(a, v){ a.href = `${v}/x`; }',
+  ];
+  for (const src of bad) assert.strictEqual(findUrlAttrWrites('probe.js', src).length, 1, `must be caught: ${src}`);
+  const ok = [
+    'function a(m){ return `<a href="${escapeHtml(safeLink(m.playbookLink))}">x</a>`; }',
+    'function a(l){ return `<a href="${cmsEsc(window.MASafeHtml.safeHref(l.x))}">x</a>`; }',
+    'function a(i){ return `<a href="${escapeHtml(safeUrl(i.href))}">x</a>`; }',
+    "function a(a){ a.href = '/login.html'; a.src = '/js/x.js?v=1'; }",
+    'function a(a, e){ a.href = `mailto:${e}`; a.src = `/api/x/${e}`; }',
+    'function a(a, v){ a.href = MASafeHtml.safeHref(v); }',
+    "function a(a, v){ a.setAttribute('href', playbookHref(v)); }",
+    'function a(a, v){ a.textContent = v; a.className = v; }',
+  ];
+  for (const src of ok) assert.deepStrictEqual(findUrlAttrWrites('probe.js', src), [], `must pass: ${src}`);
+});
+
 // --------------------------------------------------------- negative control
 test('scanner negative control: reports real sinks, ignores strings/comments/regex/reads/empty clears', () => {
   const bad = [

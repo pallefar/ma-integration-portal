@@ -403,6 +403,7 @@ function notificationsHarness(win) {
   });
   const ex = loadBlocks(EMPLOYEE_SRC, [
     'function canReady(', 'function hideSection(', 'function hideCardOf(', 'function loadEmployeeNotifications(',
+    'function safeLink(', // WR-B04: the inbox link goes through the scheme check
   ], {
     window: win,
     fetch: fetchImpl,
