@@ -7,6 +7,12 @@
  *   2) The CMS page body ([data-cms-region]) -> saved to /api/pages (publishes the page).
  * Loaded app-wide (injected once by transitions.js). Self-gates: does nothing unless
  * edit mode is ON and the active demo role is admin.
+ *
+ * [security] SAFE-01 / D-13-02 (13-09): no HTML string is ever assigned to
+ * innerHTML here. Stored markup is rendered by MASafeHtml (public/js/safe-html.js);
+ * the edit bar and page wrappers are built with createElement/textContent; a
+ * cancelled page edit puts the ORIGINAL nodes back (no serialise/parse round trip).
+ * Reading `.innerHTML` to POST an edit is fine - the server sanitizes on write.
  */
 (function () {
   if (window.__inlineEditLoaded) return;
@@ -33,11 +39,31 @@
     clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2400);
   }
 
+  // Small element builder: tag + optional class + optional textContent.
+  function mk(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  // Render stored markup into `el` through the allowlist renderer. Without it
+  // the value is shown as plain text (fail closed) - never parsed as HTML.
+  function setMarkup(el, html) {
+    if (window.MASafeHtml && typeof window.MASafeHtml.render === 'function') window.MASafeHtml.render(el, html);
+    else el.textContent = html;
+  }
+
   // Matches page-cms.js output so a live save looks identical without a reload.
   function wrapAuthored(html) {
-    return '<div class="cms-authored" style="max-width:820px;margin:0 auto;">' +
-      '<div class="cms-authored-badge" style="font-size:0.68rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--te-orange);margin-bottom:0.75rem;">Content managed in Admin CMS</div>' +
-      html + '</div>';
+    const wrap = mk('div', 'cms-authored');
+    wrap.style.cssText = 'max-width:820px;margin:0 auto;';
+    const badge = mk('div', 'cms-authored-badge', 'Content managed in Admin CMS');
+    badge.style.cssText = 'font-size:0.68rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--te-orange);margin-bottom:0.75rem;';
+    wrap.appendChild(badge);
+    if (window.MASafeHtml && typeof window.MASafeHtml.toFragment === 'function') wrap.appendChild(window.MASafeHtml.toFragment(html));
+    else wrap.appendChild(document.createTextNode(String(html)));
+    return wrap;
   }
 
   // ---------- i18n inline text editing ----------
@@ -59,7 +85,7 @@
       el.contentEditable = 'false';
       el.classList.remove('cms-editing-active');
       const val = isHtml ? el.innerHTML : el.textContent;
-      if (!commit) { if (isHtml) el.innerHTML = original; else el.textContent = original; return; }
+      if (!commit) { if (isHtml) setMarkup(el, original); else el.textContent = original; return; }
       if (val === original) return;
       fetch('/api/i18n', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: getLang(), key: key, value: val }) })
         .then(r => r.json())
@@ -67,7 +93,7 @@
           if (typeof window.setPortalI18nEntry === 'function') window.setPortalI18nEntry(getLang(), key, val);
           toast('Saved "' + key + '" (' + getLang().toUpperCase() + ')');
         })
-        .catch(() => { toast('Save failed', true); if (isHtml) el.innerHTML = original; else el.textContent = original; });
+        .catch(() => { toast('Save failed', true); if (isHtml) setMarkup(el, original); else el.textContent = original; });
     };
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); finish(false); el.blur(); }
@@ -101,38 +127,53 @@
 
   function renderBar() {
     if (!bar) { bar = document.createElement('div'); bar.className = 'cms-page-editbar'; bar.style.display = 'none'; document.body.appendChild(bar); }
-    if (!(editOn() && isAdmin() && slug && region)) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.textContent = '';
+    if (!(editOn() && isAdmin() && slug && region)) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
     if (!editing) {
       // Pages driven by the block Layout Builder are edited in Admin ▸ Pages, not inline
       // (a single contentEditable blob would fight the block model).
       if (region.querySelector('[data-cms-layout]')) {
-        bar.innerHTML = '<span class="pe-label">📐 Block layout — edit in Admin ▸ Pages</span>';
+        bar.appendChild(mk('span', 'pe-label', '📐 Block layout — edit in Admin ▸ Pages'));
         return;
       }
-      bar.innerHTML = '<span class="pe-label">Live page</span><button type="button" class="pe-edit">📄 Edit page body</button>';
-      bar.querySelector('.pe-edit').addEventListener('click', startPage);
+      bar.appendChild(mk('span', 'pe-label', 'Live page'));
+      const editBtn = mk('button', 'pe-edit', '📄 Edit page body');
+      editBtn.type = 'button';
+      editBtn.addEventListener('click', startPage);
+      bar.appendChild(editBtn);
     } else {
-      bar.innerHTML = '<span class="pe-label">Editing “' + slug + '” · ' + getLang().toUpperCase() + '</span>' +
-        '<button type="button" class="pe-save">💾 Save &amp; publish</button>' +
-        '<button type="button" class="pe-cancel">✕ Cancel</button>';
-      bar.querySelector('.pe-save').addEventListener('click', () => endPage(true));
-      bar.querySelector('.pe-cancel').addEventListener('click', () => endPage(false));
+      bar.appendChild(mk('span', 'pe-label', 'Editing “' + slug + '” · ' + getLang().toUpperCase()));
+      const saveBtn = mk('button', 'pe-save', '💾 Save & publish');
+      saveBtn.type = 'button';
+      saveBtn.addEventListener('click', () => endPage(true));
+      const cancelBtn = mk('button', 'pe-cancel', '✕ Cancel');
+      cancelBtn.type = 'button';
+      cancelBtn.addEventListener('click', () => endPage(false));
+      bar.appendChild(saveBtn);
+      bar.appendChild(cancelBtn);
     }
   }
 
   function startPage() {
     fetch('/api/pages?slug=' + encodeURIComponent(slug)).then(r => r.json()).then(page => {
-      original = region.innerHTML;
+      // Keep the ORIGINAL nodes (not a serialised copy) so Cancel restores the
+      // exact DOM - block-layout attributes and listeners included.
+      original = Array.prototype.slice.call(region.childNodes);
       region.__page = page || { slug: slug };
       const lang = getLang();
-      let bodyStr = (page && page.body && page.body[lang]) || '';
+      const bodyStr = (page && page.body && page.body[lang]) || '';
+      const target = mk('div', 'cms-editable-body');
+      target.style.cssText = 'max-width:820px;margin:0 auto;';
       if (!bodyStr.trim()) {
         const title = (page && page.title && (page.title[lang] || page.title.en)) || slug;
-        bodyStr = '<h3>' + title + '</h3><p>Start writing this page…</p>';
+        target.appendChild(mk('h3', null, String(title)));
+        target.appendChild(mk('p', null, 'Start writing this page…'));
+      } else {
+        setMarkup(target, bodyStr);
       }
-      region.innerHTML = '<div class="cms-editable-body" style="max-width:820px;margin:0 auto;">' + bodyStr + '</div>';
-      const target = region.querySelector('.cms-editable-body');
+      region.textContent = '';
+      region.appendChild(target);
       region.__target = target;
       editing = true;
       target.contentEditable = 'true';
@@ -155,10 +196,13 @@
         .then(r => r.json())
         .then(() => toast('Page saved & published (' + getLang().toUpperCase() + ')'))
         .catch(() => toast('Save failed', true));
-      region.innerHTML = wrapAuthored(html);   // reflect the published look immediately
+      region.textContent = '';
+      region.appendChild(wrapAuthored(html));   // reflect the published look immediately
     } else if (original != null) {
-      region.innerHTML = original;
+      region.textContent = '';
+      original.forEach(function (node) { region.appendChild(node); });
     }
+    original = null;
     renderBar();
   }
 

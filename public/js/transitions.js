@@ -3783,8 +3783,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let htmlContent = escapeHtml(text)
           .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
           .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-        
-        bubble.innerHTML = htmlContent;
+
+        // [security] SAFE-01 / D-13-02 (13-09): the message text is escaped first,
+        // then the markdown transforms build a small HTML string - and that string
+        // is rendered by building DOM from the allowlist (MASafeHtml), never
+        // assigned to innerHTML. The scheme allowlist drops a javascript:/data:
+        // href (`[x](javascript:alert(1))` keeps its text, loses its link); http(s)
+        // links keep their href and always carry rel="noopener noreferrer". If the
+        // renderer is missing the bubble fails closed to plain text.
+        if (window.MASafeHtml && typeof window.MASafeHtml.render === 'function') {
+          window.MASafeHtml.render(bubble, htmlContent);
+        } else {
+          bubble.textContent = text;
+        }
         chatHistory.appendChild(bubble);
         chatHistory.scrollTop = chatHistory.scrollHeight;
       }
@@ -4214,17 +4225,35 @@ document.addEventListener('DOMContentLoaded', () => {
           contentArea.style.opacity = '0';
           contentArea.style.transition = 'opacity 0.3s ease';
           setTimeout(() => {
-            contentArea.innerHTML = `<span style="display: inline-block; padding: 0.25rem 0;">${data.insight}</span>`;
+            // [security] SAFE-01 / D-13-02 (13-09): the insight text is model/RAG
+            // output (it can echo stored or retrieved content), so it is rendered
+            // by MASafeHtml into a span built with createElement - never
+            // interpolated into an innerHTML template. No renderer = plain text.
+            const span = document.createElement('span');
+            span.style.cssText = 'display: inline-block; padding: 0.25rem 0;';
+            if (window.MASafeHtml && typeof window.MASafeHtml.render === 'function') window.MASafeHtml.render(span, String(data.insight));
+            else span.textContent = String(data.insight);
+            contentArea.textContent = '';
+            contentArea.appendChild(span);
             contentArea.style.opacity = '1';
           }, 100);
         } else {
-          contentArea.innerHTML = `<span style="color: #ef4444;">⚠️ Failed to load expert insight. Please try again.</span>`;
+          setSmolInsightError(contentArea, '\u26A0\uFE0F Failed to load expert insight. Please try again.');
         }
       })
       .catch(err => {
         console.error('Error fetching AI Insight RAG insight:', err);
-        contentArea.innerHTML = `<span style="color: #ef4444;">⚠️ Failed to connect to AI Insight PMI Service.</span>`;
+        setSmolInsightError(contentArea, '\u26A0\uFE0F Failed to connect to AI Insight PMI Service.');
       });
+  }
+
+  // Error state for the AI-insight card: constant text through textContent.
+  function setSmolInsightError(contentArea, message) {
+    contentArea.textContent = '';
+    const span = document.createElement('span');
+    span.style.color = '#ef4444';
+    span.textContent = message;
+    contentArea.appendChild(span);
   }
 
   // --- Role Guidance & Action Timeline Banner Injection ---
@@ -4756,23 +4785,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // [data-i18n-html] we keep the intentional markup and only bold on top.
     const escHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const mdBold = (s) => s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // [data-i18n-html] values legitimately contain rich markup (<span>/<strong>/
-    // <input>…), so we can't blanket-escape them. Instead strip the dangerous bits
-    // before innerHTML: script/iframe/object/embed tags, inline on*= handlers, and
-    // javascript:/vbscript: URL schemes. (Defence-in-depth alongside the CSP.)
-    // The leading class covers both whitespace AND the forward slash as a valid
-    // HTML attribute separator (e.g. <img/onerror=...>) — a whitespace-only
-    // class lets that shape pass through untouched.
-    const stripDangerousHtml = (s) => String(s == null ? '' : s)
-      .replace(/<\/?(?:script|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '')
-      .replace(/[\s/]on\w+\s*=\s*"[^"]*"/gi, '')
-      .replace(/[\s/]on\w+\s*=\s*'[^']*'/gi, '')
-      .replace(/[\s/]on\w+\s*=\s*[^\s>]+/gi, '')
-      .replace(/(=\s*["']?\s*)(?:javascript|vbscript)\s*:/gi, '$1');
+    // [security] SAFE-01 / D-13-02 (13-09): [data-i18n-html] values legitimately
+    // carry rich markup (<span>/<strong>/<em>), so they cannot be blanket-escaped.
+    // The old regex stripper (script/iframe tags, on*= handlers, javascript:) was
+    // the same bypassable family the server retired in 13-01, followed by an
+    // innerHTML assignment. Every stored-markup write now goes through
+    // MASafeHtml.render (safe-html.js: DOMParser into an inert document, node-by-
+    // node rebuild from the parity-tested allowlist). If the renderer is missing
+    // the element fails closed to the value as plain text.
+    const setMarkup = (el, html) => {
+      if (window.MASafeHtml && typeof window.MASafeHtml.render === 'function') window.MASafeHtml.render(el, html);
+      else el.textContent = html;
+    };
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const v = t(el.getAttribute('data-i18n'), lang);
       if (v == null) return;
-      if (v.indexOf('**') !== -1) el.innerHTML = mdBold(escHtml(v));
+      if (v.indexOf('**') !== -1) setMarkup(el, mdBold(escHtml(v)));
       else el.textContent = v;
     });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => {
@@ -4781,7 +4809,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.querySelectorAll('[data-i18n-html]').forEach(el => {
       const v = t(el.getAttribute('data-i18n-html'), lang);
-      if (v != null) el.innerHTML = mdBold(stripDangerousHtml(v));
+      if (v != null) setMarkup(el, mdBold(String(v)));
     });
     document.documentElement.setAttribute('lang', lang);
   };

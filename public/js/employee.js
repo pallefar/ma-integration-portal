@@ -2276,16 +2276,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const l = findLesson(lessonId);
     if (!l) return;
     const lang = localStorage.getItem('employeeLanguage') || 'en';
-    const overlay = document.createElement('div');
-    overlay.className = 'cms-modal-overlay';
+    // [security] SAFE-01 / D-13-02 (13-09): the whole modal is built with
+    // createElement/textContent. The lesson body is admin-authored stored markup
+    // and goes through MASafeHtml.render into an empty container - it is never
+    // part of a string assigned to innerHTML. Without the renderer the body falls
+    // back to the lesson description as plain text.
+    const mk = (tag, cls, text, css) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      if (css) e.style.cssText = css;
+      return e;
+    };
+    const overlay = mk('div', 'cms-modal-overlay');
     const quiz = (l.quiz && l.quiz.questions && l.quiz.questions.length) ? l.quiz : null;
-    const quizHtml = quiz ? `<div class="lesson-quiz"><h4 style="margin:1rem 0 0.5rem;color:var(--te-dark-teal);">Knowledge check</h4>${quiz.questions.map((q, qi) => `
-      <div class="lq-q" style="margin-bottom:0.75rem;"><p style="font-weight:600;margin:0 0 0.35rem;">${qi + 1}. ${cmsEsc(cmsLabel(q.question, lang))}</p>
-      ${(q.options || []).map((o, oi) => `<label style="display:block;font-size:0.9rem;margin:0.15rem 0;cursor:pointer;"><input type="radio" name="lq-${qi}" value="${oi}"> ${cmsEsc(cmsLabel(o, lang))}</label>`).join('')}</div>`).join('')}
-      <button type="button" class="btn btn-primary lq-submit" style="width:auto;margin:0.5rem 0 0;">Submit answers</button>
-      <p class="lq-result" style="margin-top:0.5rem;font-weight:700;"></p></div>` : '';
-    overlay.innerHTML = `<div class="cms-modal"><div class="cms-modal-head"><h3>${cmsEsc(cmsLabel(l.title, lang))}</h3><button type="button" class="cms-modal-x">✕</button></div>
-      <div class="cms-modal-body"><div class="lesson-body">${cmsLabel(l.body, lang) || '<p>' + cmsEsc(cmsLabel(l.description, lang)) + '</p>'}</div>${quizHtml}</div></div>`;
+
+    const modal = mk('div', 'cms-modal');
+    const head = mk('div', 'cms-modal-head');
+    head.appendChild(mk('h3', null, cmsLabel(l.title, lang)));
+    const xBtn = mk('button', 'cms-modal-x', '✕');
+    xBtn.type = 'button';
+    head.appendChild(xBtn);
+    modal.appendChild(head);
+
+    const bodyWrap = mk('div', 'cms-modal-body');
+    const lessonBody = mk('div', 'lesson-body');
+    const bodyMarkup = cmsLabel(l.body, lang);
+    if (bodyMarkup && window.MASafeHtml && typeof window.MASafeHtml.render === 'function') {
+      window.MASafeHtml.render(lessonBody, bodyMarkup);
+    } else {
+      lessonBody.appendChild(mk('p', null, cmsLabel(l.description, lang)));
+    }
+    bodyWrap.appendChild(lessonBody);
+
+    if (quiz) {
+      const quizEl = mk('div', 'lesson-quiz');
+      quizEl.appendChild(mk('h4', null, 'Knowledge check', 'margin:1rem 0 0.5rem;color:var(--te-dark-teal);'));
+      quiz.questions.forEach((q, qi) => {
+        const qEl = mk('div', 'lq-q', null, 'margin-bottom:0.75rem;');
+        qEl.appendChild(mk('p', null, (qi + 1) + '. ' + cmsLabel(q.question, lang), 'font-weight:600;margin:0 0 0.35rem;'));
+        (q.options || []).forEach((o, oi) => {
+          const lab = mk('label', null, null, 'display:block;font-size:0.9rem;margin:0.15rem 0;cursor:pointer;');
+          const radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.setAttribute('name', 'lq-' + qi);
+          radio.value = String(oi);
+          lab.appendChild(radio);
+          lab.appendChild(document.createTextNode(' ' + cmsLabel(o, lang)));
+          qEl.appendChild(lab);
+        });
+        quizEl.appendChild(qEl);
+      });
+      const submit = mk('button', 'btn btn-primary lq-submit', 'Submit answers', 'width:auto;margin:0.5rem 0 0;');
+      submit.type = 'button';
+      quizEl.appendChild(submit);
+      quizEl.appendChild(mk('p', 'lq-result', null, 'margin-top:0.5rem;font-weight:700;'));
+      bodyWrap.appendChild(quizEl);
+    }
+    modal.appendChild(bodyWrap);
+    overlay.appendChild(modal);
     document.body.appendChild(overlay);
     const close = () => overlay.remove();
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
