@@ -1925,6 +1925,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.MAClientStorage && typeof window.MAClientStorage.runLegacyCleanupOnce === 'function') {
     window.MAClientStorage.runLegacyCleanupOnce();
   }
+  // [security] IN-B02 (Phase 13 review, Part B): a page restored from the
+  // back/forward cache after sign-out would show the previous user's DOM.
+  // Clear-Site-Data "cache" prevents that only in secure contexts (a plain-HTTP
+  // LAN host ignores it), so a persisted restore always reloads - the reload
+  // goes through the auth probe and bounces a signed-out browser to login.
+  window.addEventListener('pageshow', (e) => { if (e.persisted) window.location.reload(); });
 
   // Apply edit mode body class immediately on load if enabled
   if (localStorage.getItem('adminEditMode') === 'true') {

@@ -486,6 +486,11 @@ test('static: transitions.js makes no Cache Storage delete/enumerate call and no
   assert.ok(/MAClientStorage\.runLegacyCleanupOnce\(\)/.test(src), 'the guarded one-time clean-up replaces it');
 });
 
+test('static (IN-B02): transitions.js reloads a page restored from the back/forward cache', () => {
+  const src = readRoot('public', 'js', 'transitions.js');
+  assert.match(src, /window\.addEventListener\('pageshow', \(e\) => \{ if \(e\.persisted\) window\.location\.reload\(\); \}\);/);
+});
+
 test('static: no other page script wipes Cache Storage', () => {
   const dir = path.join(ROOT, 'public', 'js');
   const offenders = fs.readdirSync(dir).filter((f) => f.endsWith('.js') && f !== 'client-storage.js')
