@@ -16,7 +16,11 @@
 //   dev             no MA_MODE; MA_*_PATH point at temp COPIES of the committed
 //                   demo/control databases (login required, published demo
 //                   accounts).
-//   demo-open       dev plus DEMO_OPEN=1 (anonymous showcase visitor).
+//   demo-open       dev plus DEMO_OPEN=1 (anonymous showcase visitor). Open mode
+//                   skips the session gate, so the inline admin-only routes
+//                   (csp-violations, egress POST) answer 403 to everyone; the
+//                   runner reads the violation list with a generated
+//                   X-Admin-Token (ADMIN_TOKEN is set on this child only).
 //   dev-defaultdir  dev with MA_SLIDES_UPLOAD_DIR UNSET so uploaded slides land in
 //                   the worktree's real public/uploads/slides (B-1: a temp dir
 //                   outside public/ cannot detect a slide answered by the

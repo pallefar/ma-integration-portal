@@ -1,0 +1,51 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane real: ilWalk ===
+[lane:real] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[lane:real] PASS - bootstrap-admin created the first admin
+[ilWalk@real] PASS - IL: /dashboard.html (smoke IL page) at 1440
+[ilWalk@real] PASS - IL: /dashboard.html at 390
+[ilWalk@real] PASS - IL: /execution.html (smoke IL page) at 1440
+[ilWalk@real] PASS - IL: /execution.html at 390
+[ilWalk@real] PASS - IL: /due-diligence.html (smoke IL page) at 1440
+[ilWalk@real] PASS - IL: /due-diligence.html at 390
+[ilWalk@real] PASS - IL: /org.html (smoke IL page) at 1440
+[ilWalk@real] PASS - IL: /org.html at 390
+[ilWalk@real] PASS - IL: deal home - every dashboard tab :: 13 tabs
+[ilWalk@real] PASS - IL: execution - tasks, synergy, RAID, reports tabs :: tasks,synergy,raid,reports
+[ilWalk@real] PASS - IL: open the assistant, send a message, receive an answer
+[ilWalk@real] PASS - IL: sidebar easter-egg opens through openHtmlSlide (sandboxed frame)
+[ilWalk@real] PASS - IL: Ask 1 deck slide renders non-blank in the sandboxed opaque-origin frame (I-5) :: {"text":1254,"visible":45,"origin":"null"}
+[ilWalk@real] PASS - admin: the admin console exposes its tabs (18) :: projects,deals,audit,users,courses,modules,departments,processes,slides,pages,employees,hrbp,communication,banners,translations,menus,media,system
+[ilWalk@real] PASS - admin: admin tab "projects" opens
+[ilWalk@real] PASS - admin: admin tab "deals" opens
+[ilWalk@real] PASS - admin: admin tab "audit" opens
+[ilWalk@real] PASS - admin: admin tab "users" opens
+[ilWalk@real] PASS - admin: admin tab "courses" opens
+[ilWalk@real] PASS - admin: admin tab "modules" opens
+[ilWalk@real] PASS - admin: admin tab "departments" opens
+[ilWalk@real] PASS - admin: admin tab "processes" opens
+[ilWalk@real] PASS - admin: admin tab "slides" opens
+[ilWalk@real] PASS - admin: admin tab "pages" opens
+[ilWalk@real] PASS - admin: admin tab "employees" opens
+[ilWalk@real] PASS - admin: admin tab "hrbp" opens
+[ilWalk@real] PASS - admin: admin tab "communication" opens
+[ilWalk@real] PASS - admin: admin tab "banners" opens
+[ilWalk@real] PASS - admin: admin tab "translations" opens
+[ilWalk@real] PASS - admin: admin tab "menus" opens
+[ilWalk@real] PASS - admin: admin tab "media" opens
+[ilWalk@real] PASS - admin: admin tab "system" opens
+[ilWalk@real] PASS - admin: tab "system" (Settings / Pages / Slides) was part of the walk :: ["projects","deals","audit","users","courses","modules","departments","processes","slides","pages","employees","hrbp","communication","banners","translations","menus","media","system"]
+[ilWalk@real] PASS - admin: tab "pages" (Settings / Pages / Slides) was part of the walk :: ["projects","deals","audit","users","courses","modules","departments","processes","slides","pages","employees","hrbp","communication","banners","translations","menus","media","system"]
+[ilWalk@real] PASS - admin: tab "slides" (Settings / Pages / Slides) was part of the walk :: ["projects","deals","audit","users","courses","modules","departments","processes","slides","pages","employees","hrbp","communication","banners","translations","menus","media","system"]
+[ilWalk@real] PASS - in-page securitypolicyviolation events across the walk: none (51 checkpoints) :: []
+[ilWalk@real] PASS - GET /api/admin/csp-violations is empty after the walk :: []
+[ilWalk@real] PASS - no walk step failed :: {"failed":0,"of":32}
+[ilWalk@real] PASS - canary server saw zero hits during the walk :: []
+[ilWalk@real] PASS - real-mode walk: no third-party request was even attempted :: []
+ilWalk@real violations=0 endpoint=0 inpage=0 checkpoints=51 steps=32 failedSteps=0 csp-mode=report-only
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+44 PASS, 0 FAIL.
+EXIT=0

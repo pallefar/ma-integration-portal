@@ -1,0 +1,64 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane dev: demoWalk ===
+[lane:dev] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[demoWalk@dev] PASS - dev: /admin.html loads and settles :: /admin.html
+[demoWalk@dev] PASS - dev: /assessments.html loads and settles :: /assessments.html
+[demoWalk@dev] PASS - dev: /capability-hub.html loads and settles :: /capability-hub.html
+[demoWalk@dev] PASS - dev: /change-password.html loads and settles :: /change-password.html
+[demoWalk@dev] PASS - dev: /dashboard.html loads and settles :: /dashboard.html
+[demoWalk@dev] PASS - dev: /deal-wizard.html loads and settles :: /deal-wizard.html
+[demoWalk@dev] PASS - dev: /due-diligence.html loads and settles :: /due-diligence.html
+[demoWalk@dev] PASS - dev: /employee.html loads and settles :: /employee.html
+[demoWalk@dev] PASS - dev: /execution.html loads and settles :: /execution.html
+[demoWalk@dev] PASS - dev: /index.html loads and settles :: /index.html
+[demoWalk@dev] PASS - dev: /insights.html loads and settles :: /insights.html
+[demoWalk@dev] PASS - dev: /integration-excellence.html loads and settles :: /integration-excellence.html
+[demoWalk@dev] PASS - dev: /leaders.html loads and settles :: /leaders.html
+[demoWalk@dev] PASS - dev: /org.html loads and settles :: /org.html
+[demoWalk@dev] PASS - dev: /overview.html loads and settles :: /overview.html
+[demoWalk@dev] PASS - dev: /playbook.html loads and settles :: /playbook.html
+[demoWalk@dev] PASS - dev: /pmo.html loads and settles :: /pmo.html
+[demoWalk@dev] PASS - dev: /signage.html loads and settles :: /signage.html
+[demoWalk@dev] PASS - dev: /supporting.html loads and settles :: /supporting.html
+[demoWalk@dev] PASS - dev: /survey.html loads and settles :: /survey.html
+[demoWalk@dev] PASS - dev: open the assistant, send a message, receive an answer
+[demoWalk@dev] PASS - dev: sidebar easter-egg opens through openHtmlSlide (sandboxed frame)
+[demoWalk@dev] PASS - dev: Ask 1 deck slide renders non-blank in the sandboxed opaque-origin frame (I-5) :: {"text":1254,"visible":45,"origin":"null"}
+[demoWalk@dev] PASS - dev: survey-scores modal opens (insertAdjacentHTML template, close listener)
+[demoWalk@dev] PASS - dev: overview deck (framed) + Agenda popover
+[demoWalk@dev] PASS - dev: employee portal lesson modal
+[demoWalk@dev] PASS - dev: employee welcome video control
+[demoWalk@dev] PASS - dev: the admin console exposes its tabs (18) :: projects,deals,audit,users,courses,modules,departments,processes,slides,pages,employees,hrbp,communication,banners,translations,menus,media,system
+[demoWalk@dev] PASS - dev: admin tab "projects" opens
+[demoWalk@dev] PASS - dev: admin tab "deals" opens
+[demoWalk@dev] PASS - dev: admin tab "audit" opens
+[demoWalk@dev] PASS - dev: admin tab "users" opens
+[demoWalk@dev] PASS - dev: admin tab "courses" opens
+[demoWalk@dev] PASS - dev: admin tab "modules" opens
+[demoWalk@dev] PASS - dev: admin tab "departments" opens
+[demoWalk@dev] PASS - dev: admin tab "processes" opens
+[demoWalk@dev] PASS - dev: admin tab "slides" opens
+[demoWalk@dev] PASS - dev: admin tab "pages" opens
+[demoWalk@dev] PASS - dev: admin tab "employees" opens
+[demoWalk@dev] PASS - dev: admin tab "hrbp" opens
+[demoWalk@dev] PASS - dev: admin tab "communication" opens
+[demoWalk@dev] PASS - dev: admin tab "banners" opens
+[demoWalk@dev] PASS - dev: admin tab "translations" opens
+[demoWalk@dev] PASS - dev: admin tab "menus" opens
+[demoWalk@dev] PASS - dev: admin tab "media" opens
+[demoWalk@dev] PASS - dev: admin tab "system" opens
+[demoWalk@dev] PASS - dev: tab "system" (Settings / Pages / Slides) was part of the walk :: ["projects","deals","audit","users","courses","modules","departments","processes","slides","pages","employees","hrbp","communication","banners","translations","menus","media","system"]
+[demoWalk@dev] PASS - dev: tab "pages" (Settings / Pages / Slides) was part of the walk :: ["projects","deals","audit","users","courses","modules","departments","processes","slides","pages","employees","hrbp","communication","banners","translations","menus","media","system"]
+[demoWalk@dev] PASS - dev: tab "slides" (Settings / Pages / Slides) was part of the walk :: ["projects","deals","audit","users","courses","modules","departments","processes","slides","pages","employees","hrbp","communication","banners","translations","menus","media","system"]
+[demoWalk@dev] PASS - dev: page list with landing paths :: ["/admin.html -> /admin.html","/assessments.html -> /assessments.html","/capability-hub.html -> /capability-hub.html","/change-password.html -> /change-password.html","/dashboard.html -> /dashboard.html","/deal-wizard.html -> /deal-wizard.html","/due-diligence.html -> /due-diligence.html","/employee.html -> /employee.html","/execution.html -> /execution.html","/index.html -> /index.html","/insights.html -> /insights.html","/integration-excellence.html -> /integration-excellence.html","/leaders.html -> /leaders.html","/org.html -> /org.html","/overview.html -> /overview.html","/playbook.html -> /playbook.html","/pmo.html -> /pmo.html","/signage.html -> /signage.html","/supporting.html -> /supporting.html","/survey.html -> /survey.html"]
+[demoWalk@dev] PASS - in-page securitypolicyviolation events across the walk: none (48 checkpoints) :: []
+[demoWalk@dev] PASS - GET /api/admin/csp-violations is empty after the walk :: []
+[demoWalk@dev] PASS - no walk step failed :: {"failed":0,"of":46}
+[demoWalk@dev] PASS - canary server saw zero hits during the walk :: []
+demoWalk@dev violations=0 endpoint=0 inpage=0 checkpoints=48 steps=46 failedSteps=0 csp-mode=report-only
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+57 PASS, 0 FAIL.
+EXIT=0

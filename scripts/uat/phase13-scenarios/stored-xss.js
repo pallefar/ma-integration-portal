@@ -285,7 +285,8 @@ async function assertInertFull(ctx, page, label) {
 }
 
 async function S_shot(ctx, page, name) {
-  try { await ctx.shot(page, name); } catch (e) { /* screenshots are evidence, not a gate */ }
+  // JPEG quality 14: the whole evidence directory is capped (<= 1200 KB, README).
+  try { await ctx.shot(page, name, 14); } catch (e) { /* screenshots are evidence, not a gate */ }
 }
 
 module.exports = { storedXss, __lanes: { storedXss: ['dev', 'demo-open', 'real'] } };
