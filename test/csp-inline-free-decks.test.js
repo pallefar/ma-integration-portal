@@ -73,8 +73,14 @@ function inlineViolations(html) {
   return out;
 }
 
-// Decks externalised so far (the full set after plan task 2).
-const DECKS = ['easter-egg'];
+// Every first-party deck page; the set is also cross-checked against the directory listing below,
+// so a deck added later without a gate entry fails.
+const DECKS = ['agenda', 'deck', 'easter-egg', 'slide5', 'slide6', 'working-in-a-matrix'];
+
+test('DECKS lists every public/overview-deck/*.html', () => {
+  const onDisk = fs.readdirSync(DECK_DIR).filter((f) => f.endsWith('.html')).map((f) => f.replace(/\.html$/, '')).sort();
+  assert.deepStrictEqual(onDisk, DECKS.slice().sort());
+});
 
 test('checker self-test: it flags inline scripts, handlers and javascript: URLs and passes external scripts', () => {
   assert.strictEqual(inlineViolations('<script src="/js/a.js?v=1"></script><a href="#">x</a>').length, 0);
@@ -122,4 +128,89 @@ test('transitions.js sidebar survey and easter-egg launchers carry href="#" (not
   assert.match(TRANSITIONS, /<a href="#" class="sidebar-link sidebar-egg" data-html-slide="\/overview-deck\/easter-egg\.html"/);
   const wired = /sidebarSurveyLink\.addEventListener\('click', \(e\) => \{\s*(?:\/\/[^\n]*\n\s*)*e\.preventDefault\(\);/.exec(TRANSITIONS);
   assert.ok(wired, 'the survey link click handler must call preventDefault');
+});
+
+test('transitions.js quick-nav/notification hover is a CSS rule, not generated onmouseover/onmouseout', () => {
+  assert.doesNotMatch(TRANSITIONS, /onmouseover|onmouseout/);
+  assert.match(TRANSITIONS, /class="sidebar-notif-item"/);
+  const css = fs.readFileSync(path.join(PUBLIC, 'css', 'style.css'), 'utf8');
+  assert.match(css, /\.sidebar-notif-item:hover\s*\{\s*background:\s*rgba\(233,\s*131,\s*0,\s*0\.08\)/);
+});
+
+test('survey-scores modal close button has no inline handler and is wired with addEventListener', () => {
+  assert.doesNotMatch(TRANSITIONS, /ai-insight-modal-close"[^>]*onclick/);
+  assert.match(TRANSITIONS, /id="survey-scores-modal-close"/);
+  assert.match(TRANSITIONS, /getElementById\('survey-scores-modal-close'\);[\s\S]{0,200}addEventListener\('click'/);
+});
+
+/** Source of `const <name> = (...) => { ... };` by brace matching from the arrow's opening brace. */
+function functionBody(src, name) {
+  const start = src.indexOf('const ' + name + ' = ');
+  assert.ok(start >= 0, `could not locate ${name}`);
+  const open = src.indexOf('{', src.indexOf('=>', start));
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(open, i + 1); }
+  }
+  throw new Error('unbalanced braces in ' + name);
+}
+const stripJsComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+test('addSlide (sidebar slide-link builder) uses href="#", textContent for icon + label and no HTML-string sink (D-13-02)', () => {
+  const body = stripJsComments(functionBody(TRANSITIONS, 'addSlide'));
+  assert.doesNotMatch(body, /javascript:/);
+  assert.match(body, /a\.href = '#'/);
+  assert.match(body, /iconEl\.textContent = /);
+  assert.match(body, /labelEl\.textContent = /);
+  assert.doesNotMatch(body, /\.innerHTML\b|\.outerHTML\b|insertAdjacentHTML|document\.write/, 'no HTML-string sink in addSlide');
+  assert.match(body, /e\.preventDefault\(\);\s*window\.openHtmlSlide\(/);
+});
+
+// ---------------------------------------------------- client-JS-wide static gate (SAFE-02) ---
+
+/** Every .js file under public/js (vendored code lives in public/vendor, never here; excluded defensively). */
+function clientJsFiles(dir = path.join(PUBLIC, 'js')) {
+  const out = [];
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, ent.name);
+    if (ent.isDirectory()) { if (ent.name !== 'vendor') out.push(...clientJsFiles(full)); }
+    else if (ent.name.endsWith('.js')) out.push(full);
+  }
+  return out;
+}
+
+// Recorded allowlist: exact trimmed code lines that mention `javascript:` ON PURPOSE because they are
+// scheme GUARDS (they reject or skip such URLs), not producers of one. Comment-only lines are skipped
+// separately. Anything else naming `javascript:` in public/js fails the gate.
+const JAVASCRIPT_SCHEME_GUARD_LINES = new Set([
+  "if (href.indexOf('javascript:') === 0) return '';", // transitions.js tokenOf: javascript: hrefs carry no menu token
+]);
+
+const HANDLER_ATTR_IN_STRING = /[\s"'`]on[a-z]+\s*=\s*\\?["'`]/;
+
+test('client JS tree: no string literal carries an inline handler attribute or a javascript: URL', () => {
+  const files = clientJsFiles();
+  assert.ok(files.length >= 30, 'expected the shipped client scripts under public/js');
+  const hits = [];
+  for (const file of files) {
+    const rel = path.relative(ROOT, file);
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      if (/^(?:\/\/|\/\*|\*)/.test(trimmed)) return; // comment-only line
+      if (HANDLER_ATTR_IN_STRING.test(line)) hits.push(`${rel}:${idx + 1}: inline handler attribute: ${trimmed.slice(0, 120)}`);
+      if (/javascript\s*:/i.test(line) && !JAVASCRIPT_SCHEME_GUARD_LINES.has(trimmed)) {
+        hits.push(`${rel}:${idx + 1}: javascript: URL: ${trimmed.slice(0, 120)}`);
+      }
+    });
+  }
+  assert.deepStrictEqual(hits, [], 'inline handlers / javascript: URLs found:\n  ' + hits.join('\n  '));
+});
+
+test('client JS gate self-test: the handler pattern catches the shapes transitions.js used to generate', () => {
+  assert.ok(HANDLER_ATTR_IN_STRING.test(`<button class="x" onclick="document.getElementById('a').style.display='none'">`));
+  assert.ok(HANDLER_ATTR_IN_STRING.test(`'<a style="" onmouseover="this.style.background=\\'x\\'" onmouseout="...">'`));
+  assert.ok(!HANDLER_ATTR_IN_STRING.test(`btn.onclick = function () {}`));
+  assert.ok(!HANDLER_ATTR_IN_STRING.test(`a.addEventListener('click', fn)`));
 });

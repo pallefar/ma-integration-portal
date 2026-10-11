@@ -2297,7 +2297,7 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
             label = '<span data-i18n="notif.' + escN(it.type) + '">' + escN(it.type) + '</span>';
           }
-          return '<a href="' + escN(it.href) + '" style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.6rem 0.8rem;border-radius:8px;text-decoration:none;color:var(--text-primary,#1c2b33);font-size:0.82rem;line-height:1.45;" onmouseover="this.style.background=\'rgba(233,131,0,0.08)\'" onmouseout="this.style.background=\'none\'">'
+          return '<a href="' + escN(it.href) + '" class="sidebar-notif-item" style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.6rem 0.8rem;border-radius:8px;text-decoration:none;color:var(--text-primary,#1c2b33);font-size:0.82rem;line-height:1.45;">'
             + '<span style="flex:none;">' + (SEV_ICON[it.severity] || 'ℹ️') + '</span><span>' + label + '</span></a>';
         };
         const panel = document.createElement('div');
@@ -2820,7 +2820,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!sb) return;
       const nav = sb.querySelector('.sidebar-nav');
       if (!nav || nav.querySelector('.sidebar-group[data-group="slides"]')) return;
-      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       // Build the "Slides" group up-front so the two fixed leadership Asks always
       // appear even before (or if) the admin-authored slides load.
       const group = document.createElement('div');
@@ -2834,13 +2833,22 @@ document.addEventListener('DOMContentLoaded', () => {
         '</button>' +
         '<div class="sidebar-group-items"></div>';
       const items = group.querySelector('.sidebar-group-items');
+      // D-13-02 slide-label render path / SAFE-02: no javascript: URL and no markup string —
+      // icon and (admin-authored) label are plain text nodes; the click handler prevents the "#" jump.
       const addSlide = (icon, label, title, url) => {
         const a = document.createElement('a');
-        a.href = 'javascript:void(0)';
+        a.href = '#';
         a.className = 'sidebar-link';
         a.title = title || label;
-        a.innerHTML = '<span class="sidebar-link-icon">' + esc(icon || '\u{1F5A5}️') + '</span><span class="sidebar-link-label">' + esc(label || 'Slide') + '</span>';
-        a.addEventListener('click', () => window.openHtmlSlide(url, title || label));
+        const iconEl = document.createElement('span');
+        iconEl.className = 'sidebar-link-icon';
+        iconEl.textContent = icon || '\u{1F5A5}️';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'sidebar-link-label';
+        labelEl.textContent = label || 'Slide';
+        a.appendChild(iconEl);
+        a.appendChild(labelEl);
+        a.addEventListener('click', (e) => { e.preventDefault(); window.openHtmlSlide(url, title || label); });
         items.appendChild(a);
       };
       // Fixed app slides — the two leadership "Our Ask" decks, shown full-screen.
@@ -4602,7 +4610,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="ai-insight-modal" style="max-width: 850px; background: #ffffff; color: #333333;">
           <div class="ai-insight-modal-header" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 1.5rem;">
             <h3 class="ai-insight-modal-title" style="margin: 0; font-family: var(--font-family-display); font-size: 1.5rem; color: var(--te-dark-teal);">M&A Integration Diagnostic | <span style="color: var(--te-orange); font-weight: 300;">Integration Scorecard</span></h3>
-            <button class="ai-insight-modal-close" onclick="document.getElementById('survey-scores-modal').style.display='none'">✕</button>
+            <button class="ai-insight-modal-close" id="survey-scores-modal-close" type="button">✕</button>
           </div>
           <div class="ai-insight-modal-body">
             
@@ -4714,6 +4722,14 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     
     document.body.insertAdjacentHTML('beforeend', modalHTML);
+    // SAFE-02: close wired with a listener (the markup carries no inline handler).
+    const surveyModalClose = document.getElementById('survey-scores-modal-close');
+    if (surveyModalClose) {
+      surveyModalClose.addEventListener('click', () => {
+        const m = document.getElementById('survey-scores-modal');
+        if (m) m.style.display = 'none';
+      });
+    }
   };
 
   // Trigger Setup
