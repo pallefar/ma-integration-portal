@@ -224,7 +224,16 @@ function prepareLane(lane, tmp, cspMode) {
     env.MA_RUNTIME_DB_PATH = path.join(dataDir, 'runtime.db');
     env.MA_AUDIT_DB_PATH = path.join(dataDir, 'audit.db');
     env.MA_DEALS_DIR = path.join(dataDir, 'deals');
-    if (lane === 'demo-open') env.DEMO_OPEN = '1';
+    if (lane === 'demo-open') {
+      env.DEMO_OPEN = '1';
+      // Open mode skips the session gate, so req.portalUser is null for EVERY
+      // caller and the inline admin-only routes (csp-violations, egress POST)
+      // answer 403 even to a signed-in admin. The runner reads the violation
+      // list with the X-Admin-Token break-glass header instead; browsers never
+      // send it, so the anonymous showcase behaviour under test is unchanged.
+      env.ADMIN_TOKEN = randomSecret(24);
+      secrets.push(env.ADMIN_TOKEN);
+    }
   }
   if (lane === 'dev-defaultdir') {
     // Per-scenario child-env override that UNSETS a key (B-1): the slide lands in
@@ -372,7 +381,10 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
         if (ch.status !== 200) throw new Error('admin forced rotation failed: ' + ch.status);
         rotatedPassword = next;
         cookie = cookieOf(ch.headers) || first.cookie;
-      } else if (lane !== 'demo-open') {
+      } else {
+        // dev AND demo-open: /api/admin/* (incl. csp-violations) is closed to an
+        // anonymous visitor even in demo-open, so the operator signs in with the
+        // published demo account like the login page's click-to-fill does.
         cookie = (await loginFull('admin', publishedDemoPassword())).cookie;
       }
       sessions.set('admin', cookie);
@@ -441,8 +453,11 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
             if (sel.status !== 200) throw new Error(`deal select failed for ${f.users[key].username}: ${sel.status}`);
           }
         } else if (lane === 'demo-open') {
+          // The showcase visitor is anonymous (writes are open there by design) and is
+          // both author and victim; only the operator console / violation list needs
+          // the admin session.
           const anon = { username: null, role: 'anonymous', cookie: null };
-          f.users = { admin: anon, author: anon, victim: anon, il: anon, emp: anon, pmo: anon };
+          f.users = { admin: { username: 'admin', role: 'admin', cookie: await adminCookie() }, author: anon, victim: anon, il: anon, emp: anon, pmo: anon };
         } else {
           const pw = publishedDemoPassword();
           const admin = await adminCookie();
@@ -546,7 +561,8 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
     // GET /api/admin/csp-violations with an admin session (none needed in demo-open).
     const endpointViolations = async () => {
       const cookie = await adminCookie();
-      const r = await api(cookie, 'GET', '/api/admin/csp-violations');
+      const token = env.ADMIN_TOKEN && lane === 'demo-open' ? { 'X-Admin-Token': env.ADMIN_TOKEN } : undefined;
+      const r = await api(cookie, 'GET', '/api/admin/csp-violations', undefined, token);
       if (r.status !== 200 || !r.json) throw new Error('csp-violations answered ' + r.status);
       return r.json;
     };

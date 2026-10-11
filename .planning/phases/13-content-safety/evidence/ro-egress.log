@@ -1,0 +1,94 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane real: egress ===
+[lane:real] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[lane:real] PASS - bootstrap-admin created the first admin
+[egress@real] PASS - admin set a YouTube welcome video (settings POST) :: {"status":200}
+[egress@real] PASS - IL walk: stays on /dashboard.html :: /dashboard.html
+[egress@real] PASS - IL walk: stays on /execution.html :: /execution.html
+[egress@real] PASS - IL walk: stays on /due-diligence.html :: /due-diligence.html
+[egress@real] PASS - IL walk: stays on /org.html :: /org.html
+[egress@real] PASS - IL walk: stays on /index.html :: /index.html
+[egress@real] PASS - IL walk: no securitypolicyviolation event :: []
+[egress@real] PASS - employee walk: stays on /employee.html :: /employee.html
+[egress@real] PASS - employee walk: no securitypolicyviolation event :: []
+[egress@real] PASS - admin walk: stays on /admin.html :: /admin.html
+[egress@real] PASS - admin walk: no securitypolicyviolation event :: []
+[egress@real] PASS - real lane defaults: every request of the IL/employee/admin walk is same-origin (278 requests) :: []
+[egress@real] PASS - real lane defaults: nothing had to be intercepted locally (no third-party attempt at all) :: []
+[egress@real] PASS - served CSP equals the all-off (real-mode) policy for CSP_MODE=report-only :: {"Content-Security-Policy":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; report-uri /api/csp-report","Content-Security-Policy-Report-Only":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; report-uri /api/csp-report"}
+[egress@real] PASS - real-mode CSP lists no third-party origin (no http:/https: token, no wildcard)
+[egress@real] PASS - the HTML document response carries the same all-off policy :: {"Content-Security-Policy":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; report-uri /api/csp-report","Content-Security-Policy-Report-Only":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; report-uri /api/csp-report"}
+[egress@real] PASS - admin dashboard: stays on /dashboard.html :: /dashboard.html
+[egress@real] PASS - the AI Insight activation dialog is offered to the admin
+[egress@real] PASS - real defaults: both downloadable models are disabled and the switched-off note is shown :: {"options":[{"model":"simulated-duck","disabled":false},{"model":"lamini-78m","disabled":true},{"model":"qwen-0.5b","disabled":true}],"offNote":true}
+[egress@real] PASS - real defaults: no request to Hugging Face from the dialog page :: []
+[egress@real] PASS - real defaults: /api/ai/insight answers the 200 egressDisabled marker (no Gemini call) :: {"status":200,"egressDisabled":"gemini"}
+[egress@real] PASS - employee page: stays on /employee.html :: /employee.html
+[egress@real] PASS - real defaults: the employee video shows the "switched off" card, no play control, no YouTube request :: {"state":{"off":true,"playVisible":false,"bg":""},"yt":0}
+[egress@real] PASS - panel: youtube and huggingface saved ON, gemini still off :: {"youtube":true,"huggingface":true,"gemini":false}
+[egress@real] PASS - the very next response carries the CSP with exactly the youtube + huggingface origins (PD-9) :: {"Content-Security-Policy":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co; font-src 'self' data:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com; media-src 'self' blob: data: https://*.youtube.com; worker-src 'self' blob:; report-uri /api/csp-report","Content-Security-Policy-Report-Only":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co; font-src 'self' data:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com; media-src 'self' blob: data: https://*.youtube.com; worker-src 'self' blob:; report-uri /api/csp-report"}
+[egress@real] PASS - ...and those origins are only in img-src / connect-src / frame-src / media-src, never script-src
+[egress@real] PASS - employee page: stays on /employee.html :: /employee.html
+[egress@real] PASS - youtube ON: the employee video no longer shows the switched-off card and builds the thumbnail :: {"state":{"off":false,"playVisible":true,"bg":"linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url(\"https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg\")"},"yt":1}
+[egress@real] PASS - admin dashboard (huggingface on): stays on /dashboard.html :: /dashboard.html
+[egress@real] PASS - huggingface ON: the model options are selectable again and the switched-off note is gone :: {"disabled":0,"offNote":false}
+[egress@real] PASS - panel: switched back OFF :: {"youtube":false,"huggingface":false,"gemini":false}
+[egress@real] PASS - the next response is the all-off policy again :: {"Content-Security-Policy":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; report-uri /api/csp-report","Content-Security-Policy-Report-Only":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; report-uri /api/csp-report"}
+[egress@real] PASS - employee page: stays on /employee.html :: /employee.html
+[egress@real] PASS - youtube OFF again: the switched-off card is back and no YouTube request is made :: {"state":{"off":true,"playVisible":false,"bg":""},"yt":0}
+[egress@real] PASS - GET /api/admin/csp-violations is empty after the whole egress walk :: {"count":0,"tuples":[]}
+egress@real requests=278 thirdPartyAttempts=0 violations=0
+
+=== lane dev: egress ===
+[lane:dev] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[egress@dev] PASS - showcase copy: AI-model prompt re-armed on the throw-away database (browserModel none) :: {"status":200}
+[egress@dev] PASS - IL walk: stays on /dashboard.html :: /dashboard.html
+[egress@dev] PASS - IL walk: stays on /execution.html :: /execution.html
+[egress@dev] PASS - IL walk: stays on /due-diligence.html :: /due-diligence.html
+[egress@dev] PASS - IL walk: stays on /org.html :: /org.html
+[egress@dev] PASS - IL walk: stays on /index.html :: /index.html
+[egress@dev] PASS - IL walk: no securitypolicyviolation event :: []
+[egress@dev] PASS - employee walk: stays on /employee.html :: /employee.html
+[egress@dev] PASS - employee walk: no securitypolicyviolation event :: []
+[egress@dev] PASS - admin walk: stays on /admin.html :: /admin.html
+[egress@dev] PASS - admin walk: no securitypolicyviolation event :: []
+[egress@dev] PASS - dev: showcase walk completed (289 requests; 1 third-party attempt(s) intercepted locally: img.youtube.com)
+[egress@dev] PASS - served CSP equals the all-on (showcase) policy for CSP_MODE=report-only :: {"Content-Security-Policy":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co; font-src 'self' data:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com; media-src 'self' blob: data: https://*.youtube.com; worker-src 'self' blob:; report-uri /api/csp-report","Content-Security-Policy-Report-Only":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co; font-src 'self' data:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com; media-src 'self' blob: data: https://*.youtube.com; worker-src 'self' blob:; report-uri /api/csp-report"}
+[egress@dev] PASS - admin dashboard: stays on /dashboard.html :: /dashboard.html
+[egress@dev] PASS - the AI Insight activation dialog is offered to the admin
+[egress@dev] PASS - showcase: the downloadable models are selectable and no switched-off note is shown :: {"options":[{"model":"simulated-duck","disabled":false},{"model":"lamini-78m","disabled":false},{"model":"qwen-0.5b","disabled":false}],"offNote":false}
+[egress@dev] PASS - employee page: stays on /employee.html :: /employee.html
+[egress@dev] PASS - showcase: the employee video still builds the YouTube thumbnail (request to img.youtube.com attempted) and no switched-off card :: {"state":{"off":false,"playVisible":true,"bg":"linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url(\"https://img.youtube.com/vi/g7Qa2ZBOCNM/hqdefault.jpg\")"},"yt":["https://img.youtube.com/vi/g7Qa2ZBOCNM/hqdefault.jpg"]}
+[egress@dev] PASS - showcase: Play embeds the YouTube iframe :: https://www.youtube.com/embed/g7Qa2ZBOCNM?autoplay=1
+[egress@dev] PASS - GET /api/admin/csp-violations is empty after the whole egress walk :: {"count":0,"tuples":[]}
+egress@dev requests=289 thirdPartyAttempts=1 violations=0
+
+=== lane demo-open: egress ===
+[lane:demo-open] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"demo","demoOpen":true,"accountsWritable":true}
+[egress@demo-open] PASS - showcase copy: AI-model prompt re-armed on the throw-away database (browserModel none) :: {"status":200}
+[egress@demo-open] PASS - IL walk: stays on /dashboard.html :: /dashboard.html
+[egress@demo-open] PASS - IL walk: stays on /execution.html :: /execution.html
+[egress@demo-open] PASS - IL walk: stays on /due-diligence.html :: /due-diligence.html
+[egress@demo-open] PASS - IL walk: stays on /org.html :: /org.html
+[egress@demo-open] PASS - IL walk: stays on /index.html :: /index.html
+[egress@demo-open] PASS - IL walk: no securitypolicyviolation event :: []
+[egress@demo-open] PASS - employee walk: stays on /employee.html :: /employee.html
+[egress@demo-open] PASS - employee walk: no securitypolicyviolation event :: []
+[egress@demo-open] PASS - admin walk: stays on /admin.html :: /admin.html
+[egress@demo-open] PASS - admin walk: no securitypolicyviolation event :: []
+[egress@demo-open] PASS - demo-open: showcase walk completed (248 requests; 1 third-party attempt(s) intercepted locally: img.youtube.com)
+[egress@demo-open] PASS - served CSP equals the all-on (showcase) policy for CSP_MODE=report-only :: {"Content-Security-Policy":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co; font-src 'self' data:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com; media-src 'self' blob: data: https://*.youtube.com; worker-src 'self' blob:; report-uri /api/csp-report","Content-Security-Policy-Report-Only":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.huggingface.co; font-src 'self' data:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com; media-src 'self' blob: data: https://*.youtube.com; worker-src 'self' blob:; report-uri /api/csp-report"}
+[egress@demo-open] PASS - admin dashboard: stays on /dashboard.html :: /dashboard.html
+[egress@demo-open] PASS - the AI Insight activation dialog is offered to the admin
+[egress@demo-open] PASS - showcase: the downloadable models are selectable and no switched-off note is shown :: {"options":[{"model":"simulated-duck","disabled":false},{"model":"lamini-78m","disabled":false},{"model":"qwen-0.5b","disabled":false}],"offNote":false}
+[egress@demo-open] PASS - employee page: stays on /employee.html :: /employee.html
+[egress@demo-open] PASS - showcase: the employee video still builds the YouTube thumbnail (request to img.youtube.com attempted) and no switched-off card :: {"state":{"off":false,"playVisible":true,"bg":"linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url(\"https://img.youtube.com/vi/g7Qa2ZBOCNM/hqdefault.jpg\")"},"yt":["https://img.youtube.com/vi/g7Qa2ZBOCNM/hqdefault.jpg"]}
+[egress@demo-open] PASS - showcase: Play embeds the YouTube iframe :: https://www.youtube.com/embed/g7Qa2ZBOCNM?autoplay=1
+[egress@demo-open] PASS - GET /api/admin/csp-violations is empty after the whole egress walk :: {"count":0,"tuples":[]}
+egress@demo-open requests=248 thirdPartyAttempts=1 violations=0
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+81 PASS, 0 FAIL.
+EXIT=0

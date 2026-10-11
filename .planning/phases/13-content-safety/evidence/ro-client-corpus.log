@@ -1,0 +1,24 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane dev: clientCorpus ===
+[lane:dev] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[clientCorpus@dev] PASS - safe-html.js is served and loads in the page :: {"bytes":13670}
+[clientCorpus@dev] PASS - all 316 corpus vectors rendered through MASafeHtml.toFragment without throwing :: []
+[clientCorpus@dev] PASS - no vector leaves an on* attribute, non-allowlisted element/attribute/scheme or fetching style (316 vectors) :: []
+[clientCorpus@dev] PASS - window.__xss never set by any vector
+[clientCorpus@dev] PASS - no dialog opened by any vector :: []
+[clientCorpus@dev] PASS - no browser request to the canary origin :: []
+[clientCorpus@dev] PASS - canary server saw zero hits :: []
+[clientCorpus@dev] PASS - no script-src / img-src / connect-src / frame-src (or any non base-uri) violation while the corpus was live :: []
+[clientCorpus@dev] PASS - every base-uri event is the inert parse of a <base> vector (blocked URI = the canary origin, nothing applied) :: ["http://127.0.0.1:55472/ enforce","http://127.0.0.1:55472/ report"]
+clientCorpus@dev vectors=316 clean=316 canaryHits=0 inertBaseUriParseEvents=2
+[clientCorpus@dev] PASS - the demo i18n dictionary is readable :: {"status":200}
+[clientCorpus@dev] PASS - dictionary covers the [data-i18n-html] keys of public/*.html (25 keys, 4 languages) :: {"keys":25,"langs":["en","de","zh","cs"],"values":100}
+[clientCorpus@dev] PASS - every demo [data-i18n-html] value renders with the same element/text structure as a plain parse (100 values) :: []
+clientCorpus@dev i18nHtmlValues=100 structuralDiffs=0
+[clientCorpus@dev] PASS - GET /api/admin/csp-violations lists nothing but the inert base-uri parse tuples :: {"count":1,"tuples":[{"directive":"base-uri","blockedUri":"http://127.0.0.1:55472/","sourceFile":"","lineNumber":270,"documentPath":"/healthz","count":2,"firstSeen":"2026-10-11T07:16:58.331Z","lastSeen":"2026-10-11T07:16:58.334Z"}]}
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+16 PASS, 0 FAIL.
+EXIT=0

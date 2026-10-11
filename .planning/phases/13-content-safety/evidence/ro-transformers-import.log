@@ -1,0 +1,23 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane demo-open: transformersImport ===
+[lane:demo-open] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"demo","demoOpen":true,"accountsWritable":true}
+[transformersImport@demo-open] PASS - the page used for the import is itself violation-free first :: 0
+[transformersImport@demo-open] PASS - the vendored transformers bundle imports under the active policy :: {"ok":true,"keys":501,"hasPipeline":true,"hasEnv":true}
+[transformersImport@demo-open] PASS - no violation other than the recorded eval-class ones from the import (in-page) :: []
+[transformersImport@demo-open] PASS - recorded (PD-44): eval-class reports from the vendored bundle during import = 2 :: [{"directive":"script-src","blocked":"eval","source":"http://127.0.0.1:57221/vendor/transformers/transformers.min.js","line":34,"disposition":"report"},{"directive":"script-src","blocked":"eval","source":"http://127.0.0.1:57221/vendor/transformers/transformers.min.js","line":34,"disposition":"report"}]
+[transformersImport@demo-open] PASS - WebAssembly.compile of /vendor/transformers/ort-wasm-simd.wasm resolves :: {"ok":true,"bytes":10014674,"imports":90}
+[transformersImport@demo-open] PASS - no securitypolicyviolation event from the wasm compile (in-page) - wasm-unsafe-eval suffices (W-1) :: []
+[transformersImport@demo-open] PASS - no non-same-origin request during import + compile :: []
+[transformersImport@demo-open] PASS - no browser request to the canary origin
+[transformersImport@demo-open] PASS - same-origin vendor requests during the scenario :: ["/vendor/transformers/transformers.min.js 200","/vendor/transformers/ort-wasm-simd.wasm 200"]
+[transformersImport@demo-open] PASS - GET /api/admin/csp-violations lists nothing but the recorded eval-class tuples (endpoint) :: {"count":1,"other":[],"evalTuples":1}
+[transformersImport@demo-open] PASS - no first-party file sets numThreads (single-thread runtime: wasm-unsafe-eval suffices) :: []
+[transformersImport@demo-open] PASS - UNVERIFIED by design: the threaded runtime path (importScripts(blob:) inside a blob worker inherits script-src 'self' and would be blocked) is not exercised :: recorded for 13-13 DEPLOYMENT.md / 13-14 open items
+transformersImport wasm-compile PASS
+transformersImport@demo-open csp-mode=report-only importResolved=true wasmCompiled=true evalClassReports=2 otherViolations=0
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+15 PASS, 0 FAIL.
+EXIT=0

@@ -1,0 +1,119 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane real: slideSandbox ===
+[lane:real] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[lane:real] PASS - bootstrap-admin created the first admin
+[slideSandbox@real] PASS - .svg upload is refused with the fixed type body (415) :: {"status":415,"body":{"error":"This file type is not allowed for slides.","code":"slide-type-refused"}}
+[slideSandbox@real] PASS - .exe upload is refused with the fixed type body (415) :: {"status":415,"body":{"error":"This file type is not allowed for slides.","code":"slide-type-refused"}}
+[slideSandbox@real] PASS - a PDF renamed .html is refused (magic bytes, 415) :: {"status":415}
+[slideSandbox@real] PASS - refused uploads added no file :: {"before":[],"after":[]}
+[slideSandbox@real] PASS - probe slide uploads (200 with a /uploads/slides/ URL) :: {"status":200}
+[slideSandbox@real] PASS - the uploaded file is in the expected slide directory :: {"dir":"runner temp dir"}
+[slideSandbox@real] PASS - served slide carries exactly SLIDE_SANDBOX_CSP :: {"csp":"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'"}
+[slideSandbox@real] PASS - served slide carries X-Content-Type-Options: nosniff
+[slideSandbox@real] PASS - served slide carries no Report-Only header (PD-37)
+[slideSandbox@real] PASS - the framed slide reported its probe results via postMessage :: {"n":1}
+[slideSandbox@real] PASS - framed: fetch("/api/auth/me") failed :: blocked:TypeError
+[slideSandbox@real] PASS - framed: document.cookie read failed :: blocked:SecurityError
+[slideSandbox@real] PASS - framed: parent.document access failed :: blocked:SecurityError
+[slideSandbox@real] PASS - framed: localStorage access failed :: blocked:SecurityError
+[slideSandbox@real] PASS - framed: beacon fetch to the canary failed :: blocked:TypeError
+[slideSandbox@real] PASS - framed: the slide document has an opaque origin ("null") :: {"self":"null","message":"null"}
+[slideSandbox@real] PASS - framed: the overlay iframe is sandbox="allow-scripts" (no allow-same-origin) :: {"sandbox":"allow-scripts","src":"http://127.0.0.1:55488/uploads/slides/1791703028771_40d7e0_p13-probe.html"}
+[slideSandbox@real] PASS - framed: no /api request from the slide frame reached the server :: {"attempted":[],"reached":0}
+[slideSandbox@real] PASS - framed: no request from the slide frame reached the canary (log) :: ["csp"]
+[slideSandbox@real] PASS - framed: canary server saw zero hits :: []
+[slideSandbox@real] PASS - top-level: the response CSP is exactly SLIDE_SANDBOX_CSP :: {"topCsp":"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'"}
+[slideSandbox@real] PASS - top-level: fetch("/api/auth/me") failed :: blocked:TypeError
+[slideSandbox@real] PASS - top-level: document.cookie read failed :: blocked:SecurityError
+[slideSandbox@real] PASS - top-level: localStorage access failed :: blocked:SecurityError
+[slideSandbox@real] PASS - top-level: beacon fetch to the canary failed :: blocked:TypeError
+[slideSandbox@real] PASS - top-level: the document origin is opaque ("null") even with no frame :: null
+[slideSandbox@real] PASS - top-level: no request reached /api or the canary
+[slideSandbox@real] PASS - top-level: canary server saw zero hits :: []
+[slideSandbox@real] PASS - a ~600 KB slide fits the 1 MB test quota (200) :: {"status":200}
+[slideSandbox@real] PASS - the next ~600 KB slide is refused: fixed quota body (413) :: {"status":413,"body":{"error":"The slide library is full.","code":"slide-quota-exceeded"}}
+[slideSandbox@real] PASS - the quota refusal added no file :: {"before":["1791703028771_40d7e0_p13-probe.html","1791703032017_653f01_p13-big-1.html"],"after":["1791703028771_40d7e0_p13-probe.html","1791703032017_653f01_p13-big-1.html"]}
+[slideSandbox@real] PASS - an 11 MB slide is refused: fixed too-large body (413) :: {"status":413,"body":{"error":"Slide file is larger than 10 MB.","code":"slide-too-large"}}
+[slideSandbox@real] PASS - the too-large refusal added no file :: {"before":["1791703028771_40d7e0_p13-probe.html","1791703032017_653f01_p13-big-1.html"],"after":["1791703028771_40d7e0_p13-probe.html","1791703032017_653f01_p13-big-1.html"]}
+[slideSandbox@real] PASS - GET /api/admin/csp-violations is empty (the sandbox policy reports nothing, the app page stays clean) :: {"count":0,"tuples":[]}
+slideSandbox@real checks=34 failed=0
+
+=== lane dev: slideSandbox ===
+[lane:dev] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[slideSandbox@dev] PASS - .svg upload is refused with the fixed type body (415) :: {"status":415,"body":{"error":"This file type is not allowed for slides.","code":"slide-type-refused"}}
+[slideSandbox@dev] PASS - .exe upload is refused with the fixed type body (415) :: {"status":415,"body":{"error":"This file type is not allowed for slides.","code":"slide-type-refused"}}
+[slideSandbox@dev] PASS - a PDF renamed .html is refused (magic bytes, 415) :: {"status":415}
+[slideSandbox@dev] PASS - refused uploads added no file :: {"before":[],"after":[]}
+[slideSandbox@dev] PASS - probe slide uploads (200 with a /uploads/slides/ URL) :: {"status":200}
+[slideSandbox@dev] PASS - the uploaded file is in the expected slide directory :: {"dir":"runner temp dir"}
+[slideSandbox@dev] PASS - served slide carries exactly SLIDE_SANDBOX_CSP :: {"csp":"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'"}
+[slideSandbox@dev] PASS - served slide carries X-Content-Type-Options: nosniff
+[slideSandbox@dev] PASS - served slide carries no Report-Only header (PD-37)
+[slideSandbox@dev] PASS - the framed slide reported its probe results via postMessage :: {"n":1}
+[slideSandbox@dev] PASS - framed: fetch("/api/auth/me") failed :: blocked:TypeError
+[slideSandbox@dev] PASS - framed: document.cookie read failed :: blocked:SecurityError
+[slideSandbox@dev] PASS - framed: parent.document access failed :: blocked:SecurityError
+[slideSandbox@dev] PASS - framed: localStorage access failed :: blocked:SecurityError
+[slideSandbox@dev] PASS - framed: beacon fetch to the canary failed :: blocked:TypeError
+[slideSandbox@dev] PASS - framed: the slide document has an opaque origin ("null") :: {"self":"null","message":"null"}
+[slideSandbox@dev] PASS - framed: the overlay iframe is sandbox="allow-scripts" (no allow-same-origin) :: {"sandbox":"allow-scripts","src":"http://127.0.0.1:55514/uploads/slides/1791703034476_221de9_p13-probe.html"}
+[slideSandbox@dev] PASS - framed: no /api request from the slide frame reached the server :: {"attempted":[],"reached":0}
+[slideSandbox@dev] PASS - framed: no request from the slide frame reached the canary (log) :: ["csp"]
+[slideSandbox@dev] PASS - framed: canary server saw zero hits :: []
+[slideSandbox@dev] PASS - top-level: the response CSP is exactly SLIDE_SANDBOX_CSP :: {"topCsp":"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'"}
+[slideSandbox@dev] PASS - top-level: fetch("/api/auth/me") failed :: blocked:TypeError
+[slideSandbox@dev] PASS - top-level: document.cookie read failed :: blocked:SecurityError
+[slideSandbox@dev] PASS - top-level: localStorage access failed :: blocked:SecurityError
+[slideSandbox@dev] PASS - top-level: beacon fetch to the canary failed :: blocked:TypeError
+[slideSandbox@dev] PASS - top-level: the document origin is opaque ("null") even with no frame :: null
+[slideSandbox@dev] PASS - top-level: no request reached /api or the canary
+[slideSandbox@dev] PASS - top-level: canary server saw zero hits :: []
+[slideSandbox@dev] PASS - a ~600 KB slide fits the 1 MB test quota (200) :: {"status":200}
+[slideSandbox@dev] PASS - the next ~600 KB slide is refused: fixed quota body (413) :: {"status":413,"body":{"error":"The slide library is full.","code":"slide-quota-exceeded"}}
+[slideSandbox@dev] PASS - the quota refusal added no file :: {"before":["1791703034476_221de9_p13-probe.html","1791703037589_d900a5_p13-big-1.html"],"after":["1791703034476_221de9_p13-probe.html","1791703037589_d900a5_p13-big-1.html"]}
+[slideSandbox@dev] PASS - an 11 MB slide is refused: fixed too-large body (413) :: {"status":413,"body":{"error":"Slide file is larger than 10 MB.","code":"slide-too-large"}}
+[slideSandbox@dev] PASS - the too-large refusal added no file :: {"before":["1791703034476_221de9_p13-probe.html","1791703037589_d900a5_p13-big-1.html"],"after":["1791703034476_221de9_p13-probe.html","1791703037589_d900a5_p13-big-1.html"]}
+[slideSandbox@dev] PASS - GET /api/admin/csp-violations is empty (the sandbox policy reports nothing, the app page stays clean) :: {"count":0,"tuples":[]}
+slideSandbox@dev checks=34 failed=0
+
+=== lane dev-defaultdir: slideSandbox ===
+[lane:dev-defaultdir] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[slideSandbox@dev-defaultdir] PASS - .svg upload is refused with the fixed type body (415) :: {"status":415,"body":{"error":"This file type is not allowed for slides.","code":"slide-type-refused"}}
+[slideSandbox@dev-defaultdir] PASS - .exe upload is refused with the fixed type body (415) :: {"status":415,"body":{"error":"This file type is not allowed for slides.","code":"slide-type-refused"}}
+[slideSandbox@dev-defaultdir] PASS - a PDF renamed .html is refused (magic bytes, 415) :: {"status":415}
+[slideSandbox@dev-defaultdir] PASS - refused uploads added no file :: {"before":null,"after":null}
+[slideSandbox@dev-defaultdir] PASS - probe slide uploads (200 with a /uploads/slides/ URL) :: {"status":200}
+[slideSandbox@dev-defaultdir] PASS - the uploaded file is in the expected slide directory :: {"dir":"public/uploads/slides (default)"}
+[slideSandbox@dev-defaultdir] PASS - served slide carries exactly SLIDE_SANDBOX_CSP :: {"csp":"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'"}
+[slideSandbox@dev-defaultdir] PASS - served slide carries X-Content-Type-Options: nosniff
+[slideSandbox@dev-defaultdir] PASS - served slide carries no Report-Only header (PD-37)
+[slideSandbox@dev-defaultdir] PASS - a case-variant spelling is not served with the app CSP (404 or sandboxed) :: {"status":404}
+[slideSandbox@dev-defaultdir] PASS - the framed slide reported its probe results via postMessage :: {"n":1}
+[slideSandbox@dev-defaultdir] PASS - framed: fetch("/api/auth/me") failed :: blocked:TypeError
+[slideSandbox@dev-defaultdir] PASS - framed: document.cookie read failed :: blocked:SecurityError
+[slideSandbox@dev-defaultdir] PASS - framed: parent.document access failed :: blocked:SecurityError
+[slideSandbox@dev-defaultdir] PASS - framed: localStorage access failed :: blocked:SecurityError
+[slideSandbox@dev-defaultdir] PASS - framed: beacon fetch to the canary failed :: blocked:TypeError
+[slideSandbox@dev-defaultdir] PASS - framed: the slide document has an opaque origin ("null") :: {"self":"null","message":"null"}
+[slideSandbox@dev-defaultdir] PASS - framed: the overlay iframe is sandbox="allow-scripts" (no allow-same-origin) :: {"sandbox":"allow-scripts","src":"http://127.0.0.1:55532/uploads/slides/1791703039956_2e2fc1_p13-probe.html"}
+[slideSandbox@dev-defaultdir] PASS - framed: no /api request from the slide frame reached the server :: {"attempted":[],"reached":0}
+[slideSandbox@dev-defaultdir] PASS - framed: no request from the slide frame reached the canary (log) :: ["csp"]
+[slideSandbox@dev-defaultdir] PASS - framed: canary server saw zero hits :: []
+[slideSandbox@dev-defaultdir] PASS - top-level: the response CSP is exactly SLIDE_SANDBOX_CSP :: {"topCsp":"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'"}
+[slideSandbox@dev-defaultdir] PASS - top-level: fetch("/api/auth/me") failed :: blocked:TypeError
+[slideSandbox@dev-defaultdir] PASS - top-level: document.cookie read failed :: blocked:SecurityError
+[slideSandbox@dev-defaultdir] PASS - top-level: localStorage access failed :: blocked:SecurityError
+[slideSandbox@dev-defaultdir] PASS - top-level: beacon fetch to the canary failed :: blocked:TypeError
+[slideSandbox@dev-defaultdir] PASS - top-level: the document origin is opaque ("null") even with no frame :: null
+[slideSandbox@dev-defaultdir] PASS - top-level: no request reached /api or the canary
+[slideSandbox@dev-defaultdir] PASS - top-level: canary server saw zero hits :: []
+[slideSandbox@dev-defaultdir] PASS - GET /api/admin/csp-violations is empty (the sandbox policy reports nothing, the app page stays clean) :: {"count":0,"tuples":[]}
+[slideSandbox@dev-defaultdir] PASS - default directory: public/uploads/slides listing identical before/after (probe slide deleted by its returned URL) :: {"before":null,"after":null}
+slideSandbox default-dir PASS
+slideSandbox@dev-defaultdir checks=31 failed=0
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+105 PASS, 0 FAIL.
+EXIT=0
