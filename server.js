@@ -3085,9 +3085,16 @@ function egressSnapshot() {
 app.get('/api/admin/egress', (req, res) => {
   res.json(egressSnapshot());
 });
+const { EGRESS_KINDS } = require('./lib/egress');
 app.post('/api/admin/egress', (req, res) => {
   if (!isAdminRequest(req)) {
     return res.status(403).json({ error: 'Your role cannot perform this action.' });
+  }
+  // IN-A02 (13-REVIEW): a body naming no egress key (`{}`) changes nothing — refuse
+  // it before any runtime.db write or audit row (no before==after audit noise).
+  const patch = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!EGRESS_KINDS.some((k) => Object.prototype.hasOwnProperty.call(patch, k))) {
+    return res.status(400).json({ error: 'No egress key supplied' });
   }
   const before = { ...egress.current() };
   egress.set(req.body || {});
