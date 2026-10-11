@@ -3462,8 +3462,14 @@ app.post('/api/slides', (req, res) => {
 
 app.delete('/api/slides/:id', (req, res) => {
   const db = readDb();
-  db.slides = (db.slides || []).filter(x => x.id !== req.params.id);
+  const all = db.slides || [];
+  const removed = all.filter(x => x.id === req.params.id);
+  db.slides = all.filter(x => x.id !== req.params.id);
   writeDb(db);
+  // WR-A03 (13-REVIEW): once the record delete has committed, remove the uploaded
+  // file it pointed at unless another slide record still references the same URL
+  // (basename only, resolved inside slidesDir() — the stored URL is never a path).
+  for (const s of removed) slideUpload.removeUnreferencedUpload(s && s.url, db.slides);
   res.json({ success: true });
 });
 

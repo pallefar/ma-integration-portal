@@ -632,6 +632,62 @@ test('slide-upload-safety (n): WR-A02 — a failed write leaves no fragment: inj
   }
 });
 
+// ================================================================== WR-A03 ===
+async function slideApi(base, token, method, p, body) {
+  const res = await fetch(base + p, {
+    method,
+    headers: { Cookie: cookie(token), 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => null) };
+}
+
+test('slide-upload-safety (p): WR-A03 — deleting a slide record removes its uploaded file and frees quota; a URL shared by two records survives until the last is deleted', async () => {
+  clearDir(SLIDES_TMP);
+  const token = adminToken('slide-admin-p');
+  try {
+    await withServer(async (base) => {
+      // single reference: upload -> record -> delete -> file gone, quota freed
+      const up = await upload(base, token, { filename: 'solo.html', content: 'a'.repeat(4000) });
+      assert.strictEqual(up.status, 200, JSON.stringify(up.body));
+      const file = path.join(SLIDES_TMP, path.basename(up.body.url));
+      const rec = await slideApi(base, token, 'POST', '/api/slides', { url: up.body.url, label: 'Solo' });
+      assert.strictEqual(rec.status, 200, JSON.stringify(rec.body));
+      assert.ok(slideUpload.libraryBytes(SLIDES_TMP) >= 4000);
+      const del = await slideApi(base, token, 'DELETE', `/api/slides/${encodeURIComponent(rec.body.slide.id)}`, {});
+      assert.strictEqual(del.status, 200, JSON.stringify(del.body));
+      assert.ok(!fs.existsSync(file), 'the uploaded file is removed with its last record');
+      assert.strictEqual(slideUpload.libraryBytes(SLIDES_TMP), 0, 'the quota is freed');
+      assert.strictEqual((await fetch(base + up.body.url)).status, 404, 'the old URL no longer serves the deck');
+
+      // shared reference: the file survives the first delete, goes with the second
+      const up2 = await upload(base, token, { filename: 'shared.html', content: '<p>shared</p>' });
+      const file2 = path.join(SLIDES_TMP, path.basename(up2.body.url));
+      const a = await slideApi(base, token, 'POST', '/api/slides', { url: up2.body.url, label: 'A' });
+      const b = await slideApi(base, token, 'POST', '/api/slides', { url: up2.body.url, label: 'B' });
+      assert.strictEqual((await slideApi(base, token, 'DELETE', `/api/slides/${encodeURIComponent(a.body.slide.id)}`, {})).status, 200);
+      assert.ok(fs.existsSync(file2), 'still referenced by record B — kept');
+      assert.strictEqual((await slideApi(base, token, 'DELETE', `/api/slides/${encodeURIComponent(b.body.slide.id)}`, {})).status, 200);
+      assert.ok(!fs.existsSync(file2), 'the last reference is gone — removed');
+    });
+  } finally {
+    clearDir(SLIDES_TMP);
+  }
+  // unit: only an uploaded-slide URL that passes the name allowlist, resolved inside the directory
+  const dir = fs.mkdtempSync(path.join(TMP_DIR, 'unlink-'));
+  fs.writeFileSync(path.join(dir, '1_aa_x.html'), 'x');
+  const outside = path.join(TMP_DIR, 'outside.html');
+  fs.writeFileSync(outside, 'outside');
+  for (const url of ['/uploads/slides/../outside.html', '/uploads/slides/..%2Foutside.html', 'https://example.test/uploads/slides/1_aa_x.html',
+    '/uploads/1_aa_x.html', '/uploads/slides/sub/1_aa_x.html', null, 42]) {
+    assert.strictEqual(slideUpload.removeUnreferencedUpload(url, [], dir), false, `${url}: never touches the disk`);
+  }
+  assert.ok(fs.existsSync(outside) && fs.existsSync(path.join(dir, '1_aa_x.html')));
+  assert.strictEqual(slideUpload.removeUnreferencedUpload('/uploads/slides/1_aa_x.html', [{ url: '/uploads/slides/1_aa_x.html' }], dir), false, 'still referenced');
+  assert.strictEqual(slideUpload.removeUnreferencedUpload('/uploads/slides/1_aa_x.html', [], dir), true);
+  assert.strictEqual(slideUpload.removeUnreferencedUpload('/uploads/slides/1_aa_x.html', [], dir), false, 'already gone: no throw');
+});
+
 test('slide-upload-safety (o): WR-A02 — the boot sweep removes only *.tmp files older than an hour', () => {
   const dir = fs.mkdtempSync(path.join(TMP_DIR, 'sweep-'));
   const now = Date.now();
