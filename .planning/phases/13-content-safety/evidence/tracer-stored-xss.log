@@ -1,0 +1,88 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane dev: storedXss ===
+[lane:dev] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[storedXss@dev] PASS - payload set built: R1-03-a..d present and armed :: {"total":47,"r103":["R1-03-a","R1-03-b","R1-03-c","R1-03-d"]}
+[storedXss@dev] PASS - pmo POST /api/pages is refused (403) :: {"status":403}
+[storedXss@dev] PASS - the refused pmo write stored nothing :: {"count":3}
+[storedXss@dev] PASS - author can read the page list :: {"status":200}
+[storedXss@dev] PASS - author stored the page body (legacy ladder) :: {"status":200}
+[storedXss@dev] PASS - server stored the body already sanitised (structurally inert at rest) :: {"len":2755,"violations":[]}
+[storedXss@dev] PASS - author stored the layout blocks (richtext + hero/cards/cta text + javascript: hrefs) :: {"status":200}
+[storedXss@dev] PASS - author stored the lesson body :: {"status":200}
+[storedXss@dev] PASS - author stored the i18n html value (dictionary values are not server-sanitised, PD-5) :: {"status":200}
+[storedXss@dev] PASS - author stored the banner title/message :: {"status":200}
+[storedXss@dev] PASS - author stored the slide label :: {"status":200}
+[storedXss@dev] PASS - victim admin / page body: stays on /capability-hub.html (no bounce to login / change-password) :: /capability-hub.html
+[storedXss@dev] PASS - victim admin / page body: the benign marker rendered (not a blank region)
+[storedXss@dev] PASS - victim admin / page body: container [data-cms-region] present :: {"roots":1,"nodes":95}
+[storedXss@dev] PASS - victim admin / page body: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - victim admin / page body: window.__xss never set
+[storedXss@dev] PASS - victim admin / page body: no dialog opened :: []
+[storedXss@dev] PASS - victim admin / page body: no browser request to the canary origin :: []
+[storedXss@dev] PASS - victim admin / page body: no securitypolicyviolation event in any frame :: []
+[storedXss@dev] PASS - victim admin / layout blocks: stays on /integration-excellence.html (no bounce to login / change-password) :: /integration-excellence.html
+[storedXss@dev] PASS - victim admin / layout blocks: the richtext marker rendered
+[storedXss@dev] PASS - victim admin / layout blocks: container [data-cms-region] present :: {"roots":1,"nodes":115}
+[storedXss@dev] PASS - victim admin / layout blocks: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - victim admin / layout blocks: hero and cta javascript: hrefs became "#" :: ["#","#"]
+[storedXss@dev] PASS - victim admin / layout blocks: card title shows the payload as TEXT (not markup) :: <img src=x onerror=window.__xss=1,fetch(
+[storedXss@dev] PASS - victim admin / layout blocks: window.__xss never set
+[storedXss@dev] PASS - victim admin / layout blocks: no dialog opened :: []
+[storedXss@dev] PASS - victim admin / layout blocks: no browser request to the canary origin :: []
+[storedXss@dev] PASS - victim admin / layout blocks: no securitypolicyviolation event in any frame :: []
+[storedXss@dev] PASS - victim admin / i18n html value: stays on /leaders.html (no bounce to login / change-password) :: /leaders.html
+[storedXss@dev] PASS - victim admin / i18n html value: the benign marker rendered
+[storedXss@dev] PASS - victim admin / i18n html value: container [data-i18n-html="leaders.progress_heading"] present :: {"roots":1,"nodes":9}
+[storedXss@dev] PASS - victim admin / i18n html value: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - victim admin / i18n html value: window.__xss never set
+[storedXss@dev] PASS - victim admin / i18n html value: no dialog opened :: []
+[storedXss@dev] PASS - victim admin / i18n html value: no browser request to the canary origin :: []
+[storedXss@dev] PASS - victim admin / i18n html value: no securitypolicyviolation event in any frame :: []
+[storedXss@dev] PASS - inline-edit round trip: stays on /capability-hub.html (no bounce to login / change-password) :: /capability-hub.html
+[storedXss@dev] PASS - inline-edit: the "Edit page body" control is offered to the admin
+[storedXss@dev] PASS - inline-edit: the editable body shows the stored marker
+[storedXss@dev] PASS - inline-edit editing view: container .cms-editable-body present :: {"roots":1,"nodes":82}
+[storedXss@dev] PASS - inline-edit editing view: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - inline-edit: Cancel restored the original region (text identical, no serialise/parse drift) :: {"before":1148,"after":1148}
+[storedXss@dev] PASS - inline-edit after Cancel: container [data-cms-region] present :: {"roots":1,"nodes":95}
+[storedXss@dev] PASS - inline-edit after Cancel: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - inline-edit: no editable body left after Cancel
+[storedXss@dev] PASS - inline-edit round trip: window.__xss never set
+[storedXss@dev] PASS - inline-edit round trip: no dialog opened :: []
+[storedXss@dev] PASS - inline-edit round trip: no browser request to the canary origin :: []
+[storedXss@dev] PASS - inline-edit round trip: no securitypolicyviolation event in any frame :: []
+[storedXss@dev] PASS - victim hrbp / banner + slide + chatbot: stays on /dashboard.html (no bounce to login / change-password) :: /dashboard.html
+[storedXss@dev] PASS - banner: the benign marker rendered
+[storedXss@dev] PASS - banner: title is TEXT (payload visible literally, zero child elements) :: {"text":"P13MARK-banner <img src=x onerror=window.__xss=1,fetch(String.fromCharCode(104,116,116,112,58,47,47,49,50,55,46,48,46,48,46,49,58,53,53,51,49,50,47,112,49,51,45,120,115,115))>","children":0}
+[storedXss@dev] PASS - banner: container .page-banner present :: {"roots":2,"nodes":11}
+[storedXss@dev] PASS - banner: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - slide label: the sidebar launcher shows the payload as TEXT (zero child elements) :: {"text":"P13MARK-slide <img src=x onerror=window.__xss=1,fetch(String.fromCharCode(104,116,116,112,58,47,47,49,50,55,46,48,46,48,46,49,58,53,53,51,49,50,47,112,49,51,45,120,115,115))>","children":0}
+[storedXss@dev] PASS - slide overlay: title is TEXT and the frame is sandboxed :: {"title":"🖥️ P13MARK-slide <img src=x onerror=window.__xss=1,fetch(String.fromCharCode(104,116,116,112,58,47,47,49,50,55,46,48,46,48,46,49,58,53,53,51,49,50,47,112,49,51,45,120,115,115))>","titleChildren":0,"sandbox":"allow-scripts"}
+[storedXss@dev] PASS - chatbot: the javascript: markdown link lost its href (text kept) :: {"text":"click me","href":null,"rel":"noopener noreferrer"}
+[storedXss@dev] PASS - chatbot: the https link keeps its href and gets rel="noopener noreferrer" :: {"text":"ok","href":"https://example.org/p13","rel":"noopener noreferrer"}
+[storedXss@dev] PASS - chatbot: a raw <img onerror> typed in a message is escaped text (no <img> element) :: {"links":[{"text":"click me","href":null,"rel":"noopener noreferrer"},{"text":"ok","href":"https://example.org/p13","rel":"noopener noreferrer"}],"imgs":0,"strong":1,"text":"click me)) bold <img src=x onerror=window.__xss=1,fetch(Stri"}
+[storedXss@dev] PASS - chatbot: **bold** still renders as <strong> :: 1
+[storedXss@dev] PASS - chatbot history: container #teodor-global-history present :: {"roots":1,"nodes":6}
+[storedXss@dev] PASS - chatbot history: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - victim hrbp / banner + slide + chatbot: window.__xss never set
+[storedXss@dev] PASS - victim hrbp / banner + slide + chatbot: no dialog opened :: []
+[storedXss@dev] PASS - victim hrbp / banner + slide + chatbot: no browser request to the canary origin :: []
+[storedXss@dev] PASS - victim hrbp / banner + slide + chatbot: no securitypolicyviolation event in any frame :: []
+[storedXss@dev] PASS - victim employee / lesson modal: stays on /employee.html (no bounce to login / change-password) :: /employee.html
+[storedXss@dev] PASS - lesson: the stored lesson is listed in the academy
+[storedXss@dev] PASS - lesson: the benign marker rendered in the modal body
+[storedXss@dev] PASS - lesson modal: container .cms-modal .lesson-body present :: {"roots":1,"nodes":82}
+[storedXss@dev] PASS - lesson modal: no element/attribute an inert stored container must not hold :: []
+[storedXss@dev] PASS - victim employee / lesson modal: window.__xss never set
+[storedXss@dev] PASS - victim employee / lesson modal: no dialog opened :: []
+[storedXss@dev] PASS - victim employee / lesson modal: no browser request to the canary origin :: []
+[storedXss@dev] PASS - victim employee / lesson modal: no securitypolicyviolation event in any frame :: []
+[storedXss@dev] PASS - canary server saw ZERO hits across the whole scenario :: []
+[storedXss@dev] PASS - GET /api/admin/csp-violations is empty after every path was opened :: {"mode":"report-only","count":0,"tuples":[]}
+storedXss@dev violations=0 canaryHits=0
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+81 PASS, 0 FAIL.
+EXIT=0

@@ -1,0 +1,53 @@
+phase13-xss: playwright-core@1.58.1; csp-mode=report-only; evidence dir .planning/phases/13-content-safety/evidence
+
+=== lane real: caching ===
+[lane:real] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"real","demoOpen":false,"accountsWritable":true}
+[lane:real] PASS - bootstrap-admin created the first admin
+[caching@real] PASS - RAID entry created through the browser (201) for the 409 probe :: {"status":201}
+[caching@real] PASS - first edit with version 0 succeeds (200) :: {"status":200}
+[caching@real] PASS - browser view: GET /api/auth/mode answered 200 with Cache-Control: no-store :: {"status":200,"cacheControl":"no-store"}
+[caching@real] PASS - browser view: GET /api/raid (no session) answered 401 with Cache-Control: no-store :: {"status":401,"cacheControl":"no-store"}
+[caching@real] PASS - browser view: POST /api/raid (employee) answered 403 with Cache-Control: no-store :: {"status":403,"cacheControl":"no-store"}
+[caching@real] PASS - browser view: DELETE /api/raid/:id (unknown) answered 404 with Cache-Control: no-store :: {"status":404,"cacheControl":"no-store"}
+[caching@real] PASS - browser view: POST /api/raid (stale version) answered 409 with Cache-Control: no-store :: {"status":409,"cacheControl":"no-store"}
+[caching@real] PASS - the model-cache probe entry is seeded :: {"keys":["transformers-cache"],"has":true}
+[caching@real] PASS - the seeded transformers-cache entry survived ten consecutive app page loads :: []
+[caching@real] PASS - the logout navigation landed on /login.html :: /login.html
+[caching@real] PASS - after logout: caches.keys() is empty (the model cache is cleared on purpose) :: []
+[caching@real] PASS - after logout: sessionStorage is empty :: 0
+[caching@real] PASS - after logout: localStorage holds only the language key :: ["employeeLanguage"]
+[caching@real] PASS - after logout: the language preference itself survived :: de
+[caching@real] PASS - after logout: no service-worker registration remains :: 0
+[caching@real] PASS - the logout response carried Clear-Site-Data: "cache", "storage" :: "cache", "storage"
+[caching@real] PASS - the session is really revoked (the old cookie now resolves to no user) :: {"status":200,"user":null}
+[caching@real] PASS - GET /api/admin/csp-violations is empty after the caching walk :: {"count":0,"tuples":[]}
+[caching@real] PASS - no in-page securitypolicyviolation on the logout page :: []
+caching@real statuses=200,401,403,404,409 pageLoads=10 violations=0
+
+=== lane dev: caching ===
+[lane:dev] PASS - server booted (CSP_MODE=report-only), /api/auth/mode answers :: {"mode":"dev","demoOpen":false,"accountsWritable":true}
+[caching@dev] PASS - RAID entry created through the browser (201) for the 409 probe :: {"status":201}
+[caching@dev] PASS - first edit with version 0 succeeds (200) :: {"status":200}
+[caching@dev] PASS - browser view: GET /api/auth/mode answered 200 with Cache-Control: no-store :: {"status":200,"cacheControl":"no-store"}
+[caching@dev] PASS - browser view: GET /api/raid (no session) answered 401 with Cache-Control: no-store :: {"status":401,"cacheControl":"no-store"}
+[caching@dev] PASS - browser view: POST /api/raid (employee) answered 403 with Cache-Control: no-store :: {"status":403,"cacheControl":"no-store"}
+[caching@dev] PASS - browser view: DELETE /api/raid/:id (unknown) answered 404 with Cache-Control: no-store :: {"status":404,"cacheControl":"no-store"}
+[caching@dev] PASS - browser view: POST /api/raid (stale version) answered 409 with Cache-Control: no-store :: {"status":409,"cacheControl":"no-store"}
+[caching@dev] PASS - the model-cache probe entry is seeded :: {"keys":["transformers-cache"],"has":true}
+[caching@dev] PASS - the seeded transformers-cache entry survived ten consecutive app page loads :: []
+[caching@dev] PASS - the logout navigation landed on /login.html :: /login.html
+[caching@dev] PASS - after logout: caches.keys() is empty (the model cache is cleared on purpose) :: []
+[caching@dev] PASS - after logout: sessionStorage is empty :: 0
+[caching@dev] PASS - after logout: localStorage holds only the language key :: ["employeeLanguage"]
+[caching@dev] PASS - after logout: the language preference itself survived :: de
+[caching@dev] PASS - after logout: no service-worker registration remains :: 0
+[caching@dev] PASS - the logout response carried Clear-Site-Data: "cache", "storage" :: "cache", "storage"
+[caching@dev] PASS - the session is really revoked (the old cookie now resolves to no user) :: {"status":200,"user":null}
+[caching@dev] PASS - GET /api/admin/csp-violations is empty after the caching walk :: {"count":0,"tuples":[]}
+[caching@dev] PASS - no in-page securitypolicyviolation on the logout page :: []
+caching@dev statuses=200,401,403,404,409 pageLoads=10 violations=0
+[data-integrity] PASS - committed data/demo.db and data/control.db (+ -wal) sha256 unchanged :: 4 value(s) identical
+[data-integrity] PASS - `git status --porcelain -- data public/sent_emails` unchanged :: clean
+
+43 PASS, 0 FAIL.
+EXIT=0
