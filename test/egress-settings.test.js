@@ -138,6 +138,119 @@ test('dev: default CSP lists today\'s third-party origins; admin toggle changes 
   }
 });
 
+// T-13-13 (13-SECURITY): under DEMO_OPEN=1 the /api gate nulls req.portalUser after
+// resolving X-Admin-Token, so the egress route used to persist the change, then
+// throw on the null audit actor: 500, setting changed, NO audit row. The route now
+// resolves the attributed `admin-token` identity and records the event BEFORE the
+// setting is written.
+const OPEN_TOKEN = 'quick-egress-break-glass-token';
+function auditRows(dir, action) {
+  const audit = new Database(path.join(dir, 'audit.db'), { readonly: true });
+  try {
+    return audit.prepare('SELECT actor_username, actor_role, row_id, before_json, after_json FROM audit_log WHERE action = ? ORDER BY id').all(action);
+  } finally { audit.close(); }
+}
+
+test('demo-open + X-Admin-Token (T-13-13): POST /api/admin/egress -> 200 and exactly one egress-settings-changed row, actor admin-token, before/after; csp-violations with the token is 200', async () => {
+  const dir = fs.mkdtempSync(path.join(DIR, 'open-'));
+  const s = await startServer({ dir, mode: 'dev', env: { DEMO_OPEN: '1', ADMIN_TOKEN: OPEN_TOKEN } });
+  const tok = { 'X-Admin-Token': OPEN_TOKEN };
+  try {
+    // anonymous callers stay refused and change nothing
+    const anon = await s.request('/api/admin/egress', { method: 'POST', body: { youtube: false } });
+    assert.strictEqual(anon.status, 403);
+    const wrong = await s.request('/api/admin/egress', { method: 'POST', body: { youtube: false }, headers: { 'X-Admin-Token': 'not-the-token' } });
+    assert.strictEqual(wrong.status, 403);
+    assert.deepStrictEqual((await s.request('/api/admin/egress', { headers: tok })).body.stored, {}, 'refused calls stored nothing');
+    assert.deepStrictEqual(auditRows(dir, 'egress-settings-changed'), []);
+
+    const ok = await s.request('/api/admin/egress', { method: 'POST', body: { youtube: false }, headers: tok });
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    assert.strictEqual(ok.body.effective.youtube, false);
+    assert.deepStrictEqual(ok.body.stored, { youtube: false });
+    assert.strictEqual((await s.request('/api/admin/egress', { headers: tok })).body.effective.youtube, false, 'the change persisted');
+
+    const rows = auditRows(dir, 'egress-settings-changed');
+    assert.strictEqual(rows.length, 1, 'exactly one audit row for one accepted change');
+    assert.strictEqual(rows[0].actor_username, 'admin-token');
+    assert.strictEqual(rows[0].actor_role, 'admin');
+    assert.strictEqual(rows[0].row_id, 'egress');
+    assert.deepStrictEqual(JSON.parse(rows[0].before_json), { gemini: true, huggingface: true, youtube: true });
+    assert.deepStrictEqual(JSON.parse(rows[0].after_json), { gemini: true, huggingface: true, youtube: false });
+    assert.strictEqual(JSON.stringify(rows).includes(OPEN_TOKEN), false, 'the token value is never written to the audit log');
+
+    // the sibling admin read keeps working for the token and still refuses anonymous callers
+    const viol = await s.request('/api/admin/csp-violations', { headers: tok });
+    assert.strictEqual(viol.status, 200);
+    assert.strictEqual(viol.headers.get('cache-control'), 'no-store');
+    assert.strictEqual((await s.request('/api/admin/csp-violations')).status, 403);
+  } finally {
+    await s.stop();
+  }
+});
+
+test('demo-open + X-Admin-Token (T-13-13): a failed audit write leaves the setting UNCHANGED (non-200); a failed setting write is logged as egress-settings-change-failed; a retry then succeeds', async () => {
+  const dir = fs.mkdtempSync(path.join(DIR, 'open-fail-'));
+  const flag = path.join(dir, 'inject-failure');
+  const preload = path.join(dir, 'inject-failure-preload.js');
+  const repo = path.join(__dirname, '..');
+  // Child-only fault injection (the real server runs in a child process): the
+  // preload wraps the audit writer for the egress event, or the runtime.db
+  // egress write, while the flag file names the failure; no flag = pass-through.
+  fs.writeFileSync(preload, `
+    const fs = require('fs');
+    const mode = () => { try { return fs.readFileSync(${JSON.stringify(flag)}, 'utf8').trim(); } catch (e) { return ''; } };
+    const auditHook = require(${JSON.stringify(path.join(repo, 'db', 'auditHook.js'))});
+    const controlStore = require(${JSON.stringify(path.join(repo, 'db', 'controlStore.js'))});
+    const record = auditHook.recordSecurityEvent;
+    auditHook.recordSecurityEvent = function (ev) {
+      if (mode() === 'audit' && ev && ev.action === 'egress-settings-changed') throw new Error('injected audit failure');
+      return record.apply(this, arguments);
+    };
+    const setEgress = controlStore.setEgressSettings;
+    controlStore.setEgressSettings = function () {
+      if (mode() === 'set') throw new Error('injected setting-write failure');
+      return setEgress.apply(this, arguments);
+    };
+  `);
+  const nodeOptions = [process.env.NODE_OPTIONS, `--require ${preload}`].filter(Boolean).join(' ');
+  const s = await startServer({ dir, mode: 'dev', env: { DEMO_OPEN: '1', ADMIN_TOKEN: OPEN_TOKEN, NODE_OPTIONS: nodeOptions } });
+  const tok = { 'X-Admin-Token': OPEN_TOKEN };
+  const effective = async () => (await s.request('/api/admin/egress', { headers: tok })).body.effective;
+  const post = (body) => s.request('/api/admin/egress', { method: 'POST', body, headers: tok });
+  try {
+    // (1) audit write fails -> the setting is NOT written, the response is a failure
+    fs.writeFileSync(flag, 'audit');
+    const r1 = await post({ youtube: false });
+    assert.strictEqual(r1.status, 500);
+    assert.deepStrictEqual(await effective(), { gemini: true, huggingface: true, youtube: true }, 'no unaudited change persisted');
+    assert.deepStrictEqual((await s.request('/api/admin/egress', { headers: tok })).body.stored, {});
+    assert.deepStrictEqual(auditRows(dir, 'egress-settings-changed'), []);
+
+    // (2) the setting write fails after the audit row: still a failure, setting
+    // unchanged, and the log says the change did NOT happen
+    fs.writeFileSync(flag, 'set');
+    const r2 = await post({ youtube: false });
+    assert.strictEqual(r2.status, 500);
+    assert.deepStrictEqual(await effective(), { gemini: true, huggingface: true, youtube: true });
+    assert.strictEqual(auditRows(dir, 'egress-settings-changed').length, 1, 'audit-first: the attempt was recorded');
+    const failed = auditRows(dir, 'egress-settings-change-failed');
+    assert.strictEqual(failed.length, 1);
+    assert.strictEqual(failed[0].actor_username, 'admin-token');
+
+    // (3) with the fault gone the same request succeeds and is audited
+    fs.rmSync(flag);
+    const r3 = await post({ youtube: false });
+    assert.strictEqual(r3.status, 200);
+    assert.strictEqual((await effective()).youtube, false);
+    const rows = auditRows(dir, 'egress-settings-changed');
+    assert.strictEqual(rows.length, 2);
+    assert.deepStrictEqual(JSON.parse(rows[1].after_json), { gemini: true, huggingface: true, youtube: false });
+  } finally {
+    await s.stop();
+  }
+});
+
 test('dev: a toggle through process A is visible in process B\'s next response (PRAGMA data_version cache)', async () => {
   const dir = fs.mkdtempSync(path.join(DIR, 'xproc-'));
   const a = await startServer({ dir, mode: 'dev' });

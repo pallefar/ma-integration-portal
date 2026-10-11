@@ -320,6 +320,36 @@ test('media-upload-safety (e): the check runs before any filesystem call in the 
   assert.ok(handler.includes("`${Date.now()}_${safeName}`"), 'the stored name keeps its `${Date.now()}_` prefix');
 });
 
+test('media-upload-safety (h) / SC-05: a failed upload logs the error CODE only — never the fs error object, its path or the admin-chosen file name', async () => {
+  const token = adminToken('media-admin-h');
+  const name = nm('quarterly-target-acme-deal.png');
+  const realWrite = fs.writeFileSync;
+  const realError = console.error;
+  const logged = [];
+  fs.writeFileSync = function (target, ...rest) {
+    if (typeof target === 'string' && target.includes(RUN)) {
+      throw Object.assign(new Error(`ENAMETOOLONG: name too long, open '${target}'`), { code: 'ENAMETOOLONG', path: target, syscall: 'open', errno: -63 });
+    }
+    return realWrite.call(this, target, ...rest);
+  };
+  console.error = (...args) => { logged.push(args); };
+  let res;
+  const before = ownListing();
+  try {
+    res = await withServer((base) => post(base, token, { fileName: name, fileData: dataUrl('image/png', PNG) }));
+  } finally {
+    fs.writeFileSync = realWrite;
+    console.error = realError;
+  }
+  assert.strictEqual(res.status, 500);
+  assert.deepStrictEqual(res.body, { error: 'Media upload failed.' });
+  const line = logged.map((args) => args.map((a) => (typeof a === 'string' ? a : require('util').inspect(a))).join(' ')).join('\n');
+  assert.ok(/Media upload failed:/.test(line) && /ENAMETOOLONG/.test(line), `the code is logged (got: ${line})`);
+  assert.ok(!line.includes(RUN) && !line.includes('quarterly-target') && !line.includes('acme'), 'no part of the file name is logged');
+  assert.ok(!line.includes('public') && !line.includes('uploads') && !line.includes(REPO), 'no filesystem path is logged');
+  assert.deepStrictEqual(ownListing(), before, 'the induced failure wrote nothing');
+});
+
 // ======================================================= route: DELETE /api/media/:id ===
 test('media-upload-safety (f): deleting an uploaded media item removes its file and its record', async () => {
   const token = adminToken('media-admin-f');

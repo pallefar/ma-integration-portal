@@ -178,6 +178,21 @@ test('SAFE-07 (a): every /api status — 200/400/401/403/404/409/413(500)/500/50
   if (process.env.SAFE07_PRINT_MATRIX) console.log(JSON.stringify(matrix, null, 2));
 });
 
+test('SAFE-07 (a) / SC-04: the non-canonical /API/... 404 guard (it answers before the /api middleware) also carries Cache-Control: no-store', async () => {
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    for (const p of ['/API/auth/mode', '/Api/raid', '/%61pi/auth/mode']) {
+      const res = await fetch(base + p, { redirect: 'manual' });
+      assert.strictEqual(res.status, 404, p);
+      assert.deepStrictEqual(await res.json(), { error: 'Not found' }, p);
+      assert.strictEqual(res.headers.get('cache-control'), 'no-store', `${p} must carry no-store`);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('SAFE-07 (a): static assets are not forced to no-store (the middleware is /api-only)', async () => {
   const server = await listenLocal(app);
   try {
