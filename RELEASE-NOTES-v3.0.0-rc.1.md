@@ -126,10 +126,13 @@ This is a risk reduction, not a certification. Do not read "no critical finding"
 
 ## Known limits
 
-- **The Windows bundle is not natively boot-tested.** It was built and checked
-  statically (PE header, native binaries present, launcher line endings and
-  install-guard, path lengths) but has not been started on a Windows machine for
-  this candidate. The macOS bundle was boot-tested in both demo and real-deal lanes.
+- **Windows verification scope.** The Windows bundle was booted from the published
+  release asset on a real GitHub-hosted `windows-latest` runner (GitHub Actions run
+  38167098446): open-demo lane and real-deal lane (bootstrap → login → forced
+  rotation; published demo accounts refused). It has **not** been exercised by hand on
+  a desktop Windows machine, so launcher double-click behaviour, antivirus/SmartScreen
+  prompts and very long install paths are untested. The same workflow booted the macOS
+  and Linux (system Node 22) assets.
 - **macOS Gatekeeper.** The bundled Node is the unmodified official binary and the
   zip is not notarized. The first launch may be blocked: right-click
   `start.command` and choose **Open**, or clear the quarantine flag once:
