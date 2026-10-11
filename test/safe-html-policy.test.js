@@ -127,6 +127,39 @@ test('safe-html (parity): POLICY is deep-frozen plain data', () => {
 // ---------------------------------------------------------------------------
 // T-13-51 — the renderer builds, it never serializes
 // ---------------------------------------------------------------------------
+// WR-B02: parser nodes are never re-attached. The only node-insertion calls
+// safe-html.js may make are appendChild of a freshly created text node /
+// element / fragment and replaceChildren(frag); any append/prepend/
+// insertBefore/replaceWith/before/after call, or an appendChild of anything
+// else (e.g. a node of the parsed `doc`), is a violation.
+function reattachViolations(code) {
+  const out = [];
+  const other = code.match(/\.\s*(?:append|prepend|insertBefore|replaceWith|before|after)\s*\([^)]*\)?/g);
+  if (other) out.push(...other);
+  code.replace(/\.\s*appendChild\s*\(\s*([^)]*\)?)/g, (m, arg) => {
+    if (!/^(?:document\.createTextNode\(|el\)|frag\))/.test(arg.trim())) out.push(m);
+    return m;
+  });
+  code.replace(/\.\s*replaceChildren\s*\(\s*([^)]*)\)/g, (m, arg) => {
+    if (arg.trim() !== 'frag') out.push(m);
+    return m;
+  });
+  return out;
+}
+
+test('safe-html (no-sink) negative control: the re-attachment check catches the DOMParser-adopt shapes', () => {
+  const bad = [
+    'outParent.appendChild(doc.body.firstChild);',
+    'el.append(...doc.body.childNodes);',
+    'el.replaceChildren(...doc.body.childNodes);',
+    'el.insertBefore(n, null);',
+    'el.after(n);',
+  ];
+  for (const src of bad) assert.ok(reattachViolations(src).length > 0, `must be caught: ${src}`);
+  const ok = 'outParent.appendChild(document.createTextNode(n.data)); outParent.appendChild(el); el.appendChild(frag); el.replaceChildren(frag);';
+  assert.deepStrictEqual(reattachViolations(ok), []);
+});
+
 test('safe-html (no-sink): source has no inner/outer HTML assignment, adjacent-HTML insert or document write', () => {
   const code = stripComments(safeHtmlSource);
   assert.ok(code.includes('DOMParser'), 'sanity: comment stripping must not eat the real code (DOMParser missing)');
@@ -139,10 +172,18 @@ test('safe-html (no-sink): source has no inner/outer HTML assignment, adjacent-H
     ['range contextual fragment', /\bcreateContextualFragment\b/],
     ['srcdoc / setHTML-style string parse of a live element', /\bsetHTMLUnsafe\b/],
     ['eval / Function constructor', /\beval\s*\(|\bnew\s+Function\b/],
+    // WR-B02 (Phase 13 review, Part B): the re-attachment half of the
+    // DOMParser-adopt shape — parsed nodes are inert only inside the parser
+    // document; imported/adopted ones carry live on* and javascript: URLs.
+    ['iframe srcdoc property', /\.\s*srcdoc\b|\[\s*['"]srcdoc['"]\s*\]/],
+    ['importNode / adoptNode', /\b(?:importNode|adoptNode)\b/],
+    ['insertAdjacentElement', /\binsertAdjacentElement\b/],
   ];
   for (const [label, re] of sinks) {
     assert.ok(!re.test(code), `safe-html.js must not use ${label}`);
   }
+  assert.ok(/\.\s*appendChild\s*\(/.test(code), 'sanity: appendChild calls found');
+  assert.deepStrictEqual(reattachViolations(code), [], 'parsed nodes must never be re-attached');
   // The only way HTML text enters the output is DOMParser; style goes through CSSOM.
   assert.ok(!/setAttribute\(\s*['"]style['"]/.test(code), 'style must be copied through CSSOM, never setAttribute("style")');
 });

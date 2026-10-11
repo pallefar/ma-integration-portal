@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <p style="font-size: 0.8rem; color: var(--text-primary); line-height: 1.4; margin: 0.15rem 0;">${escapeHtml(m.description)}</p>
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px solid var(--border-color); padding-top: 0.4rem; margin-top: 0.25rem;">
               <span>Teams: <strong>${escapeHtml(m.supportingTeams)}</strong></span>
-              <span>Ref: <a href="${escapeHtml(m.playbookLink)}" target="_blank" style="color: var(--te-dark-teal); font-weight:600; text-decoration: underline;">Playbook</a></span>
+              <span>Ref: <a href="${escapeHtml(safeLink(m.playbookLink))}" target="_blank" style="color: var(--te-dark-teal); font-weight:600; text-decoration: underline;">Playbook</a></span>
             </div>
           `;
 
@@ -1240,6 +1240,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   // --- Helper: Escape HTML strings safely ---
+  // [security] WR-B04 (Phase 13 review, Part B): every stored/API value written
+  // into an href/src passes the MASafeHtml scheme check (relative, http(s),
+  // mailto, tel) and is escaped at the interpolation site; else fails closed to '#'.
+  function safeLink(value) {
+    return (window.MASafeHtml && typeof window.MASafeHtml.safeHref === 'function' && window.MASafeHtml.safeHref(value)) || '#';
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return str
@@ -1841,7 +1848,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
               </div>
               <div style="display: flex; gap: 0.5rem;">
-                <a href="${c.htmlEmailPath}" target="_blank" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; text-decoration: none; border-radius: var(--radius-sm);">
+                <a href="${escapeHtml(safeLink(c.htmlEmailPath))}" target="_blank" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; text-decoration: none; border-radius: var(--radius-sm);">
                   <span>🔍</span> View Sent HTML
                 </a>
                 <button class="btn btn-secondary delete-comm-btn" data-id="${c.id}" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; border-color: rgba(220,38,38,0.3); color: #ef4444; border-radius: var(--radius-sm);">

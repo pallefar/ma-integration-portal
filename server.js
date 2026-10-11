@@ -1630,6 +1630,13 @@ app.delete('/api/auth/sessions/:id', (req, res, next) => {
     if (req.portalUser.sessionId !== null && ended.tokenHash === req.portalUser.sessionId) {
       // The caller ended the session it is using — same cookie clearing as logout.
       res.setHeader('Set-Cookie', clearedSessionCookieHeader(req));
+      // [security] WR-B01 (Phase 13 review, Part B) / D-13-06 (b): this is a
+      // sign-out path too, so it carries the same Clear-Site-Data as
+      // POST /api/auth/logout — ONLY here, where the ended session is the
+      // caller's own (ending another device's session must not wipe this
+      // browser). Secure contexts only; public/js/account-menu.js also runs
+      // MAClientStorage.clearOnLogout() and keeps the language key.
+      res.setHeader('Clear-Site-Data', '"cache", "storage"');
       return res.json({ success: true, endedCurrent: true });
     }
     auditHook.recordSecurityEvent({

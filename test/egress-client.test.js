@@ -226,6 +226,7 @@ function videoSandbox(settingsAnswer, initial) {
   const fetched = [];
   const sandbox = {
     console, Promise, setTimeout,
+    escapeHtml: (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])),
     activeVideoSettings: Object.assign({ welcomeVideoUrl: '', welcomeVideoType: 'local', youtubeAllowed: false }, initial || {}),
     localStorage: { getItem: () => 'en' },
     document: {
@@ -240,6 +241,9 @@ function videoSandbox(settingsAnswer, initial) {
   };
   vm.createContext(sandbox);
   const code = [
+    // WR-B04 (Phase 13 review, Part B): the id check, link check and escaper the video paths now call.
+    extractBlock(EMPLOYEE_SRC, 'function isYoutubeId('),
+    extractBlock(EMPLOYEE_SRC, 'function safeLink('),
     extractBlock(EMPLOYEE_SRC, 'function getYoutubeId('),
     extractBlock(EMPLOYEE_SRC, 'function youtubeBlocked('),
     extractBlock(EMPLOYEE_SRC, 'function renderYoutubeSwitchedOff('),
@@ -290,6 +294,26 @@ test('egress absent from the settings answer fails closed (PD-38): placeholder, 
     assert.ok(!/youtube|ytimg/i.test(String(v.wrapper.style.backgroundImage || '')));
     assert.ok(v.wrapper.children.some((c) => c.attrs['data-i18n'] === 'egress.switchedOff'));
   }
+});
+
+test('WR-B04 (Phase 13 review, Part B): getYoutubeId only yields an 11-char [A-Za-z0-9_-] id; safeLink fails closed', () => {
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext([
+    extractBlock(EMPLOYEE_SRC, 'function isYoutubeId('),
+    extractBlock(EMPLOYEE_SRC, 'function getYoutubeId('),
+    extractBlock(EMPLOYEE_SRC, 'function safeLink('),
+    ';__exports = { isYoutubeId, getYoutubeId, safeLink };',
+  ].join('\n'), sandbox);
+  const { isYoutubeId, getYoutubeId, safeLink } = sandbox.__exports;
+  assert.strictEqual(getYoutubeId('https://youtu.be/abcdefghijk'), 'abcdefghijk');
+  assert.strictEqual(getYoutubeId('https://www.youtube.com/watch?v=g7Qa2ZBOCNM'), 'g7Qa2ZBOCNM');
+  assert.strictEqual(getYoutubeId('https://youtu.be/abc"def<ghi'), null, 'a quote inside the 11 chars no longer passes');
+  assert.strictEqual(getYoutubeId("https://youtu.be/abc')x;yzz"), null);
+  assert.strictEqual(isYoutubeId('g7Qa2ZBOCNM'), true);
+  assert.strictEqual(isYoutubeId('g7Qa2ZB"CNM'), false);
+  // Without MASafeHtml on the page the link check fails closed.
+  assert.strictEqual(safeLink('/e.html'), '#');
 });
 
 test('a local video is unaffected by the youtube switch', async () => {

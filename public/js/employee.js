@@ -1661,11 +1661,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- 5. WELCOME VIDEO SOURCE AND PLAYER IMPLEMENTATION ---
 
+  // [security] WR-B04 (Phase 13 review, Part B): a YouTube id is exactly 11
+  // characters of [A-Za-z0-9_-]. It is interpolated into an embed src, a
+  // thumbnail URL and a CSS url(), so nothing else (a quote, a slash) may pass.
+  // (A hoisted function, not a const: callers may run before this line.)
+  function isYoutubeId(v) { return /^[\w-]{11}$/.test(String(v == null ? '' : v)); }
   function getYoutubeId(url) {
     if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+    const match = String(url).match(regExp);
+    return (match && isYoutubeId(match[2])) ? match[2] : null;
+  }
+
+  // [security] WR-B04: every stored/API value written into an href/src passes
+  // the MASafeHtml scheme check (relative, http(s), mailto, tel) and is escaped
+  // at the interpolation site; anything else fails closed to '#'.
+  function safeLink(value) {
+    return (window.MASafeHtml && typeof window.MASafeHtml.safeHref === 'function' && window.MASafeHtml.safeHref(value)) || '#';
   }
 
   // [security] SAFE-06 / D-13-05 (plan 13-08): the one predicate every YouTube
@@ -1758,7 +1770,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // YouTube thumbnail check
       if (type === 'youtube') {
         let youtubeId = getYoutubeId(url);
-        if (!youtubeId && url.length === 11) youtubeId = url;
+        if (!youtubeId && isYoutubeId(url)) youtubeId = url;
         
         if (youtubeId && videoWrapper) {
           const imgUrl = `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
@@ -1842,7 +1854,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // already hidden when YouTube is switched off; never build the iframe.
         if (youtubeBlocked()) return;
         let youtubeId = getYoutubeId(url);
-        if (!youtubeId && url.length === 11) youtubeId = url;
+        if (!youtubeId && isYoutubeId(url)) youtubeId = url;
         
         if (youtubeId) {
           if (placeholderBg) placeholderBg.style.display = 'none';
@@ -1870,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         playerContainer.style.display = 'block';
         playerContainer.innerHTML = `
-          <video src="${url}" controls autoplay style="width: 100%; height: 100%; border-radius: var(--radius-lg); object-fit: cover; background: black;"></video>
+          <video src="${escapeHtml(safeLink(url))}" controls autoplay style="width: 100%; height: 100%; border-radius: var(--radius-lg); object-fit: cover; background: black;"></video>
           <button class="close-video-player-btn" style="position: absolute; top: 0.75rem; left: 0.75rem; z-index: 105; background: rgba(0,0,0,0.65); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 20px; padding: 0.25rem 0.75rem; font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-weight: 600; font-family: var(--font-family-sans); transition: all 0.2s;"><span style="font-size: 0.85rem; font-weight: bold;">&times;</span> Close Player</button>
         `;
         
@@ -2234,7 +2246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const lessons = (m.lessons || []).map(l => {
           const qn = (l.quiz && l.quiz.questions ? l.quiz.questions.length : 0);
           const quizBtn = `<button type="button" class="academy-view-lesson" data-lesson="${cmsEsc(l.id)}" style="font-size:0.75rem;color:var(--te-dark-teal);font-weight:600;background:none;border:none;cursor:pointer;padding:0;">📖 View lesson${qn ? ' &amp; quiz' : ''} &rarr;</button>`;
-          const pb = l.playbookLink ? `<a href="${cmsEsc(l.playbookLink)}" target="_blank" class="playbook-anchor-link" style="font-size:0.75rem;color:var(--te-orange);font-weight:600;text-decoration:none;">${readLink}</a>` : '';
+          const pb = l.playbookLink ? `<a href="${cmsEsc(safeLink(l.playbookLink))}" target="_blank" class="playbook-anchor-link" style="font-size:0.75rem;color:var(--te-orange);font-weight:600;text-decoration:none;">${readLink}</a>` : '';
           // Enforce CMS "hard" course gating: a lesson whose prerequisite isn't done stays locked.
           const prereqOk = !(gatingHard && l.prerequisite && !doneSet.has(l.prerequisite));
           const lockNote = prereqOk ? '' : `<span style="font-size:0.75rem;color:var(--te-orange);font-weight:700;">🔒 Complete the prerequisite lesson to unlock</span>`;
@@ -3450,7 +3462,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   <span>${dateStr}</span>
                 </div>
               </div>
-              <a href="${c.htmlEmailPath}" target="_blank" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; text-decoration: none; border-radius: 4px; border: 1.5px solid ${getEmployeeTemplateColor(c.template)}; background: transparent; color: ${getEmployeeTemplateColor(c.template)}; font-weight: bold; cursor: pointer; transition: all 0.2s;">
+              <a href="${escapeHtml(safeLink(c.htmlEmailPath))}" target="_blank" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; text-decoration: none; border-radius: 4px; border: 1.5px solid ${getEmployeeTemplateColor(c.template)}; background: transparent; color: ${getEmployeeTemplateColor(c.template)}; font-weight: bold; cursor: pointer; transition: all 0.2s;">
                 <span>📧</span> View Simulated Email
               </a>
             </div>
@@ -3484,7 +3496,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       <span>${dateStr}</span>
                     </div>
                   </div>
-                  <a href="${c.htmlEmailPath}" target="_blank" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; text-decoration: none; border-radius: 4px; border: 1.5px solid ${getEmployeeTemplateColor(c.template)}; background: transparent; color: ${getEmployeeTemplateColor(c.template)}; font-weight: bold; cursor: pointer; transition: all 0.2s;">
+                  <a href="${escapeHtml(safeLink(c.htmlEmailPath))}" target="_blank" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; text-decoration: none; border-radius: 4px; border: 1.5px solid ${getEmployeeTemplateColor(c.template)}; background: transparent; color: ${getEmployeeTemplateColor(c.template)}; font-weight: bold; cursor: pointer; transition: all 0.2s;">
                     <span>📧</span> View Simulated Email
                   </a>
                 </div>

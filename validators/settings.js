@@ -8,7 +8,7 @@
 'use strict';
 
 const { z } = require('zod');
-const { registerSchema, EmptyBodySchema } = require('./index');
+const { registerSchema, EmptyBodySchema, urlField } = require('./index');
 
 const NAME_MAX = 300;
 const TEXT_MAX = 4000;
@@ -61,6 +61,13 @@ const DatabaseConfigSchema = z.object({
   connectionDetails: z.string().max(LARGE_BLOB_MAX).optional(),
 }).optional();
 
+// [security] WR-B04 (Phase 13 review, Part B): the welcome video value becomes a
+// <video src> / YouTube embed id on the employee page. A relative path or an
+// http(s) URL, or — the one widening — a bare 11-character YouTube video id,
+// which the employee page accepts in place of a URL (employee.js getYoutubeId
+// fallback). An id is a plain token: it can never carry a scheme.
+const welcomeVideoUrlField = urlField(2000, { alsoAllow: /^[\w-]{11}$/ }).optional();
+
 const SettingsUpdateSchema = z.object({
   demoMode: z.union([z.boolean(), z.string().max(10)]).optional(),
   targetCompany: z.string().max(NAME_MAX).optional(),
@@ -72,15 +79,15 @@ const SettingsUpdateSchema = z.object({
   geminiApiKey: z.string().max(500).optional(),
   browserModel: z.string().max(120).optional(),
   welcomeVideoType: z.string().max(20).optional(),
-  welcomeVideoUrl: z.string().max(2000).optional(),
+  welcomeVideoUrl: welcomeVideoUrlField,
   welcomeVideoType_en: z.string().max(20).optional(),
-  welcomeVideoUrl_en: z.string().max(2000).optional(),
+  welcomeVideoUrl_en: welcomeVideoUrlField,
   welcomeVideoType_de: z.string().max(20).optional(),
-  welcomeVideoUrl_de: z.string().max(2000).optional(),
+  welcomeVideoUrl_de: welcomeVideoUrlField,
   welcomeVideoType_zh: z.string().max(20).optional(),
-  welcomeVideoUrl_zh: z.string().max(2000).optional(),
+  welcomeVideoUrl_zh: welcomeVideoUrlField,
   welcomeVideoType_cs: z.string().max(20).optional(),
-  welcomeVideoUrl_cs: z.string().max(2000).optional(),
+  welcomeVideoUrl_cs: welcomeVideoUrlField,
   roleVisibility: RoleVisibilitySchema,
   doomGloballyEnabled: z.boolean().optional(),
   doomUnlockXp: z.union([z.number(), z.string().max(10)]).optional(),

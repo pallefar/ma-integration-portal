@@ -1925,6 +1925,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.MAClientStorage && typeof window.MAClientStorage.runLegacyCleanupOnce === 'function') {
     window.MAClientStorage.runLegacyCleanupOnce();
   }
+  // [security] IN-B02 (Phase 13 review, Part B): a page restored from the
+  // back/forward cache after sign-out would show the previous user's DOM.
+  // Clear-Site-Data "cache" prevents that only in secure contexts (a plain-HTTP
+  // LAN host ignores it), so a persisted restore always reloads - the reload
+  // goes through the auth probe and bounces a signed-out browser to login.
+  window.addEventListener('pageshow', (e) => { if (e.persisted) window.location.reload(); });
 
   // Apply edit mode body class immediately on load if enabled
   if (localStorage.getItem('adminEditMode') === 'true') {
@@ -2789,8 +2795,13 @@ document.addEventListener('DOMContentLoaded', () => {
               if (gc && a.parentElement === gc) gc.appendChild(a);
             }
           } else if (it.custom && !hidden && it.href && t && t !== 'survey') {
+            // [security] WR-B04 (Phase 13 review, Part B): a custom menu href is
+            // stored data - only a MASafeHtml-approved scheme (relative, http(s),
+            // mailto, tel) reaches the link; anything else is not rendered.
+            const customHref = window.MASafeHtml && typeof window.MASafeHtml.safeHref === 'function' ? window.MASafeHtml.safeHref(it.href) : '';
+            if (!customHref) return;
             const link = document.createElement('a');
-            link.href = it.href;
+            link.href = customHref;
             link.className = 'sidebar-link sidebar-sub-link';
             const text = lbl(it.label) || it.href;
             link.title = text;

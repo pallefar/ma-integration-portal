@@ -10,7 +10,7 @@
 'use strict';
 
 const { z } = require('zod');
-const { registerSchema, EmptyBodySchema, htmlField } = require('./index');
+const { registerSchema, EmptyBodySchema, htmlField, urlField } = require('./index');
 
 const ID_MAX = 120;
 const NAME_MAX = 300;
@@ -70,7 +70,7 @@ const LessonSchema = z.object({
   body: htmlField(i18nOrString(HTML_MAX)).optional(),
   xp: z.number().optional(),
   dimension: z.string().max(60).optional(),
-  playbookLink: z.string().max(2000).optional(),
+  playbookLink: urlField(2000).optional(), // [security] CR-B01/WR-B04: lesson modal href
   prerequisite: z.string().max(ID_MAX).nullable().optional(),
   order: z.number().optional(),
   quiz: QuizSchema,
@@ -130,7 +130,7 @@ const SidebarItemSchema = z.object({
   group: z.string().max(60).optional(),
   label: i18nOrString(NAME_MAX).optional(),
   icon: z.string().max(20).optional(),
-  href: z.string().max(500).optional(),
+  href: urlField(500).optional(), // [security] CR-B01/WR-B04: custom sidebar link href
   order: z.number().optional(),
   visible: z.boolean().optional(),
   roleScope: z.string().max(60).optional(),
@@ -147,14 +147,14 @@ const LandingCardSchema = z.object({
   id: z.string().max(ID_MAX).optional(),
   icon: z.string().max(20).optional(),
   title: i18nOrString(NAME_MAX).optional(),
-  href: z.string().max(500).optional(),
+  href: urlField(500).optional(), // [security] CR-B01/WR-B04: landing card href
   order: z.number().optional(),
 });
 const BookmarkSchema = z.object({
   id: z.string().max(ID_MAX).optional(),
   icon: z.string().max(20).optional(),
   label: z.string().max(NAME_MAX).optional(),
-  page: z.string().max(NAME_MAX).optional(),
+  page: urlField(NAME_MAX).optional(), // [security] CR-B01/WR-B04: quick-nav bookmark href (page + #section)
   section: z.string().max(120).optional(),
   order: z.number().optional(),
 });
@@ -186,12 +186,12 @@ const PageBlockDataSchema = z.object({
   title: i18nOrString(NAME_MAX).optional(),
   subtitle: i18nOrString(600).optional(),
   cta: i18nOrString(120).optional(),
-  ctaHref: z.string().max(500).optional(),
+  ctaHref: urlField(500).optional(), // [security] CR-B01/WR-B04: hero CTA href
   heading: i18nOrString(NAME_MAX).optional(),
   items: i18nOrString(TEXT_MAX).optional(),
   text: i18nOrString(TEXT_MAX).optional(),
   button: i18nOrString(120).optional(),
-  href: z.string().max(500).optional(),
+  href: urlField(500).optional(), // [security] CR-B01/WR-B04: cta block href
 }).optional();
 const PageLayoutBlockSchema = z.object({
   id: z.string().trim().min(1).max(ID_MAX),

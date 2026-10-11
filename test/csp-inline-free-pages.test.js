@@ -65,24 +65,42 @@ function stripComments(html) {
   return html.replace(/<!--[\s\S]*?-->/g, '');
 }
 
+// [security] WR-B06 (Phase 13 review, Part B): the browser decodes character
+// references inside attribute values and drops tab/newline anywhere in a URL, so
+// `&#106;avascript:`, `&#x6A;avascript:` and `java&Tab;script:` all execute. The
+// scheme test runs on the DECODED, whitespace/control-free text.
+const NAMED_ENTITIES = { tab: '\t', newline: '\n', colon: ':', lpar: '(', rpar: ')', sol: '/', quot: '"', apos: "'", amp: '&', lt: '<', gt: '>', nbsp: ' ' };
+function decodeEntities(s) {
+  return s.replace(/&#x([0-9a-f]+);?/gi, (m, h) => String.fromCodePoint(Math.min(parseInt(h, 16), 0x10ffff) || 0xfffd))
+    .replace(/&#(\d+);?/g, (m, d) => String.fromCodePoint(Math.min(Number(d), 0x10ffff) || 0xfffd))
+    .replace(/&([a-z]+);/gi, (m, n) => (Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, n.toLowerCase()) ? NAMED_ENTITIES[n.toLowerCase()] : m));
+}
+const compactScheme = (s) => decodeEntities(s).replace(/[\u0000- \u007f- ­​]/g, '');
+
 // Returns the list of violations for an HTML source (empty = inline-free).
 function inlineViolations(html) {
   const src = stripComments(html);
   const v = [];
-  // inline <script>: an opening tag that has no src attribute
+  // inline <script>: an opening tag that has no src attribute. An external
+  // script must come from /js/ or /vendor/ - a `data:`/`blob:`/remote src is
+  // inline (or third-party) code by another name (WR-B06).
   const scriptRe = /<script\b([^>]*)>/gi;
   let m;
   while ((m = scriptRe.exec(src)) !== null) {
-    if (!/\bsrc\s*=/.test(m[1])) v.push(`inline <script${m[1]}>`);
+    const srcAttr = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(m[1]);
+    if (!srcAttr) { v.push(`inline <script${m[1]}>`); continue; }
+    const url = compactScheme(srcAttr[1] || srcAttr[2] || srcAttr[3] || '');
+    if (!/^\/(?:js|vendor)\//.test(url)) v.push(`<script src> outside /js/ and /vendor/: ${url.slice(0, 60)}`);
   }
-  // inline handler attributes: any `on<name>=` attribute inside a start tag
+  // inline handler attributes: any `on<name>=` attribute inside a start tag,
+  // whitespace- OR slash-separated (`<img/onerror=…>`, the R1-03 trick)
   const tagRe = /<[a-zA-Z][^>]*>/g;
   while ((m = tagRe.exec(src)) !== null) {
     const attrs = m[0].replace(/"[^"]*"|'[^']*'/g, '""'); // values out of the way
-    const h = attrs.match(/\son[a-z]+\s*=/i);
+    const h = attrs.match(/[\s/]on[a-z]+\s*=/i);
     if (h) v.push(`inline handler ${h[0].trim()} in ${m[0].slice(0, 80)}`);
   }
-  if (/javascript\s*:/i.test(src)) v.push('javascript: URL');
+  if (/javascript:/i.test(compactScheme(src))) v.push('javascript: URL');
   if (/\bsrcdoc\s*=/i.test(src)) v.push('srcdoc attribute');
   return v;
 }
@@ -95,8 +113,9 @@ function assertInlineFree(htmlPath) {
 // External files must not rebuild inline handlers / javascript: URLs as markup.
 function externalViolations(js) {
   const v = [];
-  const markupHandler = /<[a-zA-Z][^>]*\son[a-z]+\s*=/;
+  const markupHandler = /<[a-zA-Z][^>]*[\s/]on[a-z]+\s*=/;
   if (markupHandler.test(js)) v.push('string markup with an inline on*= handler');
+  if (/\.setAttribute\(\s*['"`]on/i.test(js)) v.push('setAttribute of an on* handler attribute');
   if (/["'`]\s*javascript\s*:/i.test(js) || /href\s*=\s*["']?\s*javascript:/i.test(js)) v.push('javascript: URL in a string');
   return v;
 }
@@ -111,6 +130,32 @@ test('negative control: the scanner catches an inline block, a handler, a javasc
   assert.deepStrictEqual(inlineViolations('<script src="/js/a.js?v=1"></script><!-- <script>1</script> onclick="x" --><button data-action="go">b</button>'), []);
   assert.ok(externalViolations('el.innerHTML = \'<a onclick="x()">\';').length > 0);
   assert.deepStrictEqual(externalViolations('el.addEventListener("click", function(){ if (a.onclick) {} });'), []);
+});
+
+test('negative control (WR-B06): slash-separated handlers, entity/tab-obfuscated schemes and non-/js/ script sources are caught', () => {
+  const probes = [
+    ['<img/onerror="alert(1)" src=x>', /inline handler/],
+    ['<svg/onload=alert(1)>', /inline handler/],
+    ['<a href="&#106;avascript:alert(1)">a</a>', /javascript:/],
+    ['<a href="&#x6A;avascript:alert(1)">a</a>', /javascript:/],
+    ['<a href="&#X6a;avascript&#58;alert(1)">a</a>', /javascript:/],
+    ['<a href="java&Tab;script:alert(1)">a</a>', /javascript:/],
+    ['<a href="java&NewLine;script&colon;alert(1)">a</a>', /javascript:/],
+    ['<a href=" javascript:alert(1)">a</a>', /javascript:/],
+    ['<script src="data:text/javascript,alert(1)"></script>', /outside \/js\//],
+    ['<script src="https://cdn.example/x.js"></script>', /outside \/js\//],
+    ['<script src=//cdn.example/x.js></script>', /outside \/js\//],
+    ['<script src="blob:https://x/1"></script>', /outside \/js\//],
+  ];
+  for (const [html, re] of probes) {
+    const v = inlineViolations(html);
+    assert.ok(v.some((x) => re.test(x)), `must be caught: ${html} (got ${JSON.stringify(v)})`);
+  }
+  assert.deepStrictEqual(inlineViolations('<script src="/vendor/transformers/transformers.min.js"></script><script src="/js/pages/a.js?v=1"></script><img src="/a.png" data-on="x" alt="online=yes">'), []);
+  // An external script that rebuilds a handler without quotes, or via setAttribute, is caught too.
+  assert.ok(externalViolations("el.innerHTML = '<img src=x onerror=alert(1)>';").length > 0);
+  assert.ok(externalViolations("el.setAttribute('onclick', 'x()');").length > 0);
+  assert.ok(externalViolations('el.setAttribute( "onload" , f);').length > 0);
 });
 
 for (const [page, files] of Object.entries(OWNED)) {
