@@ -80,8 +80,33 @@ safety of user-authored content.
   caches.
 - **Media upload allowlist** and code-only upload logging.
 
-Phase 13's formal close-out (final review and verification) is still pending at the
-time of this draft; treat its items as "merged, review in progress".
+Phase 13's formal close-out paperwork (final verifier sign-off) is still open; its
+code is merged, reviewed twice by independent reviewers, security-audited and covered
+by browser walks run under the enforced policy (see below).
+
+## Security review of this candidate
+
+Before this pre-release was cut, three independent whole-codebase reviews ran against
+it: identity / authorization / clean-room / audit and how the phases compose; data
+layer / operations / what actually ships; client / rendering / CSP. Result:
+
+- **One HIGH finding, fixed before release:** a signed-in Integration Lead who was not
+  a member of a deal could read, rewrite and forge that deal's clean-room grants
+  through three deal-administration routes. Every `/api/deals/:id/*` route now applies
+  the deal-membership rule (non-members get the same "not found" an unknown deal
+  gets), with a regression test that enumerates the routes.
+- **Also fixed before release:** the egress setting could change without an audit row
+  under the open demo with the break-glass token; a developer's file path baked into
+  the demo data and the AI plan template; an upload-type hole in the media library;
+  and (client review) a stale break-glass token persisted in the browser.
+- **No CRITICAL finding.** The remaining rated items are the ones listed under
+  "Known limits" — each is scheduled (Phases 14 and 20) and none is hidden.
+- What the reviews did **not** cover: a Windows host run, the bundled Node
+  runtime beyond a byte-for-byte match with nodejs.org, live denial-of-service
+  testing, and the vendored model runtime.
+
+This is a risk reduction, not a certification. Do not read "no critical finding" as
+"secure"; independent certification is Phase 23.
 
 ## What is NOT in this pre-release
 
@@ -110,8 +135,9 @@ time of this draft; treat its items as "merged, review in progress".
   are public by design. Real-deal use requires `MA_MODE=real` (the
   `start-real-deal.*` launchers) and `scripts/bootstrap-admin.js`; never put real
   data on a host started with `start.command` / `start.bat` (they set `DEMO_OPEN=1`).
-- **`compression` is still 1.8.1.** The bump to ≥ 1.8.2 is held by the supply-chain
-  age check until 2026-10-11T11:17Z and lands no later than Phase 21.
+- **`compression` is still 1.8.1.** The bump to ≥ 1.8.2 was held by the supply-chain
+  age check until 2026-10-11T11:17Z (now cleared); it ships in the next candidate and
+  no later than Phase 21.
 - **`proxy-addr` 2.0.7 (via express 4.22.2) has an open advisory.** Client-IP
   spoofing is possible only if `TRUST_PROXY` is set to an IPv4-mapped-IPv6 subnet
   such as `::ffff:10.0.0.0/104`; the documented hop-count form (`TRUST_PROXY=1`) is
