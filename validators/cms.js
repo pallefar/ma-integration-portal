@@ -23,10 +23,19 @@ const LARGE_BLOB_MAX = 70000000; // base64 media payload text — see validators
 // every localized field (title/description/body/…) and a plain string for
 // a handful of non-localized ones (e.g. a bookmark's label). Accepting
 // both matches what's actually sent rather than forcing one shape.
+//
+// [security] WR-A06 (13-REVIEW): the i18n map is bounded to I18N_MAX_KEYS
+// language entries (the CMS ships <= 4 languages; I18nUpdateSchema allows at
+// most 20). Each HTML-bearing leaf costs a synchronous lib/sanitizeHtml.js pass,
+// so an unbounded key count multiplied that cost per request. HTML_MAX above is
+// ALSO a sanitizer-cost bound: test/sanitize-html.test.js pins the worst case at
+// exactly HTML_MAX chars — raise it only together with that test.
+const I18N_MAX_KEYS = 20;
 function i18nOrString(max) {
   return z.union([
     z.string().max(max),
-    z.record(z.string().max(10), z.string().max(max).nullable()),
+    z.record(z.string().max(10), z.string().max(max).nullable())
+      .refine((o) => Object.keys(o).length <= I18N_MAX_KEYS, { message: `At most ${I18N_MAX_KEYS} language variants are allowed.` }),
   ]);
 }
 
