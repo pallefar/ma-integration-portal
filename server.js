@@ -315,8 +315,43 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// [security] WR-A01 (13-REVIEW) / D-13-03 "unauthenticated but body <= 4 KB, per-IP
+// rate-limited": POST /api/csp-report is a PUBLIC path (it passes credential
+// lockdown too), so the app-wide 50 MB parsers below must never read its body —
+// otherwise an anonymous `application/json` / form body is buffered, inflated and
+// parsed in full BEFORE the route's limiter and 4 KB parser run. Two rules:
+//   1. the per-IP limiter (lib/cspReports.js, 60/min, req.ip is TRUST_PROXY-aware)
+//      runs HERE, before any parser, so it is the first thing that sees a report;
+//   2. the global parsers skip this path (type function), so the route's own
+//      `express.json({ type: report types, limit: '4kb' })` is the ONLY reader and
+//      any other content type is answered 415 without its body being read.
+// The path test is the canonical form (lib/requestPath.js, trailing slash /
+// `//` / once-decoded) — the spellings the case-sensitive router still dispatches
+// to the route — so no spelling of the route reaches it through the 50 MB parsers.
+const cspReports = require('./lib/cspReports');
+const cspReportLimiter = cspReports.createLimiter({ perMinute: 60 });
+const CSP_REPORT_PATH = '/api/csp-report';
+function isCspReportPath(req) {
+  const r = pathForms(req.path);
+  return r.ok && r.canonical === CSP_REPORT_PATH;
+}
+app.use((req, res, next) => {
+  if (req.method !== 'POST' || !isCspReportPath(req)) return next();
+  if (!cspReportLimiter.take(req.ip)) {
+    res.set('Retry-After', '60');
+    return res.status(429).json({ error: 'Too many reports.' });
+  }
+  next();
+});
+app.use(express.json({
+  limit: '50mb',
+  type: (req) => !isCspReportPath(req) && Boolean(req.is('application/json')),
+}));
+app.use(express.urlencoded({
+  limit: '50mb',
+  extended: true,
+  type: (req) => !isCspReportPath(req) && Boolean(req.is('application/x-www-form-urlencoded')),
+}));
 // VAL-01: a malformed JSON body (including a bare top-level `null`, which
 // body-parser's strict mode rejects as invalid JSON — only object/array are
 // valid top-level JSON in strict mode) must 400, never fall through to the
@@ -3065,22 +3100,16 @@ app.post('/api/admin/egress', (req, res) => {
 // POST /api/csp-report is on PUBLIC_API_PATHS (a browser report carries no
 // session) and is the ONLY route in this block an anonymous caller reaches, so
 // it is bounded three ways BEFORE the handler: a per-IP limiter (60/min, req.ip
-// is TRUST_PROXY-aware), a route-level parser that accepts only the two report
-// content types at 4 KB, and lib/cspReports.js normalisation (distinct tuples,
-// query/fragment dropped, truncated, last 100 kept). 204, no body. Nothing here
-// renders HTML; GET /api/admin/csp-violations is JSON for admins only (the
-// `/api/admin` prefix is admin-only for every method - checked again inline).
-const cspReports = require('./lib/cspReports');
-const cspReportLimiter = cspReports.createLimiter({ perMinute: 60 });
+// is TRUST_PROXY-aware — WR-A01: mounted BEFORE the app-wide body parsers, beside
+// them, as the first reader of the request), a route-level parser that accepts
+// only the two report content types at 4 KB (the app-wide 50 MB parsers skip this
+// path, so it is the only reader), and lib/cspReports.js normalisation (distinct
+// tuples, query/fragment dropped, truncated, last 100 kept). 204, no body.
+// Nothing here renders HTML; GET /api/admin/csp-violations is JSON for admins
+// only (the `/api/admin` prefix is admin-only for every method - checked again
+// inline).
 app.post(
   '/api/csp-report',
-  (req, res, next) => {
-    if (!cspReportLimiter.take(req.ip)) {
-      res.set('Retry-After', '60');
-      return res.status(429).json({ error: 'Too many reports.' });
-    }
-    next();
-  },
   express.json({ type: cspReports.SUPPORTED_TYPES, limit: '4kb' }),
   (req, res) => {
     const type = String(req.get('content-type') || '').split(';')[0].trim().toLowerCase();

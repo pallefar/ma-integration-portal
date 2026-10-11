@@ -239,3 +239,127 @@ test('lib/cspReports normalize: both formats, bounded per request', () => {
   assert.deepStrictEqual(cspReports.normalize('application/csp-report', null), []);
   assert.deepStrictEqual(cspReports.normalize('text/html', chromium()), []);
 });
+
+// ---- WR-A01 (13-REVIEW): the 4 KB bound holds for EVERY content type ---------
+// The app-wide 50 MB parsers skip /api/csp-report and the limiter runs before any
+// parser. Proof by byte counter: the client declares (or streams) 5 MB but sends
+// only the first 64 KB and then waits — the server must answer while the rest of
+// the body has never been sent. Before the fix the global express.json /
+// express.urlencoded waited for (and buffered) all 5 MB before any answer.
+const http = require('http');
+const FIVE_MB = 5 * 1024 * 1024;
+const FIRST_CHUNK = 64 * 1024;
+
+function earlyAnswer({ type, ip, urlPath = '/api/csp-report', chunked = false, fill = '[' }) {
+  return new Promise((resolve, reject) => {
+    const { port } = server.address();
+    const headers = { 'content-type': type, 'x-forwarded-for': ip || freshIp() };
+    if (!chunked) headers['content-length'] = String(FIVE_MB);
+    let written = 0;
+    const timer = setTimeout(() => {
+      req.destroy();
+      reject(new Error(`no answer after ${written} of ${FIVE_MB} bytes — the body is being read past the bound`));
+    }, 15000);
+    const req = http.request({ host: '127.0.0.1', port, path: urlPath, method: 'POST', headers }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => { clearTimeout(timer); req.destroy(); resolve({ status: res.statusCode, body, written }); });
+    });
+    req.on('error', (e) => { if (e.code !== 'ECONNRESET' && e.code !== 'EPIPE') { clearTimeout(timer); reject(e); } });
+    const chunk = Buffer.alloc(FIRST_CHUNK, fill);
+    req.write(chunk);
+    written += chunk.length;
+  });
+}
+
+test('WR-A01: a 5 MB application/json or form body to /api/csp-report is refused 415 after <= 64 KB was ever sent (never buffered by the 50 MB parsers)', async () => {
+  for (const [label, opts, expected] of [
+    ['json, content-length', { type: 'application/json' }, 415],
+    ['json, chunked', { type: 'application/json', chunked: true }, 415],
+    ['json, charset param', { type: 'application/json; charset=utf-8' }, 415],
+    ['urlencoded', { type: 'application/x-www-form-urlencoded', fill: 'a' }, 415],
+    // `/api/csp-report/` is not on PUBLIC_API_PATHS (exact match), so the gate
+    // answers 401 — but still without the 50 MB parsers having read the body.
+    ['json, trailing-slash spelling', { type: 'application/json', urlPath: '/api/csp-report/' }, 401],
+  ]) {
+    const r = await earlyAnswer(opts);
+    assert.strictEqual(r.status, expected, `${label}: ${r.status} ${r.body}`);
+    assert.ok(r.written <= FIRST_CHUNK, `${label}: answered after ${r.written} bytes`);
+  }
+  assert.strictEqual(cspReports.size(), 0);
+});
+
+/** POST a full `bytes`-long body (content-length or chunked), resolving with the status. */
+function fullPost({ type, bytes, chunked = false, ip }) {
+  return new Promise((resolve, reject) => {
+    const { port } = server.address();
+    const headers = { 'content-type': type, 'x-forwarded-for': ip || freshIp() };
+    if (!chunked) headers['content-length'] = String(bytes);
+    const req = http.request({ host: '127.0.0.1', port, path: '/api/csp-report', method: 'POST', headers }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', (e) => { if (e.code !== 'ECONNRESET' && e.code !== 'EPIPE') reject(e); });
+    const chunk = Buffer.alloc(FIRST_CHUNK, '[');
+    let sent = 0;
+    const pump = () => {
+      while (sent < bytes) {
+        const n = Math.min(chunk.length, bytes - sent);
+        sent += n;
+        if (!req.write(n === chunk.length ? chunk : chunk.subarray(0, n))) return req.once('drain', pump);
+      }
+      req.end();
+    };
+    pump();
+  });
+}
+
+test('WR-A01: a 5 MB report-typed body is 413 from the route\'s 4 KB parser, and the app-wide 50 MB parsers never consumed it (spy)', async () => {
+  // A spy spliced in right AFTER the app-wide urlencoded parser records whether
+  // either app-wide parser consumed a /api/csp-report body (`req._body`).
+  // body-parser 1.x dumps (reads and discards, never buffers) the rest of a
+  // refused body before answering, so a 413 is not an early answer — the proof
+  // here is that only the route's 4 KB parser ever buffered it.
+  const stack = app._router.stack;
+  const urlIdx = stack.findIndex((l) => l && l.name === 'urlencodedParser');
+  assert.ok(urlIdx > 0);
+  const seen = [];
+  app.use(function wrA01Spy(req, res, next) {
+    if (req.path.startsWith('/api/csp-report')) seen.push(req._body === true);
+    next();
+  });
+  const spy = stack.pop();
+  stack.splice(urlIdx + 1, 0, spy);
+  try {
+    for (const [label, opts, expected] of [
+      ['csp-report, content-length', { type: 'application/csp-report' }, 413],
+      ['csp-report, chunked', { type: 'application/csp-report', chunked: true }, 413],
+      ['reports+json, content-length', { type: 'application/reports+json' }, 413],
+      ['json, content-length', { type: 'application/json' }, 415],
+      ['urlencoded, chunked', { type: 'application/x-www-form-urlencoded', chunked: true }, 415],
+    ]) {
+      assert.strictEqual(await fullPost({ ...opts, bytes: FIVE_MB }), expected, label);
+    }
+  } finally {
+    stack.splice(stack.indexOf(spy), 1);
+  }
+  assert.strictEqual(seen.length, 5, 'every request passed the spy');
+  assert.deepStrictEqual(seen, [false, false, false, false, false], 'no app-wide parser consumed a /api/csp-report body');
+  assert.strictEqual(cspReports.size(), 0);
+});
+
+test('WR-A01: the limiter is the first reader — 100 rapid requests from one IP: 60 reach the route, 40 are 429, and a 5 MB body is 429 unread once the window is spent', async () => {
+  const ip = freshIp();
+  const results = await Promise.all(Array.from({ length: 100 }, () => postReport(null, { ip, type: 'application/json', raw: '{"a":1}' })));
+  const counts = results.reduce((acc, r) => { acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
+  assert.deepStrictEqual(counts, { 415: 60, 429: 40 }, JSON.stringify(counts));
+  for (const r of results.filter((x) => x.status === 429)) assert.strictEqual(r.headers.get('retry-after'), '60');
+  const limited = await earlyAnswer({ type: 'application/json', ip });
+  assert.strictEqual(limited.status, 429);
+  assert.ok(limited.written <= FIRST_CHUNK, `answered after ${limited.written} bytes`);
+  // other routes still get the app-wide parsers (the skip is path-exact)
+  const login = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{not json' });
+  await login.text();
+  assert.strictEqual(login.status, 400, 'a malformed JSON body elsewhere is still parsed (and refused 400) by the app-wide parser');
+});
