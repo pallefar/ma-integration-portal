@@ -121,8 +121,12 @@ test('a v1 file: malicious page bodies are cleaned and benign rows are byte-iden
 
   const summary = lines.find((l) => /deal\/002 resanitize-html deal-file#[0-9a-f]{8}: /.test(l));
   assert.ok(summary && /2 value\(s\) changed in 2 row\(s\)/.test(summary), `summary line: ${lines.join(' | ')}`);
-  const hashLines = lines.filter((l) => /pages\/[AB] .* sha256 [0-9a-f]{64} -> [0-9a-f]{64}$/.test(l));
+  // WR-A05 (13-REVIEW): the row id is logged as sha256(id).slice(0, 8), never verbatim.
+  const idTag = (id) => '#' + require('crypto').createHash('sha256').update(id).digest('hex').slice(0, 8);
+  const hashLines = lines.filter((l) => /pages\/#[0-9a-f]{8} .* sha256 [0-9a-f]{64} -> [0-9a-f]{64}$/.test(l));
   assert.strictEqual(hashLines.length, 2);
+  assert.deepStrictEqual(hashLines.map((l) => /pages\/(#[0-9a-f]{8}) /.exec(l)[1]).sort(), [idTag('A'), idTag('B')].sort());
+  assert.ok(lines.every((l) => !/pages\/[AB]\b/.test(l)), 'no row id appears verbatim');
   assert.ok(lines.every((l) => !l.includes('onerror') && !l.includes('onclick') && !l.includes('deal.db')), 'no stored content and no file name is logged (MNPI)');
 
   // Idempotent: re-open does nothing — a payload planted AFTER the stamp survives the reopen
