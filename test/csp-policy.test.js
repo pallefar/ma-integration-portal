@@ -1,7 +1,9 @@
 'use strict';
-// SAFE-02 / D-13-03 (plan 13-07): the strict `script-src 'self' 'wasm-unsafe-eval'`
-// policy ships as Content-Security-Policy-Report-Only beside today's enforcing
-// policy, and CSP_MODE selects report-only | enforce (unknown -> enforce).
+// SAFE-02 / D-13-03 (plan 13-07, flipped by 13-13): the strict
+// `script-src 'self' 'wasm-unsafe-eval'` policy is the ENFORCING default
+// (CSP_MODE unset). `CSP_MODE=report-only` is the documented rollback: the strict
+// policy rides as Content-Security-Policy-Report-Only beside today's legacy
+// enforcing policy. An unknown value fails closed to enforce.
 //
 // Part 1 is the header matrix against lib/csp.js directly (modes x dev egress
 // defaults x real egress defaults). Part 2 boots the real app as a child
@@ -42,12 +44,33 @@ function captureWarnings(fn) {
 const DEV = modeDefaults(false);
 const REAL = modeDefaults(true);
 
-test('default mode (CSP_MODE unset): legacy policy enforced, strict policy Report-Only', () => {
-  const h = withMode(undefined, () => csp.headersFor({ egress: DEV }));
+// D-13-03 final state (plan 13-13, PD-45): the default flipped from report-only to
+// enforce. A planned flip, not a weakened assertion: the pair assertions below
+// moved to the explicit CSP_MODE=report-only rollback case.
+test('default mode (CSP_MODE unset): the strict policy is ENFORCED, no Report-Only header, no legacy token (D-13-03 final state)', () => {
+  for (const egress of [DEV, REAL]) {
+    const h = withMode(undefined, () => csp.headersFor({ egress }));
+    assert.deepStrictEqual(Object.keys(h), [CSP], 'exactly one header: the enforcing strict policy');
+    const strict = parseCsp(h[CSP]);
+    assert.deepStrictEqual(strict['script-src'], ["'self'", "'wasm-unsafe-eval'"]);
+    assert.deepStrictEqual(strict['report-uri'], ['/api/csp-report']);
+    assert.ok(!/unsafe-eval/.test(h[CSP].replace(/wasm-unsafe-eval/g, '')), 'no unsafe-eval in the enforced policy');
+    assert.ok(!/unsafe-inline/.test(strict['script-src'].join(' ')), 'no unsafe-inline in script-src');
+    assert.ok(!/nonce-/.test(h[CSP]), 'no nonces');
+    assert.ok(!/report-to|Reporting-Endpoints/i.test(h[CSP]), 'report-uri only (PD-11)');
+    assert.ok(!(RO in h), 'no Report-Only header in the default mode');
+  }
+  // the same answer for an empty / whitespace-only value and for the boot log line
+  assert.deepStrictEqual(withMode('', () => csp.headersFor({ egress: DEV })), withMode(undefined, () => csp.headersFor({ egress: DEV })));
+  assert.deepStrictEqual(withMode('   ', () => csp.resolveMode()), { mode: 'enforce', requested: '', valid: true });
+});
+
+test('CSP_MODE=report-only (the documented rollback): legacy policy enforced, strict policy Report-Only', () => {
+  const h = withMode('report-only', () => csp.headersFor({ egress: DEV }));
   assert.deepStrictEqual(Object.keys(h).sort(), [CSP, RO].sort());
 
   const legacy = parseCsp(h[CSP]);
-  assert.ok(legacy['script-src'].includes("'unsafe-inline'"), 'enforced policy is exactly today\'s (never weaker, PD-10)');
+  assert.ok(legacy['script-src'].includes("'unsafe-inline'"), 'the rollback policy is exactly the pre-flip one (never weaker, PD-10)');
   assert.ok(legacy['script-src'].includes("'unsafe-eval'"));
   assert.deepStrictEqual(legacy['report-uri'], ['/api/csp-report']);
 
@@ -85,9 +108,10 @@ test('CSP_MODE=enforce: strict policy as the ONLY header', () => {
   }
 });
 
-test('CSP_MODE=report-only (explicit, any case) equals the default; an unknown value fails closed to enforce with ONE warning', () => {
+test('CSP_MODE=report-only (explicit, any case, trimmed) selects the rollback pair; an unknown value fails closed to enforce with ONE warning', () => {
   const explicit = withMode(' Report-Only ', () => csp.headersFor({ egress: DEV }));
   assert.deepStrictEqual(Object.keys(explicit).sort(), [CSP, RO].sort());
+  assert.deepStrictEqual(explicit, withMode('report-only', () => csp.headersFor({ egress: DEV })));
 
   const warnings = captureWarnings(() => {
     for (let i = 0; i < 5; i++) {
@@ -101,11 +125,12 @@ test('CSP_MODE=report-only (explicit, any case) equals the default; an unknown v
   assert.strictEqual(security.length, 1, `exactly one boot warning, got ${security.length}: ${security.join(' | ')}`);
 
   assert.deepStrictEqual(withMode('bogus-mode-xyz', () => csp.resolveMode()), { mode: 'enforce', requested: 'bogus-mode-xyz', valid: false });
-  assert.deepStrictEqual(withMode('', () => csp.resolveMode()), { mode: 'report-only', requested: '', valid: true });
+  assert.deepStrictEqual(withMode('', () => csp.resolveMode()), { mode: 'enforce', requested: '', valid: true }, 'empty = the (enforce) default, valid');
+  assert.deepStrictEqual(withMode('report-only', () => csp.resolveMode()), { mode: 'report-only', requested: 'report-only', valid: true });
 });
 
-test('real-mode defaults: neither header carries an https: token, in report-only AND enforce (W-6)', () => {
-  for (const mode of [undefined, 'enforce']) {
+test('real-mode defaults: no header carries an https: token, in the default, enforce AND the report-only rollback (W-6)', () => {
+  for (const mode of [undefined, 'enforce', 'report-only']) {
     const h = withMode(mode, () => csp.headersFor({ egress: REAL }));
     for (const name of Object.keys(h)) {
       assert.ok(!/https?:/i.test(h[name]), `${name} (mode ${mode || 'default'}) must list no http(s) origin: ${h[name]}`);
@@ -114,22 +139,45 @@ test('real-mode defaults: neither header carries an https: token, in report-only
   }
 });
 
-test('child server, dev defaults: both headers on a page, strict value reported on /login.html', async () => {
-  const s = await startServer({ dir: fs.mkdtempSync(path.join(DIR, 'dev-')), mode: 'dev' });
+test('child server, dev defaults, CSP_MODE unset: ONE enforcing strict header on a page and on an API response', async () => {
+  const prev = process.env.CSP_MODE;
+  delete process.env.CSP_MODE; // the helper's child inherits process.env: prove the DEFAULT
+  let s;
+  try {
+    s = await startServer({ dir: fs.mkdtempSync(path.join(DIR, 'dev-')), mode: 'dev' });
+  } finally {
+    if (prev !== undefined) process.env.CSP_MODE = prev;
+  }
+  try {
+    const res = await s.request('/login.html');
+    assert.strictEqual(res.status, 200);
+    const enforced = res.headers.get('content-security-policy');
+    assert.strictEqual(res.headers.get('content-security-policy-report-only'), null, 'no Report-Only header by default');
+    assert.deepStrictEqual(parseCsp(enforced)['script-src'], ["'self'", "'wasm-unsafe-eval'"], 'the strict policy is the enforced one');
+    assert.ok(/report-uri \/api\/csp-report/.test(enforced));
+    assert.ok(!/unsafe-inline/.test(parseCsp(enforced)['script-src'].join(' ')));
+    assert.ok(!/unsafe-eval/.test(enforced.replace(/wasm-unsafe-eval/g, '')) && !/nonce-/.test(enforced));
+
+    // the header also rides an API response (every response carries it)
+    const api = await s.request('/api/auth/mode');
+    assert.deepStrictEqual(parseCsp(api.headers.get('content-security-policy'))['script-src'], ["'self'", "'wasm-unsafe-eval'"]);
+    assert.strictEqual(api.headers.get('content-security-policy-report-only'), null);
+  } finally {
+    await s.stop();
+  }
+});
+
+test('child server, dev + CSP_MODE=report-only (the rollback): legacy enforced + strict Report-Only on a page', async () => {
+  const s = await startServer({ dir: fs.mkdtempSync(path.join(DIR, 'dev-ro-')), mode: 'dev', env: { CSP_MODE: 'report-only' } });
   try {
     const res = await s.request('/login.html');
     assert.strictEqual(res.status, 200);
     const enforced = res.headers.get('content-security-policy');
     const reportOnly = res.headers.get('content-security-policy-report-only');
-    assert.ok(enforced && /'unsafe-inline'/.test(enforced), 'legacy policy still enforced');
+    assert.ok(enforced && /'unsafe-inline'/.test(enforced), 'legacy policy enforced under the rollback');
     assert.ok(reportOnly, 'strict policy present as Report-Only');
     assert.deepStrictEqual(parseCsp(reportOnly)['script-src'], ["'self'", "'wasm-unsafe-eval'"]);
     assert.ok(/report-uri \/api\/csp-report/.test(reportOnly));
-    assert.ok(!/unsafe-eval/.test(reportOnly.replace(/wasm-unsafe-eval/g, '')) && !/nonce-/.test(reportOnly));
-
-    // the header also rides an API response (every response carries it)
-    const api = await s.request('/api/auth/mode');
-    assert.ok(api.headers.get('content-security-policy-report-only'));
   } finally {
     await s.stop();
   }

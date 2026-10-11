@@ -10,10 +10,15 @@
 //
 // Lanes: real + dev use a runner-owned temp MA_SLIDES_UPLOAD_DIR (1 MB quota so
 // the quota refusal is cheap). dev-defaultdir starts the child with
-// MA_SLIDES_UPLOAD_DIR UNSET so the slide lands in the worktree's own
-// public/uploads/slides - where the terminal `.html` middleware lives, which a
-// temp dir outside public/ cannot exercise (B-1). That variant deletes what it
-// uploaded in `finally` and compares the directory listing before/after.
+// MA_SLIDES_UPLOAD_DIR UNSET so the slide lands in the product's DEFAULT slide
+// directory (B-1). Since the CR-A01 review fix (13-REVIEW-FIX-S) that default is
+// OUTSIDE the public static root: `<instance data dir>/slides`, which for this
+// non-real lane is `<repo>/data/slides` (gitignored, created 0700 at first
+// upload). The slide is served only through the dedicated /uploads/slides mount;
+// nothing may land in the old `public/uploads/slides` (the variant asserts that
+// listing is unchanged). The variant deletes what it uploaded in `finally`
+// (removing `data/slides` again when the run created it) and compares the slide
+// directory listing before/after.
 'use strict';
 
 const fs = require('fs');
@@ -55,11 +60,15 @@ async function slideSandbox(ctx) {
   const results = [];
   const chk = (step, cond, detail) => { ctx.check(step, cond, detail); results.push(!!cond); };
 
-  const dir = ctx.slidesDir;
+  // dev-defaultdir: the product's default slide directory is <instance data dir>/slides - for this
+  // non-real lane <repo>/data/slides (db/dbFiles.js DATA_DIR; lib/slideUpload.js defaultSlidesDir()).
+  // The other lanes use the runner-owned temp directory it passed in as MA_SLIDES_UPLOAD_DIR.
+  const dir = isDefaultDir ? path.join(S.REPO_ROOT, 'data', 'slides') : ctx.slidesDir;
   const dirExisted = fs.existsSync(dir);
-  const uploadsParent = path.dirname(dir);
-  const parentExisted = fs.existsSync(uploadsParent);
   const before = listing(dir);
+  // The pre-CR-A01 location. Nothing may be written there any more (it is inside the public static root).
+  const legacyDir = path.join(S.REPO_ROOT, 'public', 'uploads', 'slides');
+  const legacyBefore = listing(legacyDir);
   const created = [];
 
   try {
@@ -84,7 +93,12 @@ async function slideSandbox(ctx) {
     const slideUrl = up.json && up.json.url;
     if (!slideUrl) throw new Error('probe upload returned no URL');
     created.push(path.basename(slideUrl));
-    chk('the uploaded file is in the expected slide directory', fs.existsSync(path.join(dir, path.basename(slideUrl))), { dir: isDefaultDir ? 'public/uploads/slides (default)' : 'runner temp dir' });
+    chk('the uploaded file is in the expected slide directory', fs.existsSync(path.join(dir, path.basename(slideUrl))), { dir: isDefaultDir ? 'data/slides (the default, outside public/)' : 'runner temp dir' });
+    if (isDefaultDir) {
+      chk('default directory: the slide is NOT under the public static root (public/uploads/slides listing unchanged)',
+        JSON.stringify(listing(legacyDir)) === JSON.stringify(legacyBefore) && !fs.existsSync(path.join(legacyDir, path.basename(slideUrl))),
+        { before: legacyBefore, after: listing(legacyDir) });
+    }
 
     // ---- served headers (node view of the exact response) -------------------
     const res = await fetch(ctx.base + slideUrl);
@@ -179,11 +193,14 @@ async function slideSandbox(ctx) {
       // T-13-114: remove exactly what this run created, then prove the listing is back.
       created.forEach((n) => { try { fs.unlinkSync(path.join(dir, n)); } catch (e) { /* already gone */ } });
       if (!dirExisted) { try { fs.rmdirSync(dir); } catch (e) { /* not empty or gone */ } }
-      if (!parentExisted) { try { fs.rmdirSync(uploadsParent); } catch (e) { /* not empty or gone */ } }
       const after = listing(dir);
       const same = JSON.stringify(after) === JSON.stringify(before);
-      ctx.check('default directory: public/uploads/slides listing identical before/after (probe slide deleted by its returned URL)', same, { before, after });
+      ctx.check('default directory: data/slides listing identical before/after (probe slide deleted by its returned name; directory removed when this run created it)', same, { before, after });
       results.push(same);
+      const legacyAfter = listing(legacyDir);
+      const legacySame = JSON.stringify(legacyAfter) === JSON.stringify(legacyBefore);
+      ctx.check('default directory: public/uploads/slides listing identical before/after (nothing was ever written under public/)', legacySame, { before: legacyBefore, after: legacyAfter });
+      results.push(legacySame);
     }
   }
 

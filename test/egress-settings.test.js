@@ -31,7 +31,8 @@ test('lib/csp: builder output per egress key; youtube is never in script-src; no
   const all = parseCsp(headersFor({ egress: { gemini: true, huggingface: true, youtube: true } })['Content-Security-Policy']);
   assert.deepStrictEqual(all['frame-src'], ["'self'", ...YT_FRAME]);
   assert.deepStrictEqual(all['connect-src'], ["'self'", ...HF_CONNECT]);
-  assert.deepStrictEqual(all['script-src'], ["'self'", "'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'"]);
+  // 13-13 (D-13-03 final state): the default header is the strict ENFORCING policy.
+  assert.deepStrictEqual(all['script-src'], ["'self'", "'wasm-unsafe-eval'"]);
   assert.deepStrictEqual(all['frame-ancestors'], ["'self'"]);
   assert.ok(all['media-src'].includes('https://*.youtube.com'));
   assert.ok(all['img-src'].includes('https://img.youtube.com') && all['img-src'].includes('https://*.huggingface.co'));
