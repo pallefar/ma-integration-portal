@@ -180,9 +180,10 @@ test('101 distinct tuples keep the last 100 (least recently seen evicted); a rep
 
 test('application/reports+json: an array with two csp-violation entries and one other type yields two tuples', async () => {
   const body = [
-    { type: 'csp-violation', url: 'http://h.test/p', body: { documentURL: 'http://h.test/p?q=1', effectiveDirective: 'script-src-elem', blockedURL: 'inline', sourceFile: 'http://h.test/p', lineNumber: 7 } },
+    // WR-A07: document paths name pages this app really serves (others are dropped).
+    { type: 'csp-violation', url: 'http://h.test/index.html', body: { documentURL: 'http://h.test/index.html?q=1', effectiveDirective: 'script-src-elem', blockedURL: 'inline', sourceFile: 'http://h.test/p', lineNumber: 7 } },
     { type: 'deprecation', body: { id: 'x', message: 'old api' } },
-    { type: 'csp-violation', body: { documentURL: 'http://h.test/q', effectiveDirective: 'script-src-attr', blockedURL: 'inline', lineNumber: 9 } },
+    { type: 'csp-violation', body: { documentURL: 'http://h.test/', effectiveDirective: 'script-src-attr', blockedURL: 'inline', lineNumber: 9 } },
   ];
   const r = await postReport(body, { type: 'application/reports+json' });
   assert.strictEqual(r.status, 204);
@@ -190,7 +191,7 @@ test('application/reports+json: an array with two csp-violation entries and one 
   assert.strictEqual(admin.json.count, 2);
   assert.deepStrictEqual(admin.json.violations.map((v) => v.directive).sort(), ['script-src-attr', 'script-src-elem']);
   const elem = admin.json.violations.find((v) => v.directive === 'script-src-elem');
-  assert.strictEqual(elem.documentPath, '/p');
+  assert.strictEqual(elem.documentPath, '/index.html');
   assert.strictEqual(elem.sourceFile, 'http://h.test/p');
 });
 
@@ -220,6 +221,59 @@ test('unknown shapes, wrong content types and malformed JSON store nothing', asy
   assert.strictEqual((await postReport(null, { raw: '{not json' })).status, 400);
   assert.strictEqual(cspReports.size(), 0);
   assert.strictEqual((await list('admin')).json.count, 0);
+});
+
+// ---- WR-A07 (13-REVIEW): the list is advisory; foreign noise cannot displace first-party signal
+test('WR-A07: a report about a page the app does not serve is dropped (204, nothing stored)', async () => {
+  for (const doc of ['http://127.0.0.1:3000/no-such-page.html', 'http://127.0.0.1:3000/x', 'http://127.0.0.1:3000/vendor/a.html',
+    'http://127.0.0.1:3000/uploads/slides/1_ab_x.html', 'about:blank']) {
+    assert.strictEqual((await postReport(chromium({ 'document-uri': doc, 'blocked-uri': `https://n.test/${encodeURIComponent(doc)}` }))).status, 204);
+  }
+  assert.strictEqual(cspReports.size(), 0, 'only reports about served pages are kept');
+  for (const doc of ['http://127.0.0.1:3000/', 'http://127.0.0.1:3000/login.html', 'http://127.0.0.1:3000/admin.html?tab=x#y']) {
+    await postReport(chromium({ 'document-uri': doc, 'blocked-uri': `https://k.test/${encodeURIComponent(doc)}` }));
+  }
+  assert.strictEqual(cspReports.size(), 3, '`/` and existing pages under public/ are kept');
+});
+
+test('WR-A07: a full store evicts foreign-origin tuples before first-party ones (live route, posted-to origin decides)', async () => {
+  // one first-party tuple (source-file on the origin the report is posted to), seen FIRST
+  const firstParty = chromium({ 'source-file': `${base}/index.html`, 'blocked-uri': 'inline', 'document-uri': `${base}/index.html` });
+  assert.strictEqual((await postReport(firstParty)).status, 204);
+  // 120 foreign tuples from several addresses (an extension / another origin)
+  const ips = [freshIp(), freshIp(), freshIp()];
+  for (let i = 0; i < 120; i++) {
+    await postReport(chromium({ 'source-file': 'chrome-extension://abcdef/inject.js', 'blocked-uri': `https://noise${i}.test/s.js` }), { ip: ips[Math.floor(i / 50)] });
+  }
+  const admin = await list('admin');
+  assert.strictEqual(admin.json.count, 100);
+  assert.ok(admin.json.violations.some((v) => v.sourceFile === `${base}/index.html`), 'the first-party tuple survives 120 foreign inserts');
+  assert.ok(!admin.json.violations.some((v) => 'foreign' in v), 'the internal flag never leaves the store');
+});
+
+test('WR-A07 unit: eviction order and the foreign/first-party classification', () => {
+  const store = cspReports.createStore({ max: 3, isKnownPage: () => true });
+  const t = (blockedUri, sourceFile) => ({ directive: 'script-src-elem', blockedUri, sourceFile, lineNumber: null, documentPath: '/' });
+  const origin = 'https://portal.test';
+  store.record(t('a', 'inline'), { origin });                       // first-party, least recently seen
+  store.record(t('f1', 'https://evil.test/x.js'), { origin });      // foreign
+  store.record(t('f2', 'moz-extension://id/x.js'), { origin });     // foreign
+  store.record(t('b', 'https://portal.test/app.js'), { origin });   // first-party -> evicts f1, not a
+  assert.deepStrictEqual(store.list().map((v) => v.blockedUri).sort(), ['a', 'b', 'f2']);
+  store.record(t('c', ''), { origin });                             // evicts f2 (last foreign)
+  store.record(t('d', '/js/x.js'), { origin });                     // no foreign left -> plain LRU: evicts a
+  assert.deepStrictEqual(store.list().map((v) => v.blockedUri).sort(), ['b', 'c', 'd']);
+  assert.strictEqual(cspReports.createStore({ isKnownPage: () => false }).record(t('z', '')), false, 'refused when not a served page');
+  const f = cspReports.isForeignSource;
+  assert.strictEqual(f('inline', origin), false);
+  assert.strictEqual(f('https://portal.test/a.js', origin), false);
+  assert.strictEqual(f('https://portal.test:8443/a.js', origin), true, 'another port is another origin');
+  assert.strictEqual(f('data:', origin), true);
+  assert.strictEqual(f('https://x.test/a.js', undefined), false, 'unknown posted-to origin: no reprioritisation');
+  assert.strictEqual(cspReports.isServedPage('/'), true);
+  assert.strictEqual(cspReports.isServedPage('/overview.html'), true);
+  assert.strictEqual(cspReports.isServedPage('/vendor/transformers/x.html'), false);
+  assert.strictEqual(cspReports.isServedPage(''), false);
 });
 
 test('only POST is served on /api/csp-report: every other method reaches no handler (404)', async () => {

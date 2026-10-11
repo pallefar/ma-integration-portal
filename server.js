@@ -3123,7 +3123,10 @@ app.post(
     if (!cspReports.SUPPORTED_TYPES.includes(type)) {
       return res.status(415).json({ error: 'Unsupported report content type.' });
     }
-    for (const tuple of cspReports.normalize(type, req.body)) cspReports.record(tuple);
+    // WR-A07: the origin the report was posted to decides which source-files are
+    // foreign (evicted first); reports about pages this app does not serve are dropped.
+    const origin = `${req.protocol}://${req.get('host')}`;
+    for (const tuple of cspReports.normalize(type, req.body)) cspReports.record(tuple, { origin });
     res.status(204).end();
   },
   // Route-local error mapping: the generic handlers at the bottom of this file
