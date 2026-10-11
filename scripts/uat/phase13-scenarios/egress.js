@@ -104,7 +104,29 @@ async function videoState(ctx, who) {
   return { page, state, yt };
 }
 
+// The scenario changes settings of the lane's store (a YouTube welcome video in the real lane, the AI-model
+// prompt in the showcase lanes) to make the egress behaviour observable. Those are put back afterwards: a
+// full multi-scenario run shares one lane server, and a left-over `browserModel: 'none'` opens the AI-Insight
+// activation dialog over every later visitor's dashboard (it intercepted storedXss's sidebar click).
 async function egress(ctx) {
+  const fx = await ctx.fixture();
+  const admin = fx.users.admin;
+  const before = await ctx.api(admin.cookie, 'GET', '/api/settings');
+  const original = (before.json && typeof before.json === 'object') ? before.json : {};
+  try {
+    await egressWalk(ctx);
+  } finally {
+    const restore = ctx.lane === 'real'
+      ? { welcomeVideoType: original.welcomeVideoType || 'local', welcomeVideoUrl: original.welcomeVideoUrl || '' }
+      : (original.browserModel !== undefined ? { browserModel: original.browserModel } : null);
+    if (restore) {
+      const r = await ctx.api(admin.cookie, 'POST', '/api/settings', restore);
+      ctx.check('the settings this scenario changed are restored for the scenarios that follow in the lane', r.status === 200, { status: r.status, keys: Object.keys(restore) });
+    }
+  }
+}
+
+async function egressWalk(ctx) {
   const fx = await ctx.fixture();
   const admin = fx.users.admin;
   const isReal = ctx.lane === 'real';

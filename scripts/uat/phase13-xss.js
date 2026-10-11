@@ -613,7 +613,7 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
       try {
         await registry[name].fn(ctx);
       } catch (e) {
-        record(tag, 'scenario threw', 'FAIL', String(e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e));
+        record(tag, 'scenario threw', 'FAIL', String(e && e.stack ? e.stack.split('\n').slice(0, 14).join(' | ') : e));
       }
     }
   } catch (e) {
