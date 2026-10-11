@@ -596,12 +596,29 @@ async function runLane(lane, scenarioNames, registry, args, outDir, browser, can
       return p;
     };
 
+    // The violation list lives in the lane server's memory and is shared by every scenario of a
+    // multi-scenario run, so a scenario's "the list is empty" check is judged against the list as it
+    // was when THAT scenario started: a tuple an earlier scenario produced (the expected, recorded
+    // `eval` probe of the vendored Transformers bundle, PD-44) is not charged to a later one, but any
+    // NEW tuple - or a higher count on an old one - is. For a single-scenario invocation the baseline
+    // is empty and this is exactly the raw list.
+    const vioKey = (v) => [v.directive, v.blockedUri, v.sourceFile, v.lineNumber, v.documentPath].join('|');
     for (const name of scenarioNames) {
       const tag = name + '@' + lane;
+      let baselineVio = new Map();
+      try {
+        const rawNow = await endpointViolations();
+        baselineVio = new Map((rawNow.violations || []).map((v) => [vioKey(v), v.count || 1]));
+      } catch (e) { /* no admin session available: raw list semantics */ }
+      const scenarioViolations = async () => {
+        const raw = await endpointViolations();
+        const fresh = (raw.violations || []).filter((v) => !(baselineVio.has(vioKey(v)) && (v.count || 1) <= baselineVio.get(vioKey(v))));
+        return Object.assign({}, raw, { count: fresh.length, violations: fresh, preexisting: (raw.violations || []).length - fresh.length });
+      };
       const ctx = {
         lane, base, outDir, tmp, dataDir, slidesDir, browser, canary, repoRoot: REPO_ROOT,
         cspMode: args.cspMode,
-        newPage, settle, pageViolations, endpointViolations, shot, sleep,
+        newPage, settle, pageViolations, endpointViolations: scenarioViolations, shot, sleep,
         api, loginFull, adminCookie, createAccount, freshSession, fixture,
         publishedDemoPassword,
         viewports: { desktop: VIEWPORT_DESKTOP, phone: VIEWPORT_PHONE },
