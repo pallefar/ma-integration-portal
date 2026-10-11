@@ -259,6 +259,8 @@ const ENUMERATED_PATHS = [
   // recommended-modules card on the IL/admin dashboard: pmo-writable module records,
   // playbookLink -> href through MASafeHtml.safeHref (CR-B01, Phase 13 review Part B)
   { file: 'dashboard.js', anchor: 'function renderActionModules(', kind: 'function', uses: ['MASafeHtml.safeHref'], note: 'recommended-modules card (CR-B01)' },
+  // AI 100-day plan (model/RAG output): regex markdown -> markup string -> MASafeHtml.render (CR3-04)
+  { file: 'dashboard.js', anchor: 'function renderMarkdownPlan(', kind: 'function', render: true, uses: ['MASafeHtml.render'], note: 'AI 100-day plan (CR3-04)' },
 ];
 
 // Owned and gated by plan 13-11 in the same wave (it rewrites these functions);

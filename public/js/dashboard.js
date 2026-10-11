@@ -1127,25 +1127,78 @@ function initDemoDashboard() {
   }
 
   // 9. Markdown Plan Parser Engine
+  // [security] CR3-04: assessment.aiPlan is model/RAG output (third-party text
+  // assembled from deal data and uploaded documents). The converter below only
+  // turns its markdown into markup STRING; the string is then rendered through
+  // MASafeHtml.render (DOMParser into an inert document, allowlisted nodes built
+  // one by one) like the chatbot bubble and the AI insight card — never
+  // innerHTML. The allowlist drops most presentational CSS (border, background,
+  // font-family, var(...) colours), so the converter marks structure with class
+  // names and this table re-applies the SAME declarations through the CSSOM
+  // (style.setProperty, trusted constants, never the plan text) after the safe
+  // render. A class name in the plan text can at most select one of these
+  // trusted style sets — the AR-13-08 class-based-redress ceiling the allowlist
+  // already tolerates.
+  const PLAN_CLASS_STYLES = {
+    'ma-plan-hr': 'border: 0; height: 1px; background: var(--border-color); margin: 2rem 0;',
+    'ma-plan-h2': 'font-size: 2.2rem; color: var(--te-dark-teal); font-family: var(--font-family-display); font-weight: 800; margin-top: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--te-orange); padding-bottom: 0.5rem;',
+    'ma-plan-h3': 'font-size: 1.6rem; color: var(--te-dark-teal); font-family: var(--font-family-display); font-weight: 700; margin-top: 2rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;',
+    'ma-plan-h4': 'font-size: 1.25rem; color: var(--te-dark-teal); font-family: var(--font-family-display); font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.75rem;',
+    'ma-plan-h5': 'font-size: 1.05rem; color: var(--text-primary); font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem;',
+    'ma-plan-important': 'border-left-color: var(--te-orange);',
+    'ma-plan-important-title': 'color: var(--te-orange);',
+    'ma-plan-caution': 'border-left-color: var(--status-danger); background-color: var(--status-danger-light); color: #7F1D1D;',
+    'ma-plan-caution-title': 'color: var(--status-danger);',
+    'ma-plan-quote': 'border-left: 4px solid var(--te-orange); background: var(--bg-light); padding: 0.75rem 1.25rem; margin: 1.5rem 0; border-radius: 0 var(--radius-md) var(--radius-md) 0; font-size: 0.95rem; color: var(--text-secondary);',
+    'ma-plan-strong': 'color: var(--te-dark-teal); font-weight: 700;',
+    'ma-plan-cell': 'padding: 0.75rem 1rem; border: 1px solid var(--border-color);',
+    'ma-plan-row': 'border-bottom: 1px solid var(--border-color);',
+    'ma-plan-tablewrap': 'overflow-x: auto; margin: 1.5rem 0;',
+    'ma-plan-table': 'width: 100%; border-collapse: collapse; border: 1px solid var(--border-color);',
+    'ma-plan-li': 'margin-bottom: 0.5rem; list-style: square; margin-left: 1.5rem; color: var(--text-primary);',
+    'ma-plan-p': 'margin-bottom: 1rem; color: var(--text-primary);'
+  };
+
+  function applyPlanStyles(rootEl) {
+    rootEl.querySelectorAll('[class*="ma-plan-"]').forEach(function (el) {
+      Array.prototype.forEach.call(el.classList, function (cls) {
+        const css = Object.prototype.hasOwnProperty.call(PLAN_CLASS_STYLES, cls) ? PLAN_CLASS_STYLES[cls] : '';
+        css.split(';').forEach(function (decl) {
+          const at = decl.indexOf(':');
+          if (at < 1) return;
+          el.style.setProperty(decl.slice(0, at).trim(), decl.slice(at + 1).trim());
+        });
+      });
+    });
+  }
+
+  function showPlanError(message) {
+    const p = document.createElement('p');
+    p.style.setProperty('color', 'var(--status-danger)');
+    p.textContent = message;
+    aiPlanMarkdown.textContent = '';
+    aiPlanMarkdown.appendChild(p);
+  }
+
   function renderMarkdownPlan(md) {
     if (!md) {
-      aiPlanMarkdown.innerHTML = '<p style="color: var(--status-danger);">Error: No plan content compiled.</p>';
+      showPlanError('Error: No plan content compiled.');
       return;
     }
 
     let html = md
       .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
-      .replace(/^---$/gm, '<hr style="border: 0; height: 1px; background: var(--border-color); margin: 2rem 0;">')
-      .replace(/^# (.*$)/gim, '<h2 style="font-size: 2.2rem; color: var(--te-dark-teal); font-family: var(--font-family-display); font-weight: 800; margin-top: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--te-orange); padding-bottom: 0.5rem;">$1</h2>')
-      .replace(/^## (.*$)/gim, '<h3 style="font-size: 1.6rem; color: var(--te-dark-teal); font-family: var(--font-family-display); font-weight: 700; margin-top: 2rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">$1</h3>')
-      .replace(/^### (.*$)/gim, '<h4 style="font-size: 1.25rem; color: var(--te-dark-teal); font-family: var(--font-family-display); font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.75rem;">$1</h4>')
-      .replace(/^#### (.*$)/gim, '<h5 style="font-size: 1.05rem; color: var(--text-primary); font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem;">$1</h5>')
+      .replace(/^---$/gm, '<hr class="ma-plan-hr">')
+      .replace(/^# (.*$)/gim, '<h2 class="ma-plan-h2">$1</h2>')
+      .replace(/^## (.*$)/gim, '<h3 class="ma-plan-h3">$1</h3>')
+      .replace(/^### (.*$)/gim, '<h4 class="ma-plan-h4">$1</h4>')
+      .replace(/^#### (.*$)/gim, '<h5 class="ma-plan-h5">$1</h5>')
       .replace(/> \[\!NOTE\]\s*\n*> (.*$)/gim, '<div class="alert-box alert-box-info"><span class="alert-title">Note</span><span class="alert-content">$1</span></div>')
       .replace(/> \[\!WARNING\]\s*\n*> (.*$)/gim, '<div class="alert-box alert-box-warning"><span class="alert-title">Warning</span><span class="alert-content">$1</span></div>')
-      .replace(/> \[\!IMPORTANT\]\s*\n*> (.*$)/gim, '<div class="alert-box alert-box-info" style="border-left-color: var(--te-orange);"><span class="alert-title" style="color: var(--te-orange);">Important</span><span class="alert-content">$1</span></div>')
-      .replace(/> \[\!CAUTION\]\s*\n*> (.*$)/gim, '<div class="alert-box alert-box-warning" style="border-left-color: var(--status-danger); background-color: var(--status-danger-light); color: #7F1D1D;"><span class="alert-title" style="color: var(--status-danger);">Caution</span><span class="alert-content">$1</span></div>')
-      .replace(/^> (.*$)/gim, '<blockquote style="border-left: 4px solid var(--te-orange); background: var(--bg-light); padding: 0.75rem 1.25rem; margin: 1.5rem 0; border-radius: 0 var(--radius-md) var(--radius-md) 0; font-size: 0.95rem; color: var(--text-secondary);">$1</blockquote>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong style="color: var(--te-dark-teal); font-weight: 700;">$1</strong>')
+      .replace(/> \[\!IMPORTANT\]\s*\n*> (.*$)/gim, '<div class="alert-box alert-box-info ma-plan-important"><span class="alert-title ma-plan-important-title">Important</span><span class="alert-content">$1</span></div>')
+      .replace(/> \[\!CAUTION\]\s*\n*> (.*$)/gim, '<div class="alert-box alert-box-warning ma-plan-caution"><span class="alert-title ma-plan-caution-title">Caution</span><span class="alert-content">$1</span></div>')
+      .replace(/^> (.*$)/gim, '<blockquote class="ma-plan-quote">$1</blockquote>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="ma-plan-strong">$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/\| (.*) \|/g, (match) => {
         if (match.includes(':---') || match.includes('---:')) {
@@ -1157,16 +1210,16 @@ function initDemoDashboard() {
           isHeader = true;
         }
         const tag = isHeader ? 'th' : 'td';
-        const rowCells = cells.map(cell => `<${tag} style="padding: 0.75rem 1rem; border: 1px solid var(--border-color);">${cell}</${tag}>`).join('');
-        return `<tr style="border-bottom: 1px solid var(--border-color);">${rowCells}</tr>`;
+        const rowCells = cells.map(cell => `<${tag} class="ma-plan-cell">${cell}</${tag}>`).join('');
+        return `<tr class="ma-plan-row">${rowCells}</tr>`;
       });
 
     html = html
       .replace(/(<tr[^>]*>[\s\S]*?<\/tr>)+/gi, (match) => {
-        return `<div style="overflow-x: auto; margin: 1.5rem 0;"><table style="width: 100%; border-collapse: collapse; border: 1px solid var(--border-color);">${match}</table></div>`;
+        return `<div class="ma-plan-tablewrap"><table class="ma-plan-table">${match}</table></div>`;
       })
-      .replace(/^\s*\*\s+(.*$)/gim, '<li style="margin-bottom: 0.5rem; list-style: square; margin-left: 1.5rem; color: var(--text-primary);">$1</li>')
-      .replace(/^([^<].*)$/gim, '<p style="margin-bottom: 1rem; color: var(--text-primary);">$1</p>')
+      .replace(/^\s*\*\s+(.*$)/gim, '<li class="ma-plan-li">$1</li>')
+      .replace(/^([^<].*)$/gim, '<p class="ma-plan-p">$1</p>')
       .replace(/<p><\/p>/g, '')
       .replace(/<p><h/g, '<h')
       .replace(/<\/h(\d)><\/p>/g, '</h$1>')
@@ -1175,7 +1228,13 @@ function initDemoDashboard() {
       .replace(/<p><li/g, '<li')
       .replace(/<\/li><\/p>/g, '</li>');
 
-    aiPlanMarkdown.innerHTML = html;
+    // Fail closed: without the shared renderer nothing is written as markup.
+    if (!window.MASafeHtml || typeof window.MASafeHtml.render !== 'function') {
+      showPlanError('Error: the plan could not be displayed safely.');
+      return;
+    }
+    window.MASafeHtml.render(aiPlanMarkdown, html);
+    applyPlanStyles(aiPlanMarkdown);
   }
 
   // Helper: Escape HTML strings safely
