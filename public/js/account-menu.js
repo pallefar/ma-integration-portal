@@ -271,12 +271,32 @@
       errorEl.style.display = 'none';
       button.disabled = true;
       var status = 0;
+      // [security] WR-B01 (Phase 13 review, Part B) / D-13-06 (b): ending the
+      // CURRENT session is a sign-out, so it clears the browser like the other
+      // two sign-out paths (MAClientStorage.clearOnLogout). The server answers
+      // that case with Clear-Site-Data, which can wipe localStorage as soon as
+      // the DELETE response lands, so the language preference is snapshotted
+      // BEFORE the request and put back before leaving.
+      var langKeys = (window.MAClientStorage && window.MAClientStorage.LANGUAGE_KEYS) || ['employeeLanguage'];
+      var keptLang = {};
+      langKeys.forEach(function (k) {
+        try { var v = localStorage.getItem(k); if (v !== null && v !== undefined) keptLang[k] = v; } catch (e) { /* storage unavailable */ }
+      });
       fetch('/api/auth/sessions/' + encodeURIComponent(s.id), { method: 'DELETE' }).then(function (r) {
         status = r.status;
         return r.json().catch(function () { return null; });
       }).then(function (body) {
         if (status === 200 && body && body.success) {
-          if (body.endedCurrent === true || s.current) { window.location.href = '/login.html'; return; }
+          if (body.endedCurrent === true || s.current) {
+            var leave = function () {
+              Object.keys(keptLang).forEach(function (k) {
+                try { localStorage.setItem(k, keptLang[k]); } catch (e) { /* storage unavailable */ }
+              });
+              window.location.href = '/login.html';
+            };
+            (window.MAClientStorage ? window.MAClientStorage.clearOnLogout() : Promise.resolve()).then(leave, leave);
+            return;
+          }
           return load();
         }
         button.disabled = false;

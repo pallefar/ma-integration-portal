@@ -195,6 +195,34 @@ test('SAFE-07 (b): POST /api/auth/logout answers Clear-Site-Data "cache", "stora
   }
 });
 
+test('SAFE-07 (b) / WR-B01: DELETE /api/auth/sessions/:id sends Clear-Site-Data only when the ended session is the caller\'s own', async () => {
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const mine = newSession('pmo', 'pmo');
+    newSession('pmo', 'pmo'); // a second device of the same user
+    const list = await (await fetch(`${base}/api/auth/sessions`, { headers: cookie(mine) })).json();
+    const current = list.find((s) => s.current);
+    const other = list.find((s) => !s.current);
+    assert.ok(current && other, 'two own sessions are listed, one current');
+
+    const endOther = await fetch(`${base}/api/auth/sessions/${encodeURIComponent(other.id)}`, { method: 'DELETE', headers: cookie(mine) });
+    assert.strictEqual(endOther.status, 200);
+    assert.strictEqual((await endOther.json()).endedCurrent, undefined);
+    assert.strictEqual(endOther.headers.get('clear-site-data'), null, 'ending ANOTHER device must not wipe this browser');
+
+    const endMine = await fetch(`${base}/api/auth/sessions/${encodeURIComponent(current.id)}`, { method: 'DELETE', headers: cookie(mine) });
+    assert.strictEqual(endMine.status, 200);
+    assert.strictEqual((await endMine.json()).endedCurrent, true);
+    assert.strictEqual(endMine.headers.get('clear-site-data'), '"cache", "storage"');
+    assert.strictEqual(endMine.headers.get('cache-control'), 'no-store');
+    const after = await fetch(`${base}/api/auth/sessions`, { headers: cookie(mine) });
+    assert.strictEqual(after.status, 401, 'the session row is revoked server-side');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 // ============================================================ client rows
 
 const CLIENT_SRC = readRoot('public', 'js', 'client-storage.js');
@@ -318,6 +346,88 @@ test('static: the logout link uses href="#" + preventDefault and calls MAClientS
   assert.ok(/preventDefault\(\)/.test(block), 'the click handler must call preventDefault()');
   assert.ok(/MAClientStorage\.clearOnLogout\(\)/.test(block), 'the click handler must call MAClientStorage.clearOnLogout()');
   assert.ok(/getElementById\('client-storage-js'\)/.test(src) && /\/js\/client-storage\.js\?v=/.test(src), 'client-storage.js is loaded through the id-guarded dynamic loader');
+});
+
+// WR-B01: the third sign-out path — "End this session" on the current session in
+// the account menu. The REAL endSession() from account-menu.js runs under node:vm
+// beside the REAL client-storage.js; the DELETE stub simulates the server's
+// Clear-Site-Data by wiping localStorage when the response lands.
+function extractFunction(src, name) {
+  const at = src.indexOf(`function ${name}(`);
+  assert.ok(at >= 0, `${name} not found`);
+  let depth = 0;
+  for (let i = src.indexOf('{', at); i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(at, i + 1); }
+  }
+  throw new Error(`unbalanced ${name}`);
+}
+
+async function runEndSession({ withClientStorage, endedCurrent, current }) {
+  const local = memStorage({ employeeLanguage: 'de', active_demo_role: 'admin', pmo_tasks_state: '{}' });
+  const session = memStorage({ dismissed: '1' });
+  const names = new Set(['transformers-cache', 'other']);
+  const calls = [];
+  let loads = 0;
+  const ctx = {
+    localStorage: local,
+    sessionStorage: session,
+    caches: { keys: () => Promise.resolve(Array.from(names)), delete: (n) => Promise.resolve(names.delete(n)) },
+    navigator: { serviceWorker: { getRegistrations: () => Promise.resolve([]) } },
+    fetch: (url, opts) => {
+      calls.push(`${(opts && opts.method) || 'GET'} ${url}`);
+      if (opts && opts.method === 'DELETE') {
+        if (endedCurrent) local.clear(); // Clear-Site-Data: "storage" in a secure context
+        return Promise.resolve({ status: 200, json: () => Promise.resolve(endedCurrent ? { success: true, endedCurrent: true } : { success: true }) });
+      }
+      return Promise.resolve({ ok: true, status: 200 });
+    },
+    setTimeout, clearTimeout, URL,
+    location: { href: '/dashboard.html' },
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  if (withClientStorage) {
+    vm.runInContext(CLIENT_SRC, ctx);
+    await ctx.MAClientStorage.runLegacyCleanupOnce(); // settle the load-time clean-up (sets its flag)
+  }
+  const src = extractFunction(readRoot('public', 'js', 'account-menu.js'), 'endSession');
+  ctx.__errorEl = { style: {}, textContent: '' };
+  ctx.__load = () => { loads++; return Promise.resolve(); };
+  const endSession = vm.runInContext(`(function () { var errorEl = __errorEl; var load = __load; ${src}; return endSession; })()`, ctx);
+  endSession({ id: 's1', current }, { disabled: false });
+  for (let i = 0; i < 50 && ctx.location.href !== '/login.html' && loads === 0; i++) await new Promise((r) => setImmediate(r));
+  return { local, session, names, calls, loads, href: ctx.location.href };
+}
+
+test('account-menu (WR-B01): ending the current session clears the browser like logout and keeps the language key', async () => {
+  const r = await runEndSession({ withClientStorage: true, endedCurrent: true, current: true });
+  assert.strictEqual(r.href, '/login.html');
+  assert.deepStrictEqual(r.local._keys(), ['employeeLanguage']);
+  assert.strictEqual(r.local.getItem('employeeLanguage'), 'de', 'the language preference survives the server wipe');
+  assert.strictEqual(r.session.length, 0);
+  assert.strictEqual(r.names.size, 0, 'Cache Storage is emptied');
+  assert.deepStrictEqual(r.calls, ['DELETE /api/auth/sessions/s1', 'POST /api/auth/logout']);
+});
+
+test('account-menu (WR-B01): without MAClientStorage it still leaves for /login.html; ending another device clears nothing', async () => {
+  const bare = await runEndSession({ withClientStorage: false, endedCurrent: true, current: true });
+  assert.strictEqual(bare.href, '/login.html');
+  assert.strictEqual(bare.local.getItem('employeeLanguage'), 'de');
+  const other = await runEndSession({ withClientStorage: true, endedCurrent: false, current: false });
+  assert.strictEqual(other.href, '/dashboard.html');
+  assert.strictEqual(other.loads, 1, 'the list is reloaded');
+  assert.deepStrictEqual(other.local._keys().sort(), ['active_demo_role', 'employeeLanguage', 'ma.legacyCleanup.v1', 'pmo_tasks_state']);
+  assert.strictEqual(other.session.length, 1);
+});
+
+test('static: account-menu.js "End this session" calls MAClientStorage.clearOnLogout() before navigating to /login.html', () => {
+  const src = extractFunction(readRoot('public', 'js', 'account-menu.js'), 'endSession');
+  const clear = src.indexOf('MAClientStorage.clearOnLogout()');
+  const nav = src.indexOf("window.location.href = '/login.html'");
+  assert.ok(clear !== -1 && nav !== -1, 'both the clearing call and the navigation are present');
+  assert.ok(/\.then\(leave, leave\)/.test(src), 'navigation runs after clearing settles, on success or failure');
+  assert.ok(src.indexOf("localStorage.getItem(k)") < src.indexOf("fetch('/api/auth/sessions/"), 'language snapshot precedes the DELETE');
 });
 
 test('static: change-password.js calls clearOnLogout and change-password.html loads client-storage.js before change-password.js', () => {
