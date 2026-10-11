@@ -450,15 +450,33 @@ function initDemoDashboard() {
   })();
 
   // 4. Render Dynamic HR Modules from database
+  // [security] CR-B01 (Phase 13 review, Part B): module records are written by
+  // pmo/hrbp/admin (DEFAULT_WRITE_ROLES) and read here on the IL/admin home page,
+  // so this whole function builds DOM with createElement/textContent - no HTML
+  // string sink - and the playbook link only reaches `href` through
+  // MASafeHtml.safeHref (relative or http(s); anything else falls back to the
+  // playbook). It is an enumerated render path in test/client-render-paths.test.js.
   function renderActionModules(scores) {
-    hrModulesContainer.innerHTML = '<p style="text-align: center; color: var(--text-dim); padding: 1rem;">Scanning database modules...</p>';
-    
+    const statusLine = (text, padding, color) => {
+      const p = document.createElement('p');
+      p.style.textAlign = color ? '' : 'center';
+      p.style.color = color || 'var(--text-dim)';
+      if (padding) p.style.padding = padding;
+      p.textContent = text;
+      hrModulesContainer.replaceChildren(p);
+    };
+    const playbookHref = (value) => {
+      const safe = window.MASafeHtml && typeof window.MASafeHtml.safeHref === 'function' ? window.MASafeHtml.safeHref(value) : '';
+      return safe || '/playbook.html';
+    };
+    statusLine('Scanning database modules...', '1rem');
+
     fetch('/api/modules')
       .then(res => res.json())
       .then(modules => {
-        hrModulesContainer.innerHTML = '';
+        hrModulesContainer.replaceChildren();
         if (!modules || modules.length === 0) {
-          hrModulesContainer.innerHTML = '<p style="text-align: center; color: var(--text-dim); padding: 2rem;">No Action Modules configured in Admin Settings.</p>';
+          statusLine('No Action Modules configured in Admin Settings.', '2rem');
           return;
         }
 
@@ -476,35 +494,48 @@ function initDemoDashboard() {
         });
 
         if (recommended.length === 0) {
-          hrModulesContainer.innerHTML = '<p style="text-align: center; color: var(--text-dim); padding: 2rem;">No modules recommended for your current diagnostic scores. Check score boundaries in Admin.</p>';
+          statusLine('No modules recommended for your current diagnostic scores. Check score boundaries in Admin.', '2rem');
           return;
         }
 
+        const el = (tag, cssText, text) => {
+          const node = document.createElement(tag);
+          if (cssText) node.style.cssText = cssText;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        };
         recommended.forEach(m => {
           const card = document.createElement('div');
           card.className = 'card';
           card.style.margin = '0';
           card.style.borderLeft = `5px solid ${m.dimension === 'culture' ? 'var(--te-orange)' : m.dimension === 'talent' ? 'var(--te-dark-teal)' : '#0D9488'}`;
-          
-          card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h4 style="color: var(--te-dark-teal); font-size: 1.15rem; font-family: var(--font-family-display); font-weight: 700;">${escapeHtml(m.title)}</h4>
-              <span class="hero-badge" style="font-size: 0.7rem; font-weight: 700; background-color: var(--bg-light); color: var(--text-secondary); margin: 0; text-transform: uppercase;">
-                ${escapeHtml(m.urgency)}
-              </span>
-            </div>
-            <p style="font-size: 0.95rem; color: var(--text-primary); margin-bottom: 1.25rem;">
-              <strong>Supporting IMO Teams:</strong> ${escapeHtml(m.supportingTeams || 'Integration Leader, IMO')}<br>
-              <strong>Deployment Checklist:</strong> ${escapeHtml(m.description)}
-            </p>
-            <a href="${m.playbookLink || '/playbook.html'}" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 1rem;">Open Playbook Chapter</a>
-          `;
+
+          const head = el('div', 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;');
+          head.appendChild(el('h4', 'color: var(--te-dark-teal); font-size: 1.15rem; font-family: var(--font-family-display); font-weight: 700;', String(m.title == null ? '' : m.title)));
+          const badge = el('span', 'font-size: 0.7rem; font-weight: 700; background-color: var(--bg-light); color: var(--text-secondary); margin: 0; text-transform: uppercase;', String(m.urgency == null ? '' : m.urgency));
+          badge.className = 'hero-badge';
+          head.appendChild(badge);
+
+          const body = el('p', 'font-size: 0.95rem; color: var(--text-primary); margin-bottom: 1.25rem;');
+          body.appendChild(el('strong', '', 'Supporting IMO Teams:'));
+          body.appendChild(document.createTextNode(' ' + String(m.supportingTeams || 'Integration Leader, IMO')));
+          body.appendChild(document.createElement('br'));
+          body.appendChild(el('strong', '', 'Deployment Checklist:'));
+          body.appendChild(document.createTextNode(' ' + String(m.description == null ? '' : m.description)));
+
+          const link = el('a', 'font-size: 0.8rem; padding: 0.4rem 1rem;', 'Open Playbook Chapter');
+          link.className = 'btn btn-secondary';
+          link.setAttribute('href', playbookHref(m.playbookLink));
+
+          card.appendChild(head);
+          card.appendChild(body);
+          card.appendChild(link);
           hrModulesContainer.appendChild(card);
         });
       })
       .catch(err => {
         console.error("Error loading modules:", err);
-        hrModulesContainer.innerHTML = '<p style="color: var(--status-danger);">Failed to load recommended modules.</p>';
+        statusLine('Failed to load recommended modules.', '', 'var(--status-danger)');
       });
   }
 

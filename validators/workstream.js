@@ -11,7 +11,7 @@
 'use strict';
 
 const { z } = require('zod');
-const { registerSchema, EmptyBodySchema } = require('./index');
+const { registerSchema, EmptyBodySchema, urlField } = require('./index');
 
 // D-13: every string field carries an explicit maximum — no exceptions,
 // including free text (03-RESEARCH.md's Security Domain table: an unbounded
@@ -409,7 +409,8 @@ const ModuleUpsertSchema = z.object({
   minScore: z.union([z.number(), z.string().max(20)]).optional(),
   maxScore: z.union([z.number(), z.string().max(20)]).optional(),
   description: z.string().trim().min(1).max(TEXT_MAX),
-  playbookLink: z.string().trim().max(2000).optional(),
+  // [security] CR-B01: rendered into an href on the IL/admin dashboard; pmo-writable.
+  playbookLink: urlField(2000).optional(),
   supportingTeams: z.string().trim().max(NAME_MAX).optional(),
 });
 registerSchema('POST', '/api/modules', ModuleUpsertSchema);

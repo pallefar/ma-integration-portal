@@ -106,6 +106,33 @@ function htmlField(schema) {
   return schema;
 }
 
+// ---------------------------------------------------------------------------
+// urlField — [security] CR-B01 / WR-B04 (Phase 13 review, Part B): the ONE
+// write-time rule for every stored value the client later writes into an
+// `href`/`src` (module + lesson playbookLink, menu/landing-card/bookmark
+// targets, CMS block ctaHref/href, welcomeVideoUrl*). Escaping at render time
+// stops attribute breakout but not a `javascript:` scheme, so the store only
+// ever holds a same-origin relative reference (`/path`, `#frag`, `?query`) or
+// an absolute http(s) URL. Refused: every other scheme (`javascript:`,
+// `data:`, `vbscript:`, …), protocol-relative `//host` AND its backslash
+// spelling `/\host` (browsers read `\` as `/` in http URLs), and any value
+// carrying a control character (the URL parser drops tab/CR/LF anywhere, so
+// `/<TAB>/host` would otherwise become `//host` in the browser). The client
+// keeps its own render-time check (MASafeHtml.safeHref) as the second layer.
+// `alsoAllow` widens the rule for ONE field-specific non-URL token shape
+// (e.g. a bare 11-character YouTube id) — never a scheme. The empty string is
+// accepted (an unset link). The message never echoes the value (T-03-34).
+// ---------------------------------------------------------------------------
+const SAFE_LINK_RE = /^(?:\/(?![/\\])|#|\?|https?:\/\/)/i;
+const URL_CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
+function urlField(max, opts) {
+  const alsoAllow = opts && opts.alsoAllow instanceof RegExp ? opts.alsoAllow : null;
+  return z.string().trim().max(max).refine(
+    (v) => v === '' || (!URL_CONTROL_RE.test(v) && (SAFE_LINK_RE.test(v) || (alsoAllow !== null && alsoAllow.test(v)))),
+    'Link must be a relative path or http(s) URL'
+  );
+}
+
 // Follows zod's wrapper-type chain (optional/nullable/default/readonly/catch)
 // down to whatever's inside, checking membership in HTML_TAGGED at every
 // level — so `htmlField(z.string().max(N)).optional()` and
@@ -367,6 +394,7 @@ module.exports = {
   formatIssues,
   validateBody,
   htmlField,
+  urlField,
   applySanitization,
   WRITE_SCHEMAS,
   registerSchema,

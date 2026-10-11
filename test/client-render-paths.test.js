@@ -223,6 +223,9 @@ const ENUMERATED_PATHS = [
   { file: 'inline-edit.js', anchor: null, kind: 'file', uses: ['MASafeHtml'], note: 'inline editing (editI18n, startPage, endPage, renderBar)' },
   // lesson body (T-13-82)
   { file: 'employee.js', anchor: 'function openLessonModal(', kind: 'function', uses: ['MASafeHtml.render'], note: 'lesson modal' },
+  // recommended-modules card on the IL/admin dashboard: pmo-writable module records,
+  // playbookLink -> href through MASafeHtml.safeHref (CR-B01, Phase 13 review Part B)
+  { file: 'dashboard.js', anchor: 'function renderActionModules(', kind: 'function', uses: ['MASafeHtml.safeHref'], note: 'recommended-modules card (CR-B01)' },
 ];
 
 // Owned and gated by plan 13-11 in the same wave (it rewrites these functions);
