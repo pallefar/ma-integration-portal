@@ -376,10 +376,17 @@ test('busy-503-contract (live contention): three routes — one plain sync write
     // (3) a route whose local catch Task 1 patched (sync) — proves the
     // re-throw guard survives alongside the route's OWN unrelated
     // (filesystem) error handling.
+    //
+    // Phase 13 quick (13-QUICK-media): POST /api/media now stores only
+    // png/jpg/jpeg/webp/pdf (extension AND declared type AND magic bytes), so
+    // the probe is a minimal VALID 1x1 PNG — a refusal here would 415 before
+    // the filesystem/writeDb work this contract exercises. The stored file is
+    // removed by the `finally` below (name contains 'busy-503-contract-probe').
+    const PROBE_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     const mediaRes = await fetch(`http://127.0.0.1:${port}/api/media`, {
       method: 'POST',
       headers: { Cookie: cookieHeader(adminToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileName: 'busy-503-contract-probe.txt', fileData: 'data:text/plain;base64,cHJvYmU=' }),
+      body: JSON.stringify({ fileName: 'busy-503-contract-probe.png', fileData: `data:image/png;base64,${PROBE_PNG_B64}` }),
     });
     await assertBusy503('POST /api/media (sync, Task-1-patched catch)', mediaRes);
 
