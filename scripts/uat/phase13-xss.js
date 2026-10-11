@@ -22,12 +22,18 @@
 //                   runner reads the violation list with a generated
 //                   X-Admin-Token (ADMIN_TOKEN is set on this child only).
 //   dev-defaultdir  dev with MA_SLIDES_UPLOAD_DIR UNSET so uploaded slides land in
-//                   the worktree's real public/uploads/slides (B-1: a temp dir
-//                   outside public/ cannot detect a slide answered by the
-//                   terminal `.html` middleware). The scenario deletes what it
-//                   uploads and compares the listing before/after.
+//                   the PRODUCT'S DEFAULT slide directory (B-1). Since the CR-A01
+//                   fix (13-REVIEW-FIX-S) that default is OUTSIDE the public
+//                   static root: `<instance data dir>/slides`, i.e. `<repo>/data/slides`
+//                   for this non-real lane (gitignored, created 0700 at the first
+//                   upload) - NOT public/uploads/slides any more. The scenarios
+//                   delete what they upload (removing data/slides again when the
+//                   run created it) and compare the listing before/after, and
+//                   assert nothing is ever written under public/uploads/slides.
 //
-// Every child gets CSP_MODE=<--csp-mode> (report-only default). Committed
+// Every child gets CSP_MODE=<--csp-mode> (enforce by default - the product
+// default since plan 13-13; `--csp-mode report-only` is the documented rollback
+// pair and stays selectable). Committed
 // data/demo.db* and data/control.db* are sha256-hashed before/after the whole
 // run (main files exact; -wal absent == empty; -shm ignored) and
 // `git status --porcelain -- data public/sent_emails` is compared. Any change is
@@ -41,7 +47,7 @@
 // Usage:
 //   PLAYWRIGHT_PATH=/path/to/node_modules/playwright \
 //     node scripts/uat/phase13-xss.js [--scenario name]... [--lane name]...
-//       [--csp-mode report-only|enforce] [--out dir] [--headed]
+//       [--csp-mode enforce|report-only] [--out dir] [--headed]
 //
 // Exit codes: 0 every check PASS, 1 any FAIL, 2 Playwright not resolvable.
 
@@ -70,7 +76,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---------------------------------------------------------------- argv
 function parseArgs(argv) {
   const out = {
-    scenarios: [], lanes: [], outDir: null, headed: false, cspMode: 'report-only', scenarioDir: null,
+    scenarios: [], lanes: [], outDir: null, headed: false, cspMode: 'enforce', scenarioDir: null,
     chromium: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || null,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -240,11 +246,15 @@ function prepareLane(lane, tmp, cspMode) {
     }
   }
   if (lane === 'dev-defaultdir') {
-    // Per-scenario child-env override that UNSETS a key (B-1): the slide lands in
-    // <repo>/public/uploads/slides, where the terminal `.html` middleware lives.
+    // Per-scenario child-env override that UNSETS a key (B-1): the slide lands in the
+    // product's DEFAULT slide directory, <instance data dir>/slides - for this
+    // non-real lane <repo>/data/slides (db/dbFiles.js DATA_DIR; lib/slideUpload.js
+    // slidesDir()), outside the public static root since the CR-A01 fix. It is NOT
+    // public/uploads/slides any more; scenarios must not read or write that path
+    // except to assert nothing lands there.
     delete env.MA_SLIDES_UPLOAD_DIR;
     delete env.MA_SLIDE_QUOTA_MB;
-    slidesDir = path.join(REPO_ROOT, 'public', 'uploads', 'slides');
+    slidesDir = path.join(DATA_DIR, 'slides');
   } else {
     slidesDir = path.join(tmp, 'slides');
     fs.mkdirSync(slidesDir, { recursive: true });
