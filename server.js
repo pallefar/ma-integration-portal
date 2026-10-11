@@ -3737,15 +3737,20 @@ app.post('/api/media', (req, res) => {
   db.media = db.media || [];
   // VAL-01: presence is now owned exclusively by validators/cms.js's MediaUploadSchema.
   const { fileName, fileData, kind } = req.body || {};
+  // [security] Phase 13 quick (13-QUICK-media): public/uploads is the public static
+  // root, served same-origin with the app CSP, so only png/jpg/jpeg/webp/pdf may be
+  // stored — final extension AND declared type AND magic bytes AND <= 10 MiB decoded
+  // (lib/slideUpload.js checkMediaUpload). The verdict is reached BEFORE any fs call:
+  // a refusal creates nothing, not even the directory. Fixed bodies, never echoing input.
+  const verdict = slideUpload.checkMediaUpload({ fileName, fileData, declaredType: kind });
+  if (!verdict.ok) return res.status(verdict.status).json(verdict.body);
   try {
     const uploadDir = path.join(__dirname, 'public', 'uploads');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const m = /^data:([^;]+);base64,(.*)$/.exec(fileData);
-    const b64 = m ? m[2] : fileData.replace(/^data:[^,]*,/, '');
-    const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safeName = verdict.safeName;
     const stored = `${Date.now()}_${safeName}`;
-    fs.writeFileSync(path.join(uploadDir, stored), Buffer.from(b64, 'base64'));
-    const item = { id: newId('media'), fileName: safeName, kind: kind || (m ? m[1] : 'application/octet-stream'), url: `/uploads/${stored}`, timestamp: new Date().toISOString() };
+    fs.writeFileSync(path.join(uploadDir, stored), verdict.buffer);
+    const item = { id: newId('media'), fileName: safeName, kind: verdict.mime, url: `/uploads/${stored}`, timestamp: new Date().toISOString() };
     db.media.push(item);
     writeDb(db);
     res.json({ success: true, media: item });
@@ -3763,8 +3768,12 @@ app.delete('/api/media/:id', (req, res) => {
   const db = readDb();
   const item = (db.media || []).find(m => m.id === req.params.id);
   if (item && item.url) {
-    const p = path.join(__dirname, 'public', item.url.replace(/^\//, ''));
-    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) { /* ignore */ }
+    // [security] Phase 13 quick (13-QUICK-media): the stored url is data, never a
+    // path. Only a regular file DIRECTLY inside public/uploads/ is unlinked — not
+    // the slides subtree (those have their own lifecycle), nothing reached by
+    // `..`, separators or a symlink; any other url just drops the record.
+    const p = slideUpload.resolveMediaFile(item.url, path.join(__dirname, 'public', 'uploads'));
+    try { if (p && fs.lstatSync(p).isFile()) fs.unlinkSync(p); } catch (e) { /* absent / raced — ignore */ }
   }
   db.media = (db.media || []).filter(m => m.id !== req.params.id);
   writeDb(db);
