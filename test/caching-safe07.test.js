@@ -207,6 +207,33 @@ test('SAFE-07 (b): POST /api/auth/logout answers Clear-Site-Data "cache", "stora
   }
 });
 
+test('SAFE-07 (b) / WR-A04: a sessionless logout POST (the shape of a cross-site auto-submitted form) carries NO Clear-Site-Data', async () => {
+  const server = await listenLocal(app);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    // cross-site form post: urlencoded body, foreign Origin, no cookie (SameSite=Strict keeps it off)
+    const form = await fetch(`${base}/api/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' },
+      body: 'x=1',
+    });
+    await form.text();
+    assert.strictEqual(form.status, 200);
+    assert.strictEqual(form.headers.get('clear-site-data'), null, 'no storage wipe without a session cookie');
+    // a plain sessionless JSON logout: same
+    const plain = await postJSON(base, '/api/auth/logout', null, {});
+    await plain.text();
+    assert.strictEqual(plain.headers.get('clear-site-data'), null);
+    // and a real logout right after still gets it
+    const token = newSession('admin', 'admin');
+    const real = await postJSON(base, '/api/auth/logout', token, {});
+    await real.text();
+    assert.strictEqual(real.headers.get('clear-site-data'), '"cache", "storage"');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 // ============================================================ client rows
 
 const CLIENT_SRC = readRoot('public', 'js', 'client-storage.js');

@@ -1425,7 +1425,13 @@ app.post('/api/auth/logout', (req, res) => {
   // Honoured in secure contexts only (https / localhost) — a plain-http LAN host
   // ignores it, which is why public/js/client-storage.js clears the same state
   // client-side regardless (T-13-34, PD-19).
-  res.setHeader('Clear-Site-Data', '"cache", "storage"');
+  // [security] WR-A04 (13-REVIEW): ONLY for a genuine logout — one that carried a
+  // session cookie. The route is public and accepts a form body, so any web page
+  // can auto-submit a cross-site POST here; SameSite=Strict keeps the cookie off
+  // that request, and without this condition the response would still wipe the
+  // visitor's portal storage and Cache Storage (incl. the model cache acceptance 5
+  // wants kept). The cookie-clearing Set-Cookie above stays unconditional (inert).
+  if (token) res.setHeader('Clear-Site-Data', '"cache", "storage"');
   res.json({ success: true });
 });
 
