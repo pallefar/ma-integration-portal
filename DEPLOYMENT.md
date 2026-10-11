@@ -889,6 +889,13 @@ per-person accounts (`scripts/bootstrap-admin.js`, then the admin console **User
 tab) and leave `ADMIN_TOKEN` unset. If it is set the server logs a `[security]`
 warning at boot.
 
+The browser UI never prompts for, stores or sends this token. A request that carries a
+valid session cookie is judged on that session's role and the header never raises it;
+the token therefore works only on requests **without** a live session (a CLI or `curl`
+call without the cookie, or an expired cookie). Do not set `ADMIN_TOKEN` on a
+real-deal host: until the token is removed (Phase 20) it grants full administration to
+anyone who holds it.
+
 ## Platform support envelope
 
 - **Node.js:** requires `>= 22` (bundled in the turnkey zips as a portable Node;

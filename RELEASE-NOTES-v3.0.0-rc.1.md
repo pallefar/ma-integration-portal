@@ -98,7 +98,10 @@ layer / operations / what actually ships; client / rendering / CSP. Result:
 - **Also fixed before release:** the egress setting could change without an audit row
   under the open demo with the break-glass token; a developer's file path baked into
   the demo data and the AI plan template; an upload-type hole in the media library;
-  and (client review) a stale break-glass token persisted in the browser.
+  and (client review) a stale break-glass token persisted in the browser — the
+  browser UI no longer prompts for or stores the token, a session now always wins over
+  the header, browser state is cleared at sign-in, and the AI 100-day plan renders
+  through the same safe renderer as the rest of the UI.
 - **No CRITICAL finding.** The remaining rated items are the ones listed under
   "Known limits" — each is scheduled (Phases 14 and 20) and none is hidden.
 - What the reviews did **not** cover: a Windows host run, the bundled Node
