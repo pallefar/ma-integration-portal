@@ -769,6 +769,30 @@ non-slide file). Move it by hand if a slide record still points at it, then dele
 it. If `MA_SLIDES_UPLOAD_DIR` is set, nothing is moved automatically: copy the legacy
 files into that directory yourself.
 
+### Media library uploads
+
+`POST /api/media` (admin only; the admin console lists the library, uploads arrive
+through this route) stores **images and PDF only**: PNG, JPEG (`.jpg`/`.jpeg`), WebP
+and PDF, up to 10 MiB decoded. The final file extension, the declared type (the
+data-URL header or the `kind` field) and the file's own first bytes must all agree.
+Anything else (HTML, SVG, scripts, executables, plain text, a name with no extension
+or a double extension such as `x.png.html`) is refused `415`
+`{ "error": "This file type is not allowed.", "code": "media-type-refused" }`, and an
+oversize file `413` `{ "error": "This file is too large.", "code": "media-too-large" }`;
+a refusal stores nothing and the bodies never echo what was sent. Files are written to
+`public/uploads/` and served from the portal's own origin as static files with
+`X-Content-Type-Options: nosniff`. Deleting a media item removes its file only when it
+is a regular file directly inside `public/uploads/`; a record that points anywhere
+else is just dropped.
+
+**Upgrade audit (do this once).** Files uploaded through the media library before this
+release were never type-checked. On any host whose admin media route has been
+reachable, list `public/uploads/` (the top level; `slides/` is a separate directory)
+and delete every file that is not a PNG, JPEG, WebP or PDF you recognise, then remove
+its entry from the media list if one is shown. Active content left there (`.html`,
+`.htm`, `.svg`, `.js`) is still served from the portal's own origin until the
+per-deal file store with a static guard arrives in Phase 14.
+
 ### Caching and sign-out
 
 - Every `/api` response, at every status including errors, carries
@@ -819,7 +843,38 @@ rows are written (a boot-time repair).
 
 ### Client-side notes
 
-<!-- Filled by the orchestrator after the client review fixes are merged. -->
+- **Stored links must be relative or `http(s)`.** Every stored link field accepts only
+  a relative path (`/…`, `#…`, `?…`) or an absolute `http://` / `https://` URL; any
+  other value (`javascript:`, `data:`, `//host`, a bare name) is refused with `400`
+  `Link must be a relative path or http(s) URL`. The rule covers module and lesson
+  playbook links, sidebar and landing-card targets, quick-nav bookmark pages, the CMS
+  hero/CTA links and the welcome-video URLs (`welcomeVideoUrl` and its `_en`, `_de`,
+  `_zh`, `_cs` variants; these also accept a bare 11-character YouTube id). Values
+  stored before this release are **not migrated**: the browser neutralises an unsafe
+  link at render time (it renders as `#`, falls back to `/playbook.html`, or, for a
+  custom sidebar item, is not rendered at all). The admin menu editor saves the whole
+  menu list, so it reports a `400` naming the offending row (for example
+  `sidebar.3.href: Link must be a relative path or http(s) URL`) until that row is
+  corrected. An absolute `http(s)` link to another site is still a legitimate target;
+  the policy governs script, not where a link leads.
+- **Ending your current session is a sign-out.** Choosing **End session** on the
+  session marked "This device" in **My sessions** clears the browser exactly like
+  **Logout** (local and session storage, Cache Storage; only the language preference
+  survives), and the response carries `Clear-Site-Data: "cache", "storage"`. Ending one
+  of your *other* sessions leaves this browser untouched. As above, `Clear-Site-Data`
+  is honoured only in a secure context; the page-side clearing runs everywhere.
+- **Back button after sign-out.** A page restored from the browser's back/forward
+  cache always reloads, so on a plain-HTTP LAN host (where `Clear-Site-Data` is
+  ignored) the Back button cannot show the previous person's page.
+- **Authored content may use the portal's own CSS class names (accepted).** An author
+  can therefore make content look like application chrome, such as a full-screen
+  overlay. Only administrators can author CMS content (pages, lessons, banners,
+  translations, slides); treat CMS authoring as a trusted-admin capability.
+- **A `<base>` pasted into a translation is inert but reported.** Parsing a
+  `<base href="…">` inside an i18n value (the one channel that stores raw markup)
+  applies nothing, because the renderer drops the element, but the browser files one
+  `base-uri` entry in the violations list for it. If that entry appears, look for a
+  `<base>` in **Translations**.
 
 ## ADMIN_TOKEN (optional break-glass, discouraged)
 
